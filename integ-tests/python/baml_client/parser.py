@@ -15,6 +15,7 @@
 # fmt: off
 from typing import Any, Dict, List, Optional, Union, TypedDict, Type, Literal, cast
 from typing_extensions import NotRequired
+import os
 
 import baml_py
 
@@ -59,6 +60,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.Recipe, parsed)
@@ -85,6 +87,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.LinkedListAliasNode, parsed)
@@ -111,6 +114,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Checked[int, Literal["gt_ten"]], parsed)
@@ -137,6 +141,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -163,6 +168,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -189,6 +195,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -215,6 +222,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -241,6 +249,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -267,6 +276,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.OptionalListAndMap, parsed)
@@ -293,6 +303,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(int, parsed)
@@ -319,6 +330,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -345,6 +357,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.LinkedList, parsed)
@@ -371,6 +384,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.Tree, parsed)
@@ -397,6 +411,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.ClassToRecAlias, parsed)
@@ -423,6 +438,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Union[types.DynEnumTwo, str], parsed)
@@ -449,6 +465,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.Category, parsed)
@@ -475,6 +492,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.Category, parsed)
@@ -501,6 +519,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.Category, parsed)
@@ -527,6 +546,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -553,6 +573,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt], parsed)
@@ -579,6 +600,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -605,6 +627,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -631,6 +654,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -657,6 +681,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -683,6 +708,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -709,6 +735,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Union[types.OriginalA, types.OriginalB], parsed)
@@ -735,6 +762,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.DummyOutput, parsed)
@@ -761,6 +789,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.DynamicClassTwo, parsed)
@@ -787,6 +816,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.DynInputOutput, parsed)
@@ -813,6 +843,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[types.DynInputOutput], parsed)
@@ -839,6 +870,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -865,6 +897,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.ContactInfo, parsed)
@@ -891,6 +924,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.DynamicSchema, parsed)
@@ -917,6 +951,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[Union[types.Hobby, str]], parsed)
@@ -943,6 +978,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[str], parsed)
@@ -969,6 +1005,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[types.Person], parsed)
@@ -995,6 +1032,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.ReceiptInfo, parsed)
@@ -1021,6 +1059,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.Resume, parsed)
@@ -1047,6 +1086,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.Resume, parsed)
@@ -1073,6 +1113,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[types.ClassOptionalOutput], parsed)
@@ -1099,6 +1140,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[types.ClassOptionalOutput2], parsed)
@@ -1125,6 +1167,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[types.EnumOutput], parsed)
@@ -1151,6 +1194,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.EnumOutput, parsed)
@@ -1177,6 +1221,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.LiteralClassHello, parsed)
@@ -1203,6 +1248,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Union[types.LiteralClassOne, types.LiteralClassTwo], parsed)
@@ -1229,6 +1275,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -1255,6 +1302,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(bool, parsed)
@@ -1281,6 +1329,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.TestOutputClass, parsed)
@@ -1307,6 +1356,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[types.TestOutputClass], parsed)
@@ -1333,6 +1383,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.TestClassNested, parsed)
@@ -1359,6 +1410,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.TestClassWithEnum, parsed)
@@ -1385,6 +1437,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(int, parsed)
@@ -1411,6 +1464,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Literal[False], parsed)
@@ -1437,6 +1491,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Literal[5], parsed)
@@ -1463,6 +1518,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Literal["example output"], parsed)
@@ -1489,6 +1545,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[str], parsed)
@@ -1515,6 +1572,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.TestEnum, parsed)
@@ -1541,6 +1599,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.TestClassAlias, parsed)
@@ -1567,6 +1626,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -1593,6 +1653,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.RaysData, parsed)
@@ -1619,6 +1680,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.OrderInfo, parsed)
@@ -1645,6 +1707,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.SearchParams, parsed)
@@ -1671,6 +1734,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Dict[types.MapKey, str], parsed)
@@ -1697,6 +1761,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str], parsed)
@@ -1723,6 +1788,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Dict[Literal["key"], str], parsed)
@@ -1749,6 +1815,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.JsonValue, parsed)
@@ -1775,6 +1842,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -1801,6 +1869,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Union[Literal[1], Literal[True], Literal["string output"]], parsed)
@@ -1827,6 +1896,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Checked[types.BlockConstraint, Literal["cross_field"]], parsed)
@@ -1853,6 +1923,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.ClassWithBlockDone, parsed)
@@ -1879,6 +1950,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.ClassWithoutDone, parsed)
@@ -1905,6 +1977,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.NestedBlockConstraint, parsed)
@@ -1931,6 +2004,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.SemanticContainer, parsed)
@@ -1957,6 +2031,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Dict[str, List[str]], parsed)
@@ -1983,6 +2058,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.MergeAttrs, parsed)
@@ -2009,6 +2085,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.DynamicOutput, parsed)
@@ -2035,6 +2112,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]], parsed)
@@ -2061,6 +2139,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.ClassForNullLiteral, parsed)
@@ -2087,6 +2166,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -2113,6 +2193,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[Optional[types.OptionalTest_ReturnType]], parsed)
@@ -2139,6 +2220,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.FooAny, parsed)
@@ -2165,6 +2247,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Checked[int, Literal["too_big"]], parsed)
@@ -2191,6 +2274,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Union[int, str, bool, float], parsed)
@@ -2217,6 +2301,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -2243,6 +2328,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -2269,6 +2355,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -2295,6 +2382,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -2321,6 +2409,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -2347,6 +2436,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -2373,6 +2463,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -2399,6 +2490,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.RecAliasOne, parsed)
@@ -2425,6 +2517,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.NodeWithAliasIndirection, parsed)
@@ -2451,6 +2544,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.RecursiveUnion, parsed)
@@ -2477,6 +2571,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Checked[int, Literal["gt_ten"]], parsed)
@@ -2503,6 +2598,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(int, parsed)
@@ -2529,6 +2625,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.JsonTemplate, parsed)
@@ -2555,6 +2652,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.MalformedConstraints, parsed)
@@ -2581,6 +2679,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.Schema, parsed)
@@ -2607,6 +2706,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.RecursiveListAlias, parsed)
@@ -2633,6 +2733,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.RecursiveMapAlias, parsed)
@@ -2659,6 +2760,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.BigNumbers, parsed)
@@ -2685,6 +2787,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.TwoStoriesOneTitle, parsed)
@@ -2711,6 +2814,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.TwoStoriesOneTitleCheck, parsed)
@@ -2737,6 +2841,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(int, parsed)
@@ -2763,6 +2868,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[Union[int, str]], parsed)
@@ -2789,6 +2895,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.CompoundBigNumbers, parsed)
@@ -2815,6 +2922,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.Document1559, parsed)
@@ -2841,6 +2949,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.RecursiveAliasDependency, parsed)
@@ -2867,6 +2976,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -2893,6 +3003,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -2919,6 +3030,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -2945,6 +3057,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -2971,6 +3084,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -2997,6 +3111,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3023,6 +3138,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3049,6 +3165,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3075,6 +3192,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3101,6 +3219,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3127,6 +3246,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3153,6 +3273,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3179,6 +3300,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3205,6 +3327,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3231,6 +3354,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3257,6 +3381,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3283,6 +3408,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3309,6 +3435,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3335,6 +3462,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3361,6 +3489,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3387,6 +3516,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3413,6 +3543,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3439,6 +3570,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3465,6 +3597,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3491,6 +3624,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3517,6 +3651,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3543,6 +3678,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3569,6 +3705,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Dict[str, types.StringToClassEntry], parsed)
@@ -3595,6 +3732,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Dict[str, Dict[str, str]], parsed)
@@ -3621,6 +3759,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Dict[str, str], parsed)
@@ -3647,6 +3786,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3673,6 +3813,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3699,6 +3840,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[str], parsed)
@@ -3725,6 +3867,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3751,6 +3894,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3777,6 +3921,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3803,6 +3948,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3829,6 +3975,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3855,6 +4002,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3881,6 +4029,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3907,6 +4056,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3933,6 +4083,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.TestMemoryOutput, parsed)
@@ -3959,6 +4110,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -3985,6 +4137,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4011,6 +4164,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4037,6 +4191,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4063,6 +4218,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -4089,6 +4245,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.Haiku, parsed)
@@ -4115,6 +4272,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4141,6 +4299,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4167,6 +4326,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4193,6 +4353,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4219,6 +4380,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4245,6 +4407,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4271,6 +4434,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4297,6 +4461,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4323,6 +4488,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4349,6 +4515,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4375,6 +4542,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4401,6 +4569,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4427,6 +4596,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4453,6 +4623,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4479,6 +4650,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4505,6 +4677,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4531,6 +4704,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.CustomStory, parsed)
@@ -4557,6 +4731,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.UniverseQuestion, parsed)
@@ -4583,6 +4758,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4609,6 +4785,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4635,6 +4812,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4661,6 +4839,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.UnionTest_ReturnType, parsed)
@@ -4687,6 +4866,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(int, parsed)
@@ -4713,6 +4893,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.MaintainFieldOrder, parsed)
@@ -4739,6 +4920,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(int, parsed)
@@ -4765,6 +4947,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(int, parsed)
@@ -4791,6 +4974,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(str, parsed)
@@ -4828,6 +5012,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.Recipe, parsed)
@@ -4854,6 +5039,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.LinkedListAliasNode, parsed)
@@ -4880,6 +5066,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Checked[Optional[int], Literal["gt_ten"]], parsed)
@@ -4906,6 +5093,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -4932,6 +5120,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -4958,6 +5147,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -4984,6 +5174,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -5010,6 +5201,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -5036,6 +5228,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.OptionalListAndMap, parsed)
@@ -5062,6 +5255,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[int], parsed)
@@ -5088,6 +5282,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -5114,6 +5309,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.LinkedList, parsed)
@@ -5140,6 +5336,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.Tree, parsed)
@@ -5166,6 +5363,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.ClassToRecAlias, parsed)
@@ -5192,6 +5390,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[Union[types.DynEnumTwo, str]], parsed)
@@ -5218,6 +5417,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[types.Category], parsed)
@@ -5244,6 +5444,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[types.Category], parsed)
@@ -5270,6 +5471,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[types.Category], parsed)
@@ -5296,6 +5498,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -5322,6 +5525,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[Union[partial_types.BookOrder, partial_types.FlightConfirmation, partial_types.GroceryReceipt]], parsed)
@@ -5348,6 +5552,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -5374,6 +5579,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -5400,6 +5606,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -5426,6 +5633,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -5452,6 +5660,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -5478,6 +5687,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[Union[partial_types.OriginalA, partial_types.OriginalB]], parsed)
@@ -5504,6 +5714,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.DummyOutput, parsed)
@@ -5530,6 +5741,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.DynamicClassTwo, parsed)
@@ -5556,6 +5768,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.DynInputOutput, parsed)
@@ -5582,6 +5795,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[partial_types.DynInputOutput], parsed)
@@ -5608,6 +5822,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -5634,6 +5849,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.ContactInfo, parsed)
@@ -5660,6 +5876,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.DynamicSchema, parsed)
@@ -5686,6 +5903,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[Optional[Union[types.Hobby, str]]], parsed)
@@ -5712,6 +5930,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[Optional[str]], parsed)
@@ -5738,6 +5957,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[partial_types.Person], parsed)
@@ -5764,6 +5984,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.ReceiptInfo, parsed)
@@ -5790,6 +6011,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.Resume, parsed)
@@ -5816,6 +6038,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.Resume, parsed)
@@ -5842,6 +6065,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[partial_types.ClassOptionalOutput], parsed)
@@ -5868,6 +6092,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[partial_types.ClassOptionalOutput2], parsed)
@@ -5894,6 +6119,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[Optional[types.EnumOutput]], parsed)
@@ -5920,6 +6146,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[types.EnumOutput], parsed)
@@ -5946,6 +6173,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.LiteralClassHello, parsed)
@@ -5972,6 +6200,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[Union[partial_types.LiteralClassOne, partial_types.LiteralClassTwo]], parsed)
@@ -5998,6 +6227,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -6024,6 +6254,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[bool], parsed)
@@ -6050,6 +6281,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.TestOutputClass, parsed)
@@ -6076,6 +6308,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[partial_types.TestOutputClass], parsed)
@@ -6102,6 +6335,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.TestClassNested, parsed)
@@ -6128,6 +6362,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.TestClassWithEnum, parsed)
@@ -6154,6 +6389,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[int], parsed)
@@ -6180,6 +6416,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[Literal[False]], parsed)
@@ -6206,6 +6443,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[Literal[5]], parsed)
@@ -6232,6 +6470,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[Literal["example output"]], parsed)
@@ -6258,6 +6497,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[Optional[str]], parsed)
@@ -6284,6 +6524,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[types.TestEnum], parsed)
@@ -6310,6 +6551,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.TestClassAlias, parsed)
@@ -6336,6 +6578,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -6362,6 +6605,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.RaysData, parsed)
@@ -6388,6 +6632,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.OrderInfo, parsed)
@@ -6414,6 +6659,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.SearchParams, parsed)
@@ -6440,6 +6686,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Dict[types.MapKey, Optional[str]], parsed)
@@ -6466,6 +6713,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], Optional[str]], parsed)
@@ -6492,6 +6740,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Dict[Literal["key"], Optional[str]], parsed)
@@ -6518,6 +6767,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.JsonValue, parsed)
@@ -6544,6 +6794,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -6570,6 +6821,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]], parsed)
@@ -6596,6 +6848,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Checked[partial_types.BlockConstraint, Literal["cross_field"]], parsed)
@@ -6622,6 +6875,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.ClassWithBlockDone, parsed)
@@ -6648,6 +6902,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.ClassWithoutDone, parsed)
@@ -6674,6 +6929,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.NestedBlockConstraint, parsed)
@@ -6700,6 +6956,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.SemanticContainer, parsed)
@@ -6726,6 +6983,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Dict[str, List[Optional[str]]], parsed)
@@ -6752,6 +7010,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.MergeAttrs, parsed)
@@ -6778,6 +7037,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.DynamicOutput, parsed)
@@ -6804,6 +7064,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[Union[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], List[Optional[str]], Dict[str, List[Optional[str]]]]], parsed)
@@ -6830,6 +7091,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.ClassForNullLiteral, parsed)
@@ -6856,6 +7118,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -6882,6 +7145,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[Optional[partial_types.OptionalTest_ReturnType]], parsed)
@@ -6908,6 +7172,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.FooAny, parsed)
@@ -6934,6 +7199,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Checked[Optional[int], Literal["too_big"]], parsed)
@@ -6960,6 +7226,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], parsed)
@@ -6986,6 +7253,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7012,6 +7280,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7038,6 +7307,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7064,6 +7334,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7090,6 +7361,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7116,6 +7388,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7142,6 +7415,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7168,6 +7442,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.RecAliasOne, parsed)
@@ -7194,6 +7469,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.NodeWithAliasIndirection, parsed)
@@ -7220,6 +7496,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.RecursiveUnion, parsed)
@@ -7246,6 +7523,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Checked[Optional[int], Literal["gt_ten"]], parsed)
@@ -7272,6 +7550,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[int], parsed)
@@ -7298,6 +7577,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.JsonTemplate, parsed)
@@ -7324,6 +7604,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.MalformedConstraints, parsed)
@@ -7350,6 +7631,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.Schema, parsed)
@@ -7376,6 +7658,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.RecursiveListAlias, parsed)
@@ -7402,6 +7685,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(types.RecursiveMapAlias, parsed)
@@ -7428,6 +7712,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.BigNumbers, parsed)
@@ -7454,6 +7739,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.TwoStoriesOneTitle, parsed)
@@ -7480,6 +7766,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.TwoStoriesOneTitleCheck, parsed)
@@ -7506,6 +7793,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[int], parsed)
@@ -7532,6 +7820,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[Optional[Union[Optional[int], Optional[str]]]], parsed)
@@ -7558,6 +7847,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.CompoundBigNumbers, parsed)
@@ -7584,6 +7874,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.Document1559, parsed)
@@ -7610,6 +7901,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.RecursiveAliasDependency, parsed)
@@ -7636,6 +7928,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7662,6 +7955,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7688,6 +7982,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7714,6 +8009,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7740,6 +8036,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7766,6 +8063,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7792,6 +8090,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7818,6 +8117,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7844,6 +8144,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7870,6 +8171,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7896,6 +8198,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7922,6 +8225,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7948,6 +8252,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -7974,6 +8279,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8000,6 +8306,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8026,6 +8333,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8052,6 +8360,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8078,6 +8387,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8104,6 +8414,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8130,6 +8441,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8156,6 +8468,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8182,6 +8495,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8208,6 +8522,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8234,6 +8549,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8260,6 +8576,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8286,6 +8603,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8312,6 +8630,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8338,6 +8657,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Dict[str, partial_types.StringToClassEntry], parsed)
@@ -8364,6 +8684,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Dict[str, Dict[str, Optional[str]]], parsed)
@@ -8390,6 +8711,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Dict[str, Optional[str]], parsed)
@@ -8416,6 +8738,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8442,6 +8765,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8468,6 +8792,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(List[Optional[str]], parsed)
@@ -8494,6 +8819,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8520,6 +8846,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8546,6 +8873,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8572,6 +8900,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8598,6 +8927,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8624,6 +8954,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8650,6 +8981,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8676,6 +9008,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8702,6 +9035,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.TestMemoryOutput, parsed)
@@ -8728,6 +9062,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8754,6 +9089,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8780,6 +9116,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8806,6 +9143,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8832,6 +9170,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8858,6 +9197,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.Haiku, parsed)
@@ -8884,6 +9224,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8910,6 +9251,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8936,6 +9278,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8962,6 +9305,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -8988,6 +9332,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -9014,6 +9359,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -9040,6 +9386,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -9066,6 +9413,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -9092,6 +9440,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -9118,6 +9467,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -9144,6 +9494,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -9170,6 +9521,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -9196,6 +9548,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -9222,6 +9575,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -9248,6 +9602,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -9274,6 +9629,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -9300,6 +9656,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.CustomStory, parsed)
@@ -9326,6 +9683,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.UniverseQuestion, parsed)
@@ -9352,6 +9710,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -9378,6 +9737,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -9404,6 +9764,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)
@@ -9430,6 +9791,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.UnionTest_ReturnType, parsed)
@@ -9456,6 +9818,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[int], parsed)
@@ -9482,6 +9845,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(partial_types.MaintainFieldOrder, parsed)
@@ -9508,6 +9872,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[int], parsed)
@@ -9534,6 +9899,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[int], parsed)
@@ -9560,6 +9926,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast(Optional[str], parsed)

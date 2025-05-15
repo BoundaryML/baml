@@ -667,7 +667,7 @@ function Echo(msg: string) -> string {
         dbg!(&f.item);
         let (res, _) = rt
             // .run_test("Second", "TestSecond", &ctx, Some(on_event))
-            .run_test("Go", "Go", &ctx, Some(on_event), None)
+            .run_test("Go", "Go", &ctx, Some(on_event), None, HashMap::new())
             // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
             // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
             // .run_test("LlmParseInt", "TestParse", &ctx, Some(on_event))
@@ -792,7 +792,7 @@ test TestMakePerson() {
         // dbg!(&f.item);
         let (res, _) = rt
             // .run_test("Second", "TestSecond", &ctx, Some(on_event))
-            .run_test("OuterPyramid", "OuterPyramid", &ctx, Some(on_event), None)
+            .run_test("OuterPyramid", "OuterPyramid", &ctx, Some(on_event), None, HashMap::new())
             // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
             // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
             // .run_test("LlmParseInt", "TestParse", &ctx, Some(on_event))

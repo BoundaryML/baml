@@ -1,5 +1,6 @@
 from typing import Any, Dict, List, Optional, Union, TypedDict, Type, Literal, cast
 from typing_extensions import NotRequired
+import os
 
 import baml_py
 
@@ -44,6 +45,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast({{fn.return_type}}, parsed)
@@ -81,6 +83,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
       )
 
       return cast({{fn.partial_return_type}}, parsed)

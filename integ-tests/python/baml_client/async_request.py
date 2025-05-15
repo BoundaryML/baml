@@ -15,6 +15,7 @@
 # fmt: off
 from typing import Any, Dict, List, Optional, Union, TypedDict, Type, Literal
 from typing_extensions import NotRequired
+import os
 
 import baml_py
 
@@ -57,6 +58,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -80,6 +82,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -103,6 +106,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -126,6 +130,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -149,6 +154,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -172,6 +178,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -195,6 +202,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -218,6 +226,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -241,6 +250,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -264,6 +274,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -287,6 +298,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -310,6 +322,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -333,6 +346,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -356,6 +370,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -379,6 +394,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -402,6 +418,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -425,6 +442,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -448,6 +466,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -473,6 +492,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -496,6 +516,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -519,6 +540,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -543,6 +565,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -567,6 +590,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -591,6 +615,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -616,6 +641,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -638,6 +664,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -661,6 +688,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -684,6 +712,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -707,6 +736,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -730,6 +760,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -752,6 +783,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -775,6 +807,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -798,6 +831,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -821,6 +855,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -844,6 +879,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -867,6 +903,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -891,6 +928,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -915,6 +953,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -938,6 +977,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -961,6 +1001,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -984,6 +1025,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1007,6 +1049,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1030,6 +1073,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1053,6 +1097,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1076,6 +1121,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1099,6 +1145,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1122,6 +1169,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1145,6 +1193,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1168,6 +1217,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1191,6 +1241,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1214,6 +1265,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1237,6 +1289,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1260,6 +1313,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1283,6 +1337,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1306,6 +1361,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1329,6 +1385,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1352,6 +1409,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1375,6 +1433,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1398,6 +1457,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1421,6 +1481,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1444,6 +1505,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1467,6 +1529,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1491,6 +1554,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1515,6 +1579,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1538,6 +1603,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1561,6 +1627,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1584,6 +1651,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1607,6 +1675,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1629,6 +1698,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1651,6 +1721,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1673,6 +1744,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1695,6 +1767,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1717,6 +1790,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1740,6 +1814,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1763,6 +1838,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1786,6 +1862,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1809,6 +1886,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1832,6 +1910,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1855,6 +1934,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1878,6 +1958,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1901,6 +1982,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1924,6 +2006,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1947,6 +2030,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1970,6 +2054,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -1993,6 +2078,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2016,6 +2102,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2039,6 +2126,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2062,6 +2150,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2085,6 +2174,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2108,6 +2198,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2131,6 +2222,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2154,6 +2246,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2177,6 +2270,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2200,6 +2294,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2223,6 +2318,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2246,6 +2342,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2269,6 +2366,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2292,6 +2390,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2315,6 +2414,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2338,6 +2438,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2361,6 +2462,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2385,6 +2487,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2409,6 +2512,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2432,6 +2536,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2455,6 +2560,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2479,6 +2585,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2502,6 +2609,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2525,6 +2633,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2548,6 +2657,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2571,6 +2681,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2594,6 +2705,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2617,6 +2729,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2640,6 +2753,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2663,6 +2777,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2686,6 +2801,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2709,6 +2825,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2732,6 +2849,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2755,6 +2873,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2778,6 +2897,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2801,6 +2921,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2824,6 +2945,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2847,6 +2969,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2870,6 +2993,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2893,6 +3017,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2916,6 +3041,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2939,6 +3065,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2963,6 +3090,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -2985,6 +3113,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3008,6 +3137,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3031,6 +3161,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3054,6 +3185,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3077,6 +3209,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3100,6 +3233,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3123,6 +3257,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3146,6 +3281,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3169,6 +3305,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3192,6 +3329,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3215,6 +3353,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3238,6 +3377,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3261,6 +3401,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3284,6 +3425,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3307,6 +3449,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3329,6 +3472,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3352,6 +3496,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3375,6 +3520,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3398,6 +3544,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3421,6 +3568,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3444,6 +3592,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3467,6 +3616,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3490,6 +3640,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3514,6 +3665,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3537,6 +3689,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3560,6 +3713,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3583,6 +3737,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3606,6 +3761,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3629,6 +3785,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3652,6 +3809,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3675,6 +3833,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3698,6 +3857,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3721,6 +3881,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3744,6 +3905,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3767,6 +3929,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3790,6 +3953,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3813,6 +3977,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3836,6 +4001,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3859,6 +4025,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3882,6 +4049,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3905,6 +4073,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3927,6 +4096,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3949,6 +4119,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3972,6 +4143,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -3994,6 +4166,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4017,6 +4190,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4040,6 +4214,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4063,6 +4238,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4086,6 +4262,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4108,6 +4285,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4131,6 +4309,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4154,6 +4333,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4177,6 +4357,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4200,6 +4381,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4223,6 +4405,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4245,6 +4428,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         False,
       )
     
@@ -4279,6 +4463,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4302,6 +4487,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4325,6 +4511,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4348,6 +4535,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4371,6 +4559,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4394,6 +4583,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4417,6 +4607,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4440,6 +4631,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4463,6 +4655,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4486,6 +4679,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4509,6 +4703,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4532,6 +4727,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4555,6 +4751,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4578,6 +4775,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4601,6 +4799,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4624,6 +4823,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4647,6 +4847,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4670,6 +4871,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4695,6 +4897,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4718,6 +4921,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4741,6 +4945,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4765,6 +4970,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4789,6 +4995,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4813,6 +5020,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4838,6 +5046,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4860,6 +5069,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4883,6 +5093,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4906,6 +5117,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4929,6 +5141,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4952,6 +5165,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4974,6 +5188,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -4997,6 +5212,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5020,6 +5236,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5043,6 +5260,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5066,6 +5284,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5089,6 +5308,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5113,6 +5333,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5137,6 +5358,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5160,6 +5382,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5183,6 +5406,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5206,6 +5430,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5229,6 +5454,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5252,6 +5478,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5275,6 +5502,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5298,6 +5526,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5321,6 +5550,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5344,6 +5574,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5367,6 +5598,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5390,6 +5622,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5413,6 +5646,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5436,6 +5670,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5459,6 +5694,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5482,6 +5718,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5505,6 +5742,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5528,6 +5766,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5551,6 +5790,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5574,6 +5814,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5597,6 +5838,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5620,6 +5862,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5643,6 +5886,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5666,6 +5910,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5689,6 +5934,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5713,6 +5959,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5737,6 +5984,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5760,6 +6008,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5783,6 +6032,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5806,6 +6056,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5829,6 +6080,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5851,6 +6103,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5873,6 +6126,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5895,6 +6149,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5917,6 +6172,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5939,6 +6195,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5962,6 +6219,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -5985,6 +6243,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6008,6 +6267,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6031,6 +6291,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6054,6 +6315,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6077,6 +6339,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6100,6 +6363,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6123,6 +6387,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6146,6 +6411,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6169,6 +6435,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6192,6 +6459,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6215,6 +6483,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6238,6 +6507,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6261,6 +6531,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6284,6 +6555,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6307,6 +6579,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6330,6 +6603,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6353,6 +6627,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6376,6 +6651,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6399,6 +6675,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6422,6 +6699,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6445,6 +6723,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6468,6 +6747,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6491,6 +6771,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6514,6 +6795,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6537,6 +6819,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6560,6 +6843,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6583,6 +6867,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6607,6 +6892,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6631,6 +6917,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6654,6 +6941,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6677,6 +6965,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6701,6 +6990,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6724,6 +7014,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6747,6 +7038,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6770,6 +7062,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6793,6 +7086,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6816,6 +7110,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6839,6 +7134,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6862,6 +7158,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6885,6 +7182,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6908,6 +7206,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6931,6 +7230,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6954,6 +7254,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -6977,6 +7278,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7000,6 +7302,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7023,6 +7326,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7046,6 +7350,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7069,6 +7374,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7092,6 +7398,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7115,6 +7422,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7138,6 +7446,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7161,6 +7470,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7185,6 +7495,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7207,6 +7518,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7230,6 +7542,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7253,6 +7566,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7276,6 +7590,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7299,6 +7614,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7322,6 +7638,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7345,6 +7662,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7368,6 +7686,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7391,6 +7710,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7414,6 +7734,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7437,6 +7758,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7460,6 +7782,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7483,6 +7806,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7506,6 +7830,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7529,6 +7854,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7551,6 +7877,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7574,6 +7901,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7597,6 +7925,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7620,6 +7949,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7643,6 +7973,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7666,6 +7997,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7689,6 +8021,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7712,6 +8045,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7736,6 +8070,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7759,6 +8094,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7782,6 +8118,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7805,6 +8142,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7828,6 +8166,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7851,6 +8190,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7874,6 +8214,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7897,6 +8238,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7920,6 +8262,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7943,6 +8286,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7966,6 +8310,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -7989,6 +8334,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8012,6 +8358,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8035,6 +8382,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8058,6 +8406,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8081,6 +8430,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8104,6 +8454,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8127,6 +8478,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8149,6 +8501,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8171,6 +8524,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8194,6 +8548,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8216,6 +8571,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8239,6 +8595,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8262,6 +8619,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8285,6 +8643,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8308,6 +8667,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8330,6 +8690,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8353,6 +8714,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8376,6 +8738,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8399,6 +8762,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8422,6 +8786,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8445,6 +8810,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
@@ -8467,6 +8833,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        os.environ.copy(),
         True,
       )
     
