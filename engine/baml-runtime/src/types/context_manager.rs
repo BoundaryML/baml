@@ -1,5 +1,6 @@
 use std::{
-    collections::HashMap, env, sync::{Arc, Mutex}
+    collections::HashMap,
+    sync::{Arc, Mutex},
 };
 
 use anyhow::{Context, Result};
@@ -126,66 +127,7 @@ impl RuntimeContextManager {
         // 2. Tracer passes the span_id back in here for a new context
         // 3. profit
         span_id: Option<uuid::Uuid>,
-    ) -> Result<RuntimeContext> {
-        let mut tags = self.global_tags.lock().unwrap().clone();
-        let ctx_tags = {
-            self.context
-                .lock()
-                .unwrap()
-                .last()
-                .map(|(.., x)| x)
-                .cloned()
-                .unwrap_or_default()
-        };
-        tags.extend(ctx_tags);
-        let tags = {
-            let ctx = self.context.lock().unwrap();
-            let ctx = ctx.last();
-            ctx.map(|(.., tags)| tags).cloned().unwrap_or_default()
-        };
-
-        let (cls, enm, als, rec_cls, rec_als) = type_builder
-            .map(TypeBuilder::to_overrides)
-            .unwrap_or_default();
-
-        let mut ctx = RuntimeContext::new(
-            self.baml_src_reader.clone(),
-            self.env_vars.clone(),
-            tags,
-            Default::default(),
-            cls,
-            enm,
-            als,
-            rec_cls,
-            rec_als,
-            span_id,
-        );
-
-        ctx.client_overrides = match client_registry {
-            Some(cr) => Some(
-                cr.to_clients(&ctx)
-                    .with_context(|| "Failed to create clients from client_registry")?,
-            ),
-            None => None,
-        };
-
-        Ok(ctx)
-    }
-
-    // TODO: this is a temp workaround, think of something neat
-    pub fn create_ctx_with_env_vars(
-        &self,
-        type_builder: Option<&TypeBuilder>,
-        client_registry: Option<&ClientRegistry>,
         env_vars: HashMap<String, String>,
-        // the tracer initializes the new span_id,
-        // and then passes it back in here for a new context. It's kind of circular since tracer uses this class to _create_ the span_id....
-        // Anyway RuntimeCtx is passed everywhere and we need to know what the last span_id that the tracer created was.
-        // tl;dr
-        // 1. Tracer creates a new span id using the current context that's passe dinto call_function()
-        // 2. Tracer passes the span_id back in here for a new context
-        // 3. profit
-        span_id: Option<uuid::Uuid>,
     ) -> Result<RuntimeContext> {
         let mut tags = self.global_tags.lock().unwrap().clone();
         let ctx_tags = {

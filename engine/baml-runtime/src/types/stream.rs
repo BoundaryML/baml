@@ -6,7 +6,7 @@ use baml_types::tracing::events::{
 };
 use internal_baml_core::ir::repr::IntermediateRepr;
 use serde_json::json;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     client_registry::ClientRegistry,
@@ -68,12 +68,13 @@ impl FunctionResultStream {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        env_vars: HashMap<String, String>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>)
     where
         F: Fn(FunctionResult),
     {
         let rt = self.tokio_runtime.clone();
-        let fut = self.run(on_event, ctx, tb, cb);
+        let fut = self.run(on_event, ctx, tb, cb, env_vars);
         rt.block_on(fut)
     }
 
@@ -83,6 +84,7 @@ impl FunctionResultStream {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        env_vars: HashMap<String, String>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>)
     where
         F: Fn(FunctionResult),
@@ -123,7 +125,7 @@ impl FunctionResultStream {
             BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
         }
 
-        let rctx = ctx.create_ctx(tb, cb, span.clone().map(|s| s.span_id));
+        let rctx = ctx.create_ctx(tb, cb, span.clone().map(|s| s.span_id), env_vars);
         let res = match rctx {
             Ok(rctx) => {
                 async {

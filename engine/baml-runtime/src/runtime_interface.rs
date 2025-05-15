@@ -49,6 +49,7 @@ pub trait RuntimeInterface {
         ctx: RuntimeContext,
         #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
         collectors: Vec<Arc<Collector>>,
+        env_vars: HashMap<String, String>,
     ) -> Result<FunctionResultStream>;
 }
 

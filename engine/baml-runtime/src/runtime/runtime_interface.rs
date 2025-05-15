@@ -341,13 +341,14 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         Ok(walker.item.1.elem.constraints.clone())
     }
 
+    // TODO: check if test_type_builder needs env_vars
     fn get_test_type_builder(
         &self,
         function_name: &str,
         test_name: &str,
         ctx: &RuntimeContextManager,
     ) -> Result<Option<TypeBuilder>> {
-        let func = self.get_function(function_name, &ctx.create_ctx(None, None, None)?)?;
+        let func = self.get_function(function_name, &ctx.create_ctx(None, None, None, HashMap::new())?)?;
         let test = self.ir().find_test(&func, test_name)?;
 
         if test.type_builder_contents().is_empty() {
@@ -553,6 +554,7 @@ impl RuntimeInterface for InternalBamlRuntime {
         ctx: RuntimeContext,
         #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
         collectors: Vec<Arc<Collector>>,
+        env_vars: HashMap<String, String>
     ) -> Result<FunctionResultStream> {
         let is_expr_fn = self.get_expr_function(&function_name, &ctx).is_ok();
         if is_expr_fn {

@@ -7,7 +7,7 @@ mod test_execution_args;
 pub use test_execution_args::TestFilter;
 
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::{BTreeMap, BTreeSet, HashMap},
     ops::Deref,
     sync::Arc,
     time::Instant,
@@ -232,8 +232,9 @@ impl TestExecutor for BamlRuntime {
                         test_name.clone(),
                         TestExecutionStatus::Running,
                     ));
+                    // TODO: check if env_vars need to be passed here
                     let (result, _) = runtime
-                        .run_test(&function_name, &test_name, &ctx_manager, Some(|_| {}), None)
+                        .run_test(&function_name, &test_name, &ctx_manager, Some(|_| {}), None, HashMap::new())
                         .await;
                     let duration = start_instant.elapsed();
                     let _ = tx.send((

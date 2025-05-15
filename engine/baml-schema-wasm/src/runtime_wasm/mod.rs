@@ -1738,7 +1738,7 @@ impl WasmFunction {
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let ctx = context_manager
-            .create_ctx(test_type_builder.as_ref(), None, None)
+            .create_ctx(test_type_builder.as_ref(), None, None, None)
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let params = rt
@@ -1791,7 +1791,7 @@ impl WasmFunction {
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let ctx = context_manager
-            .create_ctx(test_type_builder.as_ref(), None, None)
+            .create_ctx(test_type_builder.as_ref(), None, None, None)
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let params = rt

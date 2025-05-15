@@ -6,6 +6,7 @@ use error::BamlError;
 use indexmap::IndexMap;
 use internal_baml_codegen::GeneratorArgs;
 use json_response::Json;
+use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use arg_validation::BamlServeValidate;
@@ -402,6 +403,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             let ctx_mgr =
                 RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None);
 
+            // TODO: check if env_vars need to be passed here
             let result_stream = self.b.read().await.stream_function(
                 b_fn,
                 &args,
@@ -409,6 +411,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 None,
                 client_registry.as_ref(),
                 Some(vec![]),
+                HashMap::new(),
             );
 
             match result_stream {
@@ -428,6 +431,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                             &ctx_mgr,
                             None,
                             None,
+                            HashMap::new(),
                         )
                         .await;
 

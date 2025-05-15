@@ -332,6 +332,7 @@ impl BamlRuntime {
         on_event: Option<F>,
         expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
         collector: Option<Arc<Collector>>,
+        env_vars: HashMap<String, String>,
     ) -> (Result<TestResponse>, Option<uuid::Uuid>)
     where
         F: Fn(FunctionResult),
@@ -348,7 +349,8 @@ impl BamlRuntime {
         }
 
         let run_to_response = || async {
-            let rctx_no_tb = ctx.create_ctx(None, None, span.clone().map(|s| s.span_id))?;
+            // acceptable clone, just used for testing
+            let rctx_no_tb = ctx.create_ctx(None, None, span.clone().map(|s| s.span_id), env_vars.clone())?;
             let (params, constraints) =
                 self.get_test_params_and_constraints(function_name, test_name, &rctx_no_tb, true)?;
 
@@ -362,6 +364,7 @@ impl BamlRuntime {
                 self.tracer.clone(),
                 None,
                 None,
+                env_vars.clone(),
                 function_name,
                 &params,
             )
@@ -386,7 +389,7 @@ impl BamlRuntime {
             };
 
             let rctx =
-                ctx.create_ctx(type_builder.as_ref(), None, span.clone().map(|s| s.span_id))?;
+                ctx.create_ctx(type_builder.as_ref(), None, span.clone().map(|s| s.span_id), env_vars.clone())?;
 
             let (function_name, params) = match expr_eval_result {
                 ExprEvalResult::Value { value, field_type } => {
@@ -439,9 +442,10 @@ impl BamlRuntime {
                 self.async_runtime.clone(),
                 // TODO: collectors here?
                 vec![],
+                env_vars.clone(),
             )?;
             let (response_res, span_uuid) =
-                stream.run(on_event, ctx, type_builder.as_ref(), None).await;
+                stream.run(on_event, ctx, type_builder.as_ref(), None, env_vars.clone()).await;
             let res = response_res?;
             let (_, llm_resp, val) = res
                 .event_chain()
@@ -512,6 +516,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         on_event: Option<F>,
         collector: Option<Arc<Collector>>,
+        env_vars: HashMap<String, String>,
     ) -> (Result<TestResponse>, Option<uuid::Uuid>)
     where
         F: Fn(FunctionResult),
@@ -524,6 +529,7 @@ impl BamlRuntime {
                 on_event,
                 None,
                 collector,
+                env_vars,
             )
             .await;
         res
@@ -594,7 +600,7 @@ impl BamlRuntime {
         // TODO: I don't want to modify function signature of create_ctx to include env_vars since a lot of code depends on it not being there.
         // Come back to this if the entire thing works
         
-        let response = match ctx.create_ctx_with_env_vars(tb, cb, env_vars, span.clone().map(|s| s.span_id)) {
+        let response = match ctx.create_ctx(tb, cb, span.clone().map(|s| s.span_id), env_vars) {
             Ok(rctx) => {
                 let is_expr_fn = self
                     .inner
@@ -730,16 +736,18 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
+        env_vars: HashMap<String, String>,
         expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
     ) -> Result<FunctionResultStream> {
         self.inner.stream_function_impl(
             function_name,
             params,
             self.tracer.clone(),
-            ctx.create_ctx(tb, cb, None)?,
+            ctx.create_ctx(tb, cb, None, env_vars.clone())?,
             #[cfg(not(target_arch = "wasm32"))]
             self.async_runtime.clone(),
             collectors.unwrap_or_else(|| vec![]),
+            env_vars,
         )
     }
 
@@ -751,8 +759,9 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
+        env_vars: HashMap<String, String>,  
     ) -> Result<FunctionResultStream> {
-        self.stream_function_with_expr_events(function_name, params, ctx, tb, cb, collectors, None)
+        self.stream_function_with_expr_events(function_name, params, ctx, tb, cb, collectors, env_vars, None)
     }
 
     pub async fn build_request(
@@ -765,7 +774,7 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
         stream: bool,
     ) -> Result<HTTPRequest> {
-        let ctx = context_manager.create_ctx_with_env_vars(tb, cb,env_vars, None)?;
+        let ctx = context_manager.create_ctx(tb, cb, None, env_vars)?;
 
         let provider = self.llm_provider_from_function(&function_name, &ctx)?;
 
@@ -835,8 +844,9 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        env_vars: HashMap<String, String>,
     ) -> Result<ResponseBamlValue> {
-        let ctx = ctx.create_ctx(tb, cb, None)?;
+        let ctx = ctx.create_ctx(tb, cb, None, env_vars)?;
 
         let renderer = PromptRenderer::from_function(
             &self.inner.get_function(&function_name, &ctx)?,
@@ -1151,6 +1161,7 @@ async fn expr_eval_result(
     tracer: Arc<BamlTracer>,
     tb: Option<&TypeBuilder>,
     cb: Option<&ClientRegistry>,
+    env_vars: HashMap<String, String>,
     function_name: &str,
     params: &BamlMap<String, BamlValue>,
 ) -> Result<ExprEvalResult> {
@@ -1168,7 +1179,7 @@ async fn expr_eval_result(
                     collector.track_function(FunctionId(span.clone().span_id.to_string()));
                 }
             }
-            let ctx = mgr.create_ctx(tb, cb, span.clone().map(|s| s.span_id))?;
+            let ctx = mgr.create_ctx(tb, cb, span.clone().map(|s| s.span_id), env_vars)?;
             let env = EvalEnv {
                 context: initial_context(ir),
                 runtime,
