@@ -12,6 +12,7 @@
     "noUncheckedIndexedAccess": true,
     "disableSourceOfProjectReferenceRedirect": true,
     "checkJs": true,
+    "rootDir": ".",
     "resolveJsonModule": true,
     "skipLibCheck": true,
     "strict": true,

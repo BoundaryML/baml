@@ -300,7 +300,7 @@ impl TracePublisher {
             .iter()
             .map(|(path, content)| {
                 // TODO(seawatts): Compute a simple hash for content_hash
-                let mut hasher = DefaultHasher::new();
+                let mut hasher: DefaultHasher = DefaultHasher::new();
                 content.hash(&mut hasher);
                 let content_hash = format!("{:x}", hasher.finish());
                 SourceCode {

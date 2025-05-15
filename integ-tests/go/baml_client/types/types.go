@@ -4969,39 +4969,11 @@ type JsonArray []JsonValue
 
 type JsonEntry Union__SimpleTag__JsonTemplate
 
-func (c JsonEntry) BamlTypeName() string {
-	return Union__SimpleTag__JsonTemplate(c).BamlTypeName()
-}
-
-func (c JsonEntry) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return Union__SimpleTag__JsonTemplate(c).Encode(builder)
-}
-
-func (u *JsonEntry) Decode(holder *cffi.CFFIValueUnionVariant) {
-	decodedUnion := Union__SimpleTag__JsonTemplate{}
-	decodedUnion.Decode(holder)
-	*u = JsonEntry(decodedUnion)
-}
-
 type JsonObject map[string]JsonValue
 
 type JsonTemplate map[string]JsonEntry
 
 type JsonValue Union__int__string__bool__float__JsonObject__JsonArray
-
-func (c JsonValue) BamlTypeName() string {
-	return Union__int__string__bool__float__JsonObject__JsonArray(c).BamlTypeName()
-}
-
-func (c JsonValue) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return Union__int__string__bool__float__JsonObject__JsonArray(c).Encode(builder)
-}
-
-func (u *JsonValue) Decode(holder *cffi.CFFIValueUnionVariant) {
-	decodedUnion := Union__int__string__bool__float__JsonObject__JsonArray{}
-	decodedUnion.Decode(holder)
-	*u = JsonValue(decodedUnion)
-}
 
 type RecAliasOne RecAliasTwo
 
