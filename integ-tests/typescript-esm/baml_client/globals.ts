@@ -18,11 +18,13 @@ $ pnpm add @boundaryml/baml
 import { BamlRuntime, BamlCtxManager } from '@boundaryml/baml'
 import { getBamlFiles } from './inlinedbaml.js'
 
+// Create a copy of process.env to avoid mutations
+const envVars = { ...process.env }
 
 export const DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = BamlRuntime.fromFiles(
   'baml_src',
   getBamlFiles(),
-  process.env
+  envVars
 )
 export const DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX = new BamlCtxManager(DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME)
 

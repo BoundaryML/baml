@@ -112,7 +112,6 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                     .filter(|(k, _)| walker.required_env_vars().contains(*k))
                     .map(|(k, v)| (k.clone(), v.clone()))
                     .collect();
-                println!("filtered_env_vars: {:#?}", filtered_env_vars);
                 clients.insert(client_name.into(), CachedClient::new(new_client.clone(), filtered_env_vars));
                 Ok(new_client)
             }

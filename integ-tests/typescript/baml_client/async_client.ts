@@ -35,6 +35,7 @@ type BamlCallOptions = {
   tb?: TypeBuilder
   clientRegistry?: ClientRegistry
   collector?: Collector | Collector[]
+  envVars?: Record<string, string | undefined>
 }
 
 export class BamlAsyncClient {
@@ -90,6 +91,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "AaaSamOutputFormat",
         {
@@ -99,6 +101,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Recipe
     } catch (error) {
@@ -113,6 +116,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "AliasThatPointsToRecursiveType",
         {
@@ -122,6 +126,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as LinkedListAliasNode
     } catch (error) {
@@ -136,6 +141,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "AliasWithMultipleAttrs",
         {
@@ -145,6 +151,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Checked<number,"gt_ten">
     } catch (error) {
@@ -159,6 +166,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "AliasedInputClass",
         {
@@ -168,6 +176,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -182,6 +191,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "AliasedInputClass2",
         {
@@ -191,6 +201,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -205,6 +216,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "AliasedInputClassNested",
         {
@@ -214,6 +226,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -228,6 +241,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "AliasedInputEnum",
         {
@@ -237,6 +251,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -251,6 +266,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "AliasedInputList",
         {
@@ -260,6 +276,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -274,6 +291,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "AllowedOptionals",
         {
@@ -283,6 +301,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as OptionalListAndMap
     } catch (error) {
@@ -297,6 +316,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "AssertFn",
         {
@@ -306,6 +326,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as number
     } catch (error) {
@@ -320,6 +341,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "AudioInput",
         {
@@ -329,6 +351,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -343,6 +366,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "BuildLinkedList",
         {
@@ -352,6 +376,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as LinkedList
     } catch (error) {
@@ -366,6 +391,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "BuildTree",
         {
@@ -375,6 +401,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Tree
     } catch (error) {
@@ -389,6 +416,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ClassThatPointsToRecursiveClassThroughAlias",
         {
@@ -398,6 +426,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as ClassToRecAlias
     } catch (error) {
@@ -412,6 +441,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ClassifyDynEnumTwo",
         {
@@ -421,6 +451,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as (string | DynEnumTwo)
     } catch (error) {
@@ -435,6 +466,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ClassifyMessage",
         {
@@ -444,6 +476,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Category
     } catch (error) {
@@ -458,6 +491,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ClassifyMessage2",
         {
@@ -467,6 +501,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Category
     } catch (error) {
@@ -481,6 +516,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ClassifyMessage3",
         {
@@ -490,6 +526,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Category
     } catch (error) {
@@ -504,6 +541,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "Completion",
         {
@@ -513,6 +551,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -527,6 +566,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "CustomTask",
         {
@@ -536,6 +576,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as BookOrder | FlightConfirmation | GroceryReceipt
     } catch (error) {
@@ -550,6 +591,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "DescribeImage",
         {
@@ -559,6 +601,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -573,6 +616,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "DescribeImage2",
         {
@@ -582,6 +626,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -596,6 +641,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "DescribeImage3",
         {
@@ -605,6 +651,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -619,6 +666,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "DescribeImage4",
         {
@@ -628,6 +676,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -642,6 +691,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "DescribeMedia1599",
         {
@@ -651,6 +701,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -665,6 +716,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "DifferentiateUnions",
         {
@@ -674,6 +726,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as OriginalA | OriginalB
     } catch (error) {
@@ -688,6 +741,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "DummyOutputFunction",
         {
@@ -697,6 +751,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as DummyOutput
     } catch (error) {
@@ -711,6 +766,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "DynamicFunc",
         {
@@ -720,6 +776,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as DynamicClassTwo
     } catch (error) {
@@ -734,6 +791,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "DynamicInputOutput",
         {
@@ -743,6 +801,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as DynInputOutput
     } catch (error) {
@@ -757,6 +816,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "DynamicListInputOutput",
         {
@@ -766,6 +826,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as DynInputOutput[]
     } catch (error) {
@@ -780,6 +841,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ExpectFailure",
         {
@@ -789,6 +851,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -803,6 +866,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ExtractContactInfo",
         {
@@ -812,6 +876,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as ContactInfo
     } catch (error) {
@@ -826,6 +891,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ExtractEntities",
         {
@@ -835,6 +901,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as DynamicSchema
     } catch (error) {
@@ -849,6 +916,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ExtractHobby",
         {
@@ -858,6 +926,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as (string | Hobby)[]
     } catch (error) {
@@ -872,6 +941,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ExtractNames",
         {
@@ -881,6 +951,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string[]
     } catch (error) {
@@ -895,6 +966,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ExtractPeople",
         {
@@ -904,6 +976,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Person[]
     } catch (error) {
@@ -918,6 +991,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ExtractReceiptInfo",
         {
@@ -927,6 +1001,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as ReceiptInfo
     } catch (error) {
@@ -941,6 +1016,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ExtractResume",
         {
@@ -950,6 +1026,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Resume
     } catch (error) {
@@ -964,6 +1041,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ExtractResume2",
         {
@@ -973,6 +1051,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Resume
     } catch (error) {
@@ -987,6 +1066,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnClassOptionalOutput",
         {
@@ -996,6 +1076,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as ClassOptionalOutput | null
     } catch (error) {
@@ -1010,6 +1091,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnClassOptionalOutput2",
         {
@@ -1019,6 +1101,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as ClassOptionalOutput2 | null
     } catch (error) {
@@ -1033,6 +1116,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnEnumListOutput",
         {
@@ -1042,6 +1126,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as EnumOutput[]
     } catch (error) {
@@ -1056,6 +1141,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnEnumOutput",
         {
@@ -1065,6 +1151,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as EnumOutput
     } catch (error) {
@@ -1079,6 +1166,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnLiteralClassInputOutput",
         {
@@ -1088,6 +1176,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as LiteralClassHello
     } catch (error) {
@@ -1102,6 +1191,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnLiteralUnionClassInputOutput",
         {
@@ -1111,6 +1201,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as LiteralClassOne | LiteralClassTwo
     } catch (error) {
@@ -1125,6 +1216,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnNamedArgsSingleStringOptional",
         {
@@ -1134,6 +1226,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -1148,6 +1241,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnOutputBool",
         {
@@ -1157,6 +1251,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as boolean
     } catch (error) {
@@ -1171,6 +1266,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnOutputClass",
         {
@@ -1180,6 +1276,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as TestOutputClass
     } catch (error) {
@@ -1194,6 +1291,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnOutputClassList",
         {
@@ -1203,6 +1301,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as TestOutputClass[]
     } catch (error) {
@@ -1217,6 +1316,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnOutputClassNested",
         {
@@ -1226,6 +1326,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as TestClassNested
     } catch (error) {
@@ -1240,6 +1341,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnOutputClassWithEnum",
         {
@@ -1249,6 +1351,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as TestClassWithEnum
     } catch (error) {
@@ -1263,6 +1366,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnOutputInt",
         {
@@ -1272,6 +1376,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as number
     } catch (error) {
@@ -1286,6 +1391,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnOutputLiteralBool",
         {
@@ -1295,6 +1401,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as false
     } catch (error) {
@@ -1309,6 +1416,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnOutputLiteralInt",
         {
@@ -1318,6 +1426,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as 5
     } catch (error) {
@@ -1332,6 +1441,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnOutputLiteralString",
         {
@@ -1341,6 +1451,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as "example output"
     } catch (error) {
@@ -1355,6 +1466,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnOutputStringList",
         {
@@ -1364,6 +1476,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string[]
     } catch (error) {
@@ -1378,6 +1491,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnTestAliasedEnumOutput",
         {
@@ -1387,6 +1501,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as TestEnum
     } catch (error) {
@@ -1401,6 +1516,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnTestClassAlias",
         {
@@ -1410,6 +1526,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as TestClassAlias
     } catch (error) {
@@ -1424,6 +1541,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "FnTestNamedArgsSingleEnum",
         {
@@ -1433,6 +1551,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -1447,6 +1566,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "GetDataType",
         {
@@ -1456,6 +1576,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as RaysData
     } catch (error) {
@@ -1470,6 +1591,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "GetOrderInfo",
         {
@@ -1479,6 +1601,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as OrderInfo
     } catch (error) {
@@ -1493,6 +1616,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "GetQuery",
         {
@@ -1502,6 +1626,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as SearchParams
     } catch (error) {
@@ -1516,6 +1641,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "InOutEnumMapKey",
         {
@@ -1525,6 +1651,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Partial<Record<types.MapKey, string>>
     } catch (error) {
@@ -1539,6 +1666,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "InOutLiteralStringUnionMapKey",
         {
@@ -1548,6 +1676,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Partial<Record<"one" | "two" | "three" | "four", string>>
     } catch (error) {
@@ -1562,6 +1691,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "InOutSingleLiteralStringMapKey",
         {
@@ -1571,6 +1701,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Partial<Record<"key", string>>
     } catch (error) {
@@ -1585,6 +1716,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "JsonTypeAliasCycle",
         {
@@ -1594,6 +1726,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as JsonValue
     } catch (error) {
@@ -1608,6 +1741,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "LLMEcho",
         {
@@ -1617,6 +1751,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -1631,6 +1766,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "LiteralUnionsTest",
         {
@@ -1640,6 +1776,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as 1 | true | "string output"
     } catch (error) {
@@ -1654,6 +1791,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "MakeBlockConstraint",
         {
@@ -1663,6 +1801,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Checked<BlockConstraint,"cross_field">
     } catch (error) {
@@ -1677,6 +1816,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "MakeClassWithBlockDone",
         {
@@ -1686,6 +1826,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as ClassWithBlockDone
     } catch (error) {
@@ -1700,6 +1841,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "MakeClassWithExternalDone",
         {
@@ -1709,6 +1851,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as ClassWithoutDone
     } catch (error) {
@@ -1723,6 +1866,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "MakeNestedBlockConstraint",
         {
@@ -1732,6 +1876,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as NestedBlockConstraint
     } catch (error) {
@@ -1746,6 +1891,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "MakeSemanticContainer",
         {
@@ -1755,6 +1901,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as SemanticContainer
     } catch (error) {
@@ -1769,6 +1916,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "MapAlias",
         {
@@ -1778,6 +1926,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Record<string, string[]>
     } catch (error) {
@@ -1792,6 +1941,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "MergeAliasAttributes",
         {
@@ -1801,6 +1951,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as MergeAttrs
     } catch (error) {
@@ -1815,6 +1966,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "MyFunc",
         {
@@ -1824,6 +1976,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as DynamicOutput
     } catch (error) {
@@ -1838,6 +1991,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "NestedAlias",
         {
@@ -1847,6 +2001,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as number | string | boolean | number | string[] | Record<string, string[]>
     } catch (error) {
@@ -1861,6 +2016,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "NullLiteralClassHello",
         {
@@ -1870,6 +2026,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as ClassForNullLiteral
     } catch (error) {
@@ -1884,6 +2041,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "OpenAIWithAnthropicResponseHello",
         {
@@ -1893,6 +2051,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -1907,6 +2066,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "OptionalTest_Function",
         {
@@ -1916,6 +2076,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as (OptionalTest_ReturnType | null)[]
     } catch (error) {
@@ -1930,6 +2091,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "PredictAge",
         {
@@ -1939,6 +2101,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as FooAny
     } catch (error) {
@@ -1953,6 +2116,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "PredictAgeBare",
         {
@@ -1962,6 +2126,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Checked<number,"too_big">
     } catch (error) {
@@ -1976,6 +2141,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "PrimitiveAlias",
         {
@@ -1985,6 +2151,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as number | string | boolean | number
     } catch (error) {
@@ -1999,6 +2166,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "PromptTestClaude",
         {
@@ -2008,6 +2176,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2022,6 +2191,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "PromptTestClaudeChat",
         {
@@ -2031,6 +2201,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2045,6 +2216,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "PromptTestClaudeChatNoSystem",
         {
@@ -2054,6 +2226,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2068,6 +2241,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "PromptTestOpenAI",
         {
@@ -2077,6 +2251,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2091,6 +2266,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "PromptTestOpenAIChat",
         {
@@ -2100,6 +2276,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2114,6 +2291,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "PromptTestOpenAIChatNoSystem",
         {
@@ -2123,6 +2301,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2137,6 +2316,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "PromptTestStreaming",
         {
@@ -2146,6 +2326,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2160,6 +2341,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "RecursiveAliasCycle",
         {
@@ -2169,6 +2351,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as RecAliasOne
     } catch (error) {
@@ -2183,6 +2366,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "RecursiveClassWithAliasIndirection",
         {
@@ -2192,6 +2376,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as NodeWithAliasIndirection
     } catch (error) {
@@ -2206,6 +2391,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "RecursiveUnionTest",
         {
@@ -2215,6 +2401,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as RecursiveUnion
     } catch (error) {
@@ -2229,6 +2416,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ReturnAliasWithMergedAttributes",
         {
@@ -2238,6 +2426,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Checked<number,"gt_ten">
     } catch (error) {
@@ -2252,6 +2441,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ReturnFailingAssert",
         {
@@ -2261,6 +2451,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as number
     } catch (error) {
@@ -2275,6 +2466,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ReturnJsonEntry",
         {
@@ -2284,6 +2476,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as JsonTemplate
     } catch (error) {
@@ -2298,6 +2491,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "ReturnMalformedConstraints",
         {
@@ -2307,6 +2501,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as MalformedConstraints
     } catch (error) {
@@ -2321,6 +2516,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "SchemaDescriptions",
         {
@@ -2330,6 +2526,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Schema
     } catch (error) {
@@ -2344,6 +2541,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "SimpleRecursiveListAlias",
         {
@@ -2353,6 +2551,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as RecursiveListAlias
     } catch (error) {
@@ -2367,6 +2566,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "SimpleRecursiveMapAlias",
         {
@@ -2376,6 +2576,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as RecursiveMapAlias
     } catch (error) {
@@ -2390,6 +2591,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "StreamBigNumbers",
         {
@@ -2399,6 +2601,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as BigNumbers
     } catch (error) {
@@ -2413,6 +2616,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "StreamFailingAssertion",
         {
@@ -2422,6 +2626,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as TwoStoriesOneTitle
     } catch (error) {
@@ -2436,6 +2641,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "StreamFailingCheck",
         {
@@ -2445,6 +2651,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as TwoStoriesOneTitleCheck
     } catch (error) {
@@ -2459,6 +2666,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "StreamOneBigNumber",
         {
@@ -2468,6 +2676,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as number
     } catch (error) {
@@ -2482,6 +2691,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "StreamUnionIntegers",
         {
@@ -2491,6 +2701,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as (number | string)[]
     } catch (error) {
@@ -2505,6 +2716,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "StreamingCompoundNumbers",
         {
@@ -2514,6 +2726,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as CompoundBigNumbers
     } catch (error) {
@@ -2528,6 +2741,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "StructureDocument1559",
         {
@@ -2537,6 +2751,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Document1559
     } catch (error) {
@@ -2551,6 +2766,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TakeRecAliasDep",
         {
@@ -2560,6 +2776,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as RecursiveAliasDependency
     } catch (error) {
@@ -2574,6 +2791,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TellStory",
         {
@@ -2583,6 +2801,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2597,6 +2816,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAnthropic",
         {
@@ -2606,6 +2826,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2620,6 +2841,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAnthropicShorthand",
         {
@@ -2629,6 +2851,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2643,6 +2866,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAws",
         {
@@ -2652,6 +2876,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2666,6 +2891,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAwsClaude37",
         {
@@ -2675,6 +2901,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2689,6 +2916,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAwsInferenceProfile",
         {
@@ -2698,6 +2926,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2712,6 +2941,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAwsInvalidAccessKey",
         {
@@ -2721,6 +2951,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2735,6 +2966,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAwsInvalidProfile",
         {
@@ -2744,6 +2976,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2758,6 +2991,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAwsInvalidRegion",
         {
@@ -2767,6 +3001,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2781,6 +3016,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAwsInvalidSessionToken",
         {
@@ -2790,6 +3026,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2804,6 +3041,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAzure",
         {
@@ -2813,6 +3051,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2827,6 +3066,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAzureFailure",
         {
@@ -2836,6 +3076,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2850,6 +3091,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAzureO1NoMaxTokens",
         {
@@ -2859,6 +3101,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2873,6 +3116,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAzureO1WithMaxCompletionTokens",
         {
@@ -2882,6 +3126,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2896,6 +3141,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAzureO1WithMaxTokens",
         {
@@ -2905,6 +3151,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2919,6 +3166,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAzureO3NoMaxTokens",
         {
@@ -2928,6 +3176,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2942,6 +3191,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAzureO3WithMaxCompletionTokens",
         {
@@ -2951,6 +3201,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2965,6 +3216,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestAzureWithMaxTokens",
         {
@@ -2974,6 +3226,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -2988,6 +3241,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestCaching",
         {
@@ -2997,6 +3251,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3011,6 +3266,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestFallbackClient",
         {
@@ -3020,6 +3276,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3034,6 +3291,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestFallbackStrategy",
         {
@@ -3043,6 +3301,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3057,6 +3316,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestFallbackToShorthand",
         {
@@ -3066,6 +3326,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3080,6 +3341,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleBool",
         {
@@ -3089,6 +3351,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3103,6 +3366,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleClass",
         {
@@ -3112,6 +3376,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3126,6 +3391,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleEnumList",
         {
@@ -3135,6 +3401,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3149,6 +3416,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleFloat",
         {
@@ -3158,6 +3426,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3172,6 +3441,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleInt",
         {
@@ -3181,6 +3451,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3195,6 +3466,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleMapStringToClass",
         {
@@ -3204,6 +3476,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Record<string, StringToClassEntry>
     } catch (error) {
@@ -3218,6 +3491,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleMapStringToMap",
         {
@@ -3227,6 +3501,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Record<string, Record<string, string>>
     } catch (error) {
@@ -3241,6 +3516,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleMapStringToString",
         {
@@ -3250,6 +3526,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Record<string, string>
     } catch (error) {
@@ -3264,6 +3541,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleString",
         {
@@ -3273,6 +3551,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3287,6 +3566,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleStringArray",
         {
@@ -3296,6 +3576,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3310,6 +3591,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleStringList",
         {
@@ -3319,6 +3601,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string[]
     } catch (error) {
@@ -3333,6 +3616,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestGemini",
         {
@@ -3342,6 +3626,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3356,6 +3641,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestGeminiOpenAiGeneric",
         {
@@ -3365,6 +3651,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3379,6 +3666,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestGeminiSystem",
         {
@@ -3388,6 +3676,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3402,6 +3691,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestGeminiSystemAsChat",
         {
@@ -3411,6 +3701,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3425,6 +3716,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestGroq",
         {
@@ -3434,6 +3726,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3448,6 +3741,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestImageInput",
         {
@@ -3457,6 +3751,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3471,6 +3766,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestImageInputAnthropic",
         {
@@ -3480,6 +3776,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3494,6 +3791,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestImageListInput",
         {
@@ -3503,6 +3801,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3517,6 +3816,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestMemory",
         {
@@ -3526,6 +3826,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as TestMemoryOutput
     } catch (error) {
@@ -3540,6 +3841,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestMulticlassNamedArgs",
         {
@@ -3549,6 +3851,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3563,6 +3866,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestNamedArgsLiteralBool",
         {
@@ -3572,6 +3876,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3586,6 +3891,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestNamedArgsLiteralInt",
         {
@@ -3595,6 +3901,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3609,6 +3916,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestNamedArgsLiteralString",
         {
@@ -3618,6 +3926,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3632,6 +3941,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestOllama",
         {
@@ -3641,6 +3951,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string | null
     } catch (error) {
@@ -3655,6 +3966,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestOllamaHaiku",
         {
@@ -3664,6 +3976,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as Haiku
     } catch (error) {
@@ -3678,6 +3991,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestOpenAI",
         {
@@ -3687,6 +4001,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3701,6 +4016,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestOpenAIDummyClient",
         {
@@ -3710,6 +4026,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3724,6 +4041,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestOpenAIGPT4oMini",
         {
@@ -3733,6 +4051,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3747,6 +4066,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestOpenAILegacyProvider",
         {
@@ -3756,6 +4076,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3770,6 +4091,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestOpenAIO1NoMaxTokens",
         {
@@ -3779,6 +4101,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3793,6 +4116,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestOpenAIO1WithMaxCompletionTokens",
         {
@@ -3802,6 +4126,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3816,6 +4141,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestOpenAIO1WithMaxTokens",
         {
@@ -3825,6 +4151,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3839,6 +4166,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestOpenAIShorthand",
         {
@@ -3848,6 +4176,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3862,6 +4191,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestOpenAIWithFinishReasonError",
         {
@@ -3871,6 +4201,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3885,6 +4216,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestOpenAIWithMaxTokens",
         {
@@ -3894,6 +4226,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3908,6 +4241,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestOpenAIWithNullMaxTokens",
         {
@@ -3917,6 +4251,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3931,6 +4266,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestOpenRouterMistralSmall3_1_24b",
         {
@@ -3940,6 +4276,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3954,6 +4291,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestRetryConstant",
         {
@@ -3963,6 +4301,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -3977,6 +4316,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestRetryExponential",
         {
@@ -3986,6 +4326,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -4000,6 +4341,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestRoundRobinStrategy",
         {
@@ -4009,6 +4351,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -4023,6 +4366,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestSingleFallbackClient",
         {
@@ -4032,6 +4376,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -4046,6 +4391,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestThinking",
         {
@@ -4055,6 +4401,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as CustomStory
     } catch (error) {
@@ -4069,6 +4416,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestUniverseQuestion",
         {
@@ -4078,6 +4426,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as UniverseQuestion
     } catch (error) {
@@ -4092,6 +4441,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestVertex",
         {
@@ -4101,6 +4451,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -4115,6 +4466,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestVertexClaude",
         {
@@ -4124,6 +4476,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -4138,6 +4491,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "TestVertexWithSystemInstructions",
         {
@@ -4147,6 +4501,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -4161,6 +4516,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "UnionTest_Function",
         {
@@ -4170,6 +4526,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as UnionTest_ReturnType
     } catch (error) {
@@ -4184,6 +4541,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "UseBlockConstraint",
         {
@@ -4193,6 +4551,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as number
     } catch (error) {
@@ -4207,6 +4566,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "UseMaintainFieldOrder",
         {
@@ -4216,6 +4576,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as MaintainFieldOrder
     } catch (error) {
@@ -4230,6 +4591,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "UseMalformedConstraints",
         {
@@ -4239,6 +4601,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as number
     } catch (error) {
@@ -4253,6 +4616,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "UseNestedBlockConstraint",
         {
@@ -4262,6 +4626,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return raw.parsed(false) as number
     } catch (error) {
@@ -4279,17 +4644,18 @@ class BamlStreamClient {
   constructor(runtime: BamlRuntime, ctxManager: BamlCtxManager, bamlOptions?: BamlCallOptions) {
     this.runtime = runtime
     this.ctxManager = ctxManager
-    this.bamlOptions = bamlOptions || {}
+    this.bamlOptions = bamlOptions || { envVars: { ...process.env } }
   }
 
   
   AaaSamOutputFormat(
       recipe: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.Recipe, Recipe> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "AaaSamOutputFormat",
         {
@@ -4300,6 +4666,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.Recipe, Recipe>(
         raw,
@@ -4314,11 +4681,12 @@ class BamlStreamClient {
   
   AliasThatPointsToRecursiveType(
       data: LinkedListAliasNode,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.LinkedListAliasNode, LinkedListAliasNode> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "AliasThatPointsToRecursiveType",
         {
@@ -4329,6 +4697,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.LinkedListAliasNode, LinkedListAliasNode>(
         raw,
@@ -4343,11 +4712,12 @@ class BamlStreamClient {
   
   AliasWithMultipleAttrs(
       money: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<Checked<number,"gt_ten">, Checked<number,"gt_ten">> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "AliasWithMultipleAttrs",
         {
@@ -4358,6 +4728,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<Checked<number,"gt_ten">, Checked<number,"gt_ten">>(
         raw,
@@ -4372,11 +4743,12 @@ class BamlStreamClient {
   
   AliasedInputClass(
       input: InputClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "AliasedInputClass",
         {
@@ -4387,6 +4759,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -4401,11 +4774,12 @@ class BamlStreamClient {
   
   AliasedInputClass2(
       input: InputClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "AliasedInputClass2",
         {
@@ -4416,6 +4790,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -4430,11 +4805,12 @@ class BamlStreamClient {
   
   AliasedInputClassNested(
       input: InputClassNested,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "AliasedInputClassNested",
         {
@@ -4445,6 +4821,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -4459,11 +4836,12 @@ class BamlStreamClient {
   
   AliasedInputEnum(
       input: AliasedEnum,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "AliasedInputEnum",
         {
@@ -4474,6 +4852,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -4488,11 +4867,12 @@ class BamlStreamClient {
   
   AliasedInputList(
       input: AliasedEnum[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "AliasedInputList",
         {
@@ -4503,6 +4883,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -4517,11 +4898,12 @@ class BamlStreamClient {
   
   AllowedOptionals(
       optionals: OptionalListAndMap,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.OptionalListAndMap, OptionalListAndMap> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "AllowedOptionals",
         {
@@ -4532,6 +4914,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.OptionalListAndMap, OptionalListAndMap>(
         raw,
@@ -4546,11 +4929,12 @@ class BamlStreamClient {
   
   AssertFn(
       a: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<number, number> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "AssertFn",
         {
@@ -4561,6 +4945,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<number, number>(
         raw,
@@ -4575,11 +4960,12 @@ class BamlStreamClient {
   
   AudioInput(
       aud: Audio,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "AudioInput",
         {
@@ -4590,6 +4976,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -4604,11 +4991,12 @@ class BamlStreamClient {
   
   BuildLinkedList(
       input: number[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.LinkedList, LinkedList> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "BuildLinkedList",
         {
@@ -4619,6 +5007,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.LinkedList, LinkedList>(
         raw,
@@ -4633,11 +5022,12 @@ class BamlStreamClient {
   
   BuildTree(
       input: BinaryNode,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.Tree, Tree> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "BuildTree",
         {
@@ -4648,6 +5038,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.Tree, Tree>(
         raw,
@@ -4662,11 +5053,12 @@ class BamlStreamClient {
   
   ClassThatPointsToRecursiveClassThroughAlias(
       cls: ClassToRecAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.ClassToRecAlias, ClassToRecAlias> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ClassThatPointsToRecursiveClassThroughAlias",
         {
@@ -4677,6 +5069,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.ClassToRecAlias, ClassToRecAlias>(
         raw,
@@ -4691,11 +5084,12 @@ class BamlStreamClient {
   
   ClassifyDynEnumTwo(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(string | DynEnumTwo), (string | DynEnumTwo)> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ClassifyDynEnumTwo",
         {
@@ -4706,6 +5100,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(string | DynEnumTwo), (string | DynEnumTwo)>(
         raw,
@@ -4720,11 +5115,12 @@ class BamlStreamClient {
   
   ClassifyMessage(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<types.Category, Category> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ClassifyMessage",
         {
@@ -4735,6 +5131,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<types.Category, Category>(
         raw,
@@ -4749,11 +5146,12 @@ class BamlStreamClient {
   
   ClassifyMessage2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<types.Category, Category> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ClassifyMessage2",
         {
@@ -4764,6 +5162,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<types.Category, Category>(
         raw,
@@ -4778,11 +5177,12 @@ class BamlStreamClient {
   
   ClassifyMessage3(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<types.Category, Category> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ClassifyMessage3",
         {
@@ -4793,6 +5193,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<types.Category, Category>(
         raw,
@@ -4807,11 +5208,12 @@ class BamlStreamClient {
   
   Completion(
       prefix: string,suffix: string,language: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "Completion",
         {
@@ -4822,6 +5224,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -4836,11 +5239,12 @@ class BamlStreamClient {
   
   CustomTask(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<((partial_types.BookOrder | null) | (partial_types.FlightConfirmation | null) | (partial_types.GroceryReceipt | null)), BookOrder | FlightConfirmation | GroceryReceipt> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "CustomTask",
         {
@@ -4851,6 +5255,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<((partial_types.BookOrder | null) | (partial_types.FlightConfirmation | null) | (partial_types.GroceryReceipt | null)), BookOrder | FlightConfirmation | GroceryReceipt>(
         raw,
@@ -4865,11 +5270,12 @@ class BamlStreamClient {
   
   DescribeImage(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "DescribeImage",
         {
@@ -4880,6 +5286,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -4894,11 +5301,12 @@ class BamlStreamClient {
   
   DescribeImage2(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "DescribeImage2",
         {
@@ -4909,6 +5317,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -4923,11 +5332,12 @@ class BamlStreamClient {
   
   DescribeImage3(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "DescribeImage3",
         {
@@ -4938,6 +5348,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -4952,11 +5363,12 @@ class BamlStreamClient {
   
   DescribeImage4(
       classWithImage: ClassWithImage,img2: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "DescribeImage4",
         {
@@ -4967,6 +5379,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -4981,11 +5394,12 @@ class BamlStreamClient {
   
   DescribeMedia1599(
       img: Image,client_sector: string,client_name: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "DescribeMedia1599",
         {
@@ -4996,6 +5410,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -5010,11 +5425,12 @@ class BamlStreamClient {
   
   DifferentiateUnions(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<((partial_types.OriginalA | null) | (partial_types.OriginalB | null)), OriginalA | OriginalB> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "DifferentiateUnions",
         {
@@ -5025,6 +5441,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<((partial_types.OriginalA | null) | (partial_types.OriginalB | null)), OriginalA | OriginalB>(
         raw,
@@ -5039,11 +5456,12 @@ class BamlStreamClient {
   
   DummyOutputFunction(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.DummyOutput, DummyOutput> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "DummyOutputFunction",
         {
@@ -5054,6 +5472,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.DummyOutput, DummyOutput>(
         raw,
@@ -5068,11 +5487,12 @@ class BamlStreamClient {
   
   DynamicFunc(
       input: DynamicClassOne,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.DynamicClassTwo, DynamicClassTwo> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "DynamicFunc",
         {
@@ -5083,6 +5503,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.DynamicClassTwo, DynamicClassTwo>(
         raw,
@@ -5097,11 +5518,12 @@ class BamlStreamClient {
   
   DynamicInputOutput(
       input: DynInputOutput,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.DynInputOutput, DynInputOutput> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "DynamicInputOutput",
         {
@@ -5112,6 +5534,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.DynInputOutput, DynInputOutput>(
         raw,
@@ -5126,11 +5549,12 @@ class BamlStreamClient {
   
   DynamicListInputOutput(
       input: DynInputOutput[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(partial_types.DynInputOutput | null)[], DynInputOutput[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "DynamicListInputOutput",
         {
@@ -5141,6 +5565,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(partial_types.DynInputOutput | null)[], DynInputOutput[]>(
         raw,
@@ -5155,11 +5580,12 @@ class BamlStreamClient {
   
   ExpectFailure(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ExpectFailure",
         {
@@ -5170,6 +5596,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -5184,11 +5611,12 @@ class BamlStreamClient {
   
   ExtractContactInfo(
       document: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.ContactInfo, ContactInfo> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ExtractContactInfo",
         {
@@ -5199,6 +5627,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.ContactInfo, ContactInfo>(
         raw,
@@ -5213,11 +5642,12 @@ class BamlStreamClient {
   
   ExtractEntities(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.DynamicSchema, DynamicSchema> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ExtractEntities",
         {
@@ -5228,6 +5658,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.DynamicSchema, DynamicSchema>(
         raw,
@@ -5242,11 +5673,12 @@ class BamlStreamClient {
   
   ExtractHobby(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(string | Hobby | null)[], (string | Hobby)[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ExtractHobby",
         {
@@ -5257,6 +5689,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(string | Hobby | null)[], (string | Hobby)[]>(
         raw,
@@ -5271,11 +5704,12 @@ class BamlStreamClient {
   
   ExtractNames(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(string | null)[], string[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ExtractNames",
         {
@@ -5286,6 +5720,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(string | null)[], string[]>(
         raw,
@@ -5300,11 +5735,12 @@ class BamlStreamClient {
   
   ExtractPeople(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(partial_types.Person | null)[], Person[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ExtractPeople",
         {
@@ -5315,6 +5751,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(partial_types.Person | null)[], Person[]>(
         raw,
@@ -5329,11 +5766,12 @@ class BamlStreamClient {
   
   ExtractReceiptInfo(
       email: string,reason: "curiosity" | "personal_finance",
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.ReceiptInfo, ReceiptInfo> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ExtractReceiptInfo",
         {
@@ -5344,6 +5782,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.ReceiptInfo, ReceiptInfo>(
         raw,
@@ -5358,11 +5797,12 @@ class BamlStreamClient {
   
   ExtractResume(
       resume: string,img?: Image | null,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.Resume, Resume> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ExtractResume",
         {
@@ -5373,6 +5813,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.Resume, Resume>(
         raw,
@@ -5387,11 +5828,12 @@ class BamlStreamClient {
   
   ExtractResume2(
       resume: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.Resume, Resume> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ExtractResume2",
         {
@@ -5402,6 +5844,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.Resume, Resume>(
         raw,
@@ -5416,11 +5859,12 @@ class BamlStreamClient {
   
   FnClassOptionalOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<((partial_types.ClassOptionalOutput | null) | null), ClassOptionalOutput | null> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnClassOptionalOutput",
         {
@@ -5431,6 +5875,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<((partial_types.ClassOptionalOutput | null) | null), ClassOptionalOutput | null>(
         raw,
@@ -5445,11 +5890,12 @@ class BamlStreamClient {
   
   FnClassOptionalOutput2(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<((partial_types.ClassOptionalOutput2 | null) | null), ClassOptionalOutput2 | null> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnClassOptionalOutput2",
         {
@@ -5460,6 +5906,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<((partial_types.ClassOptionalOutput2 | null) | null), ClassOptionalOutput2 | null>(
         raw,
@@ -5474,11 +5921,12 @@ class BamlStreamClient {
   
   FnEnumListOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(EnumOutput | null)[], EnumOutput[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnEnumListOutput",
         {
@@ -5489,6 +5937,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(EnumOutput | null)[], EnumOutput[]>(
         raw,
@@ -5503,11 +5952,12 @@ class BamlStreamClient {
   
   FnEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<types.EnumOutput, EnumOutput> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnEnumOutput",
         {
@@ -5518,6 +5968,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<types.EnumOutput, EnumOutput>(
         raw,
@@ -5532,11 +5983,12 @@ class BamlStreamClient {
   
   FnLiteralClassInputOutput(
       input: LiteralClassHello,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.LiteralClassHello, LiteralClassHello> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnLiteralClassInputOutput",
         {
@@ -5547,6 +5999,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.LiteralClassHello, LiteralClassHello>(
         raw,
@@ -5561,11 +6014,12 @@ class BamlStreamClient {
   
   FnLiteralUnionClassInputOutput(
       input: LiteralClassOne | LiteralClassTwo,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<((partial_types.LiteralClassOne | null) | (partial_types.LiteralClassTwo | null)), LiteralClassOne | LiteralClassTwo> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnLiteralUnionClassInputOutput",
         {
@@ -5576,6 +6030,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<((partial_types.LiteralClassOne | null) | (partial_types.LiteralClassTwo | null)), LiteralClassOne | LiteralClassTwo>(
         raw,
@@ -5590,11 +6045,12 @@ class BamlStreamClient {
   
   FnNamedArgsSingleStringOptional(
       myString?: string | null,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnNamedArgsSingleStringOptional",
         {
@@ -5605,6 +6061,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -5619,11 +6076,12 @@ class BamlStreamClient {
   
   FnOutputBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<boolean, boolean> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnOutputBool",
         {
@@ -5634,6 +6092,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<boolean, boolean>(
         raw,
@@ -5648,11 +6107,12 @@ class BamlStreamClient {
   
   FnOutputClass(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.TestOutputClass, TestOutputClass> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnOutputClass",
         {
@@ -5663,6 +6123,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.TestOutputClass, TestOutputClass>(
         raw,
@@ -5677,11 +6138,12 @@ class BamlStreamClient {
   
   FnOutputClassList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(partial_types.TestOutputClass | null)[], TestOutputClass[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnOutputClassList",
         {
@@ -5692,6 +6154,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(partial_types.TestOutputClass | null)[], TestOutputClass[]>(
         raw,
@@ -5706,11 +6169,12 @@ class BamlStreamClient {
   
   FnOutputClassNested(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.TestClassNested, TestClassNested> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnOutputClassNested",
         {
@@ -5721,6 +6185,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.TestClassNested, TestClassNested>(
         raw,
@@ -5735,11 +6200,12 @@ class BamlStreamClient {
   
   FnOutputClassWithEnum(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.TestClassWithEnum, TestClassWithEnum> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnOutputClassWithEnum",
         {
@@ -5750,6 +6216,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.TestClassWithEnum, TestClassWithEnum>(
         raw,
@@ -5764,11 +6231,12 @@ class BamlStreamClient {
   
   FnOutputInt(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<number, number> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnOutputInt",
         {
@@ -5779,6 +6247,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<number, number>(
         raw,
@@ -5793,11 +6262,12 @@ class BamlStreamClient {
   
   FnOutputLiteralBool(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<false, false> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnOutputLiteralBool",
         {
@@ -5808,6 +6278,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<false, false>(
         raw,
@@ -5822,11 +6293,12 @@ class BamlStreamClient {
   
   FnOutputLiteralInt(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<5, 5> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnOutputLiteralInt",
         {
@@ -5837,6 +6309,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<5, 5>(
         raw,
@@ -5851,11 +6324,12 @@ class BamlStreamClient {
   
   FnOutputLiteralString(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<"example output", "example output"> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnOutputLiteralString",
         {
@@ -5866,6 +6340,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<"example output", "example output">(
         raw,
@@ -5880,11 +6355,12 @@ class BamlStreamClient {
   
   FnOutputStringList(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(string | null)[], string[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnOutputStringList",
         {
@@ -5895,6 +6371,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(string | null)[], string[]>(
         raw,
@@ -5909,11 +6386,12 @@ class BamlStreamClient {
   
   FnTestAliasedEnumOutput(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<types.TestEnum, TestEnum> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnTestAliasedEnumOutput",
         {
@@ -5924,6 +6402,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<types.TestEnum, TestEnum>(
         raw,
@@ -5938,11 +6417,12 @@ class BamlStreamClient {
   
   FnTestClassAlias(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.TestClassAlias, TestClassAlias> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnTestClassAlias",
         {
@@ -5953,6 +6433,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.TestClassAlias, TestClassAlias>(
         raw,
@@ -5967,11 +6448,12 @@ class BamlStreamClient {
   
   FnTestNamedArgsSingleEnum(
       myArg: NamedArgsSingleEnum,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "FnTestNamedArgsSingleEnum",
         {
@@ -5982,6 +6464,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -5996,11 +6479,12 @@ class BamlStreamClient {
   
   GetDataType(
       text: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.RaysData, RaysData> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "GetDataType",
         {
@@ -6011,6 +6495,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.RaysData, RaysData>(
         raw,
@@ -6025,11 +6510,12 @@ class BamlStreamClient {
   
   GetOrderInfo(
       email: Email,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.OrderInfo, OrderInfo> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "GetOrderInfo",
         {
@@ -6040,6 +6526,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.OrderInfo, OrderInfo>(
         raw,
@@ -6054,11 +6541,12 @@ class BamlStreamClient {
   
   GetQuery(
       query: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.SearchParams, SearchParams> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "GetQuery",
         {
@@ -6069,6 +6557,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.SearchParams, SearchParams>(
         raw,
@@ -6083,11 +6572,12 @@ class BamlStreamClient {
   
   InOutEnumMapKey(
       i1: Partial<Record<types.MapKey, string>>,i2: Partial<Record<types.MapKey, string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(Record<MapKey, (string | null)> ), Partial<Record<types.MapKey, string>>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "InOutEnumMapKey",
         {
@@ -6098,6 +6588,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(Record<MapKey, (string | null)> ), Partial<Record<types.MapKey, string>>>(
         raw,
@@ -6112,11 +6603,12 @@ class BamlStreamClient {
   
   InOutLiteralStringUnionMapKey(
       i1: Partial<Record<"one" | "two" | "three" | "four", string>>,i2: Partial<Record<"one" | "two" | "three" | "four", string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(Record<"one" | "two" | "three" | "four", (string | null)> ), Partial<Record<"one" | "two" | "three" | "four", string>>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "InOutLiteralStringUnionMapKey",
         {
@@ -6127,6 +6619,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(Record<"one" | "two" | "three" | "four", (string | null)> ), Partial<Record<"one" | "two" | "three" | "four", string>>>(
         raw,
@@ -6141,11 +6634,12 @@ class BamlStreamClient {
   
   InOutSingleLiteralStringMapKey(
       m: Partial<Record<"key", string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(Record<"key", (string | null)> ), Partial<Record<"key", string>>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "InOutSingleLiteralStringMapKey",
         {
@@ -6156,6 +6650,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(Record<"key", (string | null)> ), Partial<Record<"key", string>>>(
         raw,
@@ -6170,11 +6665,12 @@ class BamlStreamClient {
   
   JsonTypeAliasCycle(
       input: JsonValue,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<JsonValue, JsonValue> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "JsonTypeAliasCycle",
         {
@@ -6185,6 +6681,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<JsonValue, JsonValue>(
         raw,
@@ -6199,11 +6696,12 @@ class BamlStreamClient {
   
   LLMEcho(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "LLMEcho",
         {
@@ -6214,6 +6712,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -6228,11 +6727,12 @@ class BamlStreamClient {
   
   LiteralUnionsTest(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(1 | true | "string output"), 1 | true | "string output"> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "LiteralUnionsTest",
         {
@@ -6243,6 +6743,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(1 | true | "string output"), 1 | true | "string output">(
         raw,
@@ -6257,11 +6758,12 @@ class BamlStreamClient {
   
   MakeBlockConstraint(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<Checked<partial_types.BlockConstraint,"cross_field">, Checked<BlockConstraint,"cross_field">> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "MakeBlockConstraint",
         {
@@ -6272,6 +6774,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<Checked<partial_types.BlockConstraint,"cross_field">, Checked<BlockConstraint,"cross_field">>(
         raw,
@@ -6286,11 +6789,12 @@ class BamlStreamClient {
   
   MakeClassWithBlockDone(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<types.ClassWithBlockDone, ClassWithBlockDone> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "MakeClassWithBlockDone",
         {
@@ -6301,6 +6805,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<types.ClassWithBlockDone, ClassWithBlockDone>(
         raw,
@@ -6315,11 +6820,12 @@ class BamlStreamClient {
   
   MakeClassWithExternalDone(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<types.ClassWithoutDone, ClassWithoutDone> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "MakeClassWithExternalDone",
         {
@@ -6330,6 +6836,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<types.ClassWithoutDone, ClassWithoutDone>(
         raw,
@@ -6344,11 +6851,12 @@ class BamlStreamClient {
   
   MakeNestedBlockConstraint(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.NestedBlockConstraint, NestedBlockConstraint> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "MakeNestedBlockConstraint",
         {
@@ -6359,6 +6867,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.NestedBlockConstraint, NestedBlockConstraint>(
         raw,
@@ -6373,11 +6882,12 @@ class BamlStreamClient {
   
   MakeSemanticContainer(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.SemanticContainer, SemanticContainer> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "MakeSemanticContainer",
         {
@@ -6388,6 +6898,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.SemanticContainer, SemanticContainer>(
         raw,
@@ -6402,11 +6913,12 @@ class BamlStreamClient {
   
   MapAlias(
       m: Record<string, string[]>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(Record<string, (string | null)[]> ), Record<string, string[]>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "MapAlias",
         {
@@ -6417,6 +6929,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(Record<string, (string | null)[]> ), Record<string, string[]>>(
         raw,
@@ -6431,11 +6944,12 @@ class BamlStreamClient {
   
   MergeAliasAttributes(
       money: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.MergeAttrs, MergeAttrs> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "MergeAliasAttributes",
         {
@@ -6446,6 +6960,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.MergeAttrs, MergeAttrs>(
         raw,
@@ -6460,11 +6975,12 @@ class BamlStreamClient {
   
   MyFunc(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.DynamicOutput, DynamicOutput> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "MyFunc",
         {
@@ -6475,6 +6991,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.DynamicOutput, DynamicOutput>(
         raw,
@@ -6489,11 +7006,12 @@ class BamlStreamClient {
   
   NestedAlias(
       c: number | string | boolean | number | string[] | Record<string, string[]>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(((number | null) | (string | null) | (boolean | null) | (number | null) | null) | (string | null)[] | (Record<string, (string | null)[]> | null)), number | string | boolean | number | string[] | Record<string, string[]>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "NestedAlias",
         {
@@ -6504,6 +7022,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(((number | null) | (string | null) | (boolean | null) | (number | null) | null) | (string | null)[] | (Record<string, (string | null)[]> | null)), number | string | boolean | number | string[] | Record<string, string[]>>(
         raw,
@@ -6518,11 +7037,12 @@ class BamlStreamClient {
   
   NullLiteralClassHello(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.ClassForNullLiteral, ClassForNullLiteral> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "NullLiteralClassHello",
         {
@@ -6533,6 +7053,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.ClassForNullLiteral, ClassForNullLiteral>(
         raw,
@@ -6547,11 +7068,12 @@ class BamlStreamClient {
   
   OpenAIWithAnthropicResponseHello(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "OpenAIWithAnthropicResponseHello",
         {
@@ -6562,6 +7084,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -6576,11 +7099,12 @@ class BamlStreamClient {
   
   OptionalTest_Function(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<((partial_types.OptionalTest_ReturnType | null) | null)[], (OptionalTest_ReturnType | null)[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "OptionalTest_Function",
         {
@@ -6591,6 +7115,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<((partial_types.OptionalTest_ReturnType | null) | null)[], (OptionalTest_ReturnType | null)[]>(
         raw,
@@ -6605,11 +7130,12 @@ class BamlStreamClient {
   
   PredictAge(
       name: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.FooAny, FooAny> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "PredictAge",
         {
@@ -6620,6 +7146,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.FooAny, FooAny>(
         raw,
@@ -6634,11 +7161,12 @@ class BamlStreamClient {
   
   PredictAgeBare(
       inp: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<Checked<number,"too_big">, Checked<number,"too_big">> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "PredictAgeBare",
         {
@@ -6649,6 +7177,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<Checked<number,"too_big">, Checked<number,"too_big">>(
         raw,
@@ -6663,11 +7192,12 @@ class BamlStreamClient {
   
   PrimitiveAlias(
       p: number | string | boolean | number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<((number | null) | (string | null) | (boolean | null) | (number | null)), number | string | boolean | number> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "PrimitiveAlias",
         {
@@ -6678,6 +7208,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<((number | null) | (string | null) | (boolean | null) | (number | null)), number | string | boolean | number>(
         raw,
@@ -6692,11 +7223,12 @@ class BamlStreamClient {
   
   PromptTestClaude(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "PromptTestClaude",
         {
@@ -6707,6 +7239,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -6721,11 +7254,12 @@ class BamlStreamClient {
   
   PromptTestClaudeChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "PromptTestClaudeChat",
         {
@@ -6736,6 +7270,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -6750,11 +7285,12 @@ class BamlStreamClient {
   
   PromptTestClaudeChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "PromptTestClaudeChatNoSystem",
         {
@@ -6765,6 +7301,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -6779,11 +7316,12 @@ class BamlStreamClient {
   
   PromptTestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "PromptTestOpenAI",
         {
@@ -6794,6 +7332,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -6808,11 +7347,12 @@ class BamlStreamClient {
   
   PromptTestOpenAIChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "PromptTestOpenAIChat",
         {
@@ -6823,6 +7363,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -6837,11 +7378,12 @@ class BamlStreamClient {
   
   PromptTestOpenAIChatNoSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "PromptTestOpenAIChatNoSystem",
         {
@@ -6852,6 +7394,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -6866,11 +7409,12 @@ class BamlStreamClient {
   
   PromptTestStreaming(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "PromptTestStreaming",
         {
@@ -6881,6 +7425,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -6895,11 +7440,12 @@ class BamlStreamClient {
   
   RecursiveAliasCycle(
       input: RecAliasOne,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<RecAliasOne, RecAliasOne> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "RecursiveAliasCycle",
         {
@@ -6910,6 +7456,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<RecAliasOne, RecAliasOne>(
         raw,
@@ -6924,11 +7471,12 @@ class BamlStreamClient {
   
   RecursiveClassWithAliasIndirection(
       cls: NodeWithAliasIndirection,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.NodeWithAliasIndirection, NodeWithAliasIndirection> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "RecursiveClassWithAliasIndirection",
         {
@@ -6939,6 +7487,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.NodeWithAliasIndirection, NodeWithAliasIndirection>(
         raw,
@@ -6953,11 +7502,12 @@ class BamlStreamClient {
   
   RecursiveUnionTest(
       input: RecursiveUnion,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<RecursiveUnion, RecursiveUnion> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "RecursiveUnionTest",
         {
@@ -6968,6 +7518,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<RecursiveUnion, RecursiveUnion>(
         raw,
@@ -6982,11 +7533,12 @@ class BamlStreamClient {
   
   ReturnAliasWithMergedAttributes(
       money: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<Checked<number,"gt_ten">, Checked<number,"gt_ten">> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ReturnAliasWithMergedAttributes",
         {
@@ -6997,6 +7549,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<Checked<number,"gt_ten">, Checked<number,"gt_ten">>(
         raw,
@@ -7011,11 +7564,12 @@ class BamlStreamClient {
   
   ReturnFailingAssert(
       inp: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<number, number> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ReturnFailingAssert",
         {
@@ -7026,6 +7580,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<number, number>(
         raw,
@@ -7040,11 +7595,12 @@ class BamlStreamClient {
   
   ReturnJsonEntry(
       s: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<JsonTemplate, JsonTemplate> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ReturnJsonEntry",
         {
@@ -7055,6 +7611,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<JsonTemplate, JsonTemplate>(
         raw,
@@ -7069,11 +7626,12 @@ class BamlStreamClient {
   
   ReturnMalformedConstraints(
       a: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.MalformedConstraints, MalformedConstraints> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "ReturnMalformedConstraints",
         {
@@ -7084,6 +7642,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.MalformedConstraints, MalformedConstraints>(
         raw,
@@ -7098,11 +7657,12 @@ class BamlStreamClient {
   
   SchemaDescriptions(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.Schema, Schema> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "SchemaDescriptions",
         {
@@ -7113,6 +7673,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.Schema, Schema>(
         raw,
@@ -7127,11 +7688,12 @@ class BamlStreamClient {
   
   SimpleRecursiveListAlias(
       input: RecursiveListAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<RecursiveListAlias, RecursiveListAlias> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "SimpleRecursiveListAlias",
         {
@@ -7142,6 +7704,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<RecursiveListAlias, RecursiveListAlias>(
         raw,
@@ -7156,11 +7719,12 @@ class BamlStreamClient {
   
   SimpleRecursiveMapAlias(
       input: RecursiveMapAlias,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<RecursiveMapAlias, RecursiveMapAlias> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "SimpleRecursiveMapAlias",
         {
@@ -7171,6 +7735,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<RecursiveMapAlias, RecursiveMapAlias>(
         raw,
@@ -7185,11 +7750,12 @@ class BamlStreamClient {
   
   StreamBigNumbers(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.BigNumbers, BigNumbers> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "StreamBigNumbers",
         {
@@ -7200,6 +7766,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.BigNumbers, BigNumbers>(
         raw,
@@ -7214,11 +7781,12 @@ class BamlStreamClient {
   
   StreamFailingAssertion(
       theme: string,length: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.TwoStoriesOneTitle, TwoStoriesOneTitle> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "StreamFailingAssertion",
         {
@@ -7229,6 +7797,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.TwoStoriesOneTitle, TwoStoriesOneTitle>(
         raw,
@@ -7243,11 +7812,12 @@ class BamlStreamClient {
   
   StreamFailingCheck(
       theme: string,length: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.TwoStoriesOneTitleCheck, TwoStoriesOneTitleCheck> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "StreamFailingCheck",
         {
@@ -7258,6 +7828,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.TwoStoriesOneTitleCheck, TwoStoriesOneTitleCheck>(
         raw,
@@ -7272,11 +7843,12 @@ class BamlStreamClient {
   
   StreamOneBigNumber(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<number, number> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "StreamOneBigNumber",
         {
@@ -7287,6 +7859,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<number, number>(
         raw,
@@ -7301,11 +7874,12 @@ class BamlStreamClient {
   
   StreamUnionIntegers(
       digits: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<((number | null) | (string | null) | null)[], (number | string)[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "StreamUnionIntegers",
         {
@@ -7316,6 +7890,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<((number | null) | (string | null) | null)[], (number | string)[]>(
         raw,
@@ -7330,11 +7905,12 @@ class BamlStreamClient {
   
   StreamingCompoundNumbers(
       digits: number,yapping: boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.CompoundBigNumbers, CompoundBigNumbers> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "StreamingCompoundNumbers",
         {
@@ -7345,6 +7921,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.CompoundBigNumbers, CompoundBigNumbers>(
         raw,
@@ -7359,11 +7936,12 @@ class BamlStreamClient {
   
   StructureDocument1559(
       document_txt: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.Document1559, Document1559> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "StructureDocument1559",
         {
@@ -7374,6 +7952,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.Document1559, Document1559>(
         raw,
@@ -7388,11 +7967,12 @@ class BamlStreamClient {
   
   TakeRecAliasDep(
       input: RecursiveAliasDependency,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.RecursiveAliasDependency, RecursiveAliasDependency> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TakeRecAliasDep",
         {
@@ -7403,6 +7983,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.RecursiveAliasDependency, RecursiveAliasDependency>(
         raw,
@@ -7417,11 +7998,12 @@ class BamlStreamClient {
   
   TellStory(
       story: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TellStory",
         {
@@ -7432,6 +8014,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7446,11 +8029,12 @@ class BamlStreamClient {
   
   TestAnthropic(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAnthropic",
         {
@@ -7461,6 +8045,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7475,11 +8060,12 @@ class BamlStreamClient {
   
   TestAnthropicShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAnthropicShorthand",
         {
@@ -7490,6 +8076,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7504,11 +8091,12 @@ class BamlStreamClient {
   
   TestAws(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAws",
         {
@@ -7519,6 +8107,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7533,11 +8122,12 @@ class BamlStreamClient {
   
   TestAwsClaude37(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAwsClaude37",
         {
@@ -7548,6 +8138,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7562,11 +8153,12 @@ class BamlStreamClient {
   
   TestAwsInferenceProfile(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAwsInferenceProfile",
         {
@@ -7577,6 +8169,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7591,11 +8184,12 @@ class BamlStreamClient {
   
   TestAwsInvalidAccessKey(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAwsInvalidAccessKey",
         {
@@ -7606,6 +8200,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7620,11 +8215,12 @@ class BamlStreamClient {
   
   TestAwsInvalidProfile(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAwsInvalidProfile",
         {
@@ -7635,6 +8231,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7649,11 +8246,12 @@ class BamlStreamClient {
   
   TestAwsInvalidRegion(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAwsInvalidRegion",
         {
@@ -7664,6 +8262,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7678,11 +8277,12 @@ class BamlStreamClient {
   
   TestAwsInvalidSessionToken(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAwsInvalidSessionToken",
         {
@@ -7693,6 +8293,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7707,11 +8308,12 @@ class BamlStreamClient {
   
   TestAzure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAzure",
         {
@@ -7722,6 +8324,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7736,11 +8339,12 @@ class BamlStreamClient {
   
   TestAzureFailure(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAzureFailure",
         {
@@ -7751,6 +8355,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7765,11 +8370,12 @@ class BamlStreamClient {
   
   TestAzureO1NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAzureO1NoMaxTokens",
         {
@@ -7780,6 +8386,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7794,11 +8401,12 @@ class BamlStreamClient {
   
   TestAzureO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAzureO1WithMaxCompletionTokens",
         {
@@ -7809,6 +8417,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7823,11 +8432,12 @@ class BamlStreamClient {
   
   TestAzureO1WithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAzureO1WithMaxTokens",
         {
@@ -7838,6 +8448,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7852,11 +8463,12 @@ class BamlStreamClient {
   
   TestAzureO3NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAzureO3NoMaxTokens",
         {
@@ -7867,6 +8479,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7881,11 +8494,12 @@ class BamlStreamClient {
   
   TestAzureO3WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAzureO3WithMaxCompletionTokens",
         {
@@ -7896,6 +8510,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7910,11 +8525,12 @@ class BamlStreamClient {
   
   TestAzureWithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestAzureWithMaxTokens",
         {
@@ -7925,6 +8541,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7939,11 +8556,12 @@ class BamlStreamClient {
   
   TestCaching(
       input: string,not_cached: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestCaching",
         {
@@ -7954,6 +8572,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7968,11 +8587,12 @@ class BamlStreamClient {
   
   TestFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestFallbackClient",
         {
@@ -7983,6 +8603,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -7997,11 +8618,12 @@ class BamlStreamClient {
   
   TestFallbackStrategy(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestFallbackStrategy",
         {
@@ -8012,6 +8634,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8026,11 +8649,12 @@ class BamlStreamClient {
   
   TestFallbackToShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestFallbackToShorthand",
         {
@@ -8041,6 +8665,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8055,11 +8680,12 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleBool(
       myBool: boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleBool",
         {
@@ -8070,6 +8696,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8084,11 +8711,12 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleClass(
       myArg: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleClass",
         {
@@ -8099,6 +8727,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8113,11 +8742,12 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleEnumList(
       myArg: NamedArgsSingleEnumList[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleEnumList",
         {
@@ -8128,6 +8758,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8142,11 +8773,12 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleFloat(
       myFloat: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleFloat",
         {
@@ -8157,6 +8789,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8171,11 +8804,12 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleInt(
       myInt: number,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleInt",
         {
@@ -8186,6 +8820,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8200,11 +8835,12 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleMapStringToClass(
       myMap: Record<string, StringToClassEntry>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(Record<string, (partial_types.StringToClassEntry | null)> ), Record<string, StringToClassEntry>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleMapStringToClass",
         {
@@ -8215,6 +8851,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(Record<string, (partial_types.StringToClassEntry | null)> ), Record<string, StringToClassEntry>>(
         raw,
@@ -8229,11 +8866,12 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleMapStringToMap(
       myMap: Record<string, Record<string, string>>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(Record<string, (Record<string, (string | null)> | null)> ), Record<string, Record<string, string>>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleMapStringToMap",
         {
@@ -8244,6 +8882,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(Record<string, (Record<string, (string | null)> | null)> ), Record<string, Record<string, string>>>(
         raw,
@@ -8258,11 +8897,12 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleMapStringToString(
       myMap: Record<string, string>,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(Record<string, (string | null)> ), Record<string, string>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleMapStringToString",
         {
@@ -8273,6 +8913,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(Record<string, (string | null)> ), Record<string, string>>(
         raw,
@@ -8287,11 +8928,12 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleString(
       myString: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleString",
         {
@@ -8302,6 +8944,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8316,11 +8959,12 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleStringArray(
       myStringArray: string[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleStringArray",
         {
@@ -8331,6 +8975,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8345,11 +8990,12 @@ class BamlStreamClient {
   
   TestFnNamedArgsSingleStringList(
       myArg: string[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<(string | null)[], string[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleStringList",
         {
@@ -8360,6 +9006,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<(string | null)[], string[]>(
         raw,
@@ -8374,11 +9021,12 @@ class BamlStreamClient {
   
   TestGemini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestGemini",
         {
@@ -8389,6 +9037,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8403,11 +9052,12 @@ class BamlStreamClient {
   
   TestGeminiOpenAiGeneric(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestGeminiOpenAiGeneric",
         {
@@ -8418,6 +9068,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8432,11 +9083,12 @@ class BamlStreamClient {
   
   TestGeminiSystem(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestGeminiSystem",
         {
@@ -8447,6 +9099,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8461,11 +9114,12 @@ class BamlStreamClient {
   
   TestGeminiSystemAsChat(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestGeminiSystemAsChat",
         {
@@ -8476,6 +9130,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8490,11 +9145,12 @@ class BamlStreamClient {
   
   TestGroq(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestGroq",
         {
@@ -8505,6 +9161,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8519,11 +9176,12 @@ class BamlStreamClient {
   
   TestImageInput(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestImageInput",
         {
@@ -8534,6 +9192,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8548,11 +9207,12 @@ class BamlStreamClient {
   
   TestImageInputAnthropic(
       img: Image,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestImageInputAnthropic",
         {
@@ -8563,6 +9223,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8577,11 +9238,12 @@ class BamlStreamClient {
   
   TestImageListInput(
       imgs: Image[],
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestImageListInput",
         {
@@ -8592,6 +9254,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8606,11 +9269,12 @@ class BamlStreamClient {
   
   TestMemory(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.TestMemoryOutput, TestMemoryOutput> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestMemory",
         {
@@ -8621,6 +9285,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.TestMemoryOutput, TestMemoryOutput>(
         raw,
@@ -8635,11 +9300,12 @@ class BamlStreamClient {
   
   TestMulticlassNamedArgs(
       myArg: NamedArgsSingleClass,myArg2: NamedArgsSingleClass,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestMulticlassNamedArgs",
         {
@@ -8650,6 +9316,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8664,11 +9331,12 @@ class BamlStreamClient {
   
   TestNamedArgsLiteralBool(
       myBool: true,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestNamedArgsLiteralBool",
         {
@@ -8679,6 +9347,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8693,11 +9362,12 @@ class BamlStreamClient {
   
   TestNamedArgsLiteralInt(
       myInt: 1,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestNamedArgsLiteralInt",
         {
@@ -8708,6 +9378,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8722,11 +9393,12 @@ class BamlStreamClient {
   
   TestNamedArgsLiteralString(
       myString: "My String",
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestNamedArgsLiteralString",
         {
@@ -8737,6 +9409,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8751,11 +9424,12 @@ class BamlStreamClient {
   
   TestOllama(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<((string | null) | null), string | null> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestOllama",
         {
@@ -8766,6 +9440,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<((string | null) | null), string | null>(
         raw,
@@ -8780,11 +9455,12 @@ class BamlStreamClient {
   
   TestOllamaHaiku(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.Haiku, Haiku> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestOllamaHaiku",
         {
@@ -8795,6 +9471,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.Haiku, Haiku>(
         raw,
@@ -8809,11 +9486,12 @@ class BamlStreamClient {
   
   TestOpenAI(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestOpenAI",
         {
@@ -8824,6 +9502,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8838,11 +9517,12 @@ class BamlStreamClient {
   
   TestOpenAIDummyClient(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestOpenAIDummyClient",
         {
@@ -8853,6 +9533,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8867,11 +9548,12 @@ class BamlStreamClient {
   
   TestOpenAIGPT4oMini(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestOpenAIGPT4oMini",
         {
@@ -8882,6 +9564,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8896,11 +9579,12 @@ class BamlStreamClient {
   
   TestOpenAILegacyProvider(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestOpenAILegacyProvider",
         {
@@ -8911,6 +9595,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8925,11 +9610,12 @@ class BamlStreamClient {
   
   TestOpenAIO1NoMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestOpenAIO1NoMaxTokens",
         {
@@ -8940,6 +9626,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8954,11 +9641,12 @@ class BamlStreamClient {
   
   TestOpenAIO1WithMaxCompletionTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestOpenAIO1WithMaxCompletionTokens",
         {
@@ -8969,6 +9657,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -8983,11 +9672,12 @@ class BamlStreamClient {
   
   TestOpenAIO1WithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestOpenAIO1WithMaxTokens",
         {
@@ -8998,6 +9688,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -9012,11 +9703,12 @@ class BamlStreamClient {
   
   TestOpenAIShorthand(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestOpenAIShorthand",
         {
@@ -9027,6 +9719,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -9041,11 +9734,12 @@ class BamlStreamClient {
   
   TestOpenAIWithFinishReasonError(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestOpenAIWithFinishReasonError",
         {
@@ -9056,6 +9750,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -9070,11 +9765,12 @@ class BamlStreamClient {
   
   TestOpenAIWithMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestOpenAIWithMaxTokens",
         {
@@ -9085,6 +9781,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -9099,11 +9796,12 @@ class BamlStreamClient {
   
   TestOpenAIWithNullMaxTokens(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestOpenAIWithNullMaxTokens",
         {
@@ -9114,6 +9812,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -9128,11 +9827,12 @@ class BamlStreamClient {
   
   TestOpenRouterMistralSmall3_1_24b(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestOpenRouterMistralSmall3_1_24b",
         {
@@ -9143,6 +9843,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -9157,11 +9858,12 @@ class BamlStreamClient {
   
   TestRetryConstant(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestRetryConstant",
         {
@@ -9172,6 +9874,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -9186,11 +9889,12 @@ class BamlStreamClient {
   
   TestRetryExponential(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestRetryExponential",
         {
@@ -9201,6 +9905,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -9215,11 +9920,12 @@ class BamlStreamClient {
   
   TestRoundRobinStrategy(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestRoundRobinStrategy",
         {
@@ -9230,6 +9936,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -9244,11 +9951,12 @@ class BamlStreamClient {
   
   TestSingleFallbackClient(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestSingleFallbackClient",
         {
@@ -9259,6 +9967,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -9273,11 +9982,12 @@ class BamlStreamClient {
   
   TestThinking(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.CustomStory, CustomStory> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestThinking",
         {
@@ -9288,6 +9998,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.CustomStory, CustomStory>(
         raw,
@@ -9302,11 +10013,12 @@ class BamlStreamClient {
   
   TestUniverseQuestion(
       question: UniverseQuestionInput,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.UniverseQuestion, UniverseQuestion> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestUniverseQuestion",
         {
@@ -9317,6 +10029,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.UniverseQuestion, UniverseQuestion>(
         raw,
@@ -9331,11 +10044,12 @@ class BamlStreamClient {
   
   TestVertex(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestVertex",
         {
@@ -9346,6 +10060,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -9360,11 +10075,12 @@ class BamlStreamClient {
   
   TestVertexClaude(
       input: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestVertexClaude",
         {
@@ -9375,6 +10091,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -9389,11 +10106,12 @@ class BamlStreamClient {
   
   TestVertexWithSystemInstructions(
       
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "TestVertexWithSystemInstructions",
         {
@@ -9404,6 +10122,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,
@@ -9418,11 +10137,12 @@ class BamlStreamClient {
   
   UnionTest_Function(
       input: string | boolean,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.UnionTest_ReturnType, UnionTest_ReturnType> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "UnionTest_Function",
         {
@@ -9433,6 +10153,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.UnionTest_ReturnType, UnionTest_ReturnType>(
         raw,
@@ -9447,11 +10168,12 @@ class BamlStreamClient {
   
   UseBlockConstraint(
       inp: BlockConstraintForParam,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<number, number> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "UseBlockConstraint",
         {
@@ -9462,6 +10184,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<number, number>(
         raw,
@@ -9476,11 +10199,12 @@ class BamlStreamClient {
   
   UseMaintainFieldOrder(
       input: MaintainFieldOrder,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<partial_types.MaintainFieldOrder, MaintainFieldOrder> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "UseMaintainFieldOrder",
         {
@@ -9491,6 +10215,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<partial_types.MaintainFieldOrder, MaintainFieldOrder>(
         raw,
@@ -9505,11 +10230,12 @@ class BamlStreamClient {
   
   UseMalformedConstraints(
       a: MalformedConstraints2,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<number, number> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "UseMalformedConstraints",
         {
@@ -9520,6 +10246,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<number, number>(
         raw,
@@ -9534,11 +10261,12 @@ class BamlStreamClient {
   
   UseNestedBlockConstraint(
       inp: NestedBlockConstraintForParam,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<number, number> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "UseNestedBlockConstraint",
         {
@@ -9549,6 +10277,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        envVars,
       )
       return new BamlStream<number, number>(
         raw,

@@ -24,12 +24,6 @@ describe('Env Vars Tests', () => {
       await atopLevelAsyncTracing()
     }).rejects.toThrow('BamlError')
 
-    await expect(async () => {
-      await b.ExtractPeople(
-        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.",
-      )
-    }).rejects.toThrow('BamlClientHttpError')
-
     resetBamlEnvVars(
       Object.fromEntries(Object.entries(process.env).filter(([_, v]) => v !== undefined)) as Record<string, string>,
     )
@@ -37,5 +31,23 @@ describe('Env Vars Tests', () => {
       "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.",
         )
         expect(people.length).toBeGreaterThan(0)
+    })
+
+    it('should reflect API key changes in headers', async () => {
+        // First request with initial API key
+        process.env.OPENAI_API_KEY = 'sk-initial-key'
+        const firstResult = await b.request.ExtractPeople(
+            "My name is John. I am 30 years old."
+        )
+        const firstHeaders = firstResult.headers as Record<string, string>
+        expect(firstHeaders['authorization']).toBe('Bearer sk-initial-key')
+
+        // Second request with changed API key
+        process.env.OPENAI_API_KEY = 'sk-new-key'
+        const secondResult = await b.request.ExtractPeople(
+            "My name is Jane. I am 25 years old."
+        )
+        const secondHeaders = secondResult.headers as Record<string, string>
+        expect(secondHeaders['authorization']).toBe('Bearer sk-new-key')
     })
 })

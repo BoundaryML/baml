@@ -10,6 +10,7 @@ import type TypeBuilder from "./type_builder"
 type BamlCallOptions = {
   tb?: TypeBuilder
   clientRegistry?: ClientRegistry
+  envVars?: Record<string, string | undefined>
 }
 
 export class HttpRequest {
@@ -23,6 +24,7 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
+      const envVars = __baml_options__?.envVars ? { ...process.env, ...__baml_options__.envVars } : { ...process.env };
       return this.runtime.buildRequestSync(
         "{{fn.name}}",
         {
@@ -33,7 +35,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        false,
+        envVars,
       )
     } catch (error) {
       throw toBamlError(error);
@@ -53,6 +55,7 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
+      const envVars = __baml_options__?.envVars ? { ...process.env, ...__baml_options__.envVars } : { ...process.env };
       return this.runtime.buildRequestSync(
         "{{fn.name}}",
         {
@@ -64,6 +67,7 @@ export class HttpStreamRequest {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
+        envVars,
       )
     } catch (error) {
       throw toBamlError(error);
