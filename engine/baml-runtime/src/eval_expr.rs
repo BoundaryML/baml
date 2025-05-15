@@ -259,8 +259,6 @@ async fn beta_reduce<'a>(
                 }
             }
             (Expr::FreeVar(name, _), _) => {
-                eprintln!("Context: {:?}", env.context);
-                // Go from free var to builtin
                 let var_lookup = env
                     .context
                     .get(name)
@@ -864,7 +862,7 @@ class Todo {
 //   })
 
 fn GetTodo() -> int {
-  std::fetch_value<int>(1)
+  std::fetch_value<int>(123)
 }
 
 test GetTodo() {
