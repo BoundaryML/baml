@@ -127,7 +127,6 @@ impl BamlRuntime {
             .map(|c| c.inner.clone())
             .collect::<Vec<_>>();
 
-            //TODO: typescript impl after python impl
         let fut = async move {
             let result = baml_runtime
                 .call_function(
@@ -185,6 +184,7 @@ impl BamlRuntime {
             tb.as_ref(),
             cb.as_ref(),
             Some(collector_list),
+            HashMap::new(),
         );
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)
@@ -229,6 +229,7 @@ impl BamlRuntime {
                 tb.as_ref(),
                 client_registry.as_ref(),
                 Some(collector_list),
+                HashMap::new(),
             )
             .map_err(from_anyhow_error)?;
 
@@ -279,6 +280,7 @@ impl BamlRuntime {
                 tb.as_ref(),
                 client_registry.as_ref(),
                 Some(collector_list),
+                HashMap::new(),
             )
             .map_err(from_anyhow_error)?;
 
@@ -324,6 +326,7 @@ impl BamlRuntime {
                     &ctx_mng,
                     tb.as_ref(),
                     cb.as_ref(),
+                    HashMap::new(),
                     stream,
                 )
                 .await
@@ -367,6 +370,7 @@ impl BamlRuntime {
                 tb.as_ref(),
                 cb.as_ref(),
                 stream,
+                HashMap::new(),
             )
             .map(HTTPRequest::from)
             .map_err(from_anyhow_error)
@@ -396,6 +400,7 @@ impl BamlRuntime {
                 &ctx_mng,
                 tb.as_ref(),
                 cb.as_ref(),
+                HashMap::new(),
             )
             .map_err(from_anyhow_error)?;
 

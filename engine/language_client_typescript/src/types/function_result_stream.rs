@@ -3,6 +3,7 @@ use napi::threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMod
 use napi::Env;
 use napi::{JsFunction, JsObject, JsUndefined};
 use napi_derive::napi;
+use std::collections::HashMap;
 
 use crate::errors::from_anyhow_error;
 
@@ -17,7 +18,8 @@ crate::lang_wrapper!(
     thread_safe,
     callback: Option<napi::Ref<()>>,
     tb: Option<baml_runtime::type_builder::TypeBuilder>,
-    cb: Option<baml_runtime::client_registry::ClientRegistry>
+    cb: Option<baml_runtime::client_registry::ClientRegistry>,
+    env_vars: HashMap<String, String>
 );
 
 impl FunctionResultStream {
@@ -32,6 +34,7 @@ impl FunctionResultStream {
             callback: event,
             tb,
             cb,
+            env_vars: HashMap::new(),
         }
     }
 }

@@ -14,6 +14,7 @@ use pyo3::{pyclass, Bound, IntoPyObjectExt, PyObject, PyRef, Python};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe);
 
@@ -72,8 +73,64 @@ impl BamlLogEvent {
     }
 }
 
+#[pyclass]
+pub struct BamlRuntime {
+    runtime: Arc<Mutex<baml_runtime::BamlRuntime>>,
+    env_vars: HashMap<String, String>,
+}
+
 #[pymethods]
 impl BamlRuntime {
+    #[new]
+    pub fn new() -> PyResult<Self> {
+        Ok(CoreBamlRuntime::new().into())
+    }
+
+    pub fn call_function_sync(
+        &self,
+        function_name: String,
+        args: HashMap<String, serde_json::Value>,
+    ) -> PyResult<serde_json::Value> {
+        let runtime = self.runtime.lock().unwrap();
+        Ok(runtime
+            .call_function_sync(&function_name, args, self.env_vars.clone())
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?)
+    }
+
+    pub fn stream_function_sync(
+        &self,
+        function_name: String,
+        args: HashMap<String, serde_json::Value>,
+    ) -> PyResult<Vec<serde_json::Value>> {
+        let runtime = self.runtime.lock().unwrap();
+        Ok(runtime
+            .stream_function_sync(&function_name, args, self.env_vars.clone())
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?)
+    }
+
+    pub fn build_request_sync(
+        &self,
+        function_name: String,
+        args: HashMap<String, serde_json::Value>,
+    ) -> PyResult<serde_json::Value> {
+        let runtime = self.runtime.lock().unwrap();
+        Ok(runtime
+            .build_request_sync(&function_name, args, self.env_vars.clone())
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?)
+    }
+
+    pub fn parse_llm_response(
+        &self,
+        types: Vec<String>,
+        partial_types: Vec<String>,
+        llm_response: String,
+    ) -> PyResult<serde_json::Value> {
+        let runtime = self.runtime.lock().unwrap();
+        Ok(runtime
+            .parse_llm_response(types, partial_types, llm_response, self.env_vars.clone())
+            .map_err(|e| PyErr::new::<pyo3::exceptions::PyRuntimeError, _>(e.to_string()))?)
+    }
+
     #[staticmethod]
     fn from_directory(directory: PathBuf, env_vars: HashMap<String, String>) -> PyResult<Self> {
         Ok(CoreBamlRuntime::from_directory(&directory, env_vars)
@@ -151,7 +208,6 @@ impl BamlRuntime {
             })
             .collect::<Vec<_>>();
 
-        // let collector = collector.map(|c| c.inner.clone());
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let (result, _) = baml_runtime
                 .call_function(
@@ -190,14 +246,14 @@ impl BamlRuntime {
         };
         let Some(args_map) = args.as_map_owned() else {
             return Err(BamlInvalidArgumentError::new_err(
-                "Failed to parse args as a map",
+                "Failed to parse args. Expect kwargs",
             ));
         };
-        log::debug!("pyo3 call_function_sync parsed args into: {:#?}", args_map);
 
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
         let cb = cb.map(|cb| cb.inner.clone());
+
         let collector_list = collectors
             .into_iter()
             .map(|c| {
@@ -206,19 +262,15 @@ impl BamlRuntime {
             })
             .collect::<Vec<_>>();
 
-        let (result, _event_id) = Python::with_gil(|py| {
-            py.allow_threads(|| {
-                self.inner.call_function_sync(
-                    function_name,
-                    &args_map,
-                    &ctx_mng,
-                    tb.as_ref(),
-                    cb.as_ref(),
-                    Some(collector_list),
-                    env_vars,
-                )
-            })
-        });
+        let (result, _) = self.inner.call_function_sync(
+            function_name,
+            &args_map,
+            &ctx_mng,
+            tb.as_ref(),
+            cb.as_ref(),
+            Some(collector_list),
+            env_vars,
+        );
 
         result
             .map(FunctionResult::from)
@@ -243,12 +295,17 @@ impl BamlRuntime {
                 "Failed to parse args, perhaps you used a non-serializable type?",
             ));
         };
-        let Some(args_map) = args.as_map() else {
-            return Err(BamlInvalidArgumentError::new_err("Failed to parse args"));
+        let Some(args_map) = args.as_map_owned() else {
+            return Err(BamlInvalidArgumentError::new_err(
+                "Failed to parse args. Expect kwargs",
+            ));
         };
-        log::debug!("pyo3 stream_function parsed args into: {:#?}", args_map);
 
-        let ctx = ctx.inner.clone();
+        let baml_runtime = self.inner.clone();
+        let ctx_mng = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
+
         let collector_list = collectors
             .into_iter()
             .map(|c| {
@@ -256,26 +313,18 @@ impl BamlRuntime {
                 collector.inner.clone()
             })
             .collect::<Vec<_>>();
-        let stream = self
-            .inner
-            .stream_function(
-                function_name,
-                args_map,
-                &ctx,
-                tb.map(|tb| tb.inner.clone()).as_ref(),
-                cb.map(|cb| cb.inner.clone()).as_ref(),
-                Some(collector_list),
-                env_vars.clone(),
-            )
-            .map_err(BamlError::from_anyhow)?;
 
-        Ok(FunctionResultStream::new(
-            stream,
-            on_event,
-            tb.map(|tb| tb.inner.clone()),
-            cb.map(|cb| cb.inner.clone()),
+        let stream = baml_runtime.stream_function(
+            function_name,
+            &args_map,
+            &ctx_mng,
+            tb.as_ref(),
+            cb.as_ref(),
+            Some(collector_list),
             env_vars,
-        ))
+        );
+
+        Ok(FunctionResultStream::new(stream, on_event, tb, cb))
     }
 
     #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars))]
@@ -296,12 +345,16 @@ impl BamlRuntime {
                 "Failed to parse args, perhaps you used a non-serializable type?",
             ));
         };
-        let Some(args_map) = args.as_map() else {
-            return Err(BamlInvalidArgumentError::new_err("Failed to parse args"));
+        let Some(args_map) = args.as_map_owned() else {
+            return Err(BamlInvalidArgumentError::new_err(
+                "Failed to parse args. Expect kwargs",
+            ));
         };
-        log::debug!("pyo3 stream_function parsed args into: {:#?}", args_map);
 
-        let ctx = ctx.inner.clone();
+        let ctx_mng = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
+
         let collector_list = collectors
             .into_iter()
             .map(|c| {
@@ -309,26 +362,18 @@ impl BamlRuntime {
                 collector.inner.clone()
             })
             .collect::<Vec<_>>();
-        let stream = self
-            .inner
-            .stream_function(
-                function_name,
-                args_map,
-                &ctx,
-                tb.map(|tb| tb.inner.clone()).as_ref(),
-                cb.map(|cb| cb.inner.clone()).as_ref(),
-                Some(collector_list),
-                env_vars.clone(),
-            )
-            .map_err(BamlError::from_anyhow)?;
 
-        Ok(SyncFunctionResultStream::new(
-            stream,
-            on_event,
-            tb.map(|tb| tb.inner.clone()),
-            cb.map(|cb| cb.inner.clone()),
+        let stream = self.inner.stream_function_sync(
+            function_name,
+            &args_map,
+            &ctx_mng,
+            tb.as_ref(),
+            cb.as_ref(),
+            Some(collector_list),
             env_vars,
-        ))
+        );
+
+        Ok(SyncFunctionResultStream::new(stream, on_event, tb, cb))
     }
 
     #[pyo3(signature = (function_name, args, ctx, tb, cb, env_vars, stream))]
@@ -354,27 +399,23 @@ impl BamlRuntime {
             ));
         };
 
-        let baml_runtime = self.inner.clone();
-        let ctx_manager = ctx.inner.clone();
-        let type_builder = tb.map(|tb| tb.inner.clone());
-        let client_registry = cb.map(|cb| cb.inner.clone());
+        let ctx_mng = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
 
-        pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            baml_runtime
-                .build_request(
-                    function_name,
-                    &args_map,
-                    &ctx_manager,
-                    type_builder.as_ref(),
-                    client_registry.as_ref(),
-                    env_vars,
-                    stream,
-                )
-                .await
-                .map(HTTPRequest::from)
-                .map_err(BamlError::from_anyhow)
-        })
-        .map(pyo3::Bound::into)
+        let request = self.inner.build_request(
+            function_name,
+            &args_map,
+            &ctx_mng,
+            tb.as_ref(),
+            cb.as_ref(),
+            env_vars,
+            stream,
+        );
+
+        request
+            .map(|r| r.into_py(py))
+            .map_err(BamlError::from_anyhow)
     }
 
     #[pyo3(signature = (function_name, args, ctx, tb, cb, env_vars, stream))]
@@ -389,41 +430,37 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
         stream: bool,
     ) -> PyResult<HTTPRequest> {
-        let Some(args) = parse_py_type(args, false)? else {
+        let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
                 "Failed to parse args, perhaps you used a non-serializable type?",
             ));
         };
         let Some(args_map) = args.as_map_owned() else {
             return Err(BamlInvalidArgumentError::new_err(
-                "Failed to parse args as a map",
+                "Failed to parse args. Expect kwargs",
             ));
         };
 
-        let context_manager = ctx.inner.clone();
-        let type_builder = tb.map(|tb| tb.inner.clone());
-        let client_registry = cb.map(|cb| cb.inner.clone());
+        let ctx_mng = ctx.inner.clone();
+        let tb = tb.map(|tb| tb.inner.clone());
+        let cb = cb.map(|cb| cb.inner.clone());
 
-        // TODO: Figure out if this will be async or not (images, media, etc).
-        // If it's not async then skip gil and threads.
-        let result = py.allow_threads(|| {
-            self.inner.build_request_sync(
-                function_name,
-                &args_map,
-                &context_manager,
-                type_builder.as_ref(),
-                client_registry.as_ref(),
-                stream,
-                env_vars,
-            )
-        });
+        let request = self.inner.build_request_sync(
+            function_name,
+            &args_map,
+            &ctx_mng,
+            tb.as_ref(),
+            cb.as_ref(),
+            env_vars,
+            stream,
+        );
 
-        result
+        request
             .map(HTTPRequest::from)
             .map_err(BamlError::from_anyhow)
     }
 
-    #[pyo3(signature = (function_name, llm_response, enum_module, cls_module, partial_cls_module, allow_partials, ctx, tb, cb, env_vars ))]
+    #[pyo3(signature = (function_name, llm_response, enum_module, cls_module, partial_cls_module, allow_partials, ctx, tb, cb, env_vars))]
     fn parse_llm_response(
         &self,
         py: Python<'_>,
@@ -442,32 +479,22 @@ impl BamlRuntime {
         let tb = tb.map(|tb| tb.inner.clone());
         let cb = cb.map(|cb| cb.inner.clone());
 
-        // Having no intermediary object wrappers allows us to avoid clonning
-        // the parsed value (unlike FunctionResult::cast_to). We pass that
-        // straight into pythonize_strict and return the final python object.
-        // Downside is we require a lot of parameters for this function, but
-        // this is only called in codegen, not part of the public API.
-        let parsed = self
-            .inner
-            .parse_llm_response(
-                function_name,
-                llm_response,
-                allow_partials,
-                &ctx_mng,
-                tb.as_ref(),
-                cb.as_ref(),
-                env_vars,
-            )
-            .map_err(BamlError::from_anyhow)?;
-
-        pythonize_strict(
-            py,
-            parsed,
-            &enum_module,
-            &cls_module,
-            &partial_cls_module,
+        let result = self.inner.parse_llm_response(
+            function_name,
+            llm_response,
+            enum_module,
+            cls_module,
+            partial_cls_module,
             allow_partials,
-        )
+            &ctx_mng,
+            tb.as_ref(),
+            cb.as_ref(),
+            env_vars,
+        );
+
+        result
+            .map(|r| r.into_py(py))
+            .map_err(BamlError::from_anyhow)
     }
 
     #[pyo3()]
@@ -480,44 +507,10 @@ impl BamlRuntime {
         self.inner.drain_stats().into()
     }
 
-    #[pyo3(signature = (callback = None))]
+    #[pyo3()]
     fn set_log_event_callback(&self, callback: Option<PyObject>, py: Python<'_>) -> PyResult<()> {
-        let baml_runtime = self.inner.clone();
-
-        if let Some(callback) = callback {
-            let arc_callback = Arc::new(callback.into_py_any(py)?);
-            baml_runtime
-                .as_ref()
-                .set_log_event_callback(Some(Box::new(move |log_event| {
-                    Python::with_gil(|py| {
-                        match arc_callback.call1(
-                            py,
-                            (BamlLogEvent {
-                                metadata: LogEventMetadata {
-                                    event_id: log_event.metadata.event_id.clone(),
-                                    parent_id: log_event.metadata.parent_id.clone(),
-                                    root_event_id: log_event.metadata.root_event_id.clone(),
-                                },
-                                prompt: log_event.prompt.clone(),
-                                raw_output: log_event.raw_output.clone(),
-                                parsed_output: log_event.parsed_output.clone(),
-                                start_time: log_event.start_time.clone(),
-                            },),
-                        ) {
-                            Ok(_) => Ok(()),
-                            Err(e) => {
-                                log::error!("Error calling log_event_callback: {:?}", e);
-                                Err(anyhow::Error::new(e)) // Proper error handling
-                            }
-                        }
-                    })
-                })))
-                .map_err(BamlError::from_anyhow)
-        } else {
-            baml_runtime
-                .as_ref()
-                .set_log_event_callback(None)
-                .map_err(BamlError::from_anyhow)
-        }
+        self.inner
+            .set_log_event_callback(callback.map(|cb| cb.into_bound(py)))
+            .map_err(BamlError::from_anyhow)
     }
 }
