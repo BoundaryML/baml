@@ -3,6 +3,11 @@ function Foo(x: int) -> int {
     x
 }
 
+fn Bar(x: int) -> int {
+    let y = x;
+    x
+}
+
 test TestBar {
     functions [Foo]
     args {
