@@ -374,6 +374,12 @@ impl ToProviderMessage for OpenAIClient {
                         let format_str = match mime_type_str.as_str() {
                             "audio/wav" | "wav" => "wav",
                             "audio/mp3" | "mp3" => "mp3",
+                            "audio/mpeg" | "mpeg" => "mp3",
+                            // "audio/ogg" | "ogg" => "ogg",
+                            // "audio/webm" | "webm" => "webm",
+                            // "audio/flac" | "flac" => "flac",
+                            // "audio/m4a" | "m4a" => "m4a",
+                            // "audio/x-m4a" | "x-m4a" => "x-m4a",
                             // Add other supported formats here if needed in the future
                             _ => anyhow::bail!(
                                 "Unsupported audio format for input_audio: '{}'. OpenAI currently supports 'wav' and 'mp3' for this structure.",

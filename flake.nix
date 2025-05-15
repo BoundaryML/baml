@@ -51,6 +51,7 @@
         buildInputs = (with pkgs; [
           cmake
           git
+	  go
           openssl
           pkg-config
           lld_17

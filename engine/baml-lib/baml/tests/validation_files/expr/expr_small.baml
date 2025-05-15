@@ -1,3 +1,3 @@
-fn A(x: int) -> int {
+function A(x: int) -> int {
     x
 }

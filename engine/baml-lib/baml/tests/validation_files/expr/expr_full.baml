@@ -24,7 +24,7 @@ let another = {
   CombinePoems(x,y)
 };
 
-fn Pipeline() -> string {
+function Pipeline() -> string {
     let x = MakePoem(6);
     let y = MakePoem(6);
     let a = MakePoem(6);
@@ -34,11 +34,11 @@ fn Pipeline() -> string {
     CombinePoems(xy, ab)
 }
 
-fn Pyramid() -> string {
+function Pyramid() -> string {
   CombinePoems( CombinePoems( MakePoem(10), MakePoem(10)), MakePoem(10))
 }
 
-fn OuterPyramid() -> string {
+function OuterPyramid() -> string {
   CombinePoems(poem, another)
 }
 

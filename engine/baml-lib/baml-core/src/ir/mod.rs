@@ -6,8 +6,9 @@ mod walker;
 
 pub use ir_helpers::{
     scope_diagnostics, ArgCoercer, ClassFieldWalker, ClassWalker, ClientWalker, EnumValueWalker,
-    EnumWalker, ExprFunctionWalker, FunctionWalker, IRHelper, IRHelperExtended, IRSemanticStreamingHelper,
-    RetryPolicyWalker, TemplateStringWalker, TestCaseWalker, TypeAliasWalker,
+    EnumWalker, ExprFunctionWalker, FunctionWalker, IRHelper, IRHelperExtended,
+    IRSemanticStreamingHelper, RetryPolicyWalker, TemplateStringWalker, TestCaseWalker,
+    TypeAliasWalker,
 };
 
 pub(super) use repr::IntermediateRepr;
@@ -33,3 +34,5 @@ pub type TestCase = repr::Node<repr::TestCase>;
 pub(super) type Walker<'db, I> = repr::Walker<'db, I>;
 
 pub(super) type Prompt = repr::Prompt;
+
+pub use walker::ExprFnAsFunctionWalker;
