@@ -7,6 +7,7 @@ use super::types::runtime_ctx_manager::RuntimeContextManager;
 use crate::function_result::FunctionResult;
 use crate::Error;
 use crate::Result;
+use std::collections::HashMap;
 
 #[magnus::wrap(class = "Baml::Ffi::FunctionResultStream", free_immediately, size)]
 pub struct FunctionResultStream {
