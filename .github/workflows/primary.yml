@@ -81,36 +81,33 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: integ-tests/typescript
       - name: Test Node Generator
-        id: gen1
-        run: pnpm generate
+        run: |
+          pnpm generate || (echo "::error:: merge canary and run codegen again" && exit 1)
         working-directory: integ-tests/typescript
       - name: Ensure No Changes
-        id: check1
-        run: git diff --exit-code
+        run: |
+          git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
       - name: Test Node Generator (1 of 3)
-        id: gen2
-        run: pnpm generate
+        run: |
+          pnpm generate || (echo "::error:: merge canary and run codegen again" && exit 1)
         working-directory: integ-tests/typescript
       - name: Ensure No Changes (1 of 3)
-        id: check2
-        run: git diff --exit-code
+        run: |
+          git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
       - name: Test Node Generator (2 of 3)
-        id: gen3
-        run: pnpm generate
+        run: |
+          pnpm generate || (echo "::error:: merge canary and run codegen again" && exit 1)
         working-directory: integ-tests/typescript
       - name: Ensure No Changes (2 of 3)
-        id: check3
-        run: git diff --exit-code
+        run: |
+          git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
       - name: Test Node Generator (3 of 3)
-        id: gen4
-        run: pnpm generate
+        run: |
+          pnpm generate || (echo "::error:: merge canary and run codegen again" && exit 1)
         working-directory: integ-tests/typescript
       - name: Ensure No Changes (3 of 3)
-        id: check4
-        run: git diff --exit-code
-      - name: Failure Message
-        if: failure() && (steps.gen1.outcome == 'failure' || steps.check1.outcome == 'failure' || steps.gen2.outcome == 'failure' || steps.check2.outcome == 'failure' || steps.gen3.outcome == 'failure' || steps.check3.outcome == 'failure' || steps.gen4.outcome == 'failure' || steps.check4.outcome == 'failure')
-        run: echo "::error::merge canary and run codegen again"
+        run: |
+          git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
   build:
     runs-on: ubuntu-latest
     steps:
