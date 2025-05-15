@@ -1608,6 +1608,7 @@ pub fn annotate_variable(
 ) -> Expr<ExprMetadata> {
     match &expr {
         Expr::FreeVar(var_name, meta) => expr,
+        Expr::Builtin(builtin, meta) => Expr::Builtin(builtin.clone(), meta.clone()),
         Expr::BoundVar(var_index, meta) => {
             if var_index == &target {
                 Expr::BoundVar(var_index.clone(), (meta.0.clone(), Some(r#type.clone())))
@@ -1643,11 +1644,6 @@ pub fn annotate_variable(
                 type_args: type_args.clone(),
             }
         }
-        Expr::Builtin(builtin, meta) => match builtin {
-            Builtin::FetchValue => {
-                todo!()
-            }
-        },
         Expr::Let(var_name, expr, body, meta) => {
             let new_binding = annotate_variable(
                 target.clone(),

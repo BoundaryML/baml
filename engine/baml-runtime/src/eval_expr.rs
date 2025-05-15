@@ -46,11 +46,7 @@ fn subst<'a>(
                 Ok(expr.clone())
             }
         }
-        Expr::Builtin(builtin, meta) => match builtin {
-            Builtin::FetchValue => {
-                todo!()
-            }
-        },
+        Expr::Builtin(builtin, meta) => Ok(expr.clone()),
         Expr::FreeVar(name, _) => Ok(expr.clone()),
         Expr::Atom(_) => Ok(expr.clone()),
         Expr::App {

@@ -88,11 +88,8 @@ pub fn typecheck_in_context(
             // Bare functions always typecheck.
             Ok(())
         }
-        Expr::Builtin(builtin, _) => match builtin {
-            Builtin::FetchValue => {
-                todo!()
-            }
-        },
+        // Builtins always typecheck.
+        Expr::Builtin(builtin, _) => Ok(()),
         Expr::FreeVar(var, (var_span, maybe_type)) => {
             if let Some(var_type) = maybe_type {
                 if let Some(ctx_type) = typing_context.get(var) {
@@ -336,7 +333,6 @@ pub fn infer_types_in_context(
             meta: (span, maybe_app_type),
             type_args,
         } => {
-            eprintln!("Infer f: {:?}", f);
             // Infer the type of an App from the return type of the function, if
             // it is a function with a known return type.
             let new_f = infer_types_in_context(typing_context, f.clone());
@@ -354,11 +350,7 @@ pub fn infer_types_in_context(
                 type_args: type_args.clone(),
             })
         }
-        Expr::Builtin(builtin, _) => match builtin {
-            Builtin::FetchValue => {
-                todo!()
-            }
-        },
+        Expr::Builtin(builtin, _) => expr.clone(),
         Expr::ArgsTuple(ref args, _) => {
             let new_args = args
                 .iter()
