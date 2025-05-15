@@ -30,22 +30,24 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
 
         // TODO: do this when server initializes instead of every time a file is opened
         // note this just schedules the task. It will run after the current task is done.
-        requester.request::<types::request::WorkspaceConfiguration>(
-            ConfigurationParams {
-                items: vec![types::ConfigurationItem {
-                    scope_uri: None,
-                    section: Some("baml".to_string()),
-                }],
-            },
-            |response| {
-                Task::local(move |session, _, _, _| {
-                    tracing::info!("Workspace configuration request received: {:?}", response);
-                    if let Some(first_response) = response.first() {
-                        session.update_baml_settings(first_response.clone());
-                    }
-                })
-            },
-        );
+        requester
+            .request::<types::request::WorkspaceConfiguration>(
+                ConfigurationParams {
+                    items: vec![types::ConfigurationItem {
+                        scope_uri: None,
+                        section: Some("baml".to_string()),
+                    }],
+                },
+                |response| {
+                    Task::local(move |session, _, _, _| {
+                        tracing::info!("Workspace configuration request received: {:?}", response);
+                        if let Some(first_response) = response.first() {
+                            session.update_baml_settings(first_response.clone());
+                        }
+                    })
+                },
+            )
+            .internal_error()?;
 
         let file_path = url
             .to_file_path()

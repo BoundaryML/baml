@@ -37,7 +37,7 @@ pub fn parse_expr_fn(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<e
         (Some(return_type), function_body)
     } else {
         diagnostics.push_error(DatamodelError::new_static(
-            "fn must have a return type: e.g. fn Foo() -> int",
+            "function must have a return type: e.g. function Foo() -> int",
             span.clone(),
         ));
         let function_body = parse_function_body(arrow_or_body, diagnostics);

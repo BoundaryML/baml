@@ -1,4 +1,4 @@
-fn Foo(x: int) -> int {
+function Foo(x: int) -> int {
     let y = x;
     x
 }
