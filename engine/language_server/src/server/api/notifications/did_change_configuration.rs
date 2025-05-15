@@ -41,22 +41,24 @@ impl super::SyncNotificationHandler for DidChangeConfiguration {
 
         // Also manually schedule a request for latest settings since sometimes the above params just have Null (not sure why)
         // note that the task will run after this current task is done.
-        requester.request::<types::request::WorkspaceConfiguration>(
-            ConfigurationParams {
-                items: vec![types::ConfigurationItem {
-                    scope_uri: None,
-                    section: Some("baml".to_string()),
-                }],
-            },
-            |response| {
-                Task::local(move |session, _, _, _| {
-                    tracing::info!("Workspace configuration request received: {:?}", response);
-                    if let Some(first_response) = response.first() {
-                        session.update_baml_settings(first_response.clone());
-                    }
-                })
-            },
-        );
+        requester
+            .request::<types::request::WorkspaceConfiguration>(
+                ConfigurationParams {
+                    items: vec![types::ConfigurationItem {
+                        scope_uri: None,
+                        section: Some("baml".to_string()),
+                    }],
+                },
+                |response| {
+                    Task::local(move |session, _, _, _| {
+                        tracing::info!("Workspace configuration request received: {:?}", response);
+                        if let Some(first_response) = response.first() {
+                            session.update_baml_settings(first_response.clone());
+                        }
+                    })
+                },
+            )
+            .internal_error()?;
 
         Ok(())
     }

@@ -251,6 +251,26 @@ export class HttpRequest {
     }
   }
   
+  AudioInputOpenai(
+      aud: Audio,prompt: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      return this.runtime.buildRequestSync(
+        "AudioInputOpenai",
+        {
+          "aud": aud,"prompt": prompt
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   BuildLinkedList(
       input: number[],
       __baml_options__?: BamlCallOptions
@@ -3886,6 +3906,26 @@ export class HttpStreamRequest {
         "AudioInput",
         {
           "aud": aud
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  AudioInputOpenai(
+      aud: Audio,prompt: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      return this.runtime.buildRequestSync(
+        "AudioInputOpenai",
+        {
+          "aud": aud,"prompt": prompt
         },
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),

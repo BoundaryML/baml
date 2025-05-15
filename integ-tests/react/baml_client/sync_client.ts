@@ -338,6 +338,29 @@ export class BamlSyncClient {
     }
   }
   
+  AudioInputOpenai(
+      aud: Audio,prompt: string,
+      __baml_options__?: BamlCallOptions
+  ): string {
+    try {
+      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
+      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const raw = this.runtime.callFunctionSync(
+        "AudioInputOpenai",
+        {
+          "aud": aud,"prompt": prompt
+        },
+        this.ctxManager.cloneContext(),
+        options.tb?.__tb(),
+        options.clientRegistry,
+        collector,
+      )
+      return raw.parsed(false) as string
+    } catch (error: any) {
+      throw toBamlError(error);
+    }
+  }
+  
   BuildLinkedList(
       input: number[],
       __baml_options__?: BamlCallOptions

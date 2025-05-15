@@ -608,7 +608,7 @@ let another = {
   CombinePoems(x,y)
 };
 
-fn Pipeline() -> string {
+function Pipeline() -> string {
     let x = MakePoem(4);
     let y = MakePoem(5);
     let a = MakePoem(6);
@@ -618,7 +618,7 @@ fn Pipeline() -> string {
     CombinePoems(xy, ab)
 }
 
-fn Pyramid() -> string {
+function Pyramid() -> string {
   CombinePoems( CombinePoems( MakePoem(10), MakePoem(10)), MakePoem(10))
 }
 
@@ -634,15 +634,15 @@ class Person {
   poem string
 }
 
-fn MakePerson() -> Person {
+function MakePerson() -> Person {
   Person { name: "Greg", poem: "Hello, world!", ..default_person }
 }
 
-fn OuterPyramid() -> string {
+function OuterPyramid() -> string {
   CombinePoems(poem, another)
 }
 
-fn ExprList() -> string[] {
+function ExprList() -> string[] {
   [ MakePoem(10), MakePoem(2) ]
 }
 
@@ -689,7 +689,7 @@ function Echo(msg: string) -> string {
     prompt #"Please repeat the message back to me, with three words of elaboration and a twist: {{ msg }}"#
   }
   
-  fn Go() -> string {
+  function Go() -> string {
     Echo("Hello")
   }
   
@@ -747,7 +747,7 @@ let another = {
   CombinePoems(x,y)
 };
 
-fn Pipeline() -> string {
+function Pipeline() -> string {
     let x = MakePoem(4);
     let y = MakePoem(5);
     let a = MakePoem(6);
@@ -757,7 +757,7 @@ fn Pipeline() -> string {
     CombinePoems(xy, ab)
 }
 
-fn Pyramid() -> string {
+function Pyramid() -> string {
   CombinePoems( CombinePoems( MakePoem(8), MakePoem(9)), MakePoem(10))
 }
 
@@ -773,15 +773,15 @@ class Person {
   poem string
 }
 
-fn MakePerson() -> Person {
+function MakePerson() -> Person {
   Person { name: "Greg", poem: "Hello, world!", ..default_person }
 }
 
-fn OuterPyramid() -> string {
+function OuterPyramid() -> string {
   CombinePoems(poem, another)
 }
 
-fn ExprList() -> string[] {
+function ExprList() -> string[] {
   [ MakePoem(11), MakePoem(12) ]
 }
 

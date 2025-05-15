@@ -729,6 +729,68 @@ func (*stream) AudioInput(ctx context.Context, aud any) <-chan string {
 	return channel
 }
 
+func AudioInputOpenai(ctx context.Context, aud any, prompt string) (*string, error) {
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"aud": aud, "prompt": prompt},
+	}
+	encoded, err := baml.EncodeRoot(args)
+	if err != nil {
+		panic(err)
+	}
+	result, err := bamlRuntime.CallFunction(ctx, "AudioInputOpenai", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	castResult := func(result any) string {
+		return (result).(string)
+	}
+
+	casted := castResult(*result.Data)
+
+	return &casted, nil
+}
+
+func (*stream) AudioInputOpenai(ctx context.Context, aud any, prompt string) <-chan string {
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"aud": aud, "prompt": prompt},
+	}
+	encoded, err := baml.EncodeRoot(args)
+	if err != nil {
+		panic(err)
+	}
+	channel := make(chan string)
+	raw, err := bamlRuntime.CallFunctionStream(ctx, "AudioInputOpenai", encoded)
+	if err != nil {
+		close(channel)
+		return channel
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-raw:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				channel <- (*result.Data).(string)
+			}
+		}
+	}()
+	return channel
+}
+
 func BuildLinkedList(ctx context.Context, input []int64) (*types.LinkedList, error) {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},

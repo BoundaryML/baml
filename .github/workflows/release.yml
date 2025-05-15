@@ -69,7 +69,7 @@ jobs:
 
   build-typescript-release:
     uses: ./.github/workflows/build-typescript-release.reusable.yaml
-  
+
   build-cli:
     needs: determine-version
     uses: ./.github/workflows/build-cli-release.reusable.yaml
@@ -79,14 +79,14 @@ jobs:
 
   # This job now calls the reusable workflow which contains the matrix strategy
   build-vscode-reusable: # Renamed job for clarity
-    needs: [ determine-version, build-cli ]
+    needs: [determine-version, build-cli]
     uses: ./.github/workflows/build-vscode-release.reusable.yaml
     with:
       # No artifact_name needed here anymore
       version: ${{ needs.determine-version.outputs.version_string }}
       # Pass the boolean output directly
       is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
-  
+
   # Kick off integration tests when we build everything.
   # This does not yet succeed/pass consistently, or even run everything, but it's a good start.
   integ-tests:
@@ -105,7 +105,6 @@ jobs:
       - build-vscode-reusable # Depends on the job calling the reusable workflow
     steps:
       - run: echo "::do-nothing::" >/dev/null
-      
 
   publish-to-pypi:
     environment: release
@@ -129,8 +128,8 @@ jobs:
           set -euo pipefail
           ls dist/
           wheel_count=$(ls dist/*.whl 2>/dev/null | wc -l)
-          if [ "$wheel_count" -lt 7 ]; then
-            echo "Error: Expected at least 7 wheels, but found $wheel_count"
+          if [ "$wheel_count" -lt 8 ]; then
+            echo "Error: Expected at least 8 wheels, but found $wheel_count"
             exit 1
           fi
           echo "Found $wheel_count wheels"
@@ -223,8 +222,6 @@ jobs:
             gem push $i
           done
 
-
-
   publish-to-open-vsx:
     environment: release
     needs: [determine-version, all-builds] # Also need determine-version for the condition
@@ -308,9 +305,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           # Match artifacts starting with 'baml-cli-'
-          pattern: baml-cli-* 
+          pattern: baml-cli-*
           # Download into this directory
-          path: cli-artifacts 
+          path: cli-artifacts
           merge-multiple: true # Merge artifacts from different OS/arch into the path
 
       # Download all CFFI library artifacts produced by the build-cli job
@@ -318,9 +315,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           # Match artifacts starting with 'libbaml-cffi-'
-          pattern: libbaml-cffi-* 
+          pattern: libbaml-cffi-*
           # Download into a separate directory
-          path: cffi-artifacts 
+          path: cffi-artifacts
           merge-multiple: true # Merge artifacts from different OS into the path
 
       - name: List downloaded CLI artifacts

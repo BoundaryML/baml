@@ -9,7 +9,26 @@ function AudioInput(aud: audio) -> string{
   "#   
 }  
 //        
-     
+
+client GPT4Audio {
+  provider openai
+  options {
+    model "gpt-4o-audio-preview"
+  }
+}
+
+function AudioInputOpenai(aud: audio, prompt: string) -> string{
+  client GPT4Audio
+  prompt #"
+    {{ _.role("user") }}
+
+   {{ prompt }}
+    
+    {{ aud }}
+  "#   
+}  
+//        
+       
       
      
 test TestURLAudioInput{
