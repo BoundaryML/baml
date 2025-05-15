@@ -42,7 +42,7 @@ export const DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX = new Baml
  */
 export function resetBamlEnvVars(envVars: Record<string, string | undefined>) {
   console.warn(
-    '[DEPRECATED] resetBamlEnvVars is deprecated. You can safely remove this call from your BAML code, now that the world is a better place!\n'
+    '[DEPRECATED] resetBamlEnvVars is deprecated because environment variables are now lazily loaded.\n'
   );
   
   if (DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX.allowResets()) {
