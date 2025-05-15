@@ -338,15 +338,15 @@ fn init(ruby: &Ruby) -> Result<()> {
         "create_context_manager",
         method!(BamlRuntimeFfi::create_context_manager, 0),
     )?;
-    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 6))?;
+    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 8))?;
     runtime_class.define_method(
         "stream_function",
-        method!(BamlRuntimeFfi::stream_function, 6),
+        method!(BamlRuntimeFfi::stream_function, 8),
     )?;
-    runtime_class.define_method("build_request", method!(BamlRuntimeFfi::build_request, 6))?;
+    runtime_class.define_method("build_request", method!(BamlRuntimeFfi::build_request, 8))?;
     runtime_class.define_method(
         "parse_llm_response",
-        method!(BamlRuntimeFfi::parse_llm_response, 8),
+        method!(BamlRuntimeFfi::parse_llm_response, 10),
     )?;
 
     FunctionResult::define_in_ruby(&module)?;
