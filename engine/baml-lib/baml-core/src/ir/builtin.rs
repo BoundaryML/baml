@@ -16,7 +16,7 @@ pub mod classes {
 
 fn builtin<T, const N: usize>(elems: [T; N]) -> Vec<Node<T>> {
     let mut attributes = NodeAttributes::default();
-    attributes.span = Some(Span::fake()); // TODO: Make spans optional in ExprMetadata
+    attributes.span = Some(Span::fake());
 
     Vec::from_iter(elems.into_iter().map(|e| Node {
         attributes: NodeAttributes::default(),
@@ -61,6 +61,6 @@ pub fn builtin_generic_fn(f: Builtin, return_type: FieldType) -> Expr<ExprMetada
     Expr::Builtin(f, (Span::fake(), Some(FieldType::arrow(signature))))
 }
 
-pub fn is_builtin_identifier(name: &str) -> bool {
-    name.starts_with("std::")
+pub fn is_builtin_identifier(identifier: &str) -> bool {
+    identifier.starts_with("std::")
 }

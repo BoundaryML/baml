@@ -2,12 +2,17 @@ use anyhow::Context;
 use futures::channel::mpsc;
 use futures::stream::{self as stream, StreamExt};
 use internal_baml_core::internal_baml_diagnostics::SerializedSpan;
+use internal_baml_core::internal_baml_parser_database::coerce;
+use internal_baml_core::ir::builtin;
+use internal_baml_jinja::types::OutputFormatContent;
+use jsonish::deserializer::deserialize_flags::Flag;
+use jsonish::helpers::render_output_format;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 
 use crate::{BamlRuntime, FunctionResult};
 use baml_types::expr::{Builtin, Expr, ExprMetadata, Name, VarIndex};
-use baml_types::{Arrow, FieldType, TypeValue};
+use baml_types::{Arrow, EvaluationContext, FieldType, TypeValue};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
 use internal_baml_core::ir::repr::IntermediateRepr;
 
@@ -273,11 +278,51 @@ async fn beta_reduce<'a>(
                 Ok(res)
             }
 
-            (Expr::Builtin(builtin, meta), _) => match builtin {
+            (Expr::Builtin(builtin, builtin_meta), Expr::ArgsTuple(args, _)) => match builtin {
                 Builtin::FetchValue => {
-                    // TODO: Actually fetch
-                    // let res = env.runtime.fetch_value(meta.0).await;
-                    todo!("Fetching IS WORKING NO WAY CANT BELIEVE THISSSSS (@grok is this real?)")
+                    let evaluated_args = eval_args(env, args).await;
+
+                    let BamlValue::Class(cls, fields) = &evaluated_args[0] else {
+                        return Err(anyhow::anyhow!(
+                            "{fetch_value} expects a request but got: {evaluated_args:?}",
+                            fetch_value = builtin::functions::FETCH_VALUE
+                        ));
+                    };
+
+                    let FieldType::Arrow(arrow) = builtin_meta.1.as_ref().unwrap() else {
+                        return Err(anyhow::anyhow!(
+                            "{fetch_value} err arrow type idk: {evaluated_args:?}",
+                            fetch_value = builtin::functions::FETCH_VALUE
+                        ));
+                    };
+
+                    let res = reqwest::Client::new()
+                        .get(fields.get("base_url").unwrap().as_str().unwrap())
+                        .send()
+                        .await?
+                        .bytes()
+                        .await
+                        .unwrap();
+
+                    let body = jsonish::from_str(
+                        &render_output_format(
+                            &env.runtime.inner.ir,
+                            &arrow.return_type,
+                            &EvaluationContext::new(&HashMap::new(), false),
+                        )
+                        .unwrap(),
+                        &arrow.return_type,
+                        &String::from_utf8(res.to_vec()).unwrap(),
+                        false,
+                    )
+                    .unwrap();
+
+                    let baml_value_with_meta_flags: BamlValueWithMeta<Vec<Flag>> =
+                        body.clone().into();
+
+                    Ok(Expr::Atom(
+                        baml_value_with_meta_flags.map_meta(|_| meta.clone()),
+                    ))
                 }
             },
 
@@ -312,6 +357,18 @@ async fn beta_reduce<'a>(
         Expr::Lambda(_, _, _) => Ok(expr.clone()),
         _ => panic!("Tried to beta reduce a {}", expr.dump_str()), // Err(anyhow::anyhow!("Not an application: {:?}", expr)),
     }
+}
+
+async fn eval_args(
+    env: &EvalEnv<'_>,
+    args: &Vec<Expr<(internal_baml_core::ast::Span, Option<FieldType>)>>,
+) -> Vec<BamlValue> {
+    let mut evaluated_args: Vec<BamlValue> = Vec::new();
+    for arg in args {
+        let val = eval_to_value(env, arg).await;
+        evaluated_args.push(val.unwrap().unwrap().clone().value());
+    }
+    evaluated_args
 }
 
 pub async fn eval_to_value_or_llm_call<'a>(
@@ -547,6 +604,7 @@ pub async fn eval_to_value<'a>(
                 let new_expr = Box::pin(beta_reduce(env, &other, true)).await?;
 
                 if new_expr.temporary_same_state(expr) {
+                    eprintln!("Value: {:?}", new_expr);
                     return Err(anyhow::anyhow!("Failed to make progress."));
                 }
                 current_expr = new_expr;
@@ -856,15 +914,37 @@ class Todo {
 
 fn GetTodo() -> Todo {
   std::fetch_value<Todo>(std::Request {
-    method: Get,
     base_url: "https://dummyjson.com/todos/1",
-    query_params: null,
-    body: null,
+    headers: {},
+    query_params: {},
   })
+}
+
+fn UseFunction() -> string {
+  let todo = GetTodo();
+  LlmDescribeTodo(todo)
+}
+
+client<llm> GPT4o {
+  provider openai
+  options {
+    model gpt-4o
+    api_key env.OPENAI_API_KEY
+  }
+}
+
+function LlmDescribeTodo(todo: Todo) -> string {
+  client GPT4o
+  prompt #"Describe the following todo in detail: {{ todo }}"#
 }
 
 test GetTodo() {
   functions [GetTodo]
+  args { }
+}
+
+test UseFunction() {
+  functions [UseFunction]
   args { }
 }
         "##,
@@ -875,10 +955,10 @@ test GetTodo() {
         let on_event = |res: FunctionResult| {
             eprintln!("on_event: {:?}", res);
         };
-        let f = rt.inner.ir.find_expr_fn("GetTodo").unwrap();
+        let f = rt.inner.ir.find_expr_fn("UseFunction").unwrap();
         // dbg!(&f.item);
         let (res, _) = rt
-            .run_test("GetTodo", "GetTodo", &ctx, Some(on_event), None)
+            .run_test("UseFunction", "UseFunction", &ctx, Some(on_event), None)
             .await;
         dbg!(res);
         assert!(false);

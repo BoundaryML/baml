@@ -589,7 +589,6 @@ impl IntermediateRepr {
             classes: db
                 .walk_classes()
                 .map(|c| c.node(db))
-                .chain(builtin_classes().into_iter().map(Ok))
                 .collect::<Result<Vec<_>>>()?,
             type_aliases: db
                 .walk_type_aliases()
