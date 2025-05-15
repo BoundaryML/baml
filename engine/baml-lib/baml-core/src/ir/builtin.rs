@@ -11,7 +11,7 @@ pub mod functions {
 }
 
 pub mod classes {
-    pub const REQUEST: &str = "std::request";
+    pub const REQUEST: &str = "std::Request";
 }
 
 fn builtin<T, const N: usize>(elems: [T; N]) -> Vec<Node<T>> {
@@ -31,28 +31,34 @@ pub fn builtin_classes() -> Vec<Node<Class>> {
         static_fields: vec![],
         inputs: vec![
             (String::from("base_url"), FieldType::string()),
-            // TODO: How do we add JSON type here? Builtin JSON type alias?
-            // (String::from(
-            //     "query_params",
-            //     FieldType::map(FieldType::string(), FieldType::null()),
-            // )),
+            (
+                String::from("headers"),
+                FieldType::map(FieldType::string(), FieldType::string()),
+            ),
+            (
+                String::from("query_params"),
+                FieldType::map(FieldType::string(), FieldType::string()),
+            ),
         ],
     }])
 }
 
+/// This builds a specialized version of an std generic function.
+///
+/// For now we only have functions that take in a generic type parameter and
+/// return that same type, generics to not appear in function parameters. So
+/// managing this is fairly simple, but will require carrying additional data
+/// when actual user defined generics are introduced.
 pub fn builtin_generic_fn(f: Builtin, return_type: FieldType) -> Expr<ExprMetadata> {
-    match f {
-        Builtin::FetchValue => Expr::Builtin(
-            Builtin::FetchValue,
-            (
-                Span::fake(),
-                Some(FieldType::arrow(Arrow {
-                    param_types: vec![FieldType::class(classes::REQUEST)],
-                    return_type,
-                })),
-            ),
-        ),
-    }
+    let signature = match f {
+        // fn fetch_value<T>(request: std::Request) -> T
+        Builtin::FetchValue => Arrow {
+            param_types: vec![FieldType::class(classes::REQUEST)],
+            return_type,
+        },
+    };
+
+    Expr::Builtin(f, (Span::fake(), Some(FieldType::arrow(signature))))
 }
 
 pub fn is_builtin_identifier(name: &str) -> bool {
