@@ -81,10 +81,7 @@ impl FieldType {
         FieldType::Optional(Box::new(self))
     }
 
-    pub fn arrow(param_types: Vec<FieldType>, return_type: FieldType) -> Self {
-        FieldType::Arrow(Box::new(Arrow {
-            param_types,
-            return_type,
-        }))
+    pub fn arrow(arrow: Arrow) -> Self {
+        FieldType::Arrow(Box::new(arrow))
     }
 }

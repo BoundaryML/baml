@@ -6,6 +6,7 @@ use internal_baml_diagnostics::DatamodelError;
 use internal_baml_schema_ast::ast::{ClassConstructor, ClassConstructorField, Expression, Stmt};
 use internal_baml_schema_ast::ast::{WithName, WithSpan};
 
+use crate::ir;
 use crate::validate::validation_pipeline::context::Context;
 
 /// Builtin functions.
@@ -13,13 +14,16 @@ use crate::validate::validation_pipeline::context::Context;
 /// TODO: Define this somewhere else like their own std.baml file or something,
 /// but we don't have modules yet.
 fn baml_prelude() -> HashSet<String> {
-    let builtin_functions = ["std::fetch_value"];
+    let builtin_functions = [ir::builtin::functions::FETCH_VALUE];
 
-    let builtin_classes = ["std::request"];
+    let builtin_classes = [ir::builtin::classes::REQUEST];
 
-    let builtin_identifiers = builtin_functions.iter().chain(builtin_classes.iter());
-
-    HashSet::from_iter(builtin_identifiers.map(ToString::to_string))
+    HashSet::from_iter(
+        builtin_functions
+            .iter()
+            .chain(builtin_classes.iter())
+            .map(ToString::to_string),
+    )
 }
 
 // An expr_fn is valid if:

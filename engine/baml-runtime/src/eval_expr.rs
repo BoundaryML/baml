@@ -854,15 +854,13 @@ class Todo {
   userId int 
 }
 
-//   std::fetch_value<Todo>(std::request {
-//     method: Get,
-//     base_url: "https://dummyjson.com/todos/1",
-//     query_params: null,
-//     body: null,
-//   })
-
-fn GetTodo() -> int {
-  std::fetch_value<int>(123)
+fn GetTodo() -> Todo {
+  std::fetch_value<Todo>(What {
+    method: Get,
+    base_url: "https://dummyjson.com/todos/1",
+    query_params: null,
+    body: null,
+  })
 }
 
 test GetTodo() {

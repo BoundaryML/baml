@@ -31,7 +31,7 @@ use serde::Serialize;
 use crate::validate::validation_pipeline::validations::expr_typecheck::infer_types_in_context;
 use crate::Configuration;
 
-use super::builtin::{builtin_classes, is_builtin_identifier};
+use super::builtin::{builtin_classes, builtin_generic_fn, is_builtin_identifier};
 
 /// This class represents the intermediate representation of the BAML AST.
 /// It is a representation of the BAML AST that is easier to work with than the
@@ -346,7 +346,13 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                 ))
             }
             ast::Expression::App(app) => {
-                // Mangle
+                // Mangle names.
+                //
+                // TODO: Should probably be a separate pass on the IR similar
+                // to fn specialize_generics, but there are some issues with
+                // Arc<> and &mut and stuff cause we need to either mutate the
+                // IR in place or build a new one, so for now this thing can
+                // live here.
                 let name = if let Some(ty) = app.type_args.first() {
                     format!("{}<{}>", app.name, ty)
                 } else {
@@ -2169,21 +2175,16 @@ fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<E
             args,
             meta,
         } => {
-            if let Some(ty) = type_args.first() {
+            // If there's a type arg then we know it's a builtin function
+            // because as of right now users can't define their own generic
+            // functions. We also know that the name is already mangled because
+            // we do that when we build the IR from the AST. Take a look at
+            // WithRepr<Expr> for ast::Expression::App for more details.
+            if let Some(type_arg) = type_args.first() {
                 if let Expr::FreeVar(name, _) = func.as_ref() {
                     ctx.insert(
-                        name.clone(),
-                        Expr::Builtin(
-                            Builtin::FetchValue,
-                            (
-                                Span::fake(),
-                                Some(FieldType::Arrow(Box::new(Arrow {
-                                    // param_types: vec![FieldType::class("std::request")],
-                                    param_types: vec![FieldType::int()],
-                                    return_type: ty.clone(),
-                                }))),
-                            ),
-                        ),
+                        name.clone(), // Already mangled.
+                        builtin_generic_fn(Builtin::FetchValue, type_arg.clone()),
                     );
                 }
             }

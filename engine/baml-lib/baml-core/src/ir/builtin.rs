@@ -1,10 +1,18 @@
 use baml_types::{
-    expr::{Builtin, Expr},
+    expr::{Builtin, Expr, ExprMetadata},
     Arrow, FieldType,
 };
 use internal_baml_diagnostics::Span;
 
 use super::repr::{Class, ExprFunction, Node, NodeAttributes};
+
+pub mod functions {
+    pub const FETCH_VALUE: &str = "std::fetch_value";
+}
+
+pub mod classes {
+    pub const REQUEST: &str = "std::request";
+}
 
 fn builtin<T, const N: usize>(elems: [T; N]) -> Vec<Node<T>> {
     let mut attributes = NodeAttributes::default();
@@ -18,7 +26,7 @@ fn builtin<T, const N: usize>(elems: [T; N]) -> Vec<Node<T>> {
 
 pub fn builtin_classes() -> Vec<Node<Class>> {
     builtin([Class {
-        name: String::from("std::request"),
+        name: String::from(functions::FETCH_VALUE),
         docstring: None,
         static_fields: vec![],
         inputs: vec![
@@ -32,23 +40,19 @@ pub fn builtin_classes() -> Vec<Node<Class>> {
     }])
 }
 
-pub fn builtin_functions() -> Vec<Node<ExprFunction>> {
-    builtin([ExprFunction {
-        name: String::from("std::fetch_value"),
-        inputs: vec![(String::from("request"), FieldType::class("std::request"))],
-        output: FieldType::generic("T"),
-        tests: vec![],
-        expr: Expr::Builtin(
+pub fn builtin_generic_fn(f: Builtin, return_type: FieldType) -> Expr<ExprMetadata> {
+    match f {
+        Builtin::FetchValue => Expr::Builtin(
             Builtin::FetchValue,
             (
                 Span::fake(),
-                Some(FieldType::arrow(
-                    vec![FieldType::class("std::request")],
-                    FieldType::generic("T"),
-                )),
+                Some(FieldType::arrow(Arrow {
+                    param_types: vec![FieldType::class(classes::REQUEST)],
+                    return_type,
+                })),
             ),
         ),
-    }])
+    }
 }
 
 pub fn is_builtin_identifier(name: &str) -> bool {
