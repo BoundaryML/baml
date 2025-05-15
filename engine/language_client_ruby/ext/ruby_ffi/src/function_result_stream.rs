@@ -44,7 +44,7 @@ impl FunctionResultStream {
             rb_self
                 .inner
                 .borrow_mut()
-                .run(on_event, &ctx.inner, None, None),
+                .run(on_event, &ctx.inner, None, None, HashMap::new()),
         ) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
             (Err(e), _) => Err(Error::new(

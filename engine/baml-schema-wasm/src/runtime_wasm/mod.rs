@@ -1616,7 +1616,7 @@ impl WasmRuntime {
                     // Create a future for this test
                     let future = async move {
                         let (test_response, span) = rt
-                            .run_test(&function_name, &test_name, &ctx, Some(cb), None)
+                            .run_test(&function_name, &test_name, &ctx, Some(cb), None, HashMap::new())
                             .await;
 
                         // Return WasmTestResponse for this test
@@ -1738,7 +1738,7 @@ impl WasmFunction {
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let ctx = context_manager
-            .create_ctx(test_type_builder.as_ref(), None, None, None)
+            .create_ctx(test_type_builder.as_ref(), None, None, HashMap::new())
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let params = rt
@@ -1791,7 +1791,7 @@ impl WasmFunction {
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let ctx = context_manager
-            .create_ctx(test_type_builder.as_ref(), None, None, None)
+            .create_ctx(test_type_builder.as_ref(), None, None, HashMap::new())
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let params = rt
@@ -1883,7 +1883,7 @@ impl WasmFunction {
 
         // Pass the sender to run_test_with_expr_events
         let (test_response, span) = rt
-            .run_test_with_expr_events(&function_name, &test_name, &ctx, Some(cb), Some(tx), None)
+            .run_test_with_expr_events(&function_name, &test_name, &ctx, Some(cb), Some(tx), None, HashMap::new())
             .await;
 
         log::info!("test_response: {:#?}", test_response);
@@ -1932,7 +1932,7 @@ impl WasmFunction {
 
         // Now pass collector_arc to your runtime's run_test
         let (test_response, span) = rt
-            .run_test(&function_name, &test_name, &ctx, Some(cb), None)
+            .run_test(&function_name, &test_name, &ctx, Some(cb), None, HashMap::new())
             .await;
 
         log::info!("test_response: {:#?}", test_response);
