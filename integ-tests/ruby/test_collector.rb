@@ -14,14 +14,14 @@ describe "Ruby Collector Tests" do
     # Ensure collector is empty before each test
     # This depends on if Ruby exposes the same API as Python
     # You might need to modify this based on actual Ruby API
-    assert_equal 0, Baml::Collector.__function_span_count if Baml::Collector.respond_to?(:__function_span_count)
+    assert_equal 0, Baml::Collector.__function_call_count if Baml::Collector.respond_to?(:__function_call_count)
   end
 
   after do
     # Force garbage collection and check collector is empty
     GC.start
     # GC.start(full_mark: true, immediate_sweep: true);
-    assert_equal 0, Baml::Collector.__function_span_count if Baml::Collector.respond_to?(:__function_span_count)
+    assert_equal 0, Baml::Collector.__function_call_count if Baml::Collector.respond_to?(:__function_call_count)
   end
 
   it "test_collector_no_stream_success" do
@@ -37,7 +37,7 @@ describe "Ruby Collector Tests" do
     puts "func called"
 
 
-    puts "#{Baml::Collector.__function_span_count}"
+    puts "#{Baml::Collector.__function_call_count}"
     puts "#{Baml::Collector.__print_storage}"
 
     function_logs = collector.logs
@@ -129,7 +129,7 @@ describe "Ruby Collector Tests" do
     # Force GC to run
     GC.start
     # Still not collected because it's in use
-    assert Baml::Collector.__function_span_count > 0 if Baml::Collector.respond_to?(:__function_span_count)
+    assert Baml::Collector.__function_call_count > 0 if Baml::Collector.respond_to?(:__function_call_count)
   end
 
   it "tests_collector_no_stream_no_getting_logs" do
@@ -142,7 +142,7 @@ describe "Ruby Collector Tests" do
     # Force GC to run
     GC.start
     # Still not collected because it's in use
-    assert Baml::Collector.__function_span_count > 0 if Baml::Collector.respond_to?(:__function_span_count)
+    assert Baml::Collector.__function_call_count > 0 if Baml::Collector.respond_to?(:__function_call_count)
   end
 
   it "tests_collector_stream_success" do
@@ -218,7 +218,7 @@ describe "Ruby Collector Tests" do
     # Force GC to run
     GC.start
     # Still not collected because it's in use
-    assert Baml::Collector.__function_span_count > 0 if Baml::Collector.respond_to?(:__function_span_count)
+    assert Baml::Collector.__function_call_count > 0 if Baml::Collector.respond_to?(:__function_call_count)
   end
 
   it "tests_collector_multiple_calls_usage" do

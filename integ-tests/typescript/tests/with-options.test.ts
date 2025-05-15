@@ -14,19 +14,19 @@ async function gc() {
 describe("With Options Tests", () => {
   beforeEach(() => {
     // Ensure collector is empty before each test
-    expect(Collector.__functionSpanCount()).toBe(0);
+    expect(Collector.__functionCallCount()).toBe(0);
   });
 
   afterEach(async () => {
     // Force garbage collection and verify all spans are cleaned up
     await gc();
-    expect(Collector.__functionSpanCount()).toBe(0);
+    expect(Collector.__functionCallCount()).toBe(0);
   });
 
   it("should test with options logger async call", async () => {
-    console.log("### function_span_count", Collector.__functionSpanCount());
+    console.log("### function_call_count", Collector.__functionCallCount());
     // Should be garbage collected
-    expect(Collector.__functionSpanCount()).toBe(0);
+    expect(Collector.__functionCallCount()).toBe(0);
 
     // Create a collector
     const collector = new Collector("my-collector");
@@ -64,7 +64,7 @@ describe("With Options Tests", () => {
     // Force garbage collection to check function spans
     await gc();
     // Still not collected because it's in use
-    expect(Collector.__functionSpanCount()).toBeGreaterThan(0);
+    expect(Collector.__functionCallCount()).toBeGreaterThan(0);
   });
 
   it("should test with options logger sync", async () => {

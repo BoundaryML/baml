@@ -79,8 +79,8 @@ impl Collector {
     }
 
     #[staticmethod]
-    pub fn __function_span_count() -> usize {
-        BAML_TRACER.lock().unwrap().function_span_count()
+    pub fn __function_call_count() -> usize {
+        BAML_TRACER.lock().unwrap().function_call_count()
     }
 
     #[staticmethod]

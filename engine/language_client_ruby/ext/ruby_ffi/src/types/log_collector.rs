@@ -125,8 +125,8 @@ impl Collector {
         )
     }
 
-    pub fn __function_span_count() -> u32 {
-        let call_count = BAML_TRACER.lock().unwrap().function_span_count();
+    pub fn __function_call_count() -> u32 {
+        let call_count = BAML_TRACER.lock().unwrap().function_call_count();
         call_count as u32
     }
 
@@ -145,8 +145,8 @@ impl Collector {
         cls.define_method("usage", method!(Collector::usage, 0))?;
         cls.define_method("to_s", method!(Collector::to_s, 0))?;
         cls.define_singleton_method(
-            "__function_span_count",
-            function!(Collector::__function_span_count, 0),
+            "__function_call_count",
+            function!(Collector::__function_call_count, 0),
         )?;
         cls.define_singleton_method("__print_storage", function!(Collector::__print_storage, 0))?;
 
