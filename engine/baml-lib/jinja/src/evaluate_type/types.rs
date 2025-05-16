@@ -303,6 +303,15 @@ impl PredefinedTypes {
                                 "hoisted_class_prefix".into(),
                                 Type::merge(vec![Type::String, Type::None]),
                             ),
+                            (
+                                "hoist_classes".into(),
+                                Type::merge(vec![
+                                    Type::None,
+                                    Type::Bool,
+                                    Type::String,
+                                    Type::List(Box::new(Type::String)),
+                                ]),
+                            ),
                         ],
                     ),
                 ),

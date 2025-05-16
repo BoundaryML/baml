@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{ops::Deref, sync::Arc};
 
 use anyhow::Result;
 use baml_types::{Constraint, FieldType, StreamingBehavior, TypeValue};
@@ -157,11 +157,24 @@ pub(crate) enum MapStyle {
     ObjectLiteral,
 }
 
+/// Hoist classes setting.
+///
+/// Recursive classes are always hoisted.
+pub(crate) enum HoistClasses {
+    /// Hoist all classes.
+    All,
+    /// Hoist only the specified subset.
+    Subset(Vec<String>),
+    /// Default behavior, hoist only recursive classes.
+    Auto,
+}
+
 pub struct RenderOptions {
     prefix: RenderSetting<String>,
     pub(crate) or_splitter: String,
     enum_value_prefix: RenderSetting<String>,
     hoisted_class_prefix: RenderSetting<String>,
+    hoist_classes: HoistClasses,
     always_hoist_enums: RenderSetting<bool>,
     map_style: MapStyle,
 }
@@ -173,6 +186,7 @@ impl Default for RenderOptions {
             or_splitter: Self::DEFAULT_OR_SPLITTER.to_string(),
             enum_value_prefix: RenderSetting::Auto,
             hoisted_class_prefix: RenderSetting::Auto,
+            hoist_classes: HoistClasses::Auto,
             always_hoist_enums: RenderSetting::Auto,
             map_style: MapStyle::TypeParameters,
         }
@@ -190,6 +204,7 @@ impl RenderOptions {
         always_hoist_enums: Option<bool>,
         map_style: Option<MapStyle>,
         hoisted_class_prefix: Option<Option<String>>,
+        hoist_classes: Option<HoistClasses>,
     ) -> Self {
         Self {
             prefix: prefix.map_or(RenderSetting::Auto, |p| {
@@ -205,7 +220,12 @@ impl RenderOptions {
             hoisted_class_prefix: hoisted_class_prefix.map_or(RenderSetting::Auto, |p| {
                 p.map_or(RenderSetting::Never, RenderSetting::Always)
             }),
+            hoist_classes: hoist_classes.unwrap_or(HoistClasses::Auto),
         }
+    }
+
+    pub(crate) fn builder() -> RenderOptionsBuilder {
+        RenderOptionsBuilder::default()
     }
 
     // TODO: Might need a builder pattern for this as well.
@@ -214,6 +234,67 @@ impl RenderOptions {
             hoisted_class_prefix: RenderSetting::Always(prefix.to_owned()),
             ..Default::default()
         }
+    }
+
+    // TODO: Might need a builder pattern for this as well.
+    pub(crate) fn hoist_classes(hoist_classes: HoistClasses) -> Self {
+        Self {
+            hoist_classes,
+            ..Default::default()
+        }
+    }
+}
+pub(crate) struct RenderOptionsBuilder {
+    prefix: Option<Option<String>>,
+    or_splitter: Option<String>,
+    enum_value_prefix: Option<Option<String>>,
+    always_hoist_enums: Option<bool>,
+    map_style: Option<MapStyle>,
+    hoisted_class_prefix: Option<Option<String>>,
+}
+
+impl Default for RenderOptionsBuilder {
+    fn default() -> Self {
+        Self {
+            prefix: None,
+            or_splitter: None,
+            enum_value_prefix: None,
+            always_hoist_enums: None,
+            map_style: None,
+            hoisted_class_prefix: None,
+        }
+    }
+}
+
+impl RenderOptionsBuilder {
+    pub fn prefix(mut self, prefix: Option<String>) -> Self {
+        self.prefix = Some(prefix);
+        self
+    }
+
+    pub fn or_splitter(mut self, or_splitter: String) -> Self {
+        self.or_splitter = Some(or_splitter);
+        self
+    }
+
+    pub fn enum_value_prefix(mut self, enum_value_prefix: Option<String>) -> Self {
+        self.enum_value_prefix = Some(enum_value_prefix);
+        self
+    }
+
+    pub fn always_hoist_enums(mut self, always_hoist_enums: bool) -> Self {
+        self.always_hoist_enums = Some(always_hoist_enums);
+        self
+    }
+
+    pub fn map_style(mut self, map_style: MapStyle) -> Self {
+        self.map_style = Some(map_style);
+        self
+    }
+
+    pub fn hoisted_class_prefix(mut self, hoisted_class_prefix: Option<String>) -> Self {
+        self.hoisted_class_prefix = Some(hoisted_class_prefix);
+        self
     }
 }
 
@@ -313,6 +394,7 @@ fn indefinite_article_a_or_an(word: &str) -> &str {
 
 struct RenderState {
     hoisted_enums: IndexSet<String>,
+    hoisted_classes: IndexSet<String>,
 }
 
 impl OutputFormatContent {
@@ -335,10 +417,11 @@ impl OutputFormatContent {
         }
     }
 
-    fn prefix(&self, options: &RenderOptions) -> Option<String> {
+    fn prefix(&self, options: &RenderOptions, render_state: &RenderState) -> Option<String> {
         fn auto_prefix(
             ft: &FieldType,
             options: &RenderOptions,
+            render_state: &RenderState,
             output_format_content: &OutputFormatContent,
         ) -> Option<String> {
             match ft {
@@ -356,7 +439,7 @@ impl OutputFormatContent {
                     };
 
                     // Line break if schema else just inline the name.
-                    let end = if output_format_content.recursive_classes.contains(cls) {
+                    let end = if render_state.hoisted_classes.contains(cls) {
                         " "
                     } else {
                         "\n"
@@ -382,7 +465,7 @@ impl OutputFormatContent {
                 FieldType::Map(_, _) => Some(String::from("Answer in JSON using this schema:\n")),
                 FieldType::Tuple(_) => None,
                 FieldType::WithMetadata { base, .. } => {
-                    auto_prefix(base, options, output_format_content)
+                    auto_prefix(base, options, render_state, output_format_content)
                 }
                 FieldType::Arrow(_) => None, // TODO: Error? Arrow shouldn't appear here.
             }
@@ -391,7 +474,7 @@ impl OutputFormatContent {
         match &options.prefix {
             RenderSetting::Always(prefix) => Some(prefix.to_owned()),
             RenderSetting::Never => None,
-            RenderSetting::Auto => auto_prefix(&self.target, options, self),
+            RenderSetting::Auto => auto_prefix(&self.target, options, render_state, self),
         }
     }
 
@@ -425,7 +508,7 @@ impl OutputFormatContent {
     /// is recursive itself you own't get any rendering! You'll just get the
     /// name of the type. Instead call [`Self::inner_type_render`] as an entry
     /// point and that will render the schema considering recursive fields.
-    fn render_possibly_recursive_type(
+    fn render_possibly_hoisted_type(
         &self,
         options: &RenderOptions,
         field_type: &FieldType,
@@ -433,7 +516,9 @@ impl OutputFormatContent {
         group_hoisted_literals: bool,
     ) -> Result<String, minijinja::Error> {
         match field_type {
-            FieldType::Class(nested_class) if self.recursive_classes.contains(nested_class) => {
+            FieldType::Class(nested_class)
+                if render_state.hoisted_classes.contains(nested_class) =>
+            {
                 Ok(nested_class.to_owned())
             }
 
@@ -463,7 +548,7 @@ impl OutputFormatContent {
                 }
             },
             FieldType::Literal(v) => v.to_string(),
-            FieldType::WithMetadata { base, .. } => self.render_possibly_recursive_type(
+            FieldType::WithMetadata { base, .. } => self.render_possibly_hoisted_type(
                 options,
                 base,
                 render_state,
@@ -512,7 +597,7 @@ impl OutputFormatContent {
                             Ok(ClassFieldRender {
                                 name: name.rendered_name().to_string(),
                                 description: description.clone(),
-                                r#type: self.render_possibly_recursive_type(
+                                r#type: self.render_possibly_hoisted_type(
                                     options,
                                     field_type,
                                     render_state,
@@ -526,8 +611,10 @@ impl OutputFormatContent {
             }
             FieldType::RecursiveTypeAlias(name) => name.to_owned(),
             FieldType::List(inner) => {
-                let is_recursive = match inner.as_ref() {
-                    FieldType::Class(nested_class) => self.recursive_classes.contains(nested_class),
+                let is_hoisted = match inner.as_ref() {
+                    FieldType::Class(nested_class) => {
+                        render_state.hoisted_classes.contains(nested_class)
+                    }
                     FieldType::RecursiveTypeAlias(name) => {
                         self.structural_recursive_aliases.contains_key(name)
                     }
@@ -535,9 +622,9 @@ impl OutputFormatContent {
                 };
 
                 let inner_str =
-                    self.render_possibly_recursive_type(options, inner, render_state, false)?;
+                    self.render_possibly_hoisted_type(options, inner, render_state, false)?;
 
-                if !is_recursive
+                if !is_hoisted
                     && match inner.as_ref() {
                         FieldType::Primitive(_) => false,
                         FieldType::Optional(t) => !t.is_primitive(),
@@ -554,12 +641,12 @@ impl OutputFormatContent {
             }
             FieldType::Union(items) => items
                 .iter()
-                .map(|t| self.render_possibly_recursive_type(options, t, render_state, false))
+                .map(|t| self.render_possibly_hoisted_type(options, t, render_state, false))
                 .collect::<Result<Vec<_>, minijinja::Error>>()?
                 .join(&options.or_splitter),
             FieldType::Optional(inner) => {
                 let inner_str =
-                    self.render_possibly_recursive_type(options, inner, render_state, false)?;
+                    self.render_possibly_hoisted_type(options, inner, render_state, false)?;
                 if inner.is_optional() {
                     inner_str
                 } else {
@@ -576,13 +663,13 @@ impl OutputFormatContent {
                 style: &options.map_style,
                 // NOTE: Key can't be recursive because we only support strings
                 // as keys.
-                key_type: self.render_possibly_recursive_type(
+                key_type: self.render_possibly_hoisted_type(
                     options,
                     key_type,
                     render_state,
                     false,
                 )?,
-                value_type: self.render_possibly_recursive_type(
+                value_type: self.render_possibly_hoisted_type(
                     options,
                     value_type,
                     render_state,
@@ -600,11 +687,59 @@ impl OutputFormatContent {
     }
 
     pub fn render(&self, options: RenderOptions) -> Result<Option<String>, minijinja::Error> {
-        let prefix = self.prefix(&options);
-
+        // Hoisted enums are computed during rendering.
+        // Recursive classes are always hoisted so we start with those as base.
         let mut render_state = RenderState {
             hoisted_enums: IndexSet::new(),
+            hoisted_classes: self.recursive_classes.deref().clone(),
         };
+
+        // Now figure out what to hoist besides recursive classes.
+        match &options.hoist_classes {
+            // Nothing here, default behavior.
+            HoistClasses::Auto => {}
+
+            // Hoist all classes.
+            HoistClasses::All => render_state
+                .hoisted_classes
+                .extend(self.classes.keys().cloned()),
+
+            // Hoist only the specified subset.
+            HoistClasses::Subset(classes) => {
+                let mut not_found = IndexSet::new();
+
+                for cls in classes {
+                    if self.classes.contains_key(cls) {
+                        render_state.hoisted_classes.insert(cls.to_owned());
+                    } else {
+                        not_found.insert(cls.to_owned());
+                    }
+                }
+
+                // Error message if class/classes not found.
+                if !not_found.is_empty() {
+                    let (class_or_classes, it_does_or_they_do) = if not_found.len() == 1 {
+                        ("class", "it does")
+                    } else {
+                        ("classes", "they do")
+                    };
+
+                    return Err(minijinja::Error::new(
+                        minijinja::ErrorKind::BadSerialization,
+                        format!(
+                            "{class_or_classes} {} cannot be hoisted because {it_does_or_they_do} not exist",
+                            not_found
+                                .iter()
+                                .map(|cls| format!("\"{cls}\""))
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                        ),
+                    ));
+                }
+            }
+        };
+
+        let prefix = self.prefix(&options, &render_state);
 
         let mut message = match &self.target {
             FieldType::Primitive(TypeValue::String) if prefix.is_none() => None,
@@ -624,7 +759,7 @@ impl OutputFormatContent {
         // Top level recursive classes will just use their name instead of the
         // entire schema which should already be hoisted.
         if let FieldType::Class(class) = &self.target {
-            if self.recursive_classes.contains(class) {
+            if render_state.hoisted_classes.contains(class) {
                 message = Some(class.to_owned());
             }
         }
@@ -636,7 +771,13 @@ impl OutputFormatContent {
         // contain these classes because we already know that we're gonna hoist
         // them beforehand. Recursive cycles are computed after the AST
         // validation stage.
-        for class_name in self.recursive_classes.iter() {
+        //
+        // TODO: We need to clone this because the render function takes in a
+        // mutable reference to the render state but at the same time we are
+        // iteraring over one of the render state fields. This can be avoiaded
+        // if we precompute hoisted enums so we don't have to modify the render
+        // state. It would become render context or something.
+        for class_name in &render_state.hoisted_classes.clone() {
             let schema = self.inner_type_render(
                 &options,
                 &FieldType::Class(class_name.to_owned()),
@@ -2595,6 +2736,188 @@ type B = C
 type C = A[]
 
 Answer in JSON using this type: A"#
+            ))
+        );
+    }
+
+    #[test]
+    fn render_hoisted_classes_subset() {
+        let classes = vec![
+            Class {
+                name: Name::new("A".to_string()),
+                fields: vec![(Name::new("prop".to_string()), FieldType::int(), None, false)],
+                constraints: Vec::new(),
+                streaming_behavior: StreamingBehavior::default(),
+            },
+            Class {
+                name: Name::new("B".to_string()),
+                fields: vec![(
+                    Name::new("prop".to_string()),
+                    FieldType::string(),
+                    None,
+                    false,
+                )],
+                constraints: Vec::new(),
+                streaming_behavior: StreamingBehavior::default(),
+            },
+            Class {
+                name: Name::new("C".to_string()),
+                fields: vec![(
+                    Name::new("prop".to_string()),
+                    FieldType::float(),
+                    None,
+                    false,
+                )],
+                constraints: Vec::new(),
+                streaming_behavior: StreamingBehavior::default(),
+            },
+            Class {
+                name: Name::new("Ret".to_string()),
+                fields: vec![
+                    (
+                        Name::new("a".to_string()),
+                        FieldType::class("A"),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("b".to_string()),
+                        FieldType::class("B"),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("c".to_string()),
+                        FieldType::class("C"),
+                        None,
+                        false,
+                    ),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: StreamingBehavior::default(),
+            },
+        ];
+
+        let content = OutputFormatContent::target(FieldType::class("Ret"))
+            .classes(classes)
+            .build();
+        let rendered = content
+            .render(RenderOptions::hoist_classes(HoistClasses::Subset(vec![
+                "A".to_string(),
+                "B".to_string(),
+            ])))
+            .unwrap();
+        #[rustfmt::skip]
+        assert_eq!(
+            rendered,
+            Some(String::from(
+r#"A {
+  prop: int,
+}
+
+B {
+  prop: string,
+}
+
+Answer in JSON using this schema:
+{
+  a: A,
+  b: B,
+  c: {
+    prop: float,
+  },
+}"#
+            ))
+        );
+    }
+
+    #[test]
+    fn render_hoist_all_classes() {
+        let classes = vec![
+            Class {
+                name: Name::new("A".to_string()),
+                fields: vec![(Name::new("prop".to_string()), FieldType::int(), None, false)],
+                constraints: Vec::new(),
+                streaming_behavior: StreamingBehavior::default(),
+            },
+            Class {
+                name: Name::new("B".to_string()),
+                fields: vec![(
+                    Name::new("prop".to_string()),
+                    FieldType::string(),
+                    None,
+                    false,
+                )],
+                constraints: Vec::new(),
+                streaming_behavior: StreamingBehavior::default(),
+            },
+            Class {
+                name: Name::new("C".to_string()),
+                fields: vec![(
+                    Name::new("prop".to_string()),
+                    FieldType::float(),
+                    None,
+                    false,
+                )],
+                constraints: Vec::new(),
+                streaming_behavior: StreamingBehavior::default(),
+            },
+            Class {
+                name: Name::new("Ret".to_string()),
+                fields: vec![
+                    (
+                        Name::new("a".to_string()),
+                        FieldType::class("A"),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("b".to_string()),
+                        FieldType::class("B"),
+                        None,
+                        false,
+                    ),
+                    (
+                        Name::new("c".to_string()),
+                        FieldType::class("C"),
+                        None,
+                        false,
+                    ),
+                ],
+                constraints: Vec::new(),
+                streaming_behavior: StreamingBehavior::default(),
+            },
+        ];
+
+        let content = OutputFormatContent::target(FieldType::class("Ret"))
+            .classes(classes)
+            .build();
+        let rendered = content
+            .render(RenderOptions::hoist_classes(HoistClasses::All))
+            .unwrap();
+        #[rustfmt::skip]
+        assert_eq!(
+            rendered,
+            Some(String::from(
+r#"A {
+  prop: int,
+}
+
+B {
+  prop: string,
+}
+
+C {
+  prop: float,
+}
+
+Ret {
+  a: A,
+  b: B,
+  c: C,
+}
+
+Answer in JSON using this schema: Ret"#
             ))
         );
     }
