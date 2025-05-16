@@ -321,6 +321,29 @@ module Baml
       params(
         llm_response: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(String)
+    }
+    def AudioInputOpenai(llm_response:, baml_options: {})
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.parse_llm_response(
+        "AudioInputOpenai",
+        llm_response,
+        Baml::Types,
+        Baml::PartialTypes,
+        false,
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+      )
+    end
+
+    sig {
+      params(
+        llm_response: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::LinkedList)
     }
     def BuildLinkedList(llm_response:, baml_options: {})
@@ -4694,6 +4717,29 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         Hash.new
+      )
+    end
+
+    sig {
+      params(
+        llm_response: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+      ).returns(T.nilable(String))
+    }
+    def AudioInputOpenai(llm_response:, baml_options: {})
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      end
+
+      @runtime.parse_llm_response(
+        "AudioInputOpenai",
+        llm_response,
+        Baml::Types,
+        Baml::PartialTypes,
+        true,
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
       )
     end
 
