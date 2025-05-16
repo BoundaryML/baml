@@ -46,6 +46,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -67,6 +68,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -88,6 +90,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -109,6 +112,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -130,6 +134,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -151,6 +156,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -172,6 +178,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -193,6 +200,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -214,6 +222,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -235,6 +244,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -256,6 +266,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -277,6 +288,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -298,6 +310,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -319,6 +332,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -340,6 +354,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -361,6 +376,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -382,6 +398,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -403,6 +420,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -424,6 +442,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -445,6 +464,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -466,6 +486,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -487,6 +508,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -508,6 +530,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -529,6 +552,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -550,6 +574,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -571,6 +596,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -592,6 +618,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -613,6 +640,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -634,6 +662,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -655,6 +684,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -676,6 +706,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -697,6 +728,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -718,6 +750,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -739,6 +772,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -760,6 +794,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -781,6 +816,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -802,6 +838,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -823,6 +860,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -844,6 +882,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -865,6 +904,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -886,6 +926,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -907,6 +948,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -928,6 +970,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -949,6 +992,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -970,6 +1014,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -991,6 +1036,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1012,6 +1058,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1033,6 +1080,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1054,6 +1102,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1075,6 +1124,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1096,6 +1146,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1117,6 +1168,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1138,6 +1190,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1159,6 +1212,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1180,6 +1234,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1201,6 +1256,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1222,6 +1278,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1243,6 +1300,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1264,6 +1322,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1285,6 +1344,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1306,6 +1366,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1327,6 +1388,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1348,6 +1410,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1369,6 +1432,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1390,6 +1454,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1411,6 +1476,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1432,6 +1498,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1453,6 +1520,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1474,6 +1542,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1495,6 +1564,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1516,6 +1586,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1537,6 +1608,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1558,6 +1630,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1579,6 +1652,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1600,6 +1674,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1621,6 +1696,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1642,6 +1718,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1663,6 +1740,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1684,6 +1762,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1705,6 +1784,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1726,6 +1806,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1747,6 +1828,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1768,6 +1850,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1789,6 +1872,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1810,6 +1894,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1831,6 +1916,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1852,6 +1938,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1873,6 +1960,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1894,6 +1982,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1915,6 +2004,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1936,6 +2026,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1957,6 +2048,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1978,6 +2070,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -1999,6 +2092,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2020,6 +2114,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2041,6 +2136,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2062,6 +2158,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2083,6 +2180,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2104,6 +2202,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2125,6 +2224,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2146,6 +2246,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2167,6 +2268,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2188,6 +2290,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2209,6 +2312,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2230,6 +2334,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2251,6 +2356,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2272,6 +2378,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2293,6 +2400,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2314,6 +2422,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2335,6 +2444,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2356,6 +2466,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2377,6 +2488,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2398,6 +2510,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2419,6 +2532,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2440,6 +2554,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2461,6 +2576,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2482,6 +2598,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2503,6 +2620,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2524,6 +2642,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2545,6 +2664,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2566,6 +2686,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2587,6 +2708,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2608,6 +2730,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2629,6 +2752,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2650,6 +2774,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2671,6 +2796,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2692,6 +2818,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2713,6 +2840,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2734,6 +2862,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2755,6 +2884,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2776,6 +2906,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2797,6 +2928,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2818,6 +2950,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2839,6 +2972,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2860,6 +2994,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2881,6 +3016,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2902,6 +3038,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2923,6 +3060,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2944,6 +3082,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2965,6 +3104,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -2986,6 +3126,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3007,6 +3148,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3028,6 +3170,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3049,6 +3192,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3070,6 +3214,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3091,6 +3236,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3112,6 +3258,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3133,6 +3280,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3154,6 +3302,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3175,6 +3324,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3196,6 +3346,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3217,6 +3368,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3238,6 +3390,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3259,6 +3412,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3280,6 +3434,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3301,6 +3456,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3322,6 +3478,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3343,6 +3500,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3364,6 +3522,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3385,6 +3544,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3406,6 +3566,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3427,6 +3588,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3448,6 +3610,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3469,6 +3632,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3490,6 +3654,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3511,6 +3676,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3532,6 +3698,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3553,6 +3720,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3574,6 +3742,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3595,6 +3764,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3616,6 +3786,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3637,6 +3808,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3658,6 +3830,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3679,6 +3852,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3700,6 +3874,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3721,6 +3896,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3742,6 +3918,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3763,6 +3940,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3784,6 +3962,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3805,6 +3984,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3826,6 +4006,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3847,6 +4028,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
@@ -3868,6 +4050,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
+        false,
         envVars,
       )
     } catch (error) {
