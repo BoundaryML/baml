@@ -279,6 +279,7 @@ export class AsyncHttpRequest {
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
+      const envVars = __baml_options__?.envVars ? { ...process.env, ...__baml_options__.envVars } : { ...process.env };
       return await this.runtime.buildRequest(
         "AudioInputOpenai",
         {
@@ -288,26 +289,7 @@ export class AsyncHttpRequest {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         false,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  async AudioInputOpenai(
-      aud: Audio,prompt: string,
-      __baml_options__?: BamlCallOptions
-  ): Promise<HTTPRequest> {
-    try {
-      return await this.runtime.buildRequest(
-        "AudioInputOpenai",
-        {
-          "aud": aud,"prompt": prompt
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        false,
+        envVars
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4329,6 +4311,7 @@ export class AsyncHttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
+      const envVars = __baml_options__?.envVars ? { ...process.env, ...__baml_options__.envVars } : { ...process.env };
       return await this.runtime.buildRequest(
         "AudioInputOpenai",
         {
@@ -4338,26 +4321,7 @@ export class AsyncHttpStreamRequest {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  async AudioInputOpenai(
-      aud: Audio,prompt: string,
-      __baml_options__?: BamlCallOptions
-  ): Promise<HTTPRequest> {
-    try {
-      return await this.runtime.buildRequest(
-        "AudioInputOpenai",
-        {
-          "aud": aud,"prompt": prompt
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        true,
+        envVars
       )
     } catch (error) {
       throw toBamlError(error);
