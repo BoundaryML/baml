@@ -35,7 +35,7 @@ class BamlCallOptions(TypedDict, total=False):
     tb: NotRequired[TypeBuilder]
     client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
     collector: NotRequired[Union[baml_py.baml_py.Collector, List[baml_py.baml_py.Collector]]]
-
+    env_vars: NotRequired[Dict[str, str]]
 
 class BamlAsyncClient:
     __runtime: baml_py.BamlRuntime
@@ -124,7 +124,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.Recipe, raw.cast_to(types, types, partial_types, False))
     
@@ -152,7 +152,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.LinkedListAliasNode, raw.cast_to(types, types, partial_types, False))
     
@@ -180,7 +180,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Checked[int, Literal["gt_ten"]], raw.cast_to(types, types, partial_types, False))
     
@@ -208,7 +208,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -236,7 +236,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -264,7 +264,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -292,7 +292,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -320,7 +320,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -348,7 +348,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.OptionalListAndMap, raw.cast_to(types, types, partial_types, False))
     
@@ -376,7 +376,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -404,7 +404,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -432,33 +432,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-      )
-      return cast(str, raw.cast_to(types, types, partial_types, False))
-    
-    async def AudioInputOpenai(
-        self,
-        aud: baml_py.Audio,prompt: str,
-        baml_options: BamlCallOptions = {},
-    ) -> str:
-      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
-
-      __tb__ = options.get("tb", None)
-      if __tb__ is not None:
-        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
-      else:
-        tb = None
-      __cr__ = options.get("client_registry", None)
-      collector = options.get("collector", None)
-      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      raw = await self.__runtime.call_function(
-        "AudioInputOpenai",
-        {
-          "aud": aud,"prompt": prompt,
-        },
-        self.__ctx_manager.get(),
-        tb,
-        __cr__,
-        collectors,
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -486,7 +460,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.LinkedList, raw.cast_to(types, types, partial_types, False))
     
@@ -514,7 +488,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.Tree, raw.cast_to(types, types, partial_types, False))
     
@@ -542,7 +516,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.ClassToRecAlias, raw.cast_to(types, types, partial_types, False))
     
@@ -570,7 +544,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Union[types.DynEnumTwo, str], raw.cast_to(types, types, partial_types, False))
     
@@ -598,7 +572,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.Category, raw.cast_to(types, types, partial_types, False))
     
@@ -626,7 +600,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.Category, raw.cast_to(types, types, partial_types, False))
     
@@ -654,7 +628,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.Category, raw.cast_to(types, types, partial_types, False))
     
@@ -682,7 +656,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -710,7 +684,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt], raw.cast_to(types, types, partial_types, False))
     
@@ -738,7 +712,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -766,7 +740,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -794,7 +768,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -822,7 +796,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -850,7 +824,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -878,7 +852,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Union[types.OriginalA, types.OriginalB], raw.cast_to(types, types, partial_types, False))
     
@@ -906,7 +880,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.DummyOutput, raw.cast_to(types, types, partial_types, False))
     
@@ -934,7 +908,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.DynamicClassTwo, raw.cast_to(types, types, partial_types, False))
     
@@ -962,7 +936,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.DynInputOutput, raw.cast_to(types, types, partial_types, False))
     
@@ -990,7 +964,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(List[types.DynInputOutput], raw.cast_to(types, types, partial_types, False))
     
@@ -1018,7 +992,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -1046,7 +1020,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.ContactInfo, raw.cast_to(types, types, partial_types, False))
     
@@ -1074,7 +1048,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.DynamicSchema, raw.cast_to(types, types, partial_types, False))
     
@@ -1102,7 +1076,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(List[Union[types.Hobby, str]], raw.cast_to(types, types, partial_types, False))
     
@@ -1130,7 +1104,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(List[str], raw.cast_to(types, types, partial_types, False))
     
@@ -1158,7 +1132,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(List[types.Person], raw.cast_to(types, types, partial_types, False))
     
@@ -1186,7 +1160,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.ReceiptInfo, raw.cast_to(types, types, partial_types, False))
     
@@ -1214,7 +1188,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.Resume, raw.cast_to(types, types, partial_types, False))
     
@@ -1242,7 +1216,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.Resume, raw.cast_to(types, types, partial_types, False))
     
@@ -1270,7 +1244,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Optional[types.ClassOptionalOutput], raw.cast_to(types, types, partial_types, False))
     
@@ -1298,7 +1272,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Optional[types.ClassOptionalOutput2], raw.cast_to(types, types, partial_types, False))
     
@@ -1326,7 +1300,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(List[types.EnumOutput], raw.cast_to(types, types, partial_types, False))
     
@@ -1354,7 +1328,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.EnumOutput, raw.cast_to(types, types, partial_types, False))
     
@@ -1382,7 +1356,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.LiteralClassHello, raw.cast_to(types, types, partial_types, False))
     
@@ -1410,7 +1384,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Union[types.LiteralClassOne, types.LiteralClassTwo], raw.cast_to(types, types, partial_types, False))
     
@@ -1438,7 +1412,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -1466,7 +1440,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(bool, raw.cast_to(types, types, partial_types, False))
     
@@ -1494,7 +1468,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.TestOutputClass, raw.cast_to(types, types, partial_types, False))
     
@@ -1522,7 +1496,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(List[types.TestOutputClass], raw.cast_to(types, types, partial_types, False))
     
@@ -1550,7 +1524,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.TestClassNested, raw.cast_to(types, types, partial_types, False))
     
@@ -1578,7 +1552,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.TestClassWithEnum, raw.cast_to(types, types, partial_types, False))
     
@@ -1606,7 +1580,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -1634,7 +1608,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Literal[False], raw.cast_to(types, types, partial_types, False))
     
@@ -1662,7 +1636,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Literal[5], raw.cast_to(types, types, partial_types, False))
     
@@ -1690,7 +1664,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Literal["example output"], raw.cast_to(types, types, partial_types, False))
     
@@ -1718,7 +1692,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(List[str], raw.cast_to(types, types, partial_types, False))
     
@@ -1746,7 +1720,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.TestEnum, raw.cast_to(types, types, partial_types, False))
     
@@ -1774,7 +1748,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.TestClassAlias, raw.cast_to(types, types, partial_types, False))
     
@@ -1802,7 +1776,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -1830,7 +1804,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.RaysData, raw.cast_to(types, types, partial_types, False))
     
@@ -1858,7 +1832,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.OrderInfo, raw.cast_to(types, types, partial_types, False))
     
@@ -1886,7 +1860,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.SearchParams, raw.cast_to(types, types, partial_types, False))
     
@@ -1914,7 +1888,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Dict[types.MapKey, str], raw.cast_to(types, types, partial_types, False))
     
@@ -1942,7 +1916,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str], raw.cast_to(types, types, partial_types, False))
     
@@ -1970,7 +1944,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Dict[Literal["key"], str], raw.cast_to(types, types, partial_types, False))
     
@@ -1998,7 +1972,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.JsonValue, raw.cast_to(types, types, partial_types, False))
     
@@ -2026,7 +2000,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2054,7 +2028,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Union[Literal[1], Literal[True], Literal["string output"]], raw.cast_to(types, types, partial_types, False))
     
@@ -2082,7 +2056,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Checked[types.BlockConstraint, Literal["cross_field"]], raw.cast_to(types, types, partial_types, False))
     
@@ -2110,7 +2084,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.ClassWithBlockDone, raw.cast_to(types, types, partial_types, False))
     
@@ -2138,7 +2112,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.ClassWithoutDone, raw.cast_to(types, types, partial_types, False))
     
@@ -2166,7 +2140,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.NestedBlockConstraint, raw.cast_to(types, types, partial_types, False))
     
@@ -2194,7 +2168,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.SemanticContainer, raw.cast_to(types, types, partial_types, False))
     
@@ -2222,7 +2196,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Dict[str, List[str]], raw.cast_to(types, types, partial_types, False))
     
@@ -2250,7 +2224,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.MergeAttrs, raw.cast_to(types, types, partial_types, False))
     
@@ -2278,7 +2252,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.DynamicOutput, raw.cast_to(types, types, partial_types, False))
     
@@ -2306,7 +2280,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]], raw.cast_to(types, types, partial_types, False))
     
@@ -2334,7 +2308,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.ClassForNullLiteral, raw.cast_to(types, types, partial_types, False))
     
@@ -2362,7 +2336,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2390,7 +2364,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(List[Optional[types.OptionalTest_ReturnType]], raw.cast_to(types, types, partial_types, False))
     
@@ -2418,7 +2392,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.FooAny, raw.cast_to(types, types, partial_types, False))
     
@@ -2446,7 +2420,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Checked[int, Literal["too_big"]], raw.cast_to(types, types, partial_types, False))
     
@@ -2474,7 +2448,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Union[int, str, bool, float], raw.cast_to(types, types, partial_types, False))
     
@@ -2502,7 +2476,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2530,7 +2504,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2558,7 +2532,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2586,7 +2560,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2614,7 +2588,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2642,7 +2616,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2670,7 +2644,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -2698,7 +2672,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.RecAliasOne, raw.cast_to(types, types, partial_types, False))
     
@@ -2726,7 +2700,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.NodeWithAliasIndirection, raw.cast_to(types, types, partial_types, False))
     
@@ -2754,7 +2728,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.RecursiveUnion, raw.cast_to(types, types, partial_types, False))
     
@@ -2782,7 +2756,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Checked[int, Literal["gt_ten"]], raw.cast_to(types, types, partial_types, False))
     
@@ -2810,7 +2784,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -2838,7 +2812,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.JsonTemplate, raw.cast_to(types, types, partial_types, False))
     
@@ -2866,7 +2840,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.MalformedConstraints, raw.cast_to(types, types, partial_types, False))
     
@@ -2894,7 +2868,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.Schema, raw.cast_to(types, types, partial_types, False))
     
@@ -2922,7 +2896,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.RecursiveListAlias, raw.cast_to(types, types, partial_types, False))
     
@@ -2950,7 +2924,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.RecursiveMapAlias, raw.cast_to(types, types, partial_types, False))
     
@@ -2978,7 +2952,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.BigNumbers, raw.cast_to(types, types, partial_types, False))
     
@@ -3006,7 +2980,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.TwoStoriesOneTitle, raw.cast_to(types, types, partial_types, False))
     
@@ -3034,7 +3008,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.TwoStoriesOneTitleCheck, raw.cast_to(types, types, partial_types, False))
     
@@ -3062,7 +3036,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -3090,7 +3064,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(List[Union[int, str]], raw.cast_to(types, types, partial_types, False))
     
@@ -3118,7 +3092,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.CompoundBigNumbers, raw.cast_to(types, types, partial_types, False))
     
@@ -3146,7 +3120,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.Document1559, raw.cast_to(types, types, partial_types, False))
     
@@ -3174,7 +3148,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.RecursiveAliasDependency, raw.cast_to(types, types, partial_types, False))
     
@@ -3202,7 +3176,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3230,7 +3204,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3258,7 +3232,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3286,7 +3260,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3314,7 +3288,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3342,7 +3316,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3370,7 +3344,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3398,7 +3372,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3426,7 +3400,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3454,7 +3428,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3482,7 +3456,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3510,7 +3484,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3538,7 +3512,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3566,7 +3540,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3594,7 +3568,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3622,7 +3596,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3650,7 +3624,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3678,7 +3652,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3706,7 +3680,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3734,7 +3708,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3762,7 +3736,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3790,7 +3764,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3818,7 +3792,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3846,7 +3820,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3874,7 +3848,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3902,7 +3876,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3930,7 +3904,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -3958,7 +3932,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Dict[str, types.StringToClassEntry], raw.cast_to(types, types, partial_types, False))
     
@@ -3986,7 +3960,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Dict[str, Dict[str, str]], raw.cast_to(types, types, partial_types, False))
     
@@ -4014,7 +3988,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Dict[str, str], raw.cast_to(types, types, partial_types, False))
     
@@ -4042,7 +4016,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4070,7 +4044,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4098,7 +4072,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(List[str], raw.cast_to(types, types, partial_types, False))
     
@@ -4126,7 +4100,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4154,7 +4128,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4182,7 +4156,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4210,7 +4184,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4238,7 +4212,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4266,7 +4240,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4294,7 +4268,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4322,7 +4296,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4350,7 +4324,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.TestMemoryOutput, raw.cast_to(types, types, partial_types, False))
     
@@ -4378,7 +4352,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4406,7 +4380,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4434,7 +4408,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4462,7 +4436,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4490,7 +4464,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(Optional[str], raw.cast_to(types, types, partial_types, False))
     
@@ -4518,7 +4492,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.Haiku, raw.cast_to(types, types, partial_types, False))
     
@@ -4546,7 +4520,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4574,7 +4548,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4602,7 +4576,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4630,7 +4604,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4658,7 +4632,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4686,7 +4660,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4714,7 +4688,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4742,7 +4716,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4770,7 +4744,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4798,7 +4772,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4826,7 +4800,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4854,7 +4828,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4882,7 +4856,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4910,7 +4884,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4938,7 +4912,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4966,7 +4940,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -4994,7 +4968,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.CustomStory, raw.cast_to(types, types, partial_types, False))
     
@@ -5022,7 +4996,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.UniverseQuestion, raw.cast_to(types, types, partial_types, False))
     
@@ -5050,7 +5024,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -5078,7 +5052,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -5106,7 +5080,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -5134,7 +5108,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.UnionTest_ReturnType, raw.cast_to(types, types, partial_types, False))
     
@@ -5162,7 +5136,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -5190,7 +5164,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(types.MaintainFieldOrder, raw.cast_to(types, types, partial_types, False))
     
@@ -5218,7 +5192,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -5246,7 +5220,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(int, raw.cast_to(types, types, partial_types, False))
     
@@ -5274,7 +5248,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        os.environ.copy(),
+        options.get("env_vars", os.environ.copy()),
       )
       return cast(str, raw.cast_to(types, types, partial_types, False))
     
@@ -5314,6 +5288,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.Recipe, types.Recipe](
@@ -5347,6 +5322,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.LinkedListAliasNode, types.LinkedListAliasNode](
@@ -5380,6 +5356,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Checked[Optional[int], Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]](
@@ -5413,6 +5390,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -5446,6 +5424,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -5479,6 +5458,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -5512,6 +5492,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -5545,6 +5526,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -5578,6 +5560,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.OptionalListAndMap, types.OptionalListAndMap](
@@ -5611,6 +5594,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[int], int](
@@ -5644,6 +5628,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -5678,6 +5663,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -5711,6 +5697,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.LinkedList, types.LinkedList](
@@ -5744,6 +5731,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.Tree, types.Tree](
@@ -5777,6 +5765,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.ClassToRecAlias, types.ClassToRecAlias](
@@ -5810,6 +5799,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[Union[types.DynEnumTwo, str]], Union[types.DynEnumTwo, str]](
@@ -5843,6 +5833,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[types.Category], types.Category](
@@ -5876,6 +5867,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[types.Category], types.Category](
@@ -5909,6 +5901,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[types.Category], types.Category](
@@ -5944,6 +5937,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -5977,6 +5971,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[Union[partial_types.BookOrder, partial_types.FlightConfirmation, partial_types.GroceryReceipt]], Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt]](
@@ -6010,6 +6005,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -6044,6 +6040,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -6078,6 +6075,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -6112,6 +6110,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -6147,6 +6146,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -6179,6 +6179,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[Union[partial_types.OriginalA, partial_types.OriginalB]], Union[types.OriginalA, types.OriginalB]](
@@ -6212,6 +6213,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.DummyOutput, types.DummyOutput](
@@ -6245,6 +6247,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.DynamicClassTwo, types.DynamicClassTwo](
@@ -6278,6 +6281,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.DynInputOutput, types.DynInputOutput](
@@ -6311,6 +6315,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[List[partial_types.DynInputOutput], List[types.DynInputOutput]](
@@ -6343,6 +6348,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -6376,6 +6382,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.ContactInfo, types.ContactInfo](
@@ -6409,6 +6416,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.DynamicSchema, types.DynamicSchema](
@@ -6442,6 +6450,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[List[Optional[Union[types.Hobby, str]]], List[Union[types.Hobby, str]]](
@@ -6475,6 +6484,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[List[Optional[str]], List[str]](
@@ -6508,6 +6518,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[List[partial_types.Person], List[types.Person]](
@@ -6542,6 +6553,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.ReceiptInfo, types.ReceiptInfo](
@@ -6576,6 +6588,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.Resume, types.Resume](
@@ -6609,6 +6622,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.Resume, types.Resume](
@@ -6642,6 +6656,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[partial_types.ClassOptionalOutput], Optional[types.ClassOptionalOutput]](
@@ -6675,6 +6690,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[partial_types.ClassOptionalOutput2], Optional[types.ClassOptionalOutput2]](
@@ -6708,6 +6724,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[List[Optional[types.EnumOutput]], List[types.EnumOutput]](
@@ -6741,6 +6758,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[types.EnumOutput], types.EnumOutput](
@@ -6774,6 +6792,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.LiteralClassHello, types.LiteralClassHello](
@@ -6807,6 +6826,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[Union[partial_types.LiteralClassOne, partial_types.LiteralClassTwo]], Union[types.LiteralClassOne, types.LiteralClassTwo]](
@@ -6840,6 +6860,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -6873,6 +6894,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[bool], bool](
@@ -6906,6 +6928,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.TestOutputClass, types.TestOutputClass](
@@ -6939,6 +6962,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[List[partial_types.TestOutputClass], List[types.TestOutputClass]](
@@ -6972,6 +6996,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.TestClassNested, types.TestClassNested](
@@ -7005,6 +7030,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.TestClassWithEnum, types.TestClassWithEnum](
@@ -7038,6 +7064,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[int], int](
@@ -7071,6 +7098,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[Literal[False]], Literal[False]](
@@ -7104,6 +7132,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[Literal[5]], Literal[5]](
@@ -7137,6 +7166,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[Literal["example output"]], Literal["example output"]](
@@ -7170,6 +7200,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[List[Optional[str]], List[str]](
@@ -7203,6 +7234,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[types.TestEnum], types.TestEnum](
@@ -7236,6 +7268,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.TestClassAlias, types.TestClassAlias](
@@ -7269,6 +7302,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -7302,6 +7336,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.RaysData, types.RaysData](
@@ -7335,6 +7370,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.OrderInfo, types.OrderInfo](
@@ -7368,6 +7404,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.SearchParams, types.SearchParams](
@@ -7402,6 +7439,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Dict[types.MapKey, Optional[str]], Dict[types.MapKey, str]](
@@ -7436,6 +7474,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], Optional[str]], Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str]](
@@ -7469,6 +7508,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Dict[Literal["key"], Optional[str]], Dict[Literal["key"], str]](
@@ -7502,6 +7542,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[types.JsonValue, types.JsonValue](
@@ -7535,6 +7576,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -7568,6 +7610,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]], Union[Literal[1], Literal[True], Literal["string output"]]](
@@ -7600,6 +7643,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Checked[partial_types.BlockConstraint, Literal["cross_field"]], Checked[types.BlockConstraint, Literal["cross_field"]]](
@@ -7632,6 +7676,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[types.ClassWithBlockDone, types.ClassWithBlockDone](
@@ -7664,6 +7709,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[types.ClassWithoutDone, types.ClassWithoutDone](
@@ -7696,6 +7742,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.NestedBlockConstraint, types.NestedBlockConstraint](
@@ -7728,6 +7775,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.SemanticContainer, types.SemanticContainer](
@@ -7761,6 +7809,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Dict[str, List[Optional[str]]], Dict[str, List[str]]](
@@ -7794,6 +7843,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.MergeAttrs, types.MergeAttrs](
@@ -7827,6 +7877,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.DynamicOutput, types.DynamicOutput](
@@ -7860,6 +7911,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[Union[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], List[Optional[str]], Dict[str, List[Optional[str]]]]], Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]]](
@@ -7893,6 +7945,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.ClassForNullLiteral, types.ClassForNullLiteral](
@@ -7926,6 +7979,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -7959,6 +8013,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[List[Optional[partial_types.OptionalTest_ReturnType]], List[Optional[types.OptionalTest_ReturnType]]](
@@ -7992,6 +8047,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.FooAny, types.FooAny](
@@ -8025,6 +8081,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Checked[Optional[int], Literal["too_big"]], Checked[int, Literal["too_big"]]](
@@ -8058,6 +8115,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], Union[int, str, bool, float]](
@@ -8091,6 +8149,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -8124,6 +8183,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -8157,6 +8217,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -8190,6 +8251,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -8223,6 +8285,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -8256,6 +8319,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -8289,6 +8353,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -8322,6 +8387,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[types.RecAliasOne, types.RecAliasOne](
@@ -8355,6 +8421,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection](
@@ -8388,6 +8455,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[types.RecursiveUnion, types.RecursiveUnion](
@@ -8421,6 +8489,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Checked[Optional[int], Literal["gt_ten"]], Checked[int, Literal["gt_ten"]]](
@@ -8454,6 +8523,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[int], int](
@@ -8487,6 +8557,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[types.JsonTemplate, types.JsonTemplate](
@@ -8520,6 +8591,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.MalformedConstraints, types.MalformedConstraints](
@@ -8553,6 +8625,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.Schema, types.Schema](
@@ -8586,6 +8659,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[types.RecursiveListAlias, types.RecursiveListAlias](
@@ -8619,6 +8693,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[types.RecursiveMapAlias, types.RecursiveMapAlias](
@@ -8652,6 +8727,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.BigNumbers, types.BigNumbers](
@@ -8686,6 +8762,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle](
@@ -8720,6 +8797,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck](
@@ -8753,6 +8831,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[int], int](
@@ -8786,6 +8865,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[List[Optional[Union[Optional[int], Optional[str]]]], List[Union[int, str]]](
@@ -8820,6 +8900,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.CompoundBigNumbers, types.CompoundBigNumbers](
@@ -8853,6 +8934,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.Document1559, types.Document1559](
@@ -8886,6 +8968,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.RecursiveAliasDependency, types.RecursiveAliasDependency](
@@ -8919,6 +9002,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -8952,6 +9036,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -8985,6 +9070,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9018,6 +9104,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9051,6 +9138,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9084,6 +9172,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9117,6 +9206,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9150,6 +9240,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9183,6 +9274,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9216,6 +9308,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9249,6 +9342,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9282,6 +9376,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9315,6 +9410,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9348,6 +9444,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9381,6 +9478,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9414,6 +9512,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9447,6 +9546,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9480,6 +9580,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9514,6 +9615,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9546,6 +9648,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9579,6 +9682,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9612,6 +9716,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9645,6 +9750,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9678,6 +9784,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9711,6 +9818,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9744,6 +9852,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9777,6 +9886,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9810,6 +9920,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Dict[str, partial_types.StringToClassEntry], Dict[str, types.StringToClassEntry]](
@@ -9843,6 +9954,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Dict[str, Dict[str, Optional[str]]], Dict[str, Dict[str, str]]](
@@ -9876,6 +9988,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Dict[str, Optional[str]], Dict[str, str]](
@@ -9909,6 +10022,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9942,6 +10056,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -9975,6 +10090,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[List[Optional[str]], List[str]](
@@ -10008,6 +10124,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10040,6 +10157,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10073,6 +10191,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10106,6 +10225,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10139,6 +10259,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10172,6 +10293,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10205,6 +10327,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10238,6 +10361,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10271,6 +10395,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.TestMemoryOutput, types.TestMemoryOutput](
@@ -10305,6 +10430,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10338,6 +10464,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10371,6 +10498,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10404,6 +10532,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10437,6 +10566,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], Optional[str]](
@@ -10470,6 +10600,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.Haiku, types.Haiku](
@@ -10503,6 +10634,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10536,6 +10668,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10569,6 +10702,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10602,6 +10736,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10635,6 +10770,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10668,6 +10804,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10701,6 +10838,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10734,6 +10872,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10767,6 +10906,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10800,6 +10940,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10833,6 +10974,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10866,6 +11008,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10898,6 +11041,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10930,6 +11074,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10963,6 +11108,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -10995,6 +11141,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -11028,6 +11175,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.CustomStory, types.CustomStory](
@@ -11061,6 +11209,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.UniverseQuestion, types.UniverseQuestion](
@@ -11094,6 +11243,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -11127,6 +11277,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -11159,6 +11310,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](
@@ -11192,6 +11344,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.UnionTest_ReturnType, types.UnionTest_ReturnType](
@@ -11225,6 +11378,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[int], int](
@@ -11258,6 +11412,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[partial_types.MaintainFieldOrder, types.MaintainFieldOrder](
@@ -11291,6 +11446,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[int], int](
@@ -11324,6 +11480,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[int], int](
@@ -11356,6 +11513,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
+        options.get("env_vars", os.environ.copy()),
       )
 
       return baml_py.BamlStream[Optional[str], str](

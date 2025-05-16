@@ -252,6 +252,7 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
+      const envVars = __baml_options__?.envVars ? { ...process.env, ...__baml_options__.envVars } : { ...process.env };
       return this.runtime.parseLlmResponse(
         "AudioInputOpenai",
         llmResponse,
@@ -259,24 +260,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-      ) as string
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  AudioInputOpenai(
-      llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): string {
-    try {
-      return this.runtime.parseLlmResponse(
-        "AudioInputOpenai",
-        llmResponse,
-        false,
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        envVars,
       ) as string
     } catch (error) {
       throw toBamlError(error);
@@ -3934,6 +3918,7 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): string {
     try {
+      const envVars = __baml_options__?.envVars ? { ...process.env, ...__baml_options__.envVars } : { ...process.env };
       return this.runtime.parseLlmResponse(
         "AudioInputOpenai",
         llmResponse,
@@ -3941,24 +3926,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-      ) as string
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  AudioInputOpenai(
-      llmResponse: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
-  ): string {
-    try {
-      return this.runtime.parseLlmResponse(
-        "AudioInputOpenai",
-        llmResponse,
-        true,
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
+        envVars,
       ) as string
     } catch (error) {
       throw toBamlError(error);

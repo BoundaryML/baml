@@ -69,7 +69,7 @@ func {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
 
 func (*stream) {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
 		, {{name}} {{type}}
-		{%- endfor %}) <-chan {{ fn.return_type }} {
+		{%- endfor %}, envVars map[string]string) <-chan {{ fn.return_type }} {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{ {% for (name, type) in fn.args -%}"{{name}}": {{name}},{% endfor %} },
 	}
@@ -78,7 +78,7 @@ func (*stream) {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -
 		panic(err)
 	}
 	channel := make(chan {{ fn.return_type }})
-	raw, err := bamlRuntime.CallFunctionStream(ctx, "{{ fn.name }}", encoded)
+	raw, err := bamlRuntime.CallFunctionStream(ctx, "{{ fn.name }}", encoded, envVars)
 	if err != nil {
 		close(channel)
 		return channel

@@ -366,6 +366,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "AudioInputOpenai",
         {
@@ -375,29 +376,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
-      )
-      return raw.parsed(false) as string
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  async AudioInputOpenai(
-      aud: Audio,prompt: string,
-      __baml_options__?: BamlCallOptions
-  ): Promise<string> {
-    try {
-      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const raw = await this.runtime.callFunction(
-        "AudioInputOpenai",
-        {
-          "aud": aud,"prompt": prompt
-        },
-        this.ctxManager.cloneContext(),
-        options.tb?.__tb(),
-        options.clientRegistry,
-        collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error) {
@@ -5037,11 +5016,12 @@ class BamlStreamClient {
   
   AudioInputOpenai(
       aud: Audio,prompt: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], envVars?: Record<string, string | undefined> }
   ): BamlStream<string, string> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "AudioInputOpenai",
         {
@@ -5052,35 +5032,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
-      )
-      return new BamlStream<string, string>(
-        raw,
-        (a): string => a,
-        (a): string => a,
-        this.ctxManager.cloneContext(),
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  AudioInputOpenai(
-      aud: Audio,prompt: string,
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
-  ): BamlStream<string, string> {
-    try {
-      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const raw = this.runtime.streamFunction(
-        "AudioInputOpenai",
-        {
-          "aud": aud,"prompt": prompt
-        },
-        undefined,
-        this.ctxManager.cloneContext(),
-        options.tb?.__tb(),
-        options.clientRegistry,
-        collector,
+        envVars,
       )
       return new BamlStream<string, string>(
         raw,

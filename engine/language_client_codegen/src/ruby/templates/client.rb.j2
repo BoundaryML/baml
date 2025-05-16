@@ -177,6 +177,7 @@ module Baml
       else
         []
       end
+      env_vars = baml_options[:env_vars] || ENV.to_h
 
       raw = @runtime.stream_function(
         "{{fn.name}}",
@@ -189,7 +190,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[{{fn.partial_return_type}}, {{fn.return_type}}].new(
         ffi_stream: raw,

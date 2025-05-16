@@ -368,6 +368,7 @@ export class BamlSyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
       const raw = this.runtime.callFunctionSync(
         "AudioInputOpenai",
         {
@@ -377,29 +378,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
-      )
-      return raw.parsed(false) as string
-    } catch (error: any) {
-      throw toBamlError(error);
-    }
-  }
-  
-  AudioInputOpenai(
-      aud: Audio,prompt: string,
-      __baml_options__?: BamlCallOptions
-  ): string {
-    try {
-      const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
-      const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const raw = this.runtime.callFunctionSync(
-        "AudioInputOpenai",
-        {
-          "aud": aud,"prompt": prompt
-        },
-        this.ctxManager.cloneContext(),
-        options.tb?.__tb(),
-        options.clientRegistry,
-        collector,
+        envVars,
       )
       return raw.parsed(false) as string
     } catch (error: any) {

@@ -268,6 +268,7 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
+      const envVars = __baml_options__?.envVars ? { ...process.env, ...__baml_options__.envVars } : { ...process.env };
       return this.runtime.buildRequestSync(
         "AudioInputOpenai",
         {
@@ -276,27 +277,7 @@ export class HttpRequest {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        false,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  AudioInputOpenai(
-      aud: Audio,prompt: string,
-      __baml_options__?: BamlCallOptions
-  ): HTTPRequest {
-    try {
-      return this.runtime.buildRequestSync(
-        "AudioInputOpenai",
-        {
-          "aud": aud,"prompt": prompt
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        false,
+        envVars,
       )
     } catch (error) {
       throw toBamlError(error);
@@ -4147,6 +4128,7 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
+      const envVars = __baml_options__?.envVars ? { ...process.env, ...__baml_options__.envVars } : { ...process.env };
       return this.runtime.buildRequestSync(
         "AudioInputOpenai",
         {
@@ -4156,26 +4138,7 @@ export class HttpStreamRequest {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         true,
-      )
-    } catch (error) {
-      throw toBamlError(error);
-    }
-  }
-  
-  AudioInputOpenai(
-      aud: Audio,prompt: string,
-      __baml_options__?: BamlCallOptions
-  ): HTTPRequest {
-    try {
-      return this.runtime.buildRequestSync(
-        "AudioInputOpenai",
-        {
-          "aud": aud,"prompt": prompt
-        },
-        this.ctxManager.cloneContext(),
-        __baml_options__?.tb?.__tb(),
-        __baml_options__?.clientRegistry,
-        true,
+        envVars,
       )
     } catch (error) {
       throw toBamlError(error);
