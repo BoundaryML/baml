@@ -8,9 +8,14 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBPanel
 import com.intellij.ui.content.ContentFactory
+import com.intellij.ui.jcef.JBCefBrowser
 import org.jetbrains.plugins.template.MyBundle
 import org.jetbrains.plugins.template.services.MyProjectService
+import java.awt.BorderLayout
+import java.nio.file.Files
+import java.nio.file.Paths
 import javax.swing.JButton
+import javax.swing.JPanel
 
 
 class MyToolWindowFactory : ToolWindowFactory {
@@ -29,17 +34,55 @@ class MyToolWindowFactory : ToolWindowFactory {
 
     class MyToolWindow(toolWindow: ToolWindow) {
 
-        private val service = toolWindow.project.service<MyProjectService>()
+        private val browser = JBCefBrowser()
 
-        fun getContent() = JBPanel<JBPanel<*>>().apply {
-            val label = JBLabel(MyBundle.message("randomLabel", "?"))
+        init {
+            var htmlContent = """
+                          <!DOCTYPE html>
+                          <html lang="en">
+                            <head>
+                              <meta charset="UTF-8" />
+                              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                              <title>Hello World</title>
+                            </head>
+                            <body>
+                              <div id="root">Waiting for react (unimplemented)</div>
+                            </body>
+                          </html>
+            """.trimIndent()
+            browser.loadHTML(htmlContent)
+        }
 
-            add(label)
-            add(JButton(MyBundle.message("shuffle")).apply {
-                addActionListener {
-                    label.text = MyBundle.message("randomLabel", service.getRandomNumber())
-                }
-            })
+        fun getContent(): JPanel {
+            return JPanel(BorderLayout()).apply {
+                add(browser.component, BorderLayout.CENTER)
+            }
+        }
+
+
+        // This approach doesn't work.
+        // We need to follow instructions here and implement resource loaders
+        // https://plugins.jetbrains.com/docs/intellij/embedded-browser-jcef.html#loading-resources-from-plugin-distribution
+        private fun loadHtmlFromResources(): String {
+            // Load the HTML file from the `resources/web-panel/index.html`
+            val stylesUri = javaClass.getResource("/web-panel/index.css")!!.toURI()
+            val scriptUri = javaClass.getResource("/web-panel/index.js")!!.toURI()
+
+            val htmlContent = """
+                          <!DOCTYPE html>
+                          <html lang="en">
+                            <head>
+                              <meta charset="UTF-8" />
+                              <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+                              <title>Hello World</title>
+                            </head>
+                            <body>
+                              <div id="root">Waiting for react (unimplemented)</div>
+                            </body>
+                          </html>
+            """.trimIndent()
+
+            return htmlContent;
         }
     }
 }
