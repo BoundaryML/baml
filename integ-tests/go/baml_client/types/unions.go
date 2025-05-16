@@ -92,7 +92,33 @@ func (u Union__BookOrder__FlightConfirmation__GroceryReceipt) MarshalJSON() ([]b
 }
 
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_BookOrder)
+	if err == nil {
+		u.variant = "BookOrder"
+		return nil
+	} else {
+		u.variant_BookOrder = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_FlightConfirmation)
+	if err == nil {
+		u.variant = "FlightConfirmation"
+		return nil
+	} else {
+		u.variant_FlightConfirmation = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_GroceryReceipt)
+	if err == nil {
+		u.variant = "GroceryReceipt"
+		return nil
+	} else {
+		u.variant_GroceryReceipt = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__BookOrder__FlightConfirmation__GroceryReceipt) SetBookOrder(v BookOrder) {
@@ -243,7 +269,25 @@ func (u Union__List__bool__List__int) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__List__bool__List__int) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_List__bool)
+	if err == nil {
+		u.variant = "List__bool"
+		return nil
+	} else {
+		u.variant_List__bool = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_List__int)
+	if err == nil {
+		u.variant = "List__int"
+		return nil
+	} else {
+		u.variant_List__int = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__List__bool__List__int) SetList__bool(v []bool) {
@@ -358,7 +402,25 @@ func (u Union__LiteralClassOne__LiteralClassTwo) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__LiteralClassOne__LiteralClassTwo) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_LiteralClassOne)
+	if err == nil {
+		u.variant = "LiteralClassOne"
+		return nil
+	} else {
+		u.variant_LiteralClassOne = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_LiteralClassTwo)
+	if err == nil {
+		u.variant = "LiteralClassTwo"
+		return nil
+	} else {
+		u.variant_LiteralClassTwo = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__LiteralClassOne__LiteralClassTwo) SetLiteralClassOne(v LiteralClassOne) {
@@ -473,7 +535,25 @@ func (u Union__Martian__Earthling) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__Martian__Earthling) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_Martian)
+	if err == nil {
+		u.variant = "Martian"
+		return nil
+	} else {
+		u.variant_Martian = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Earthling)
+	if err == nil {
+		u.variant = "Earthling"
+		return nil
+	} else {
+		u.variant_Earthling = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__Martian__Earthling) SetMartian(v Martian) {
@@ -601,7 +681,33 @@ func (u Union__MemoryObject__ComplexMemoryObject__AnotherObject) MarshalJSON() (
 }
 
 func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_MemoryObject)
+	if err == nil {
+		u.variant = "MemoryObject"
+		return nil
+	} else {
+		u.variant_MemoryObject = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_ComplexMemoryObject)
+	if err == nil {
+		u.variant = "ComplexMemoryObject"
+		return nil
+	} else {
+		u.variant_ComplexMemoryObject = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_AnotherObject)
+	if err == nil {
+		u.variant = "AnotherObject"
+		return nil
+	} else {
+		u.variant_AnotherObject = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__MemoryObject__ComplexMemoryObject__AnotherObject) SetMemoryObject(v MemoryObject) {
@@ -748,7 +854,25 @@ func (u Union__Nested__string) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__Nested__string) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_Nested)
+	if err == nil {
+		u.variant = "Nested"
+		return nil
+	} else {
+		u.variant_Nested = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_string)
+	if err == nil {
+		u.variant = "string"
+		return nil
+	} else {
+		u.variant_string = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__Nested__string) SetNested(v Nested) {
@@ -863,7 +987,25 @@ func (u Union__OriginalA__OriginalB) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__OriginalA__OriginalB) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_OriginalA)
+	if err == nil {
+		u.variant = "OriginalA"
+		return nil
+	} else {
+		u.variant_OriginalA = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_OriginalB)
+	if err == nil {
+		u.variant = "OriginalB"
+		return nil
+	} else {
+		u.variant_OriginalB = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__OriginalA__OriginalB) SetOriginalA(v OriginalA) {
@@ -978,7 +1120,25 @@ func (u Union__PhoneNumber__EmailAddress) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__PhoneNumber__EmailAddress) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_PhoneNumber)
+	if err == nil {
+		u.variant = "PhoneNumber"
+		return nil
+	} else {
+		u.variant_PhoneNumber = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_EmailAddress)
+	if err == nil {
+		u.variant = "EmailAddress"
+		return nil
+	} else {
+		u.variant_EmailAddress = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__PhoneNumber__EmailAddress) SetPhoneNumber(v PhoneNumber) {
@@ -1093,7 +1253,25 @@ func (u Union__Resume__Event) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__Resume__Event) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_Resume)
+	if err == nil {
+		u.variant = "Resume"
+		return nil
+	} else {
+		u.variant_Resume = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Event)
+	if err == nil {
+		u.variant = "Event"
+		return nil
+	} else {
+		u.variant_Event = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__Resume__Event) SetResume(v Resume) {
@@ -1208,7 +1386,25 @@ func (u Union__SimpleTag__JsonTemplate) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__SimpleTag__JsonTemplate) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_SimpleTag)
+	if err == nil {
+		u.variant = "SimpleTag"
+		return nil
+	} else {
+		u.variant_SimpleTag = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_JsonTemplate)
+	if err == nil {
+		u.variant = "JsonTemplate"
+		return nil
+	} else {
+		u.variant_JsonTemplate = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__SimpleTag__JsonTemplate) SetSimpleTag(v SimpleTag) {
@@ -1323,7 +1519,25 @@ func (u Union__Tag__string) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__Tag__string) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_Tag)
+	if err == nil {
+		u.variant = "Tag"
+		return nil
+	} else {
+		u.variant_Tag = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_string)
+	if err == nil {
+		u.variant = "string"
+		return nil
+	} else {
+		u.variant_string = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__Tag__string) SetTag(v Tag) {
@@ -1438,7 +1652,25 @@ func (u Union__float__bool) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__float__bool) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_float)
+	if err == nil {
+		u.variant = "float"
+		return nil
+	} else {
+		u.variant_float = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_bool)
+	if err == nil {
+		u.variant = "bool"
+		return nil
+	} else {
+		u.variant_bool = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__float__bool) SetFloat(v float64) {
@@ -1566,7 +1798,33 @@ func (u Union__int_1__bool_true__string_string_output) MarshalJSON() ([]byte, er
 }
 
 func (u *Union__int_1__bool_true__string_string_output) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_int_1)
+	if err == nil {
+		u.variant = "int_1"
+		return nil
+	} else {
+		u.variant_int_1 = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_bool_true)
+	if err == nil {
+		u.variant = "bool_true"
+		return nil
+	} else {
+		u.variant_bool_true = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_string_string_output)
+	if err == nil {
+		u.variant = "string_string_output"
+		return nil
+	} else {
+		u.variant_string_string_output = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__int_1__bool_true__string_string_output) SetInt_1(v int) {
@@ -1713,7 +1971,25 @@ func (u Union__int__float) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__int__float) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_int)
+	if err == nil {
+		u.variant = "int"
+		return nil
+	} else {
+		u.variant_int = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_float)
+	if err == nil {
+		u.variant = "float"
+		return nil
+	} else {
+		u.variant_float = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__int__float) SetInt(v int64) {
@@ -1828,7 +2104,25 @@ func (u Union__int__string) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__int__string) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_int)
+	if err == nil {
+		u.variant = "int"
+		return nil
+	} else {
+		u.variant_int = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_string)
+	if err == nil {
+		u.variant = "string"
+		return nil
+	} else {
+		u.variant_string = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__int__string) SetInt(v int64) {
@@ -1969,7 +2263,41 @@ func (u Union__int__string__bool__float) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__int__string__bool__float) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_int)
+	if err == nil {
+		u.variant = "int"
+		return nil
+	} else {
+		u.variant_int = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_string)
+	if err == nil {
+		u.variant = "string"
+		return nil
+	} else {
+		u.variant_string = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_bool)
+	if err == nil {
+		u.variant = "bool"
+		return nil
+	} else {
+		u.variant_bool = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_float)
+	if err == nil {
+		u.variant = "float"
+		return nil
+	} else {
+		u.variant_float = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__int__string__bool__float) SetInt(v int64) {
@@ -2204,7 +2532,57 @@ func (u Union__int__string__bool__float__JsonObject__JsonArray) MarshalJSON() ([
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_int)
+	if err == nil {
+		u.variant = "int"
+		return nil
+	} else {
+		u.variant_int = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_string)
+	if err == nil {
+		u.variant = "string"
+		return nil
+	} else {
+		u.variant_string = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_bool)
+	if err == nil {
+		u.variant = "bool"
+		return nil
+	} else {
+		u.variant_bool = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_float)
+	if err == nil {
+		u.variant = "float"
+		return nil
+	} else {
+		u.variant_float = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_JsonObject)
+	if err == nil {
+		u.variant = "JsonObject"
+		return nil
+	} else {
+		u.variant_JsonObject = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_JsonArray)
+	if err == nil {
+		u.variant = "JsonArray"
+		return nil
+	} else {
+		u.variant_JsonArray = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__int__string__bool__float__JsonObject__JsonArray) SetInt(v int64) {
@@ -2525,7 +2903,57 @@ func (u Union__int__string__bool__float__List__string__Map__string_List__string)
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_int)
+	if err == nil {
+		u.variant = "int"
+		return nil
+	} else {
+		u.variant_int = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_string)
+	if err == nil {
+		u.variant = "string"
+		return nil
+	} else {
+		u.variant_string = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_bool)
+	if err == nil {
+		u.variant = "bool"
+		return nil
+	} else {
+		u.variant_bool = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_float)
+	if err == nil {
+		u.variant = "float"
+		return nil
+	} else {
+		u.variant_float = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_List__string)
+	if err == nil {
+		u.variant = "List__string"
+		return nil
+	} else {
+		u.variant_List__string = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Map__string_List__string)
+	if err == nil {
+		u.variant = "Map__string_List__string"
+		return nil
+	} else {
+		u.variant_Map__string_List__string = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__int__string__bool__float__List__string__Map__string_List__string) SetInt(v int64) {
@@ -2794,7 +3222,25 @@ func (u Union__string__List__Nested) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__string__List__Nested) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_string)
+	if err == nil {
+		u.variant = "string"
+		return nil
+	} else {
+		u.variant_string = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_List__Nested)
+	if err == nil {
+		u.variant = "List__Nested"
+		return nil
+	} else {
+		u.variant_List__Nested = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__string__List__Nested) SetString(v string) {
@@ -2909,7 +3355,25 @@ func (u Union__string__Map__string_RecursiveUnion) MarshalJSON() ([]byte, error)
 }
 
 func (u *Union__string__Map__string_RecursiveUnion) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_string)
+	if err == nil {
+		u.variant = "string"
+		return nil
+	} else {
+		u.variant_string = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Map__string_RecursiveUnion)
+	if err == nil {
+		u.variant = "Map__string_RecursiveUnion"
+		return nil
+	} else {
+		u.variant_Map__string_RecursiveUnion = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__string__Map__string_RecursiveUnion) SetString(v string) {
@@ -3024,7 +3488,25 @@ func (u Union__string__Nested) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__string__Nested) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_string)
+	if err == nil {
+		u.variant = "string"
+		return nil
+	} else {
+		u.variant_string = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_Nested)
+	if err == nil {
+		u.variant = "Nested"
+		return nil
+	} else {
+		u.variant_Nested = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__string__Nested) SetString(v string) {
@@ -3139,7 +3621,25 @@ func (u Union__string__bool) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__string__bool) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_string)
+	if err == nil {
+		u.variant = "string"
+		return nil
+	} else {
+		u.variant_string = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_bool)
+	if err == nil {
+		u.variant = "bool"
+		return nil
+	} else {
+		u.variant_bool = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__string__bool) SetString(v string) {
@@ -3254,7 +3754,25 @@ func (u Union__string__int) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__string__int) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_string)
+	if err == nil {
+		u.variant = "string"
+		return nil
+	} else {
+		u.variant_string = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_int)
+	if err == nil {
+		u.variant = "int"
+		return nil
+	} else {
+		u.variant_int = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__string__int) SetString(v string) {
@@ -3382,7 +3900,33 @@ func (u Union__string__int__float) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__string__int__float) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_string)
+	if err == nil {
+		u.variant = "string"
+		return nil
+	} else {
+		u.variant_string = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_int)
+	if err == nil {
+		u.variant = "int"
+		return nil
+	} else {
+		u.variant_int = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_float)
+	if err == nil {
+		u.variant = "float"
+		return nil
+	} else {
+		u.variant_float = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__string__int__float) SetString(v string) {
@@ -3529,7 +4073,25 @@ func (u Union__string_barisa__string_ox_burger) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__string_barisa__string_ox_burger) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_string_barisa)
+	if err == nil {
+		u.variant = "string_barisa"
+		return nil
+	} else {
+		u.variant_string_barisa = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_string_ox_burger)
+	if err == nil {
+		u.variant = "string_ox_burger"
+		return nil
+	} else {
+		u.variant_string_ox_burger = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__string_barisa__string_ox_burger) SetString_barisa(v string) {
@@ -3644,7 +4206,25 @@ func (u Union__string_breakfast__string_dinner) MarshalJSON() ([]byte, error) {
 }
 
 func (u *Union__string_breakfast__string_dinner) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_string_breakfast)
+	if err == nil {
+		u.variant = "string_breakfast"
+		return nil
+	} else {
+		u.variant_string_breakfast = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_string_dinner)
+	if err == nil {
+		u.variant = "string_dinner"
+		return nil
+	} else {
+		u.variant_string_dinner = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__string_breakfast__string_dinner) SetString_breakfast(v string) {
@@ -3759,7 +4339,25 @@ func (u Union__string_curiosity__string_personal_finance) MarshalJSON() ([]byte,
 }
 
 func (u *Union__string_curiosity__string_personal_finance) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_string_curiosity)
+	if err == nil {
+		u.variant = "string_curiosity"
+		return nil
+	} else {
+		u.variant_string_curiosity = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_string_personal_finance)
+	if err == nil {
+		u.variant = "string_personal_finance"
+		return nil
+	} else {
+		u.variant_string_personal_finance = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__string_curiosity__string_personal_finance) SetString_curiosity(v string) {
@@ -3900,7 +4498,41 @@ func (u Union__string_one__string_two__string_three__string_four) MarshalJSON() 
 }
 
 func (u *Union__string_one__string_two__string_three__string_four) UnmarshalJSON(data []byte) error {
-	return fmt.Errorf("not implemented")
+	var err error
+
+	err = json.Unmarshal(data, &u.variant_string_one)
+	if err == nil {
+		u.variant = "string_one"
+		return nil
+	} else {
+		u.variant_string_one = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_string_two)
+	if err == nil {
+		u.variant = "string_two"
+		return nil
+	} else {
+		u.variant_string_two = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_string_three)
+	if err == nil {
+		u.variant = "string_three"
+		return nil
+	} else {
+		u.variant_string_three = nil
+	}
+
+	err = json.Unmarshal(data, &u.variant_string_four)
+	if err == nil {
+		u.variant = "string_four"
+		return nil
+	} else {
+		u.variant_string_four = nil
+	}
+
+	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 func (u *Union__string_one__string_two__string_three__string_four) SetString_one(v string) {

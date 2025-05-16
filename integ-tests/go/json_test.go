@@ -17,8 +17,8 @@ func TestRoundTrip(t *testing.T) {
 		{b.Blah{
 			Prop4: &[]string{"test"}[0],
 		}},
-		// TODO Fix this!
-		// {b.Union__float__boolNewWithBool(&[]bool{true}[0])},
+		{b.Union__float__boolNewWithBool(&[]bool{true}[0])},
+		{b.Union__float__boolNewWithFloat(&[]float64{1.1}[0])},
 	}
 
 	for _, test := range tests {
