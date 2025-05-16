@@ -739,6 +739,9 @@ navigation:
           - page: "Azure AI Foundary (openai-generic)"
             slug: azure-ai-foundary
             path: 03-reference/baml/clients/providers/azure-ai-foundary.mdx
+          - page: "Cerebras (openai-generic)"
+            slug: cerebras
+            path: 03-reference/baml/clients/providers/cerebras.mdx
           - page: "Groq (openai-generic)"
             slug: groq
             path: 03-reference/baml/clients/providers/groq.mdx
