@@ -8,7 +8,7 @@ generator target{
     output_type "python/pydantic"
 }
 
-// error: Error validating field `None` in enum `Test`: Enum value 'None' is a reserved word in Python, try changing the name or use an @alias.
+// error: Error validating field `None` in enum `Test`: Enum value 'None' is a reserved word in Python, try changing the name and using `Empty @alias("None")`.
 //   -->  enum/enum_is_valid.baml:2
 //    | 
 //  1 | enum Test {

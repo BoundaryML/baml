@@ -51,7 +51,7 @@ pub(super) fn assert_no_enum_value_collisions(
                 let value_name = value.name();
                 if RESERVED_NAMES_PYTHON.contains(&value_name) {
                     ctx.push_error(DatamodelError::new_field_validation_error(
-                        format!("Enum value '{}' is a reserved word in Python, try changing the name or use an @alias.", value_name),
+                        format!("Enum value '{}' is a reserved word in Python, try changing the name and using `Empty @alias(\"{}\")`.", value_name, value_name),
                         "enum",
                         e.name(),
                         value_name,
