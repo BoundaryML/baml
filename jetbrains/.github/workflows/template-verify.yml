@@ -1,0 +1,43 @@
+# GitHub Actions Workflow verifies if the template repository is consistent with all provided content.
+
+name: Template Verify
+on:
+  # Trigger the workflow on pushes to only the 'main' branch (this avoids duplicate checks being run e.g., for dependabot pull requests)
+  push:
+    branches: [main]
+    paths: ['**/gradle.properties']
+  # Trigger the workflow on any pull request
+  pull_request:
+    paths: ['**/gradle.properties']
+
+jobs:
+
+  build:
+    name: Template Verify
+    if: github.event.repository.name == 'intellij-platform-plugin-template'
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.properties.outputs.version }}
+      changelog: ${{ steps.properties.outputs.changelog }}
+    steps:
+
+      # Check out the current repository
+      - name: Fetch Sources
+        uses: actions/checkout@v4
+
+      # Compare `gradle.properties` with `.github/template-cleanup/gradle.properties`
+      - name: Verify gradle.properties
+        run: |
+          echo "\`\`\`diff" >> $GITHUB_STEP_SUMMARY
+          
+          diff -U 0 \
+            -I '^pluginVersion' \
+            -I '^pluginGroup' \
+            -I '^pluginName' \
+            -I '^pluginRepositoryUrl' \
+            --label .github/template-cleanup/gradle.properties \
+            --label gradle.properties \
+            .github/template-cleanup/gradle.properties gradle.properties \
+            >> $GITHUB_STEP_SUMMARY
+          
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
