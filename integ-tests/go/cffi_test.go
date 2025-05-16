@@ -65,6 +65,14 @@ func TestEncodeDecode(t *testing.T) {
 			Name:       &[]string{"John Doe"}[0],
 			Hair_color: &[]b.Color{b.ColorRED}[0],
 		}},
+		{&b.Recipe{
+			Recipe_type: *b.Union__string_breakfast__string_dinnerNewWithString_breakfast(&[]string{"breakfast"}[0]),
+			Ingredients: map[string]b.Quantity{
+				"a": {
+					Amount: *b.Union__int__floatNewWithInt(&[]int64{1}[0]),
+				},
+			},
+		}},
 		// {b.RecursiveUnion(*b.Union__string__Map__string_RecursiveUnionNewWithMap__string_RecursiveUnion(&map[string]b.RecursiveUnion{
 		// 	"key": b.RecursiveUnion(*b.Union__string__Map__string_RecursiveUnionNewWithString(&[]string{"value"}[0])),
 		// 	"key2": b.RecursiveUnion(*b.Union__string__Map__string_RecursiveUnionNewWithMap__string_RecursiveUnion(&map[string]b.RecursiveUnion{
