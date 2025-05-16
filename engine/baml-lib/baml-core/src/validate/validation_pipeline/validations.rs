@@ -9,6 +9,7 @@ mod functions;
 mod template_strings;
 mod tests;
 mod types;
+mod reserved_names;
 
 use baml_types::GeneratorOutputType;
 
@@ -36,6 +37,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
         })
         .collect::<HashSet<_>>();
     classes::assert_no_field_name_collisions(ctx, &codegen_targets);
+    enums::assert_no_enum_value_collisions(ctx, &codegen_targets);
 
     expr_fns::validate_expr_fns(ctx);
 
