@@ -17,6 +17,7 @@ function TestImageInputAnthropic(img: image) -> string{
   "#
 }
 
+
 test  image_url_with_media_type {
   functions [TestImageInput, TestImageInputAnthropic]
   args {

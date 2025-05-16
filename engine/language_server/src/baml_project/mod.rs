@@ -158,7 +158,7 @@ impl BamlProject {
 
         let runtime = self.runtime(env);
         if let Err(e) = runtime {
-            if (e.has_errors()) {
+            if e.has_errors() {
                 tracing::error!("Failed to run codegen: {:?}", e);
                 return Err(anyhow::anyhow!("Project has errors."));
             } else {

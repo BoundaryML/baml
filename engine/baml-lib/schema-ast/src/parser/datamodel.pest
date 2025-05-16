@@ -225,10 +225,10 @@ top_level_assignment = { stmt }
 
 // Regular function.
 // e.g.:
-// fn foo(x:int, y: bool?) -> string {
+// function foo(x:int, y: bool?) -> string {
 //   go(x,y)
 // }
-expr_fn = { "fn" ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_block }
+expr_fn = { ("function" | "fn") ~ identifier ~ named_argument_list ~ ARROW? ~ field_type_chain? ~ expr_block }
 
 // Body of a function (including curly brackets).
 expr_block = { BLOCK_OPEN ~ NEWLINE? ~ (stmt ~ NEWLINE)* ~ expression ~ NEWLINE? ~ BLOCK_CLOSE }
