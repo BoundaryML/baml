@@ -70,6 +70,8 @@ fn get_publish_channel(
 #[derive(Serialize)]
 struct RuntimeAST {
     ast: Arc<AstSignatureWrapper>,
+    #[serde(skip)]
+    client: reqwest::Client,
 }
 
 impl RuntimeAST {
@@ -79,7 +81,8 @@ impl RuntimeAST {
             .cloned()
             // .expect("BOUNDARY_API_URL is not set")
             // .unwrap_or_else(|| "https://api.boundaryml.com".to_string())
-            .unwrap_or_else(|| "https://o2em3sulde.execute-api.us-east-1.amazonaws.com".to_string())
+            // .unwrap_or_else(|| "https://o2em3sulde.execute-api.us-east-1.amazonaws.com".to_string())
+            .unwrap_or_else(|| "https://abe8c5ez29.execute-api.us-east-1.amazonaws.com".to_string())
     }
 
     pub fn api_key(&self) -> String {
@@ -89,6 +92,56 @@ impl RuntimeAST {
             .unwrap_or_else(|| "7fc9adc617ed731ba6048daffe0e0de2ec168283624d07a94c2ed520183ea3f722633aa2a5eee9109098254e294f995e".to_string())
         // .expect("BOUNDARY_API_KEY is not set")
     }
+
+    async fn api_request<'req, 'resp, TEndpoint>(
+        &self,
+        request: TEndpoint::Request<'req>,
+    ) -> Result<TEndpoint::Response<'resp>, ApiError>
+    where
+        TEndpoint: ApiEndpoint,
+    {
+        // A) send the request, propagating low‑level network errors
+        let response = self
+            .client
+            .post(format!("{}{}", self.base_url(), TEndpoint::path()))
+            .json(&request)
+            .bearer_auth(self.api_key())
+            .send()
+            .await
+            .map_err(ApiError::Transport)?;
+
+        // B) take the status code up‑front
+        let status = response.status();
+
+        // We still need the body either way, so pull it into bytes now
+        let bytes = response.bytes().await.map_err(ApiError::Transport)?;
+
+        // C) non‑2xx → turn into our own Http error, preserving body for debugging
+        if !status.is_success() {
+            let body_str = String::from_utf8_lossy(&bytes).to_string();
+            return Err(ApiError::Http {
+                status,
+                body: body_str,
+            });
+        }
+
+        // D) happy path: 2xx → attempt to parse into T
+        Ok(serde_json::from_slice::<TEndpoint::Response<'resp>>(&bytes)
+            .map_err(ApiError::Deserialize)?)
+    }
+}
+
+#[derive(thiserror::Error, Debug)]
+pub enum ApiError {
+    #[error("Transport error: {0}")]
+    Transport(reqwest::Error),
+    #[error("HTTP error: {status} {body}")]
+    Http {
+        status: reqwest::StatusCode,
+        body: String,
+    },
+    #[error("Failed to deserialize response: {0}")]
+    Deserialize(serde_json::Error),
 }
 
 impl TypeLookup for RuntimeAST {
@@ -105,7 +158,10 @@ impl TypeLookup for RuntimeAST {
 }
 
 pub fn start_publisher(lookup: Arc<AstSignatureWrapper>, rt: Arc<tokio::runtime::Runtime>) {
-    let lookup = Arc::new(RuntimeAST { ast: lookup });
+    let lookup = Arc::new(RuntimeAST {
+        ast: lookup,
+        client: reqwest::Client::new(),
+    });
 
     // Use get_or_init to ensure thread-safe initialization
     let channel = PUBLISHING_CHANNEL.get_or_init(|| {
@@ -316,38 +372,19 @@ impl TracePublisher {
             types,
             source_code,
         });
-        let request = CreateBamlSrcUploadRequest { ast };
 
-        let body = serde_json::to_string(&request)
-            .context("Failed to serialize CreateBamlSrcUploadRequest")?;
-
-        tracing::info!("BAML source upload body: {}", body);
-
-        let url = format!("{}{}", lookup.base_url(), CreateBamlSrcUpload::path());
-        let client = reqwest::Client::new();
-        let response = client
-            .post(&url)
-            .bearer_auth(&lookup.api_key())
-            .json(&request)
-            .send()
+        match lookup
+            .api_request::<CreateBamlSrcUpload>(CreateBamlSrcUploadRequest { ast })
             .await
-            .context("Failed to send BAML source upload request")?;
-
-        let status = response.status();
-        let response_text = response
-            .text()
-            .await
-            .context("Failed to get response body from BAML source upload")?;
-
-        if status.is_success() {
-            tracing::info!("Successfully uploaded BAML source");
-            Ok(())
-        } else {
-            Err(anyhow::anyhow!(
-                "Failed to upload BAML source. Status: {}, Response: {}",
-                status,
-                response_text
-            ))
+        {
+            Ok(response) => {
+                tracing::info!("Successfully uploaded BAML source");
+                Ok(())
+            }
+            Err(e) => {
+                tracing::error!("Failed to upload baml src: {}", e);
+                return Err(e.into());
+            }
         }
     }
 
@@ -401,32 +438,20 @@ impl TracePublisher {
 
         // Upload via HTTP with retry logic.
         // TODO watch out with time crate
-        let client = reqwest::Client::new();
-        let response = client
-            .post(format!(
-                "{}/{}",
-                self.lookup.base_url(),
-                CreateTraceEventUploadUrl::path()
-            ))
-            .bearer_auth(self.lookup.api_key())
-            .json(&CreateTraceEventUploadUrlRequest {})
-            .send()
-            .await
-            .context(format!(
-                "Failed to send {}",
-                type_name::<CreateTraceEventUploadUrlRequest>(),
-            ))?;
-        let response_body = response
-            .text()
-            .await
-            .context("Failed to parse response as text")?;
-        tracing::error!("response body: {}", response_body);
-        let upload_url_details: CreateTraceEventUploadUrlResponse =
-            serde_json::from_str(&response_body).context(format!(
-                "Failed to parse {}",
-                type_name::<CreateTraceEventUploadUrlResponse>(),
-            ))?;
 
+        let upload_url_details = match self
+            .lookup
+            .api_request::<CreateTraceEventUploadUrl>(CreateTraceEventUploadUrlRequest {})
+            .await
+        {
+            Ok(response) => response,
+            Err(e) => {
+                tracing::error!("Failed to upload trace events: {}", e);
+                return Err(e.into());
+            }
+        };
+
+        let client = reqwest::Client::new();
         client
             .put(upload_url_details.upload_url)
             .json(&trace_event_batch)
