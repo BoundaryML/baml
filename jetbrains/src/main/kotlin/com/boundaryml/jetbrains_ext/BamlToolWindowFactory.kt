@@ -1,4 +1,4 @@
-package com.boundaryml.jetbrains_ext.toolWindow
+package com.boundaryml.jetbrains_ext
 
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
@@ -7,24 +7,24 @@ import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.jcef.JBCefBrowser
 import java.awt.BorderLayout
+import java.awt.Container
 import javax.swing.JPanel
 
-
-class MyToolWindowFactory : ToolWindowFactory {
+class BamlToolWindowFactory : ToolWindowFactory {
 
     init {
         thisLogger().warn("Don't forget to remove all non-needed sample code files with their corresponding registration entries in `plugin.xml`.")
     }
 
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val myToolWindow = MyToolWindow(toolWindow)
+        val myToolWindow = BamlToolWindow(toolWindow)
         val content = ContentFactory.getInstance().createContent(myToolWindow.getContent(), null, false)
         toolWindow.contentManager.addContent(content)
     }
 
     override fun shouldBeAvailable(project: Project) = true
 
-    class MyToolWindow(toolWindow: ToolWindow) {
+    class BamlToolWindow(toolWindow: ToolWindow) {
 
         private val browser = JBCefBrowser()
 
@@ -38,7 +38,7 @@ class MyToolWindowFactory : ToolWindowFactory {
                               <title>Hello World</title>
                             </head>
                             <body>
-                              <div id="root">Waiting for react (unimplemented)</div>
+                              <div id="root">TODO: render the BAML playground here and wire up the vscode provider bridge</div>
                             </body>
                           </html>
             """.trimIndent()

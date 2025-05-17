@@ -1,16 +1,16 @@
-package com.boundaryml.jetbrains_ext.services
+package com.boundaryml.jetbrains_ext
 
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
-import com.boundaryml.jetbrains_ext.MyBundle
 
+// This service runs in the background
 @Service(Service.Level.PROJECT)
-class MyProjectService(project: Project) {
+class BamlProjectService(project: Project) {
 
     init {
         thisLogger().info(MyBundle.message("projectService", project.name))
-        thisLogger().warn("Don't forget to remove all non-needed sample code files with their corresponding registration entries in `plugin.xml`.")
+        thisLogger().info("BAML Jetbrains extension service has started")
     }
 
     fun getRandomNumber() = (1..100).random()
