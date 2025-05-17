@@ -65,6 +65,11 @@ fn render_value_coercion(container_variable_name: &str, field_type: &GoType) -> 
             inner_type.name,
             render_value_coercion("__holder", inner_type),
         );
+    } else if field_type.is_slice || field_type.is_map {
+        return format!(
+            "baml.Decode({container_variable_name}).({})",
+            filters::type_name_without_pointer(&field_type.name).unwrap()
+        );
     } else {
         return format!(
             "*baml.Decode({container_variable_name}).(*{})",
@@ -229,6 +234,7 @@ pub struct GoType {
     name: String,
     is_pointer: bool,
     is_slice: bool,
+    is_map: bool,
     is_primitive: bool,
     is_class: bool,
     is_integer: bool,
@@ -530,6 +536,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             is_pointer: self.is_optional(),
             is_union: matches!(simplified, FieldType::Union(_)),
             is_slice: matches!(simplified, FieldType::List(_)),
+            is_map: matches!(simplified, FieldType::Map(_, _)),
             is_primitive: self.is_primitive(),
             is_class: matches!(simplified, FieldType::Class(_)),
             is_integer: matches!(simplified, FieldType::Primitive(TypeValue::Int)),

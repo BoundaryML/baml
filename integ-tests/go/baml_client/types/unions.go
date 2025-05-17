@@ -2460,7 +2460,7 @@ func (u *Union__int__string__bool__float__List__string__Map__string_List__string
 
 	case "Map__string_List__string":
 		u.variant = "Map__string_List__string"
-		value := *baml.Decode(valueHolder).(*map[string][]string)
+		value := baml.Decode(valueHolder).(map[string][]string)
 		u.variant_Map__string_List__string = &value
 
 	}
@@ -2868,7 +2868,7 @@ func (u *Union__string__Map__string_RecursiveUnion) Decode(holder *cffi.CFFIValu
 
 	case "Map__string_RecursiveUnion":
 		u.variant = "Map__string_RecursiveUnion"
-		value := *baml.Decode(valueHolder).(*map[string]RecursiveUnion)
+		value := baml.Decode(valueHolder).(map[string]RecursiveUnion)
 		u.variant_Map__string_RecursiveUnion = &value
 
 	}
