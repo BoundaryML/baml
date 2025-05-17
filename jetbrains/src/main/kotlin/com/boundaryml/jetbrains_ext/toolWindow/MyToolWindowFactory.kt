@@ -1,20 +1,12 @@
-package org.jetbrains.plugins.template.toolWindow
+package com.boundaryml.jetbrains_ext.toolWindow
 
-import com.intellij.openapi.components.service
 import com.intellij.openapi.diagnostic.thisLogger
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
-import com.intellij.ui.components.JBLabel
-import com.intellij.ui.components.JBPanel
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.jcef.JBCefBrowser
-import org.jetbrains.plugins.template.MyBundle
-import org.jetbrains.plugins.template.services.MyProjectService
 import java.awt.BorderLayout
-import java.nio.file.Files
-import java.nio.file.Paths
-import javax.swing.JButton
 import javax.swing.JPanel
 
 

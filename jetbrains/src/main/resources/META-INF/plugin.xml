@@ -10,15 +10,23 @@
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="org.jetbrains.plugins.template.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
-        <postStartupActivity implementation="org.jetbrains.plugins.template.startup.MyProjectActivity" />
-        <fileType name="BAML" language="baml" extensions="baml" />
+        <toolWindow factoryClass="com.boundaryml.jetbrains_ext.toolWindow.MyToolWindowFactory" id="BAML Playground"/>
+        <postStartupActivity implementation="com.boundaryml.jetbrains_ext.startup.MyProjectActivity" />
+        <fileType name="BAML"
+                  language="baml"
+                  fieldName="INSTANCE"
+                  implementationClass="com.boundaryml.jetbrains_ext.baml.BamlFileType"
+                  extensions="baml"
+        />
 
-        <textmate.bundleProvider implementation="org.jetbrains.plugins.template.baml.BamlTextMateBundleProvider" />
+        <textmate.bundleProvider implementation="com.boundaryml.jetbrains_ext.baml.BamlTextMateBundleProvider" />
+        <editorHighlighterProvider
+                filetype="BAML"
+                implementationClass="org.jetbrains.plugins.textmate.language.syntax.highlighting.TextMateEditorHighlighterProvider"/>
+        <lang.syntaxHighlighterFactory
+                language="baml"
+                implementationClass="org.jetbrains.plugins.textmate.language.syntax.highlighting.TextMateSyntaxHighlighterFactory"/>
 
-<!--        <textMateBundle root="textmate">-->
-<!--            <fileMapping language="baml" scopeName="source.yourlanguage"/>-->
-<!--        </textMateBundle>-->
     </extensions>
 
 

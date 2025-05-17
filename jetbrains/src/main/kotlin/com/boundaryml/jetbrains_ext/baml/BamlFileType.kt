@@ -1,4 +1,4 @@
-package org.jetbrains.plugins.template.baml
+package com.boundaryml.jetbrains_ext.baml
 
 import com.intellij.openapi.fileTypes.LanguageFileType
 import javax.swing.Icon
