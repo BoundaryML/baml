@@ -1,5 +1,6 @@
 use anyhow::Result;
 use baml_types::expr::VarIndex;
+use baml_types::TypeValue;
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -249,6 +250,21 @@ pub fn typecheck_in_context(
             }
             Ok(())
         }
+        Expr::If(cond, then, else_, meta) => {
+            if !compatible_as_subtype(
+                ir,
+                &cond.meta().1,
+                &Some(FieldType::Primitive(TypeValue::Bool)),
+            ) {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    "Type mismatch in if",
+                    meta.0.clone(),
+                ));
+            }
+            // TODO: Check that then and else have the same type? Or, if they're compatible,
+            // who should be a subtype of who?
+            Ok(())
+        }
     }
 }
 
@@ -441,6 +457,19 @@ pub fn infer_types_in_context(
         }
         Expr::LLMFunction(llm_function, args, (span, maybe_type)) => expr.clone(),
         Expr::BoundVar(_, _) => expr.clone(),
+        Expr::If(cond, then, else_, meta) => {
+            // TODO: Infer the type of the whole expression from new_then?
+            let new_cond = infer_types_in_context(typing_context, cond.clone());
+            let new_then = infer_types_in_context(typing_context, then.clone());
+            let new_else = else_
+                .as_ref()
+                .map(|e| infer_types_in_context(typing_context, e.clone()));
+            let mut new_meta = meta.clone();
+            if new_meta.1.is_none() {
+                new_meta.1 = new_then.meta().1.clone();
+            }
+            Arc::new(Expr::If(new_cond, new_then, new_else, new_meta))
+        }
     }
 }
 
