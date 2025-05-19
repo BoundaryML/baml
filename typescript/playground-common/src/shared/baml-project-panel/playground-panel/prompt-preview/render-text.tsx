@@ -88,8 +88,9 @@ export const RenderPromptPart: React.FC<{
         </div>
       )}
       <ScrollArea className='relative flex-1 p-2 pb-6 bg-muted/50 dark:bg-slate-900' type='always'>
+        {/* This should match the ParsedResponseRenderer max-h- as well */}
         <pre
-          className={`whitespace-pre-wrap text-xs  ${isFullTextVisible ? 'max-h-fit' : 'max-h-64'}`}
+          className={`whitespace-pre-wrap text-xs  ${isFullTextVisible ? 'max-h-[500px]' : 'max-h-64'}`}
           dangerouslySetInnerHTML={{ __html: renderContent }}
         />
 
