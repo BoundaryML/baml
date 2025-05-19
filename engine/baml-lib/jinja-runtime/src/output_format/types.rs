@@ -169,6 +169,9 @@ pub(crate) enum HoistClasses {
     Auto,
 }
 
+/// Maximum number of variants in the enum that we render without hoisting.
+const INLINE_RENDER_ENUM_MAX_VALUES: usize = 6;
+
 pub struct RenderOptions {
     prefix: RenderSetting<String>,
     pub(crate) or_splitter: String,
@@ -601,9 +604,15 @@ impl OutputFormatContent {
     /// We need to render both schemas and names, which makes deciding when to
     /// "stop" recursion complicated. And that's what this function does, it
     /// saves us from writing if statements in every case where we might
-    /// encounter a recursive type. Users can also decide to hoist non-recursive
-    /// classes for other reasons such as saving tokens or improve the adherence
-    /// to the schema of the model response.
+    /// encounter a nested recursive type in [`Self::inner_type_render`].
+    ///
+    /// Users can also decide to hoist non-recursive classes for other reasons
+    /// such as saving tokens or improve the adherence to the schema of the
+    /// model response.
+    ///
+    /// Rule of thumb is, call [`Self::inner_type_render`] as an entry point
+    /// and inside [`Self::inner_type_render`] call this function for each
+    /// nested/inner type and let it handle the rest of recursion.
     fn render_possibly_hoisted_type(
         &self,
         options: &RenderOptions,
@@ -622,6 +631,10 @@ impl OutputFormatContent {
         }
     }
 
+    /// This function is the entry point for recursive schema rendering.
+    ///
+    /// Read the documentation of [`Self::render_possibly_hoisted_type`] for
+    /// more details.
     fn inner_type_render(
         &self,
         options: &RenderOptions,
@@ -757,8 +770,6 @@ impl OutputFormatContent {
             }
             FieldType::Map(key_type, value_type) => MapRender {
                 style: &options.map_style,
-                // NOTE: Key can't be recursive because we only support strings
-                // as keys.
                 key_type: self.render_possibly_hoisted_type(
                     options,
                     key_type,
@@ -789,6 +800,16 @@ impl OutputFormatContent {
             hoisted_enums: IndexSet::new(),
             hoisted_classes: self.recursive_classes.deref().clone(),
         };
+
+        // Precompute hoisted enums.
+        // for enm in self.enums.values() {
+        //     if enm.values.len() > INLINE_RENDER_ENUM_MAX_VALUES
+        //         || enm.values.iter().any(|(_, desc)| desc.is_some())
+        //         || matches!(options.always_hoist_enums, RenderSetting::Always(true))
+        //     {
+        //         render_state.hoisted_enums.insert(enm.name.name.clone());
+        //     }
+        // }
 
         // Now figure out what to hoist besides recursive classes.
         match &options.hoist_classes {
@@ -863,11 +884,6 @@ impl OutputFormatContent {
         let mut class_definitions = Vec::new();
         let mut type_alias_definitions = Vec::new();
 
-        // Hoist recursive classes. The render_state struct doesn't need to
-        // contain these classes because we already know that we're gonna hoist
-        // them beforehand. Recursive cycles are computed after the AST
-        // validation stage.
-        //
         // TODO: We need to clone this because the render function takes in a
         // mutable reference to the render state but at the same time we are
         // iteraring over one of the render state fields. This can be avoiaded
@@ -1033,7 +1049,12 @@ mod tests {
         assert_eq!(
             rendered,
             Some(String::from(
-                "Answer with any of the categories:\nColor\n----\n- Red\n- Green\n- Blue"
+                "Answer with any of the categories:
+Color
+----
+- Red
+- Green
+- Blue"
             ))
         );
     }
@@ -1067,7 +1088,13 @@ mod tests {
         assert_eq!(
             rendered,
             Some(String::from(
-                "Answer in JSON using this schema:\n{\n  // The person's name\n  name: string,\n  // The person's age\n  age: int,\n}"
+                r#"Answer in JSON using this schema:
+{
+  // The person's name
+  name: string,
+  // The person's age
+  age: int,
+}"#
             ))
         );
     }
@@ -1102,7 +1129,181 @@ mod tests {
         assert_eq!(
             rendered,
             Some(String::from(
-                "Answer in JSON using this schema:\n{\n  // 111\n  //   \n  school: string or null,\n  // 2222222\n  degree: string,\n  year: int,\n}"
+                r#"Answer in JSON using this schema:
+{
+  // 111
+  //   
+  school: string or null,
+  // 2222222
+  degree: string,
+  year: int,
+}"#
+            ))
+        );
+    }
+
+    #[test]
+    fn hoist_enum_if_more_than_max_values() {
+        let enums = vec![Enum {
+            name: Name::new("Enm".to_string()),
+            values: vec![
+                (Name::new("A".to_string()), None),
+                (Name::new("B".to_string()), None),
+                (Name::new("C".to_string()), None),
+                (Name::new("D".to_string()), None),
+                (Name::new("E".to_string()), None),
+                (Name::new("F".to_string()), None),
+                (Name::new("G".to_string()), None),
+            ],
+            constraints: Vec::new(),
+        }];
+
+        let classes = vec![Class {
+            name: Name::new("Output".to_string()),
+            fields: vec![(
+                Name::new("output".to_string()),
+                FieldType::Enum("Enm".to_string()),
+                None,
+                false,
+            )],
+            constraints: Vec::new(),
+            streaming_behavior: StreamingBehavior::default(),
+        }];
+
+        let content = OutputFormatContent::target(FieldType::class("Output"))
+            .enums(enums)
+            .classes(classes)
+            .build();
+        let rendered = content.render(RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some(String::from(
+                r#"Enm
+----
+- A
+- B
+- C
+- D
+- E
+- F
+- G
+
+Answer in JSON using this schema:
+{
+  output: Enm,
+}"#
+            ))
+        );
+    }
+
+    #[test]
+    fn hoist_enum_if_variant_has_description() {
+        let enums = vec![Enum {
+            name: Name::new("Enm".to_string()),
+            values: vec![
+                (
+                    Name::new("A".to_string()),
+                    Some("A description".to_string()),
+                ),
+                (Name::new("B".to_string()), None),
+                (Name::new("C".to_string()), None),
+                (Name::new("D".to_string()), None),
+                (Name::new("E".to_string()), None),
+                (Name::new("F".to_string()), None),
+            ],
+            constraints: Vec::new(),
+        }];
+
+        let classes = vec![Class {
+            name: Name::new("Output".to_string()),
+            fields: vec![(
+                Name::new("output".to_string()),
+                FieldType::Enum("Enm".to_string()),
+                None,
+                false,
+            )],
+            constraints: Vec::new(),
+            streaming_behavior: StreamingBehavior::default(),
+        }];
+
+        let content = OutputFormatContent::target(FieldType::class("Output"))
+            .enums(enums)
+            .classes(classes)
+            .build();
+        let rendered = content.render(RenderOptions::default()).unwrap();
+        assert_eq!(
+            rendered,
+            Some(String::from(
+                r#"Enm
+----
+- A: A description
+- B
+- C
+- D
+- E
+- F
+
+Answer in JSON using this schema:
+{
+  output: Enm,
+}"#
+            ))
+        );
+    }
+
+    #[test]
+    fn hoist_enum_if_setting_always_hoist_enum() {
+        let enums = vec![Enum {
+            name: Name::new("Enm".to_string()),
+            values: vec![
+                (Name::new("A".to_string()), None),
+                (Name::new("B".to_string()), None),
+                (Name::new("C".to_string()), None),
+                (Name::new("D".to_string()), None),
+                (Name::new("E".to_string()), None),
+                (Name::new("F".to_string()), None),
+            ],
+            constraints: Vec::new(),
+        }];
+
+        let classes = vec![Class {
+            name: Name::new("Output".to_string()),
+            fields: vec![(
+                Name::new("output".to_string()),
+                FieldType::Enum("Enm".to_string()),
+                None,
+                false,
+            )],
+            constraints: Vec::new(),
+            streaming_behavior: StreamingBehavior::default(),
+        }];
+
+        let content = OutputFormatContent::target(FieldType::class("Output"))
+            .enums(enums)
+            .classes(classes)
+            .build();
+        let rendered = content
+            .render(RenderOptions {
+                always_hoist_enums: RenderSetting::Always(true),
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(
+            rendered,
+            Some(String::from(
+                r#"Enm
+----
+- A
+- B
+- C
+- D
+- E
+- F
+
+Answer in JSON using this schema:
+{
+  output: Enm,
+}"#
             ))
         );
     }
