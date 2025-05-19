@@ -38,32 +38,3 @@ export function resetBamlEnvVars(envVars: Record<string, string | undefined>) {
     throw new Error('BamlError: Cannot reset BAML environment variables while there are active BAML contexts.')
   }
 }
-
-const patchedLoad = (originalFn: any) => (...args: any[]) => {
-    const result = originalFn(...args);
-    try {
-        // Dont fail if env vars fail to reset
-        resetBamlEnvVars(process.env);
-    } catch (e) {
-        console.error(e);
-    }
-    return result;
-};
-
-try {
-  const dotenv = require('dotenv');
-  // Monkeypatch load function to call resetBamlEnvVars after execution
-
-
-    // Apply the patch
-    dotenv.config = patchedLoad(dotenv.config);
-    dotenv.configDotenv = patchedLoad(dotenv.configDotenv);
-    dotenv.populate = patchedLoad(dotenv.populate);
-} catch (error) {
-  // dotenv is not installed, so we do nothing
-}
-
-// also patch process.loadEnvFile
-if (process.loadEnvFile) {
-    process.loadEnvFile = patchedLoad(process.loadEnvFile);
-}

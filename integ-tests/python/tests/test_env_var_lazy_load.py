@@ -1,6 +1,5 @@
 import pytest
 from ..baml_client.sync_client import b as sync_b
-import os
 
 
 @pytest.mark.parametrize("test_input,expected_key", [

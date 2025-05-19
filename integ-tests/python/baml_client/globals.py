@@ -14,6 +14,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 from __future__ import annotations
+from warnings import deprecated
 import os
 
 from baml_py import BamlCtxManager, BamlRuntime
@@ -29,6 +30,7 @@ DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = BamlRuntime.from_
 )
 DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX = BamlCtxManager(DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME)
 
+@deprecated("reset_baml_env_vars is deprecated and is safe to remove, since environment variables are now lazily loaded on each function call")
 def reset_baml_env_vars(env_vars: Dict[str, str]):
   if DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX.allow_reset():
     DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME.reset(
