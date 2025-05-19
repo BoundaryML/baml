@@ -494,20 +494,116 @@ impl OutputFormatContent {
         .to_string(options)
     }
 
-    /// Recursive classes are rendered using their name instead of schema.
+    /// Renders either the schema or the name of a type.
     ///
-    /// The schema must be hoisted and named, otherwise there's no way to refer
-    /// to a recursive class.
+    /// Prompt rendering is somewhat confusing because of hoisted types, so
+    /// let's give a little explanation.
     ///
-    /// This function stops the recursion if it finds a recursive class and
-    /// simply returns its name. It acts as wrapper for
-    /// [`Self::inner_type_render`] and must be called wherever we could
-    /// encounter a recursive type when rendering.
+    /// The [`Self::inner_type_render`] function renders schemas only, say we
+    /// have these classes:
     ///
-    /// Do not call this function as an entry point because if the target type
-    /// is recursive itself you own't get any rendering! You'll just get the
-    /// name of the type. Instead call [`Self::inner_type_render`] as an entry
-    /// point and that will render the schema considering recursive fields.
+    /// ```baml
+    /// class Example {
+    ///     a string
+    ///     b string
+    ///     c Nested
+    /// }
+    ///
+    /// class Nested {
+    ///     n int
+    ///     m int
+    /// }
+    /// ```
+    ///
+    /// then [`Self::inner_type_render`] will return this string:
+    ///
+    /// ```ts
+    /// {
+    ///     a: string,
+    ///     b: string,
+    ///     c: {
+    ///         n: int,
+    ///         m: int,
+    ///     },
+    /// }
+    /// ```
+    ///
+    /// Basically it renders all schemas recursively into one single schema.
+    /// That becomes a problem when you define recursive classes, because
+    /// there's no way to render them "inline" as above. Here's an example:
+    ///
+    /// ```baml
+    /// class Node {
+    ///     data int
+    ///     next Node?
+    /// }
+    /// ```
+    ///
+    /// If we wanted to render this as above we'd stack overflow:
+    ///
+    /// ```ts
+    /// {
+    ///     data: int,
+    ///     next: {
+    ///         data: int,
+    ///         next: {
+    ///             data: int,
+    ///             next: <<< STACK OVERFLOW >>>
+    ///         },
+    ///     },
+    /// }
+    /// ```
+    ///
+    /// So the solution is to hoist the class and use its name instead. This is
+    /// how the complete prompt would look like:
+    ///
+    /// ```text
+    /// Node {
+    ///     data: int,
+    ///     next: Node,
+    /// }
+    ///
+    /// Answer in JSON using this schema: Node
+    /// ```
+    ///
+    /// Obviously, we want to be able to embed recursive classes in other
+    /// non-recursive classes, something like this:
+    ///
+    /// ```baml
+    /// class Example {
+    ///     a string
+    ///     b string
+    ///     c Nested
+    ///     d LinkedList
+    /// }
+    /// ```
+    ///
+    /// Which requires this prompt:
+    ///
+    /// ```text
+    /// Node {
+    ///     data: int,
+    ///     next: Node,
+    /// }
+    ///
+    /// Answer in JSON using this schema:
+    /// {
+    ///     a: string,
+    ///     b: string,
+    ///     c: {
+    ///         n: int,
+    ///         m: int,
+    ///     },
+    ///     d: Node,
+    /// }
+    /// ```
+    ///
+    /// We need to render both schemas and names, which makes deciding when to
+    /// "stop" recursion complicated. And that's what this function does, it
+    /// saves us from writing if statements in every case where we might
+    /// encounter a recursive type. Users can also decide to hoist non-recursive
+    /// classes for other reasons such as saving tokens or improve the adherence
+    /// to the schema of the model response.
     fn render_possibly_hoisted_type(
         &self,
         options: &RenderOptions,
