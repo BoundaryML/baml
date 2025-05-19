@@ -270,8 +270,16 @@ fn test_output_format() {
     );
 
     assert_eq!(
+        assert_fails_to!(
+            "ctx.output_format(hoist_classes=1)",
+            &types
+        ),
+        vec!["Function 'baml::OutputFormat' expects argument 'hoist_classes' to be of type (none | bool | literal[\"auto\"] | list[string]), but got literal[1]"]
+    );
+
+    assert_eq!(
         assert_fails_to!("ctx.output_format(prefix='1', unknown=1)", &types),
-        vec!["Function 'baml::OutputFormat' does not have an argument 'unknown'. Did you mean one of these: 'always_hoist_enums', 'enum_value_prefix', 'or_splitter'?"]
+        vec!["Function 'baml::OutputFormat' does not have an argument 'unknown'. Did you mean one of these: 'enum_value_prefix', 'hoist_classes', 'or_splitter'?"]
     );
 }
 

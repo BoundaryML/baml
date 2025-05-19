@@ -836,8 +836,6 @@ impl OutputFormatContent {
             });
         }
 
-        // once render_state.hoisted_enums is used, we shouldn't write to it again, hence why into_iter() over iter().
-        // We want a compile-time error if render_state.hoisted_enums is used again.
         let enum_definitions = Vec::from_iter(render_ctx.hoisted_enums.into_iter().map(|e| {
             let enm = self.enums.get(&e).expect("Enum not found"); // TODO: Jinja Err
             self.enum_to_string(enm, &options)

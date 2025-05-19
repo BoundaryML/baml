@@ -308,7 +308,7 @@ impl PredefinedTypes {
                                 Type::merge(vec![
                                     Type::None,
                                     Type::Bool,
-                                    Type::String,
+                                    Type::Literal(LiteralValue::String(String::from("auto"))),
                                     Type::List(Box::new(Type::String)),
                                 ]),
                             ),
