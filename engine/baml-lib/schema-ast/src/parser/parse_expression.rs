@@ -1,6 +1,8 @@
 use super::{
     helpers::{parsing_catch_all, Pair},
-    parse_expr::{parse_expr_block, parse_fn_app, parse_generic_fn_app, parse_lambda},
+    parse_expr::{
+        parse_expr_block, parse_fn_app, parse_generic_fn_app, parse_if_expression, parse_lambda,
+    },
     parse_identifier::parse_identifier,
     Rule,
 };
@@ -42,6 +44,7 @@ pub(crate) fn parse_expression(
         Rule::lambda => parse_lambda(first_child, diagnostics),
         Rule::expr_block => parse_expr_block(first_child, diagnostics)
             .map(|block| Expression::ExprBlock(block, span)),
+        Rule::if_expression => parse_if_expression(first_child, diagnostics),
 
         Rule::BLOCK_LEVEL_CATCH_ALL => {
             diagnostics.push_error(

@@ -114,6 +114,7 @@ jinja_expression  =  { jinja_block_open ~ jinja_body ~ jinja_block_close }
 expression        =  {
     generic_fn_app |
     fn_app |
+    if_expression |
     lambda |
     jinja_expression |
     map_expression |
@@ -244,6 +245,9 @@ fn_args = { expression? ~ ("," ~ expression)* }
 
 // Function application.
 fn_app = { identifier ~ "(" ~ fn_args ~ ")" }
+
+// If expression.
+if_expression = { "if" ~ expression ~ "{" ~ expression ~ "}" ~ ( "else" ~ "{" ~ expression ~ "}" )? }
 
 // Anonymous function.
 lambda = { named_argument_list ~ "=>" ~ expression }

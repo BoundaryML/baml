@@ -60,7 +60,17 @@ func (u {{ union.name }}) MarshalJSON() ([]byte, error) {
 }
 
 func (u *{{ union.name }}) UnmarshalJSON(data []byte) error {
-    return fmt.Errorf("not implemented")
+    var err error
+    {% for variant in union.variants %}
+    err = json.Unmarshal(data, &u.variant_{{ variant.0 }})
+    if err == nil {
+        u.variant = "{{ variant.0 }}"
+        return nil
+    } else {
+        u.variant_{{ variant.0 }} = nil
+    }
+    {% endfor %}
+    return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
 {% for variant in union.variants %}

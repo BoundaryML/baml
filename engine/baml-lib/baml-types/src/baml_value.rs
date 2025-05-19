@@ -576,7 +576,8 @@ impl<T> BamlValueWithMeta<T> {
             ),
             BamlValue::Media(m) => Media(m.clone(), meta),
             BamlValue::Enum(n, v) => Enum(n.clone(), v.clone(), meta),
-            BamlValue::Class(_, items) => Map(
+            BamlValue::Class(class_name, items) => BamlValueWithMeta::Class(
+                class_name.clone(),
                 items
                     .iter()
                     .map(|(k, v)| (k.clone(), Self::with_const_meta(v, meta.clone())))
@@ -660,7 +661,7 @@ impl<T> BamlValueWithMeta<T> {
         T: std::fmt::Debug,
     {
         let other_meta: U = other.meta().clone();
-        let error_msg = String::new(); // format!("Could not unify {:?} with {:?}.", self, other);
+        let error_msg = String::new();
         let ret = match (self, other) {
             (BamlValueWithMeta::Null(meta1), _) => {
                 Result::<_, _>::Ok(BamlValueWithMeta::Null((meta1, other_meta)))

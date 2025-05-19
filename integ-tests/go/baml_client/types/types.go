@@ -3849,7 +3849,7 @@ func (c *Recipe) Decode(holder cffi.CFFIValueClass) {
 			switch key {
 
 			case "ingredients":
-				c.Ingredients = *baml.Decode(valueHolder).(*map[string]Quantity)
+				c.Ingredients = baml.Decode(valueHolder).(map[string]Quantity)
 
 			case "recipe_type":
 				c.Recipe_type = *baml.Decode(valueHolder).(*Union__string_breakfast__string_dinner)

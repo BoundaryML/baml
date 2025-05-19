@@ -412,6 +412,17 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                 let body = convert_function_body(block.clone(), db)?;
                 Ok(body)
             }
+            ast::Expression::If(cond, then, else_, span) => {
+                let cond = cond.repr(db)?;
+                let then = then.repr(db)?;
+                let else_ = else_.as_ref().map(|e| e.repr(db)).transpose()?;
+                Ok(Expr::If(
+                    Arc::new(cond),
+                    Arc::new(then),
+                    else_.map(|e| Arc::new(e)),
+                    (span.clone(), None),
+                ))
+            }
         }
     }
 }
@@ -1724,6 +1735,31 @@ pub fn annotate_variable(
                 .collect();
             Expr::List(new_items, meta.clone())
         }
+        Expr::If(cond, then, else_, meta) => {
+            let new_cond = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(cond.clone()),
+            );
+            let new_then = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(then.clone()),
+            );
+            let new_else = else_.as_ref().map(|e| {
+                annotate_variable(
+                    target.clone(),
+                    r#type.clone(),
+                    Arc::unwrap_or_clone(e.clone()),
+                )
+            });
+            Expr::If(
+                Arc::new(new_cond),
+                Arc::new(new_then),
+                new_else.map(|e| Arc::new(e)),
+                meta.clone(),
+            )
+        }
     }
 }
 
@@ -2188,6 +2224,13 @@ fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<E
                 }
             }
             specialize_generics(args, ctx);
+        }
+        Expr::If(cond, then, r#else, meta) => {
+            specialize_generics(cond, ctx);
+            specialize_generics(then, ctx);
+            if let Some(r#else) = r#else {
+                specialize_generics(r#else, ctx);
+            }
         }
     }
 }
