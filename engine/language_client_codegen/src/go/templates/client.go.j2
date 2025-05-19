@@ -11,14 +11,18 @@ import (
 
 var bamlRuntime *baml.BamlRuntime
 
-func init() {
+func getEnvVars() map[string]string {
 	var env_vars = map[string]string{}
 	for _, env_var := range os.Environ() {
 		key, value, _ := strings.Cut(env_var, "=")
 		env_vars[key] = value
 	}
+	return env_vars
+}
+
+func init() {
 	baml.SetTypeMap(typeMap)
-	runtime, err := baml.CreateRuntime("./baml_src", getBamlFiles(), env_vars)
+	runtime, err := baml.CreateRuntime("./baml_src", getBamlFiles(), getEnvVars())
 	if err != nil {
 		panic(err)
 	}
@@ -49,7 +53,7 @@ func {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
 	if err != nil {
 		panic(err)
 	}
-	result, err := bamlRuntime.CallFunction(ctx, "{{ fn.name }}", encoded)
+	result, err := bamlRuntime.CallFunction(ctx, "{{ fn.name }}", encoded, getEnvVars())
 	if err != nil {
 		return nil, err
 	}
@@ -69,7 +73,7 @@ func {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
 
 func (*stream) {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
 		, {{name}} {{type}}
-		{%- endfor %}, envVars map[string]string) <-chan {{ fn.return_type }} {
+		{%- endfor %}) <-chan {{ fn.return_type }} {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{ {% for (name, type) in fn.args -%}"{{name}}": {{name}},{% endfor %} },
 	}
@@ -78,7 +82,7 @@ func (*stream) {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -
 		panic(err)
 	}
 	channel := make(chan {{ fn.return_type }})
-	raw, err := bamlRuntime.CallFunctionStream(ctx, "{{ fn.name }}", encoded, envVars)
+	raw, err := bamlRuntime.CallFunctionStream(ctx, "{{ fn.name }}", encoded, getEnvVars())
 	if err != nil {
 		close(channel)
 		return channel

@@ -20,5 +20,5 @@ DEFINE_WRAPPER_FUNCTIONS(const void *, CreateBamlRuntime, (const char *root_path
 DEFINE_WRAPPER_FUNCTIONS(void, DestroyBamlRuntime, (const void *runtime), (runtime), )
 DEFINE_WRAPPER_FUNCTIONS(int, InvokeRuntimeCli, (const char *const *args), (args), -1)
 DEFINE_WRAPPER_FUNCTIONS(void, RegisterCallbacks, (CallbackFn callback_fn, CallbackFn error_callback_fn), (callback_fn, error_callback_fn), )
-DEFINE_WRAPPER_FUNCTIONS(const void *, CallFunctionFromC, (const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id), (runtime, function_name, encoded_args, length, id), NULL)
-DEFINE_WRAPPER_FUNCTIONS(const void *, CallFunctionStreamFromC, (const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id), (runtime, function_name, encoded_args, length, id), NULL)
+DEFINE_WRAPPER_FUNCTIONS(const void *, CallFunctionFromC, (const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id, const char *env_vars), (runtime, function_name, encoded_args, length, id, env_vars), NULL)
+DEFINE_WRAPPER_FUNCTIONS(const void *, CallFunctionStreamFromC, (const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id, const char *env_vars), (runtime, function_name, encoded_args, length, id, env_vars), NULL)
