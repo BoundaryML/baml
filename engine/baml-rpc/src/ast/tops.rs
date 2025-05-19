@@ -14,8 +14,28 @@ use super::{
     },
 };
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
+#[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub struct BamlFunctionId(pub AstNodeId);
+
+// Delegate serialization and deserialization to AstNodeId
+impl Serialize for BamlFunctionId {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for BamlFunctionId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let ast_node_id = AstNodeId::deserialize(deserializer)?;
+        Ok(BamlFunctionId(ast_node_id))
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]

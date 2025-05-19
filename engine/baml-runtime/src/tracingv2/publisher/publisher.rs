@@ -182,15 +182,18 @@ pub fn start_publisher(lookup: Arc<AstSignatureWrapper>, rt: Arc<tokio::runtime:
         tx
     });
 
+    baml_log::info!("Updating runtime");
     // Update runtime if channel already existed
     let _ = rt.block_on(flush());
     let _ = channel.send(PublisherMessage::UpdateRuntime(lookup));
+    baml_log::info!("Updated runtime");
 }
 
 /// Gracefully shutdown the TracePublisher.
 /// 1. Sends a Shutdown message and waits for its ack.
 /// 2. Awaits the background task's JoinHandle so Drop runs.
 pub async fn shutdown_publisher() -> anyhow::Result<()> {
+    baml_log::info!("Shutting down publisher");
     // 1. send Shutdown
     let Some(channel) = get_publish_channel(true) else {
         return Ok(());
@@ -373,16 +376,18 @@ impl TracePublisher {
             source_code,
         });
 
+        tracing::info!("Uploading BAML source");
+
         match lookup
             .api_request::<CreateBamlSrcUpload>(CreateBamlSrcUploadRequest { ast })
             .await
         {
             Ok(response) => {
-                tracing::info!("Successfully uploaded BAML source");
+                baml_log::info!("Successfully uploaded BAML source");
                 Ok(())
             }
             Err(e) => {
-                tracing::error!("Failed to upload baml src: {}", e);
+                baml_log::error!("Failed to upload baml src: {}", e);
                 return Err(e.into());
             }
         }
@@ -391,7 +396,7 @@ impl TracePublisher {
     async fn process_batch(&self, batch: Vec<Arc<TraceEventWithMeta>>) {
         let batch_result = self.process_batch_impl(batch).await;
         if let Err(e) = batch_result {
-            tracing::error!("Failed to upload trace events: {:?}", e);
+            baml_log::error!("Failed to upload trace events: {:?}", e);
         }
     }
 
@@ -446,7 +451,7 @@ impl TracePublisher {
         {
             Ok(response) => response,
             Err(e) => {
-                tracing::error!("Failed to upload trace events: {}", e);
+                baml_log::error!("Failed to upload trace events: {}", e);
                 return Err(e.into());
             }
         };
@@ -458,6 +463,9 @@ impl TracePublisher {
             .headers(
                 upload_url_details
                     .upload_metadata
+                    // S3 upload URL shoves the project_id into S3ObjectMetadata
+                    // When we process the S3 Upload notification, the Queue processor
+                    // relies on this metadata to determine the project_id.
                     .as_reqwest_headers()
                     .context(format!(
                         "Failed to convert {} to HeaderMap",

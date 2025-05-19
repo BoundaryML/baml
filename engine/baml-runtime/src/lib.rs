@@ -163,6 +163,8 @@ impl BamlRuntime {
             #[cfg(not(target_arch = "wasm32"))]
             async_runtime: rt.clone(),
         };
+        log::info!("Starting publisher");
+        baml_log::info!("ssstarting publisher");
 
         tracingv2::publisher::start_publisher(
             Arc::new(
@@ -172,6 +174,8 @@ impl BamlRuntime {
             ),
             rt.clone(),
         );
+
+        log::info!("Started publisher");
 
         Ok(runtime)
     }

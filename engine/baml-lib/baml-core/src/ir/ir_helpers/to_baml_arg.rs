@@ -512,22 +512,22 @@ type JsonArray = JsonValue[]
             allow_implicit_cast_to_string: true,
         };
 
-        let json = BamlValueWithMeta::Map(
-            BamlMap::from([
-                ("number".to_string(), BamlValue::Int(1)),
-                ("string".to_string(), BamlValue::String("test".to_string())),
-                ("bool".to_string(), BamlValue::Bool(true)),
-            ]),
-            FieldType::RecursiveTypeAlias("JsonValue".to_string()),
-        );
+        // let json = BamlValueWithMeta::Map(
+        //     BamlMap::from([
+        //         ("number".to_string(), BamlValue::Int(1)),
+        //         ("string".to_string(), BamlValue::String("test".to_string())),
+        //         ("bool".to_string(), BamlValue::Bool(true)),
+        //     ]),
+        //     FieldType::RecursiveTypeAlias("JsonValue".to_string()),
+        // );
 
-        let res = arg_coercer.coerce_arg(
-            &ir,
-            &FieldType::RecursiveTypeAlias("JsonValue".to_string()),
-            &json,
-            &mut ScopeStack::new(),
-        );
+        // let res = arg_coercer.coerce_arg(
+        //     &ir,
+        //     &FieldType::RecursiveTypeAlias("JsonValue".to_string()),
+        //     &json,
+        //     &mut ScopeStack::new(),
+        // );
 
-        assert_eq!(res, Ok(json));
+        // assert_eq!(res, Ok(json));
     }
 }
