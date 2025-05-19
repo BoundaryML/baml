@@ -395,7 +395,7 @@ fn indefinite_article_a_or_an(word: &str) -> &str {
     }
 }
 
-struct RenderState {
+struct RenderCtx {
     hoisted_enums: IndexSet<String>,
     hoisted_classes: IndexSet<String>,
 }
@@ -420,11 +420,11 @@ impl OutputFormatContent {
         }
     }
 
-    fn prefix(&self, options: &RenderOptions, render_state: &RenderState) -> Option<String> {
+    fn prefix(&self, options: &RenderOptions, render_state: &RenderCtx) -> Option<String> {
         fn auto_prefix(
             ft: &FieldType,
             options: &RenderOptions,
-            render_state: &RenderState,
+            render_state: &RenderCtx,
             output_format_content: &OutputFormatContent,
         ) -> Option<String> {
             match ft {
@@ -617,17 +617,14 @@ impl OutputFormatContent {
         &self,
         options: &RenderOptions,
         field_type: &FieldType,
-        render_state: &mut RenderState,
-        group_hoisted_literals: bool,
+        render_ctx: &RenderCtx,
     ) -> Result<String, minijinja::Error> {
         match field_type {
-            FieldType::Class(nested_class)
-                if render_state.hoisted_classes.contains(nested_class) =>
-            {
+            FieldType::Class(nested_class) if render_ctx.hoisted_classes.contains(nested_class) => {
                 Ok(nested_class.to_owned())
             }
 
-            _ => self.inner_type_render(options, field_type, render_state, group_hoisted_literals),
+            _ => self.inner_type_render(options, field_type, render_ctx),
         }
     }
 
@@ -639,8 +636,7 @@ impl OutputFormatContent {
         &self,
         options: &RenderOptions,
         field: &FieldType,
-        render_state: &mut RenderState,
-        group_hoisted_literals: bool,
+        render_ctx: &RenderCtx,
     ) -> Result<String, minijinja::Error> {
         Ok(match field {
             FieldType::Primitive(t) => match t {
@@ -657,12 +653,9 @@ impl OutputFormatContent {
                 }
             },
             FieldType::Literal(v) => v.to_string(),
-            FieldType::WithMetadata { base, .. } => self.render_possibly_hoisted_type(
-                options,
-                base,
-                render_state,
-                group_hoisted_literals,
-            )?,
+            FieldType::WithMetadata { base, .. } => {
+                self.render_possibly_hoisted_type(options, base, render_ctx)?
+            }
             FieldType::Enum(e) => {
                 let Some(enm) = self.enums.get(e) else {
                     return Err(minijinja::Error::new(
@@ -671,22 +664,14 @@ impl OutputFormatContent {
                     ));
                 };
 
-                if enm.values.len() <= 6
-                    && enm.values.iter().all(|(_, d)| d.is_none())
-                    && !group_hoisted_literals
-                    && !matches!(options.always_hoist_enums, RenderSetting::Always(true))
-                {
-                    let values = enm
-                        .values
+                if render_ctx.hoisted_enums.contains(&enm.name.name) {
+                    enm.name.rendered_name().to_string()
+                } else {
+                    enm.values
                         .iter()
                         .map(|(n, _)| format!("'{}'", n.rendered_name()))
                         .collect::<Vec<_>>()
-                        .join(&options.or_splitter);
-
-                    values
-                } else {
-                    render_state.hoisted_enums.insert(enm.name.name.clone());
-                    enm.name.rendered_name().to_string()
+                        .join(&options.or_splitter)
                 }
             }
             FieldType::Class(cls) => {
@@ -707,10 +692,7 @@ impl OutputFormatContent {
                                 name: name.rendered_name().to_string(),
                                 description: description.clone(),
                                 r#type: self.render_possibly_hoisted_type(
-                                    options,
-                                    field_type,
-                                    render_state,
-                                    false,
+                                    options, field_type, render_ctx,
                                 )?,
                             })
                         })
@@ -722,7 +704,7 @@ impl OutputFormatContent {
             FieldType::List(inner) => {
                 let is_hoisted = match inner.as_ref() {
                     FieldType::Class(nested_class) => {
-                        render_state.hoisted_classes.contains(nested_class)
+                        render_ctx.hoisted_classes.contains(nested_class)
                     }
                     FieldType::RecursiveTypeAlias(name) => {
                         self.structural_recursive_aliases.contains_key(name)
@@ -730,8 +712,7 @@ impl OutputFormatContent {
                     _ => false,
                 };
 
-                let inner_str =
-                    self.render_possibly_hoisted_type(options, inner, render_state, false)?;
+                let inner_str = self.render_possibly_hoisted_type(options, inner, render_ctx)?;
 
                 if !is_hoisted
                     && match inner.as_ref() {
@@ -750,12 +731,11 @@ impl OutputFormatContent {
             }
             FieldType::Union(items) => items
                 .iter()
-                .map(|t| self.render_possibly_hoisted_type(options, t, render_state, false))
+                .map(|t| self.render_possibly_hoisted_type(options, t, render_ctx))
                 .collect::<Result<Vec<_>, minijinja::Error>>()?
                 .join(&options.or_splitter),
             FieldType::Optional(inner) => {
-                let inner_str =
-                    self.render_possibly_hoisted_type(options, inner, render_state, false)?;
+                let inner_str = self.render_possibly_hoisted_type(options, inner, render_ctx)?;
                 if inner.is_optional() {
                     inner_str
                 } else {
@@ -770,18 +750,8 @@ impl OutputFormatContent {
             }
             FieldType::Map(key_type, value_type) => MapRender {
                 style: &options.map_style,
-                key_type: self.render_possibly_hoisted_type(
-                    options,
-                    key_type,
-                    render_state,
-                    false,
-                )?,
-                value_type: self.render_possibly_hoisted_type(
-                    options,
-                    value_type,
-                    render_state,
-                    false,
-                )?,
+                key_type: self.render_possibly_hoisted_type(options, key_type, render_ctx)?,
+                value_type: self.render_possibly_hoisted_type(options, value_type, render_ctx)?,
             }
             .to_string(),
             FieldType::Arrow(_) => {
@@ -794,22 +764,28 @@ impl OutputFormatContent {
     }
 
     pub fn render(&self, options: RenderOptions) -> Result<Option<String>, minijinja::Error> {
-        // Hoisted enums are computed during rendering.
-        // Recursive classes are always hoisted so we start with those as base.
-        let mut render_state = RenderState {
+        // Render context. Only contains hoisted types for now.
+        let mut render_ctx = RenderCtx {
             hoisted_enums: IndexSet::new(),
+            // Recursive classes are always hoisted so we start with those as base.
+            // TODO: Figure out memory gymnastics to avoid this clone.
             hoisted_classes: self.recursive_classes.deref().clone(),
         };
 
         // Precompute hoisted enums.
-        // for enm in self.enums.values() {
-        //     if enm.values.len() > INLINE_RENDER_ENUM_MAX_VALUES
-        //         || enm.values.iter().any(|(_, desc)| desc.is_some())
-        //         || matches!(options.always_hoist_enums, RenderSetting::Always(true))
-        //     {
-        //         render_state.hoisted_enums.insert(enm.name.name.clone());
-        //     }
-        // }
+        //
+        // Original code had the "group_hoisted_literals" logic here but it
+        // was always false, so not actually used. See this code:
+        // https://github.com/BoundaryML/baml/blob/ee15d0f379f53a93f2d80b39909c74495b19930b/engine/baml-lib/jinja-runtime/src/output_format/types.rs#L480-L496
+        for enm in self.enums.values() {
+            if enm.values.len() > INLINE_RENDER_ENUM_MAX_VALUES
+                || enm.values.iter().any(|(_, desc)| desc.is_some())
+                || matches!(options.always_hoist_enums, RenderSetting::Always(true))
+            //  || group_hoisted_literals
+            {
+                render_ctx.hoisted_enums.insert(enm.name.name.clone());
+            }
+        }
 
         // Now figure out what to hoist besides recursive classes.
         match &options.hoist_classes {
@@ -817,7 +793,7 @@ impl OutputFormatContent {
             HoistClasses::Auto => {}
 
             // Hoist all classes.
-            HoistClasses::All => render_state
+            HoistClasses::All => render_ctx
                 .hoisted_classes
                 .extend(self.classes.keys().cloned()),
 
@@ -827,7 +803,7 @@ impl OutputFormatContent {
 
                 for cls in classes {
                     if self.classes.contains_key(cls) {
-                        render_state.hoisted_classes.insert(cls.to_owned());
+                        render_ctx.hoisted_classes.insert(cls.to_owned());
                     } else {
                         not_found.insert(cls.to_owned());
                     }
@@ -844,7 +820,7 @@ impl OutputFormatContent {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
                         format!(
-                            "{class_or_classes} {} cannot be hoisted because {it_does_or_they_do} not exist",
+                            "Cannot hoist {class_or_classes} {} because {it_does_or_they_do} not exist",
                             not_found
                                 .iter()
                                 .map(|cls| format!("\"{cls}\""))
@@ -856,7 +832,8 @@ impl OutputFormatContent {
             }
         };
 
-        let prefix = self.prefix(&options, &render_state);
+        // Schema prefix (Answer in JSON using...)
+        let prefix = self.prefix(&options, &render_ctx);
 
         let mut message = match &self.target {
             FieldType::Primitive(TypeValue::String) if prefix.is_none() => None,
@@ -870,13 +847,13 @@ impl OutputFormatContent {
 
                 Some(self.enum_to_string(enm, &options))
             }
-            _ => Some(self.inner_type_render(&options, &self.target, &mut render_state, false)?),
+            _ => Some(self.inner_type_render(&options, &self.target, &render_ctx)?),
         };
 
         // Top level recursive classes will just use their name instead of the
         // entire schema which should already be hoisted.
         if let FieldType::Class(class) = &self.target {
-            if render_state.hoisted_classes.contains(class) {
+            if render_ctx.hoisted_classes.contains(class) {
                 message = Some(class.to_owned());
             }
         }
@@ -884,17 +861,11 @@ impl OutputFormatContent {
         let mut class_definitions = Vec::new();
         let mut type_alias_definitions = Vec::new();
 
-        // TODO: We need to clone this because the render function takes in a
-        // mutable reference to the render state but at the same time we are
-        // iteraring over one of the render state fields. This can be avoiaded
-        // if we precompute hoisted enums so we don't have to modify the render
-        // state. It would become render context or something.
-        for class_name in &render_state.hoisted_classes.clone() {
+        for class_name in &render_ctx.hoisted_classes {
             let schema = self.inner_type_render(
                 &options,
                 &FieldType::Class(class_name.to_owned()),
-                &mut render_state,
-                false,
+                &render_ctx,
             )?;
 
             class_definitions.push(match &options.hoisted_class_prefix {
@@ -906,8 +877,7 @@ impl OutputFormatContent {
         }
 
         for (alias, target) in self.structural_recursive_aliases.iter() {
-            let recursive_pointer =
-                self.inner_type_render(&options, target, &mut render_state, false)?;
+            let recursive_pointer = self.inner_type_render(&options, target, &render_ctx)?;
 
             type_alias_definitions.push(match &options.hoisted_class_prefix {
                 RenderSetting::Always(prefix) if !prefix.is_empty() => {
@@ -919,7 +889,7 @@ impl OutputFormatContent {
 
         // once render_state.hoisted_enums is used, we shouldn't write to it again, hence why into_iter() over iter().
         // We want a compile-time error if render_state.hoisted_enums is used again.
-        let enum_definitions = Vec::from_iter(render_state.hoisted_enums.into_iter().map(|e| {
+        let enum_definitions = Vec::from_iter(render_ctx.hoisted_enums.into_iter().map(|e| {
             let enm = self.enums.get(&e).expect("Enum not found"); // TODO: Jinja Err
             self.enum_to_string(enm, &options)
         }));
