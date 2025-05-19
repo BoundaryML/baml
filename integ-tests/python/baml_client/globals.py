@@ -14,13 +14,12 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 from __future__ import annotations
-from warnings import deprecated
 import os
 
 from baml_py import BamlCtxManager, BamlRuntime
 from baml_py.baml_py import BamlError
 from .inlinedbaml import get_baml_files
-from typing_extensions import Literal
+from typing_extensions import deprecated
 from typing import Dict, Any
 
 DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME = BamlRuntime.from_files(
