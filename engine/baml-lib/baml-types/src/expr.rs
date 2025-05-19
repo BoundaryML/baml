@@ -27,6 +27,7 @@ pub enum Expr<T> {
     BoundVar(VarIndex, T),
     Lambda(usize, Arc<Expr<T>>, T), // number of parameters, body, metadata
     App(Arc<Expr<T>>, Arc<Expr<T>>, T),
+    If(Arc<Expr<T>>, Arc<Expr<T>>, Option<Arc<Expr<T>>>, T),
     Let(Name, Arc<Expr<T>>, Arc<Expr<T>>, T), // let name = expr in body
     ArgsTuple(Vec<Expr<T>>, T),
 }
@@ -76,6 +77,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::App(_, _, meta) => meta,
             Expr::ArgsTuple(_, meta) => meta,
             Expr::Let(_, _, _, meta) => meta,
+            Expr::If(_, _, _, meta) => meta,
         }
     }
 
@@ -92,6 +94,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::App(_, _, meta) => meta,
             Expr::Let(_, _, _, meta) => meta,
             Expr::ArgsTuple(_, meta) => meta,
+            Expr::If(_, _, _, meta) => meta,
         }
     }
 
@@ -108,6 +111,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::App(_, _, meta) => meta,
             Expr::ArgsTuple(_, meta) => meta,
             Expr::Let(_, _, _, meta) => meta,
+            Expr::If(_, _, _, meta) => meta,
         }
     }
 }
@@ -176,6 +180,14 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                     None => String::new(),
                 };
                 format!("Class({} {{ {}{} }}", name, fields, spread)
+            }
+            Expr::If(cond, then, else_, _) => {
+                format!(
+                    "If {} {{ {} }} {}",
+                    cond.dump_str(),
+                    then.dump_str(),
+                    else_.as_ref().map(|e| e.dump_str()).unwrap_or_default()
+                )
             }
         }
     }
@@ -266,6 +278,16 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                         .all(|(a1, a2)| a1.temporary_same_state(a2))
             }
             (Expr::List(_, _), _) => false,
+
+            (Expr::If(cond1, then1, else1, _), Expr::If(cond2, then2, else2, _)) => {
+                let else_same = match (&else1, &else2) {
+                    (Some(e1), Some(e2)) => e1.temporary_same_state(e2),
+                    (None, None) => true,
+                    _ => false,
+                };
+                cond1.temporary_same_state(cond2) && then1.temporary_same_state(then2) && else_same
+            }
+            (Expr::If(_, _, _, _), _) => false,
         }
     }
 }
@@ -354,6 +376,14 @@ impl Expr<ExprMetadata> {
                 free_vars.extend(body.free_vars());
                 free_vars
             }
+            Expr::If(cond, then, else_, _) => {
+                let mut free_vars = cond.free_vars();
+                free_vars.extend(then.free_vars());
+                if let Some(else_) = else_ {
+                    free_vars.extend(else_.free_vars());
+                }
+                free_vars
+            }
             Expr::ArgsTuple(args, _) => args.iter().flat_map(|a| a.free_vars()).collect(),
         }
     }
@@ -433,6 +463,12 @@ impl<T: Clone> Expr<T> {
                 Arc::new(body.open(target, new_name)),
                 m.clone(),
             ),
+            Expr::If(cond, then, else_, m) => Expr::If(
+                Arc::new(cond.open(target, new_name)),
+                Arc::new(then.open(target, new_name)),
+                else_.as_ref().map(|e| Arc::new(e.open(target, new_name))),
+                m.clone(),
+            ),
             Expr::ArgsTuple(args, m) => Expr::ArgsTuple(
                 args.iter().map(|e| e.open(target, new_name)).collect(),
                 m.clone(),
@@ -495,6 +531,12 @@ impl<T: Clone> Expr<T> {
                 n.clone(),
                 Arc::new(e.close(new_index, target)),
                 Arc::new(body.close(new_index, target)),
+                m.clone(),
+            ),
+            Expr::If(cond, then, else_, m) => Expr::If(
+                Arc::new(cond.close(new_index, target)),
+                Arc::new(then.close(new_index, target)),
+                else_.as_ref().map(|e| Arc::new(e.close(new_index, target))),
                 m.clone(),
             ),
             Expr::ArgsTuple(args, m) => Expr::ArgsTuple(

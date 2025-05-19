@@ -154,5 +154,12 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
             }
             validate_expression(ctx, &block.expr, &scope);
         }
+        Expression::If(cond, then, else_, span) => {
+            validate_expression(ctx, cond, scope);
+            validate_expression(ctx, then, scope);
+            if let Some(else_) = else_ {
+                validate_expression(ctx, else_, scope);
+            }
+        }
     }
 }
