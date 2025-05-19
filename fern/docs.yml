@@ -763,6 +763,9 @@ navigation:
           - page: "OpenRouter (openai-generic)"
             slug: openrouter
             path: 03-reference/baml/clients/providers/openrouter.mdx
+          - page: "Tinfoil (openai-generic)"
+            slug: tinfoil
+            path: 03-reference/baml/clients/providers/tinfoil.mdx
           - page: "TogetherAI (openai-generic)"
             slug: together
             path: 03-reference/baml/clients/providers/together.mdx

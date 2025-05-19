@@ -1,6 +1,6 @@
 @top Baml { Decl* }
 
-Decl { ClassDecl | EnumDecl | FunctionDecl | ClientDecl | TemplateStringDecl | TestDecl | TypeAliasDecl | TypeBuilderDecl }
+Decl { ClassDecl | EnumDecl | FunctionDecl | ClientDecl | RetryPolicyDecl | TemplateStringDecl | TestDecl | TypeAliasDecl | TypeBuilderDecl | LetDecl }
 
 ClassDecl { "class" IdentifierDecl "{" (BlockAttribute | ClassField)* "}" }
 
@@ -17,6 +17,8 @@ TypeAliasDecl {
 DynamicDecl { "dynamic" IdentifierDecl "{" ClassField* "}" }
 
 TypeBuilderDecl { TypeBuilderKeyword "{" (ClassDecl | EnumDecl | DynamicDecl | TypeAliasDecl)* "}" }
+
+RetryPolicyDecl { RetryPolicyKeyword IdentifierDecl "{" ConfigTupleValue* "}"}
 
 TypeExpr { ComplexTypeExpr | UnionTypeExpr }
 ComplexTypeExpr {
@@ -47,29 +49,40 @@ BlockAttribute {
 
 FunctionDecl {
   "function" IdentifierDecl "(" FunctionArgs ")" "->" TypeExpr
-  "{" TupleValue* "}"
+  "{" (FunctionTupleValue | LetDecl | FunctionValueAtom)* "}"
 }
 FunctionArgs { (FunctionArg ",")* FunctionArg? }
 FunctionArg {
   IdentifierDecl ":" TypeExpr
 }
-TupleValue { IdentifierDecl ValueExpr }
+FunctionValueAtom {
+  LiteralDecl | PromptExpr
+}
+FunctionValueExpr {
+  FunctionValueAtom |
+  "{" LetDecl* FunctionValueExpr "}" |
+  IdentifierDecl "(" (FunctionValueExpr ("," FunctionValueExpr)*)? ")"
+}
+FunctionTupleValue { (ClientKeyword | PromptKeyword) FunctionValueAtom }
 
-ValueExpr { LiteralDecl | PromptExpr | "{" TupleValue* "}" }
+ConfigValueExpr { LiteralDecl | PromptExpr | UnquotedString | "{" ConfigTupleValue* "}" }
+ConfigTupleValue { IdentifierDecl ConfigValueExpr }
 
 ClientDecl {
-  "client<llm>" IdentifierDecl "{" TupleValue* "}"
+  "client<llm>" IdentifierDecl "{" ConfigTupleValue* "}"
 }
 
 TestDecl {
-  "test" IdentifierDecl "{" (BlockAttribute | TupleValue | TypeBuilderDecl)* "}"
+  "test" IdentifierDecl "{" (BlockAttribute | FunctionTupleValue | TypeBuilderDecl)* "}"
 }
 
-LiteralDecl { NumericLiteral | QuotedString | UnquotedString }
+LiteralDecl { NumericLiteral | QuotedString }
 
 TemplateStringDecl {
   "template_string" IdentifierDecl "(" FunctionArgs ")" PromptExpr
 }
+
+LetDecl { LetKeyword IdentifierDecl "=" FunctionValueExpr ";"}
 
 @tokens {
 
@@ -77,12 +90,16 @@ TemplateStringDecl {
     NumericLiteral, QuotedString, UnquotedString, UnquotedAttributeValue
   }
   @precedence {
-    MapIdentifier, TypeBuilderKeyword, IdentifierDecl, UnquotedAttributeValue
+    MapIdentifier, TypeBuilderKeyword, ClientKeyword, PromptKeyword, LetKeyword, IdentifierDecl, UnquotedAttributeValue
   }
 
+  LetKeyword { "let" }
+  ClientKeyword { "client" }
+  PromptKeyword { "prompt" }
   TypeBuilderKeyword { "type_builder" }
+  RetryPolicyKeyword { "retry_policy" }
   MapIdentifier { "map" }
-  IdentifierDecl { $[A-Za-z0-9-_]+ }
+  IdentifierDecl { $[A-Za-z]$[A-Za-z0-9-_]* }
 
   NumericLiteral { $[0-9]+ | $[0-9]*'.'$[0-9]+ }
 
