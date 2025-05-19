@@ -160,8 +160,9 @@ pub extern "C" fn call_function_from_c(
     encoded_args: *const libc::c_char,
     length: usize,
     id: u32,
+    env_vars_json: *const libc::c_char,
 ) -> *const libc::c_void {
-    match call_function_from_c_inner(runtime, function_name, encoded_args, length, id) {
+    match call_function_from_c_inner(runtime, function_name, encoded_args, length, id, env_vars_json) {
         Ok(_) => null(),
         Err(e) => {
             Box::into_raw(Box::new(CString::new(e.to_string()).unwrap())) as *const libc::c_void
@@ -175,6 +176,7 @@ fn call_function_from_c_inner(
     encoded_args: *const libc::c_char,
     length: usize,
     id: u32,
+    env_vars_json: *const libc::c_char,
 ) -> Result<()> {
     // Safety: assume that the pointers provided are valid.
     let runtime = unsafe { &*(runtime as *const BamlRuntime) };
@@ -191,12 +193,16 @@ fn call_function_from_c_inner(
     let buffer = unsafe { std::slice::from_raw_parts(encoded_args as *const u8, length) };
     let function_args = ctypes::buffer_to_cffi_function_arguments(buffer)?;
 
+    let env_vars = serde_json::from_str::<HashMap<String, String>>(unsafe {
+        CStr::from_ptr(env_vars_json).to_str().unwrap()
+    })
+    .unwrap();
+
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
     // Spawn an async task to await the future and call the callback when done.
     // Ensure that a Tokio runtime is running in your application.
     let rt = RUNTIME.clone();
-    // TODO: Come back to this if the entire thing works
     rt.spawn(async move {
         let (result, _) = runtime
             .call_function(
@@ -206,7 +212,7 @@ fn call_function_from_c_inner(
                 None,
                 None,
                 None,
-                HashMap::new(),
+                env_vars,
             )
             .await;
         safe_trigger_callback(id, true, result);
@@ -224,8 +230,9 @@ pub extern "C" fn call_function_stream_from_c(
     encoded_args: *const libc::c_char,
     length: usize,
     id: u32,
+    env_vars_json: *const libc::c_char,
 ) -> *const libc::c_void {
-    match call_function_stream_from_c_inner(runtime, function_name, encoded_args, length, id) {
+    match call_function_stream_from_c_inner(runtime, function_name, encoded_args, length, id, env_vars_json) {
         Ok(_) => null(),
         Err(e) => {
             Box::into_raw(Box::new(CString::new(e.to_string()).unwrap())) as *const libc::c_void
@@ -239,6 +246,7 @@ fn call_function_stream_from_c_inner(
     encoded_args: *const libc::c_char,
     length: usize,
     id: u32,
+    env_vars_json: *const libc::c_char,
 ) -> Result<()> {
     // Safety: assume that the pointers provided are valid.
     let runtime = unsafe { &*(runtime as *const BamlRuntime) };
@@ -255,6 +263,11 @@ fn call_function_stream_from_c_inner(
     let buffer = unsafe { std::slice::from_raw_parts(encoded_args as *const u8, length) };
     let function_args = ctypes::buffer_to_cffi_function_arguments(buffer)?;
 
+    let env_vars = serde_json::from_str::<HashMap<String, String>>(unsafe {
+        CStr::from_ptr(env_vars_json).to_str().unwrap()
+    })
+    .unwrap();
+
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
     let mut stream = match runtime.stream_function(
         func_name,
@@ -263,7 +276,7 @@ fn call_function_stream_from_c_inner(
         None,
         None,
         None,
-        HashMap::new(),
+        env_vars,
     ) {
         Ok(stream) => stream,
         Err(e) => {

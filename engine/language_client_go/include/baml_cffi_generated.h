@@ -36,7 +36,8 @@ const void *call_function_from_c(const void *runtime,
                                  const char *function_name,
                                  const char *encoded_args,
                                  uintptr_t length,
-                                 uint32_t id);
+                                 uint32_t id,
+                                 const char *env_vars_json);
 
 /**
  * Extern "C" function that returns immediately, scheduling the async call.
@@ -46,4 +47,5 @@ const void *call_function_stream_from_c(const void *runtime,
                                         const char *function_name,
                                         const char *encoded_args,
                                         uintptr_t length,
-                                        uint32_t id);
+                                        uint32_t id,
+                                        const char *env_vars_json);
