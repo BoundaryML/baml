@@ -231,11 +231,7 @@ async fn beta_reduce<'a>(
                 Box::pin(beta_reduce(env, &new_body, eval_final_llm_fn)).await
             }
             (Expr::LLMFunction(name, arg_names, _), Expr::ArgsTuple(args, _)) => {
-                let mut evaluated_args: Vec<BamlValue> = Vec::new();
-                for arg in args {
-                    let val = eval_to_value(env, arg).await;
-                    evaluated_args.push(val.unwrap().unwrap().clone().value());
-                }
+                let evaluated_args = eval_args(env, args).await?;
 
                 let params = evaluated_args
                     .into_iter()
@@ -294,29 +290,44 @@ async fn beta_reduce<'a>(
 
             (Expr::Builtin(builtin, builtin_meta), Expr::ArgsTuple(args, _)) => match builtin {
                 Builtin::FetchValue => {
-                    let evaluated_args = eval_args(env, args).await;
+                    let evaluated_args = eval_args(env, args).await?;
 
                     let BamlValue::Class(cls, fields) = &evaluated_args[0] else {
                         return Err(anyhow::anyhow!(
-                            "{fetch_value} expects a request but got: {evaluated_args:?}",
-                            fetch_value = builtin::functions::FETCH_VALUE
+                            "{fetch_value} expects a {request_type} parameter but got: {evaluated_args:?}",
+                            fetch_value = builtin::functions::FETCH_VALUE,
+                            request_type = builtin::classes::REQUEST,
                         ));
                     };
 
-                    let FieldType::Arrow(arrow) = builtin_meta.1.as_ref().unwrap() else {
-                        return Err(anyhow::anyhow!(
-                            "{fetch_value} err arrow type idk: {evaluated_args:?}",
+                    // Builtin meta shoulld be set.
+                    let arrow = match builtin_meta.1.as_ref() {
+                        Some(FieldType::Arrow(arrow)) => arrow,
+
+                        other => {
+                            return Err(anyhow::anyhow!(
+                            "Internal error: {fetch_value} meta contains no arrow type: {other:?}",
                             fetch_value = builtin::functions::FETCH_VALUE
-                        ));
+                        ))
+                        }
                     };
+
+                    let base_url = fields
+                        .get("base_url")
+                        .map(|u| u.as_str())
+                        .ok_or(anyhow::anyhow!(
+                            "{fetch_value} argument has no 'base_url' field",
+                            fetch_value = builtin::functions::FETCH_VALUE
+                        ))?
+                        .ok_or(anyhow::anyhow!("Can't convert 'base_url' to string"))?;
 
                     let res = reqwest::Client::new()
-                        .get(fields.get("base_url").unwrap().as_str().unwrap())
+                        .get(base_url)
                         .send()
                         .await?
                         .bytes()
                         .await
-                        .unwrap();
+                        .map_err(|e| anyhow::anyhow!("Failed to fetch {}: {}", base_url, e))?;
 
                     let body = jsonish::from_str(
                         &render_output_format(
@@ -324,12 +335,14 @@ async fn beta_reduce<'a>(
                             &arrow.return_type,
                             &EvaluationContext::new(&HashMap::new(), false),
                         )
-                        .unwrap(),
+                        .map_err(|e| {
+                            anyhow::anyhow!("Failed rendering output format during fetch: {}", e)
+                        })?,
                         &arrow.return_type,
                         &String::from_utf8(res.to_vec()).unwrap(),
                         false,
                     )
-                    .unwrap();
+                    .map_err(|e| anyhow::anyhow!("(jsonish) failed parsing response: {}", e))?;
 
                     let baml_value_with_meta_flags: BamlValueWithMeta<Vec<Flag>> =
                         body.clone().into();
@@ -393,13 +406,13 @@ async fn beta_reduce<'a>(
 async fn eval_args(
     env: &EvalEnv<'_>,
     args: &Vec<Expr<(internal_baml_core::ast::Span, Option<FieldType>)>>,
-) -> Vec<BamlValue> {
+) -> anyhow::Result<Vec<BamlValue>> {
     let mut evaluated_args: Vec<BamlValue> = Vec::new();
     for arg in args {
-        let val = eval_to_value(env, arg).await;
-        evaluated_args.push(val.unwrap().unwrap().clone().value());
+        let val = eval_to_value(env, arg).await?;
+        evaluated_args.push(val.unwrap().clone().value());
     }
-    evaluated_args
+    Ok(evaluated_args)
 }
 
 pub async fn eval_to_value_or_llm_call<'a>(
