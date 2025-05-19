@@ -200,6 +200,12 @@ impl RenderOptions {
     const DEFAULT_OR_SPLITTER: &'static str = " or ";
     const DEFAULT_TYPE_PREFIX_IN_RENDER_MESSAGE: &'static str = "schema";
 
+    /// Option<Option<T>> Basically means that we can have a paremeter which
+    /// 1. the user can completely omit: None
+    /// 2. the user can set to null:     Some(None)
+    ///
+    /// This might be a little annoying, maybe we can change the code in mod.rs
+    /// to flatten the types Option<Option<T>> => Option<T>
     pub(crate) fn new(
         prefix: Option<Option<String>>,
         or_splitter: Option<String>,
@@ -227,10 +233,6 @@ impl RenderOptions {
         }
     }
 
-    pub(crate) fn builder() -> RenderOptionsBuilder {
-        RenderOptionsBuilder::default()
-    }
-
     // TODO: Might need a builder pattern for this as well.
     pub(crate) fn with_hoisted_class_prefix(prefix: &str) -> Self {
         Self {
@@ -245,59 +247,6 @@ impl RenderOptions {
             hoist_classes,
             ..Default::default()
         }
-    }
-}
-pub(crate) struct RenderOptionsBuilder {
-    prefix: Option<Option<String>>,
-    or_splitter: Option<String>,
-    enum_value_prefix: Option<Option<String>>,
-    always_hoist_enums: Option<bool>,
-    map_style: Option<MapStyle>,
-    hoisted_class_prefix: Option<Option<String>>,
-}
-
-impl Default for RenderOptionsBuilder {
-    fn default() -> Self {
-        Self {
-            prefix: None,
-            or_splitter: None,
-            enum_value_prefix: None,
-            always_hoist_enums: None,
-            map_style: None,
-            hoisted_class_prefix: None,
-        }
-    }
-}
-
-impl RenderOptionsBuilder {
-    pub fn prefix(mut self, prefix: Option<String>) -> Self {
-        self.prefix = Some(prefix);
-        self
-    }
-
-    pub fn or_splitter(mut self, or_splitter: String) -> Self {
-        self.or_splitter = Some(or_splitter);
-        self
-    }
-
-    pub fn enum_value_prefix(mut self, enum_value_prefix: Option<String>) -> Self {
-        self.enum_value_prefix = Some(enum_value_prefix);
-        self
-    }
-
-    pub fn always_hoist_enums(mut self, always_hoist_enums: bool) -> Self {
-        self.always_hoist_enums = Some(always_hoist_enums);
-        self
-    }
-
-    pub fn map_style(mut self, map_style: MapStyle) -> Self {
-        self.map_style = Some(map_style);
-        self
-    }
-
-    pub fn hoisted_class_prefix(mut self, hoisted_class_prefix: Option<String>) -> Self {
-        self.hoisted_class_prefix = Some(hoisted_class_prefix);
-        self
     }
 }
 
