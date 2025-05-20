@@ -12,7 +12,16 @@ from .type_builder import TypeBuilder
 class BamlCallOptions(TypedDict, total=False):
     tb: NotRequired[TypeBuilder]
     client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
+    env_vars: NotRequired[Dict[str, Optional[str]]]
 
+def env_vars_to_dict(overrides: Dict[str, Optional[str]]) -> Dict[str, str]:
+    base = os.environ.copy()
+    for k, v in overrides.items():
+        if v is not None:
+            base[k] = v
+        else:
+            base.pop(k, None)
+    return base
 
 class LlmResponseParser:
     __runtime: baml_py.BamlRuntime
@@ -35,7 +44,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = {**os.environ.copy(), **(baml_options.get("env_vars", {}))}
+      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "{{fn.name}}",
@@ -75,7 +84,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = {**os.environ.copy(), **(baml_options.get("env_vars", {}))}
+      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "{{fn.name}}",

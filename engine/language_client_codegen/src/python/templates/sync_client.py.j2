@@ -21,7 +21,16 @@ class BamlCallOptions(TypedDict, total=False):
     tb: NotRequired[TypeBuilder]
     client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
     collector: NotRequired[Union[baml_py.baml_py.Collector, List[baml_py.baml_py.Collector]]]
+    env_vars: NotRequired[Dict[str, Optional[str]]]
 
+def env_vars_to_dict(overrides: Dict[str, Optional[str]]) -> Dict[str, str]:
+    base = os.environ.copy()
+    for k, v in overrides.items():
+        if v is not None:
+            base[k] = v
+        else:
+            base.pop(k, None)
+    return base
 
 class BamlSyncClient:
     __runtime: baml_py.BamlRuntime
@@ -103,7 +112,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-
+      env_vars = env_vars_to_dict(options.get("env_vars", {}))
       raw = self.__runtime.call_function_sync(
         "{{fn.name}}",
         {
@@ -115,7 +124,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
-        {**os.environ.copy(), **(options.get("env_vars", {}))},
+        env_vars,
       )
       return cast({{fn.return_type}}, raw.cast_to(types, types, partial_types, False))
     {% endfor %}
@@ -148,7 +157,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-
+      env_vars = env_vars_to_dict(options.get("env_vars", {}))
       raw = self.__runtime.stream_function_sync(
         "{{fn.name}}",
         {
@@ -161,7 +170,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
-        options.get("env_vars", os.environ.copy()),
+        env_vars,
       )
 
       return baml_py.BamlSyncStream[{{ fn.partial_return_type }}, {{ fn.return_type }}](

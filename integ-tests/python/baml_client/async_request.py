@@ -27,7 +27,16 @@ from .type_builder import TypeBuilder
 class BamlCallOptions(TypedDict, total=False):
     tb: NotRequired[TypeBuilder]
     client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
+    env_vars: NotRequired[Dict[str, Optional[str]]]
 
+def env_vars_to_dict(overrides: Dict[str, Optional[str]]) -> Dict[str, str]:
+    base = os.environ.copy()
+    for k, v in overrides.items():
+        if v is not None:
+            base[k] = v
+        else:
+            base.pop(k, None)
+    return base
 
 class AsyncHttpRequest:
     __runtime: baml_py.BamlRuntime
@@ -58,7 +67,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -82,7 +91,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -106,7 +115,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -130,7 +139,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -154,7 +163,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -178,7 +187,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -202,7 +211,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -226,7 +235,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -250,7 +259,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -274,7 +283,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -298,7 +307,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -323,7 +332,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -347,7 +356,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -371,7 +380,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -395,7 +404,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -419,7 +428,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -443,7 +452,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -467,7 +476,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -491,7 +500,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -517,7 +526,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -541,7 +550,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -565,7 +574,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -590,7 +599,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -615,7 +624,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -640,7 +649,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -666,7 +675,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -689,7 +698,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -713,7 +722,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -737,7 +746,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -761,7 +770,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -785,7 +794,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -808,7 +817,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -832,7 +841,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -856,7 +865,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -880,7 +889,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -904,7 +913,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -928,7 +937,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -953,7 +962,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -978,7 +987,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1002,7 +1011,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1026,7 +1035,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1050,7 +1059,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1074,7 +1083,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1098,7 +1107,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1122,7 +1131,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1146,7 +1155,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1170,7 +1179,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1194,7 +1203,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1218,7 +1227,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1242,7 +1251,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1266,7 +1275,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1290,7 +1299,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1314,7 +1323,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1338,7 +1347,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1362,7 +1371,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1386,7 +1395,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1410,7 +1419,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1434,7 +1443,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1458,7 +1467,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1482,7 +1491,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1506,7 +1515,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1530,7 +1539,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1554,7 +1563,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1579,7 +1588,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1604,7 +1613,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1628,7 +1637,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1652,7 +1661,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1676,7 +1685,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1700,7 +1709,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1723,7 +1732,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1746,7 +1755,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1769,7 +1778,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1792,7 +1801,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1815,7 +1824,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1839,7 +1848,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1863,7 +1872,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1887,7 +1896,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1911,7 +1920,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1935,7 +1944,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1959,7 +1968,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -1983,7 +1992,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2007,7 +2016,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2031,7 +2040,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2055,7 +2064,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2079,7 +2088,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2103,7 +2112,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2127,7 +2136,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2151,7 +2160,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2175,7 +2184,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2199,7 +2208,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2223,7 +2232,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2247,7 +2256,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2271,7 +2280,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2295,7 +2304,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2319,7 +2328,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2343,7 +2352,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2367,7 +2376,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2391,7 +2400,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2415,7 +2424,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2439,7 +2448,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2463,7 +2472,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2487,7 +2496,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2512,7 +2521,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2537,7 +2546,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2561,7 +2570,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2585,7 +2594,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2610,7 +2619,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2634,7 +2643,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2658,7 +2667,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2682,7 +2691,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2706,7 +2715,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2730,7 +2739,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2754,7 +2763,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2778,7 +2787,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2802,7 +2811,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2826,7 +2835,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2850,7 +2859,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2874,7 +2883,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2898,7 +2907,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2922,7 +2931,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2946,7 +2955,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2970,7 +2979,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -2994,7 +3003,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3018,7 +3027,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3042,7 +3051,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3066,7 +3075,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3090,7 +3099,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3115,7 +3124,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3138,7 +3147,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3162,7 +3171,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3186,7 +3195,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3210,7 +3219,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3234,7 +3243,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3258,7 +3267,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3282,7 +3291,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3306,7 +3315,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3330,7 +3339,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3354,7 +3363,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3378,7 +3387,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3402,7 +3411,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3426,7 +3435,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3450,7 +3459,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3474,7 +3483,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3497,7 +3506,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3521,7 +3530,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3545,7 +3554,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3569,7 +3578,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3593,7 +3602,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3617,7 +3626,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3641,7 +3650,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3665,7 +3674,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3690,7 +3699,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3714,7 +3723,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3738,7 +3747,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3762,7 +3771,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3786,7 +3795,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3810,7 +3819,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3834,7 +3843,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3858,7 +3867,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3882,7 +3891,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3906,7 +3915,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3930,7 +3939,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3954,7 +3963,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -3978,7 +3987,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4002,7 +4011,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4026,7 +4035,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4050,7 +4059,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4074,7 +4083,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4098,7 +4107,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4121,7 +4130,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4144,7 +4153,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4168,7 +4177,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4191,7 +4200,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4215,7 +4224,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4239,7 +4248,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4263,7 +4272,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4287,7 +4296,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4310,7 +4319,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4334,7 +4343,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4358,7 +4367,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4382,7 +4391,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4406,7 +4415,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4430,7 +4439,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4453,7 +4462,7 @@ class AsyncHttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         False,
       )
     
@@ -4488,7 +4497,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4512,7 +4521,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4536,7 +4545,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4560,7 +4569,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4584,7 +4593,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4608,7 +4617,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4632,7 +4641,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4656,7 +4665,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4680,7 +4689,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4704,7 +4713,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4728,7 +4737,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4753,7 +4762,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4777,7 +4786,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4801,7 +4810,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4825,7 +4834,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4849,7 +4858,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4873,7 +4882,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4897,7 +4906,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4921,7 +4930,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4947,7 +4956,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4971,7 +4980,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -4995,7 +5004,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5020,7 +5029,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5045,7 +5054,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5070,7 +5079,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5096,7 +5105,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5119,7 +5128,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5143,7 +5152,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5167,7 +5176,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5191,7 +5200,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5215,7 +5224,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5238,7 +5247,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5262,7 +5271,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5286,7 +5295,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5310,7 +5319,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5334,7 +5343,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5358,7 +5367,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5383,7 +5392,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5408,7 +5417,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5432,7 +5441,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5456,7 +5465,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5480,7 +5489,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5504,7 +5513,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5528,7 +5537,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5552,7 +5561,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5576,7 +5585,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5600,7 +5609,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5624,7 +5633,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5648,7 +5657,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5672,7 +5681,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5696,7 +5705,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5720,7 +5729,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5744,7 +5753,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5768,7 +5777,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5792,7 +5801,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5816,7 +5825,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5840,7 +5849,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5864,7 +5873,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5888,7 +5897,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5912,7 +5921,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5936,7 +5945,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5960,7 +5969,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -5984,7 +5993,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6009,7 +6018,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6034,7 +6043,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6058,7 +6067,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6082,7 +6091,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6106,7 +6115,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6130,7 +6139,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6153,7 +6162,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6176,7 +6185,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6199,7 +6208,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6222,7 +6231,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6245,7 +6254,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6269,7 +6278,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6293,7 +6302,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6317,7 +6326,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6341,7 +6350,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6365,7 +6374,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6389,7 +6398,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6413,7 +6422,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6437,7 +6446,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6461,7 +6470,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6485,7 +6494,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6509,7 +6518,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6533,7 +6542,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6557,7 +6566,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6581,7 +6590,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6605,7 +6614,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6629,7 +6638,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6653,7 +6662,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6677,7 +6686,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6701,7 +6710,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6725,7 +6734,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6749,7 +6758,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6773,7 +6782,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6797,7 +6806,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6821,7 +6830,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6845,7 +6854,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6869,7 +6878,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6893,7 +6902,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6917,7 +6926,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6942,7 +6951,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6967,7 +6976,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -6991,7 +7000,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7015,7 +7024,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7040,7 +7049,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7064,7 +7073,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7088,7 +7097,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7112,7 +7121,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7136,7 +7145,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7160,7 +7169,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7184,7 +7193,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7208,7 +7217,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7232,7 +7241,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7256,7 +7265,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7280,7 +7289,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7304,7 +7313,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7328,7 +7337,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7352,7 +7361,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7376,7 +7385,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7400,7 +7409,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7424,7 +7433,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7448,7 +7457,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7472,7 +7481,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7496,7 +7505,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7520,7 +7529,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7545,7 +7554,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7568,7 +7577,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7592,7 +7601,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7616,7 +7625,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7640,7 +7649,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7664,7 +7673,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7688,7 +7697,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7712,7 +7721,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7736,7 +7745,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7760,7 +7769,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7784,7 +7793,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7808,7 +7817,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7832,7 +7841,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7856,7 +7865,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7880,7 +7889,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7904,7 +7913,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7927,7 +7936,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7951,7 +7960,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7975,7 +7984,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -7999,7 +8008,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8023,7 +8032,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8047,7 +8056,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8071,7 +8080,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8095,7 +8104,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8120,7 +8129,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8144,7 +8153,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8168,7 +8177,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8192,7 +8201,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8216,7 +8225,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8240,7 +8249,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8264,7 +8273,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8288,7 +8297,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8312,7 +8321,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8336,7 +8345,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8360,7 +8369,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8384,7 +8393,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8408,7 +8417,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8432,7 +8441,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8456,7 +8465,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8480,7 +8489,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8504,7 +8513,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8528,7 +8537,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8551,7 +8560,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8574,7 +8583,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8598,7 +8607,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8621,7 +8630,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8645,7 +8654,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8669,7 +8678,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8693,7 +8702,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8717,7 +8726,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8740,7 +8749,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8764,7 +8773,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8788,7 +8797,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8812,7 +8821,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8836,7 +8845,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8860,7 +8869,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
@@ -8883,7 +8892,7 @@ class AsyncHttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
+        env_vars_to_dict(baml_options.get("env_vars", {})),
         True,
       )
     
