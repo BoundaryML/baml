@@ -16,6 +16,7 @@ use internal_baml_core::ir::{
 pub(crate) struct PythonTypes<'ir> {
     enums: Vec<PythonEnum<'ir>>,
     classes: Vec<PythonClass<'ir>>,
+    is_pydantic_2: bool,
     structural_recursive_alias_cycles: Vec<PythonTypeAlias<'ir>>,
 }
 
@@ -51,6 +52,7 @@ struct PythonTypeAlias<'ir> {
 #[template(path = "partial_types.py.j2", escape = "none")]
 pub(crate) struct PythonStreamTypes<'ir> {
     partial_classes: Vec<PartialPythonClass<'ir>>,
+    is_pydantic_2: bool,
     structural_recursive_alias_cycles: Vec<PythonTypeAlias<'ir>>,
 }
 
@@ -68,11 +70,12 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonT
     type Error = anyhow::Error;
 
     fn try_from(
-        (ir, _): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs),
+        (ir, gen): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs),
     ) -> Result<PythonTypes<'ir>> {
         Ok(PythonTypes {
             enums: ir.walk_enums().map(PythonEnum::from).collect::<Vec<_>>(),
             classes: ir.walk_classes().map(PythonClass::from).collect::<Vec<_>>(),
+            is_pydantic_2: matches!(gen.client_type, baml_types::GeneratorOutputType::PythonPydantic),
             structural_recursive_alias_cycles: {
                 let mut cycles = ir
                     .walk_alias_cycles()
@@ -160,12 +163,13 @@ impl<'ir> From<Walker<'ir, (&'ir String, &'ir FieldType)>> for PythonTypeAlias<'
 impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonStreamTypes<'ir> {
     type Error = anyhow::Error;
 
-    fn try_from((ir, _): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+    fn try_from((ir, gen): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
         Ok(Self {
             partial_classes: ir
                 .walk_classes()
                 .map(PartialPythonClass::from)
                 .collect::<Vec<_>>(),
+            is_pydantic_2: matches!(gen.client_type, baml_types::GeneratorOutputType::PythonPydantic),
             structural_recursive_alias_cycles: {
                 let mut cycles = ir
                     .walk_alias_cycles()

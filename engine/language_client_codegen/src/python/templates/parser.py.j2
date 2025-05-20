@@ -1,5 +1,5 @@
-from typing import Any, Dict, List, Optional, Union, TypedDict, Type, Literal, cast
-from typing_extensions import NotRequired
+from typing import Any, Dict, List, Optional, Union, TypedDict, Type, cast
+from typing_extensions import NotRequired, Literal
 import os
 
 import baml_py
@@ -35,6 +35,8 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
+      env_vars = {**os.environ.copy(), **(baml_options.get("env_vars", {}))}
+
       parsed = self.__runtime.parse_llm_response(
         "{{fn.name}}",
         llm_response,
@@ -45,7 +47,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        env_vars,
       )
 
       return cast({{fn.return_type}}, parsed)
@@ -73,6 +75,8 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
+      env_vars = {**os.environ.copy(), **(baml_options.get("env_vars", {}))}
+
       parsed = self.__runtime.parse_llm_response(
         "{{fn.name}}",
         llm_response,
@@ -83,7 +87,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        env_vars,
       )
 
       return cast({{fn.partial_return_type}}, parsed)

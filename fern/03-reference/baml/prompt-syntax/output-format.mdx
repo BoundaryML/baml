@@ -127,13 +127,127 @@ BAML renders it as `property: string or null` as we have observed some LLMs have
 You can always set it to ` | ` or something else for a specific model you use.
 </ParamField>
 
+<ParamField path="hoist_classes" type="'auto' | bool | list[string]">
+
+**Default: `"auto"`**
+
+<Info>
+Requires BAML Version 0.89+
+</Info>
+
+Controls which classes are hoisted in the prompt. Recursive classes are
+**always** hoisted because they need to be referenced by name.
+
+Let's use this as an example to visualize the different options:
+
+```baml
+class Example {
+  a string
+  b string
+  c NestedClass
+  d Node
+}
+
+class NestedClass {
+  m int
+  n int
+}
+
+class Node {
+  data int
+  next Node?
+}
+
+function UseExample() -> Example {
+  client GPT4
+  prompt #"{{ctx.output_format}}"#
+}
+```
+
+**"auto"**
+
+Only recursive classes are hoisted:
+
+```baml
+Node {
+  data: int,
+  next: Node or null
+}
+
+Answer in JSON using this schema:
+{
+  a: string,
+  b: string,
+  c: {
+    m: int,
+    n: int,
+  },
+  d: Node,
+}
+```
+
+**false**
+
+Same as `"auto"`.
+
+**true**
+
+Hoist all classes.
+
+```baml
+Node {
+  data: int,
+  next: Node or null
+}
+
+Example {
+  a: string,
+  b: string,
+  c: NestedClass,
+  d: Node,
+}
+
+NestedClass {
+  m: int,
+  n: int,
+}
+
+Answer in JSON using this schema: Example
+```
+
+**list[string]**
+
+Hoist only recursive classes and the classes specified in the list. For example
+`ctx.output_format(hoist_classes=["NestedClass"])` will hoist `NestedClass`.
+
+```baml
+Node {
+  data: int,
+  next: Node or null
+}
+
+NestedClass {
+  m: int,
+  n: int,
+}
+
+Answer in JSON using this schema:
+{
+  a: string,
+  b: string,
+  c: NestedClass,
+  d: Node,
+}
+```
+
+</ParamField>
+
 <ParamField path="hoisted_class_prefix" type="string"> 
 Prefix of hoisted classes in the prompt. **Default: `<none>`**
 
-Recursive classes are hoisted in the prompt so that any class field can
-reference them using their name. This parameter controls the prefix used for
-hoisted classes as well as the word used in the render message to refer to the
-output type, which defaults to `"schema"`:
+This parameter controls the prefix used for hoisted classes as well as the word
+used in the render message to refer to the output type, which defaults to
+`"schema"`:
 
 ```
 Answer in JSON using this schema:

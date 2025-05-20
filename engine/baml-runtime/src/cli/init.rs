@@ -84,7 +84,7 @@ impl InitArgs {
             "Created new BAML project in {} for {}",
             baml_src.display(),
             match output_type {
-                GeneratorOutputType::PythonPydantic => "Python clients".to_string(),
+                GeneratorOutputType::PythonPydanticV1 | GeneratorOutputType::PythonPydantic => "Python clients".to_string(),
                 GeneratorOutputType::Typescript => "TypeScript clients".to_string(),
                 GeneratorOutputType::RubySorbet => "Ruby clients".to_string(),
                 GeneratorOutputType::OpenApi => match &self.openapi_client_type {
@@ -98,7 +98,7 @@ impl InitArgs {
         baml_log::info!(
             "Follow instructions at https://docs.boundaryml.com/docs/get-started/quickstart/{}",
             match output_type {
-                GeneratorOutputType::PythonPydantic => "python",
+                GeneratorOutputType::PythonPydanticV1 | GeneratorOutputType::PythonPydantic => "python",
                 GeneratorOutputType::Typescript => "typescript",
                 GeneratorOutputType::RubySorbet => "ruby",
                 GeneratorOutputType::OpenApi => "openapi",
@@ -121,6 +121,7 @@ fn generate_main_baml_content(
         | GeneratorOutputType::RubySorbet
         | GeneratorOutputType::Go => "".to_string(),
         GeneratorOutputType::PythonPydantic
+        | GeneratorOutputType::PythonPydanticV1
         | GeneratorOutputType::Typescript
         | GeneratorOutputType::TypescriptReact => format!(
             r#"

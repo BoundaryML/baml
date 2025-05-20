@@ -29,14 +29,14 @@ mod framework {
     }
 
     impl TypescriptFramework {
-        pub fn from_generator_type(output_type: Option<GeneratorOutputType>) -> Option<Self> {
+        pub fn from_generator_type(output_type: GeneratorOutputType) -> Option<Self> {
             match output_type {
-                Some(GeneratorOutputType::TypescriptReact) => Some(Self::React),
-                Some(GeneratorOutputType::Typescript) | None => Some(Self::None),
-                Some(GeneratorOutputType::OpenApi) => None,
-                Some(GeneratorOutputType::PythonPydantic) => None,
-                Some(GeneratorOutputType::RubySorbet) => None,
-                Some(GeneratorOutputType::Go) => None,
+                GeneratorOutputType::TypescriptReact => Some(Self::React),
+                GeneratorOutputType::Typescript => Some(Self::None),
+                GeneratorOutputType::OpenApi => None,
+                GeneratorOutputType::PythonPydantic | GeneratorOutputType::PythonPydanticV1 => None,
+                GeneratorOutputType::RubySorbet => None,
+                GeneratorOutputType::Go => None,
             }
         }
     }
@@ -903,7 +903,7 @@ client<llm> GPT35 {
             true,
             GeneratorDefaultClientMode::Async,
             Vec::new(),
-            Some(GeneratorOutputType::Typescript),
+            GeneratorOutputType::Typescript,
             None,
             None,
         )

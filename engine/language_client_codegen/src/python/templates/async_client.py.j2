@@ -1,5 +1,5 @@
-from typing import Any, Dict, List, Optional, TypeVar, Union, TypedDict, Type, Literal, cast
-from typing_extensions import NotRequired
+from typing import Any, Dict, List, Optional, TypeVar, Union, TypedDict, Type, cast
+from typing_extensions import NotRequired, Literal
 import pprint
 import os
 import baml_py
@@ -102,6 +102,7 @@ class BamlAsyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+      env_vars = {**os.environ.copy(), **(options.get("env_vars", {}))}
       raw = await self.__runtime.call_function(
         "{{fn.name}}",
         {
@@ -113,7 +114,7 @@ class BamlAsyncClient:
         tb,
         __cr__,
         collectors,
-        options.get("env_vars", os.environ.copy()),
+        env_vars,
       )
       return cast({{fn.return_type}}, raw.cast_to(types, types, partial_types, False))
     {% endfor %}
@@ -145,6 +146,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+      env_vars = {**os.environ.copy(), **(options.get("env_vars", {}))}
       raw = self.__runtime.stream_function(
         "{{fn.name}}",
         {
@@ -157,7 +159,7 @@ class BamlStreamClient:
         tb,
         __cr__,
         collectors,
-        {**os.environ.copy(), **(options.get("env_vars", {}))},
+        env_vars,
       )
 
       return baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}](

@@ -4,6 +4,12 @@ generator lang_python {
   version "0.88.0"
 }
 
+generator lang_python_v1 {
+  output_type python/pydantic/v1
+  output_dir "../python-v1"
+  version "0.88.0"
+}
+
 generator lang_typescript {
   output_type typescript
   output_dir "../typescript"
