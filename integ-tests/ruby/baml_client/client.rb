@@ -60,7 +60,7 @@ module Baml
     sig { returns(Baml::LlmStreamParser) }
     attr_reader :parse_stream
 
-    sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager, baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))])).void}
+    sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager, baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])])).void}
     def initialize(runtime:, ctx_manager: nil, baml_options: nil)
       @runtime = runtime
       @ctx_manager = ctx_manager || runtime.create_context_manager()
@@ -81,7 +81,7 @@ module Baml
       params(
         varargs: T.untyped,
         recipe: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::Recipe)
     }
     def AaaSamOutputFormat(
@@ -93,8 +93,8 @@ module Baml
         
         raise ArgumentError.new("AaaSamOutputFormat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -118,6 +118,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "AaaSamOutputFormat",
@@ -128,7 +129,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -137,7 +138,7 @@ module Baml
       params(
         varargs: T.untyped,
         data: Baml::Types::LinkedListAliasNode,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::LinkedListAliasNode)
     }
     def AliasThatPointsToRecursiveType(
@@ -149,8 +150,8 @@ module Baml
         
         raise ArgumentError.new("AliasThatPointsToRecursiveType may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -174,6 +175,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "AliasThatPointsToRecursiveType",
@@ -184,7 +186,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -193,7 +195,7 @@ module Baml
       params(
         varargs: T.untyped,
         money: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Checked[Integer])
     }
     def AliasWithMultipleAttrs(
@@ -205,8 +207,8 @@ module Baml
         
         raise ArgumentError.new("AliasWithMultipleAttrs may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -230,6 +232,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "AliasWithMultipleAttrs",
@@ -240,7 +243,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -249,7 +252,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::InputClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def AliasedInputClass(
@@ -261,8 +264,8 @@ module Baml
         
         raise ArgumentError.new("AliasedInputClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -286,6 +289,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "AliasedInputClass",
@@ -296,7 +300,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -305,7 +309,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::InputClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def AliasedInputClass2(
@@ -317,8 +321,8 @@ module Baml
         
         raise ArgumentError.new("AliasedInputClass2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -342,6 +346,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "AliasedInputClass2",
@@ -352,7 +357,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -361,7 +366,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::InputClassNested,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def AliasedInputClassNested(
@@ -373,8 +378,8 @@ module Baml
         
         raise ArgumentError.new("AliasedInputClassNested may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -398,6 +403,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "AliasedInputClassNested",
@@ -408,7 +414,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -417,7 +423,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.any(Baml::Types::AliasedEnum, String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def AliasedInputEnum(
@@ -429,8 +435,8 @@ module Baml
         
         raise ArgumentError.new("AliasedInputEnum may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -454,6 +460,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "AliasedInputEnum",
@@ -464,7 +471,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -473,7 +480,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T::Array[T.any(Baml::Types::AliasedEnum, String)],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def AliasedInputList(
@@ -485,8 +492,8 @@ module Baml
         
         raise ArgumentError.new("AliasedInputList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -510,6 +517,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "AliasedInputList",
@@ -520,7 +528,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -529,7 +537,7 @@ module Baml
       params(
         varargs: T.untyped,
         optionals: Baml::Types::OptionalListAndMap,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::OptionalListAndMap)
     }
     def AllowedOptionals(
@@ -541,8 +549,8 @@ module Baml
         
         raise ArgumentError.new("AllowedOptionals may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -566,6 +574,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "AllowedOptionals",
@@ -576,7 +585,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -585,7 +594,7 @@ module Baml
       params(
         varargs: T.untyped,
         a: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Integer)
     }
     def AssertFn(
@@ -597,8 +606,8 @@ module Baml
         
         raise ArgumentError.new("AssertFn may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -622,6 +631,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "AssertFn",
@@ -632,7 +642,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -641,7 +651,7 @@ module Baml
       params(
         varargs: T.untyped,
         aud: Baml::Audio,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def AudioInput(
@@ -653,8 +663,8 @@ module Baml
         
         raise ArgumentError.new("AudioInput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -678,6 +688,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "AudioInput",
@@ -688,7 +699,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -697,7 +708,7 @@ module Baml
       params(
         varargs: T.untyped,
         aud: Baml::Audio,prompt: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def AudioInputOpenai(
@@ -709,8 +720,8 @@ module Baml
         
         raise ArgumentError.new("AudioInputOpenai may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -734,6 +745,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "AudioInputOpenai",
@@ -744,61 +756,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-      )
-      (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
-    end
-
-    sig {
-      params(
-        varargs: T.untyped,
-        aud: Baml::Audio,prompt: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
-      ).returns(String)
-    }
-    def AudioInputOpenai(
-        *varargs,
-        aud:,prompt:,
-        baml_options: {}
-    )
-      if varargs.any?
-        
-        raise ArgumentError.new("AudioInputOpenai may only be called with keyword arguments")
-      end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
-      end
-
-      # Merge options from initialization with those passed to the method
-      # Passed options take precedence over initialization options
-      effective_options = {}
-
-      if @baml_options
-        effective_options = @baml_options.dup
-      end
-
-      # Override with any options passed to this specific call
-      baml_options.each do |key, value|
-        effective_options[key] = value
-      end
-
-      # Use the merged options for the rest of the method
-      baml_options = effective_options
-
-      collector = if baml_options[:collector]
-        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
-      else
-        []
-      end
-
-      raw = @runtime.call_function(
-        "AudioInputOpenai",
-        {
-          aud: aud,prompt: prompt,
-        },
-        @ctx_manager,
-        baml_options[:tb]&.instance_variable_get(:@registry),
-        baml_options[:client_registry],
-        collector,
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -807,7 +765,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T::Array[Integer],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::LinkedList)
     }
     def BuildLinkedList(
@@ -819,8 +777,8 @@ module Baml
         
         raise ArgumentError.new("BuildLinkedList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -844,6 +802,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "BuildLinkedList",
@@ -854,7 +813,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -863,7 +822,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::BinaryNode,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::Tree)
     }
     def BuildTree(
@@ -875,8 +834,8 @@ module Baml
         
         raise ArgumentError.new("BuildTree may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -900,6 +859,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "BuildTree",
@@ -910,7 +870,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -919,7 +879,7 @@ module Baml
       params(
         varargs: T.untyped,
         cls: Baml::Types::ClassToRecAlias,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::ClassToRecAlias)
     }
     def ClassThatPointsToRecursiveClassThroughAlias(
@@ -931,8 +891,8 @@ module Baml
         
         raise ArgumentError.new("ClassThatPointsToRecursiveClassThroughAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -956,6 +916,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ClassThatPointsToRecursiveClassThroughAlias",
@@ -966,7 +927,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -975,7 +936,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.any(Baml::Types::DynEnumTwo, String))
     }
     def ClassifyDynEnumTwo(
@@ -987,8 +948,8 @@ module Baml
         
         raise ArgumentError.new("ClassifyDynEnumTwo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1012,6 +973,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ClassifyDynEnumTwo",
@@ -1022,7 +984,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1031,7 +993,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.any(Baml::Types::Category, String))
     }
     def ClassifyMessage(
@@ -1043,8 +1005,8 @@ module Baml
         
         raise ArgumentError.new("ClassifyMessage may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1068,6 +1030,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ClassifyMessage",
@@ -1078,7 +1041,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1087,7 +1050,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.any(Baml::Types::Category, String))
     }
     def ClassifyMessage2(
@@ -1099,8 +1062,8 @@ module Baml
         
         raise ArgumentError.new("ClassifyMessage2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1124,6 +1087,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ClassifyMessage2",
@@ -1134,7 +1098,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1143,7 +1107,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.any(Baml::Types::Category, String))
     }
     def ClassifyMessage3(
@@ -1155,8 +1119,8 @@ module Baml
         
         raise ArgumentError.new("ClassifyMessage3 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1180,6 +1144,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ClassifyMessage3",
@@ -1190,7 +1155,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1199,7 +1164,7 @@ module Baml
       params(
         varargs: T.untyped,
         prefix: String,suffix: String,language: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def Completion(
@@ -1211,8 +1176,8 @@ module Baml
         
         raise ArgumentError.new("Completion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1236,6 +1201,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "Completion",
@@ -1246,7 +1212,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1255,7 +1221,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.any(Baml::Types::BookOrder, Baml::Types::FlightConfirmation, Baml::Types::GroceryReceipt))
     }
     def CustomTask(
@@ -1267,8 +1233,8 @@ module Baml
         
         raise ArgumentError.new("CustomTask may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1292,6 +1258,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "CustomTask",
@@ -1302,7 +1269,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1311,7 +1278,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def DescribeImage(
@@ -1323,8 +1290,8 @@ module Baml
         
         raise ArgumentError.new("DescribeImage may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1348,6 +1315,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "DescribeImage",
@@ -1358,7 +1326,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1367,7 +1335,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def DescribeImage2(
@@ -1379,8 +1347,8 @@ module Baml
         
         raise ArgumentError.new("DescribeImage2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1404,6 +1372,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "DescribeImage2",
@@ -1414,7 +1383,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1423,7 +1392,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def DescribeImage3(
@@ -1435,8 +1404,8 @@ module Baml
         
         raise ArgumentError.new("DescribeImage3 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1460,6 +1429,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "DescribeImage3",
@@ -1470,7 +1440,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1479,7 +1449,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def DescribeImage4(
@@ -1491,8 +1461,8 @@ module Baml
         
         raise ArgumentError.new("DescribeImage4 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1516,6 +1486,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "DescribeImage4",
@@ -1526,7 +1497,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1535,7 +1506,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,client_sector: String,client_name: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def DescribeMedia1599(
@@ -1547,8 +1518,8 @@ module Baml
         
         raise ArgumentError.new("DescribeMedia1599 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1572,6 +1543,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "DescribeMedia1599",
@@ -1582,7 +1554,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1591,7 +1563,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.any(Baml::Types::OriginalA, Baml::Types::OriginalB))
     }
     def DifferentiateUnions(
@@ -1603,8 +1575,8 @@ module Baml
         
         raise ArgumentError.new("DifferentiateUnions may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1628,6 +1600,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "DifferentiateUnions",
@@ -1638,7 +1611,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1647,7 +1620,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::DummyOutput)
     }
     def DummyOutputFunction(
@@ -1659,8 +1632,8 @@ module Baml
         
         raise ArgumentError.new("DummyOutputFunction may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1684,6 +1657,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "DummyOutputFunction",
@@ -1694,7 +1668,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1703,7 +1677,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::DynamicClassOne,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::DynamicClassTwo)
     }
     def DynamicFunc(
@@ -1715,8 +1689,8 @@ module Baml
         
         raise ArgumentError.new("DynamicFunc may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1740,6 +1714,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "DynamicFunc",
@@ -1750,7 +1725,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1759,7 +1734,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::DynInputOutput,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::DynInputOutput)
     }
     def DynamicInputOutput(
@@ -1771,8 +1746,8 @@ module Baml
         
         raise ArgumentError.new("DynamicInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1796,6 +1771,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "DynamicInputOutput",
@@ -1806,7 +1782,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1815,7 +1791,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T::Array[Baml::Types::DynInputOutput],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Array[Baml::Types::DynInputOutput])
     }
     def DynamicListInputOutput(
@@ -1827,8 +1803,8 @@ module Baml
         
         raise ArgumentError.new("DynamicListInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1852,6 +1828,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "DynamicListInputOutput",
@@ -1862,7 +1839,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1871,7 +1848,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def ExpectFailure(
@@ -1883,8 +1860,8 @@ module Baml
         
         raise ArgumentError.new("ExpectFailure may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1908,6 +1885,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ExpectFailure",
@@ -1918,7 +1896,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1927,7 +1905,7 @@ module Baml
       params(
         varargs: T.untyped,
         document: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::ContactInfo)
     }
     def ExtractContactInfo(
@@ -1939,8 +1917,8 @@ module Baml
         
         raise ArgumentError.new("ExtractContactInfo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -1964,6 +1942,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ExtractContactInfo",
@@ -1974,7 +1953,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -1983,7 +1962,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::DynamicSchema)
     }
     def ExtractEntities(
@@ -1995,8 +1974,8 @@ module Baml
         
         raise ArgumentError.new("ExtractEntities may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2020,6 +1999,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ExtractEntities",
@@ -2030,7 +2010,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2039,7 +2019,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Array[T.any(Baml::Types::Hobby, String)])
     }
     def ExtractHobby(
@@ -2051,8 +2031,8 @@ module Baml
         
         raise ArgumentError.new("ExtractHobby may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2076,6 +2056,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ExtractHobby",
@@ -2086,7 +2067,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2095,7 +2076,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Array[String])
     }
     def ExtractNames(
@@ -2107,8 +2088,8 @@ module Baml
         
         raise ArgumentError.new("ExtractNames may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2132,6 +2113,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ExtractNames",
@@ -2142,7 +2124,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2151,7 +2133,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Array[Baml::Types::Person])
     }
     def ExtractPeople(
@@ -2163,8 +2145,8 @@ module Baml
         
         raise ArgumentError.new("ExtractPeople may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2188,6 +2170,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ExtractPeople",
@@ -2198,7 +2181,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2207,7 +2190,7 @@ module Baml
       params(
         varargs: T.untyped,
         email: String,reason: T.any(String, String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::ReceiptInfo)
     }
     def ExtractReceiptInfo(
@@ -2219,8 +2202,8 @@ module Baml
         
         raise ArgumentError.new("ExtractReceiptInfo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2244,6 +2227,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ExtractReceiptInfo",
@@ -2254,7 +2238,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2263,7 +2247,7 @@ module Baml
       params(
         varargs: T.untyped,
         resume: String,img: T.nilable(Baml::Image),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::Resume)
     }
     def ExtractResume(
@@ -2275,8 +2259,8 @@ module Baml
         
         raise ArgumentError.new("ExtractResume may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2300,6 +2284,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ExtractResume",
@@ -2310,7 +2295,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2319,7 +2304,7 @@ module Baml
       params(
         varargs: T.untyped,
         resume: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::Resume)
     }
     def ExtractResume2(
@@ -2331,8 +2316,8 @@ module Baml
         
         raise ArgumentError.new("ExtractResume2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2356,6 +2341,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ExtractResume2",
@@ -2366,7 +2352,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2375,7 +2361,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.nilable(Baml::Types::ClassOptionalOutput))
     }
     def FnClassOptionalOutput(
@@ -2387,8 +2373,8 @@ module Baml
         
         raise ArgumentError.new("FnClassOptionalOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2412,6 +2398,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnClassOptionalOutput",
@@ -2422,7 +2409,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2431,7 +2418,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.nilable(Baml::Types::ClassOptionalOutput2))
     }
     def FnClassOptionalOutput2(
@@ -2443,8 +2430,8 @@ module Baml
         
         raise ArgumentError.new("FnClassOptionalOutput2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2468,6 +2455,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnClassOptionalOutput2",
@@ -2478,7 +2466,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2487,7 +2475,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Array[T.any(Baml::Types::EnumOutput, String)])
     }
     def FnEnumListOutput(
@@ -2499,8 +2487,8 @@ module Baml
         
         raise ArgumentError.new("FnEnumListOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2524,6 +2512,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnEnumListOutput",
@@ -2534,7 +2523,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2543,7 +2532,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.any(Baml::Types::EnumOutput, String))
     }
     def FnEnumOutput(
@@ -2555,8 +2544,8 @@ module Baml
         
         raise ArgumentError.new("FnEnumOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2580,6 +2569,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnEnumOutput",
@@ -2590,7 +2580,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2599,7 +2589,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::LiteralClassHello,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::LiteralClassHello)
     }
     def FnLiteralClassInputOutput(
@@ -2611,8 +2601,8 @@ module Baml
         
         raise ArgumentError.new("FnLiteralClassInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2636,6 +2626,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnLiteralClassInputOutput",
@@ -2646,7 +2637,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2655,7 +2646,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.any(Baml::Types::LiteralClassOne, Baml::Types::LiteralClassTwo),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.any(Baml::Types::LiteralClassOne, Baml::Types::LiteralClassTwo))
     }
     def FnLiteralUnionClassInputOutput(
@@ -2667,8 +2658,8 @@ module Baml
         
         raise ArgumentError.new("FnLiteralUnionClassInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2692,6 +2683,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnLiteralUnionClassInputOutput",
@@ -2702,7 +2694,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2711,7 +2703,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: T.nilable(String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def FnNamedArgsSingleStringOptional(
@@ -2723,8 +2715,8 @@ module Baml
         
         raise ArgumentError.new("FnNamedArgsSingleStringOptional may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2748,6 +2740,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnNamedArgsSingleStringOptional",
@@ -2758,7 +2751,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2767,7 +2760,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Boolean)
     }
     def FnOutputBool(
@@ -2779,8 +2772,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2804,6 +2797,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnOutputBool",
@@ -2814,7 +2808,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2823,7 +2817,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::TestOutputClass)
     }
     def FnOutputClass(
@@ -2835,8 +2829,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2860,6 +2854,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnOutputClass",
@@ -2870,7 +2865,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2879,7 +2874,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Array[Baml::Types::TestOutputClass])
     }
     def FnOutputClassList(
@@ -2891,8 +2886,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputClassList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2916,6 +2911,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnOutputClassList",
@@ -2926,7 +2922,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2935,7 +2931,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::TestClassNested)
     }
     def FnOutputClassNested(
@@ -2947,8 +2943,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputClassNested may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -2972,6 +2968,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnOutputClassNested",
@@ -2982,7 +2979,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -2991,7 +2988,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::TestClassWithEnum)
     }
     def FnOutputClassWithEnum(
@@ -3003,8 +3000,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputClassWithEnum may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3028,6 +3025,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnOutputClassWithEnum",
@@ -3038,7 +3036,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3047,7 +3045,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Integer)
     }
     def FnOutputInt(
@@ -3059,8 +3057,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3084,6 +3082,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnOutputInt",
@@ -3094,7 +3093,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3103,7 +3102,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Boolean)
     }
     def FnOutputLiteralBool(
@@ -3115,8 +3114,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputLiteralBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3140,6 +3139,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnOutputLiteralBool",
@@ -3150,7 +3150,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3159,7 +3159,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Integer)
     }
     def FnOutputLiteralInt(
@@ -3171,8 +3171,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputLiteralInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3196,6 +3196,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnOutputLiteralInt",
@@ -3206,7 +3207,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3215,7 +3216,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def FnOutputLiteralString(
@@ -3227,8 +3228,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputLiteralString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3252,6 +3253,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnOutputLiteralString",
@@ -3262,7 +3264,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3271,7 +3273,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Array[String])
     }
     def FnOutputStringList(
@@ -3283,8 +3285,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputStringList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3308,6 +3310,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnOutputStringList",
@@ -3318,7 +3321,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3327,7 +3330,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.any(Baml::Types::TestEnum, String))
     }
     def FnTestAliasedEnumOutput(
@@ -3339,8 +3342,8 @@ module Baml
         
         raise ArgumentError.new("FnTestAliasedEnumOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3364,6 +3367,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnTestAliasedEnumOutput",
@@ -3374,7 +3378,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3383,7 +3387,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::TestClassAlias)
     }
     def FnTestClassAlias(
@@ -3395,8 +3399,8 @@ module Baml
         
         raise ArgumentError.new("FnTestClassAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3420,6 +3424,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnTestClassAlias",
@@ -3430,7 +3435,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3439,7 +3444,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T.any(Baml::Types::NamedArgsSingleEnum, String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def FnTestNamedArgsSingleEnum(
@@ -3451,8 +3456,8 @@ module Baml
         
         raise ArgumentError.new("FnTestNamedArgsSingleEnum may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3476,6 +3481,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "FnTestNamedArgsSingleEnum",
@@ -3486,7 +3492,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3495,7 +3501,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::RaysData)
     }
     def GetDataType(
@@ -3507,8 +3513,8 @@ module Baml
         
         raise ArgumentError.new("GetDataType may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3532,6 +3538,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "GetDataType",
@@ -3542,7 +3549,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3551,7 +3558,7 @@ module Baml
       params(
         varargs: T.untyped,
         email: Baml::Types::Email,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::OrderInfo)
     }
     def GetOrderInfo(
@@ -3563,8 +3570,8 @@ module Baml
         
         raise ArgumentError.new("GetOrderInfo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3588,6 +3595,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "GetOrderInfo",
@@ -3598,7 +3606,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3607,7 +3615,7 @@ module Baml
       params(
         varargs: T.untyped,
         query: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::SearchParams)
     }
     def GetQuery(
@@ -3619,8 +3627,8 @@ module Baml
         
         raise ArgumentError.new("GetQuery may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3644,6 +3652,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "GetQuery",
@@ -3654,7 +3663,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3663,7 +3672,7 @@ module Baml
       params(
         varargs: T.untyped,
         i1: T::Hash[String, String],i2: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Hash[String, String])
     }
     def InOutEnumMapKey(
@@ -3675,8 +3684,8 @@ module Baml
         
         raise ArgumentError.new("InOutEnumMapKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3700,6 +3709,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "InOutEnumMapKey",
@@ -3710,7 +3720,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3719,7 +3729,7 @@ module Baml
       params(
         varargs: T.untyped,
         i1: T::Hash[String, String],i2: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Hash[String, String])
     }
     def InOutLiteralStringUnionMapKey(
@@ -3731,8 +3741,8 @@ module Baml
         
         raise ArgumentError.new("InOutLiteralStringUnionMapKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3756,6 +3766,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "InOutLiteralStringUnionMapKey",
@@ -3766,7 +3777,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3775,7 +3786,7 @@ module Baml
       params(
         varargs: T.untyped,
         m: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Hash[String, String])
     }
     def InOutSingleLiteralStringMapKey(
@@ -3787,8 +3798,8 @@ module Baml
         
         raise ArgumentError.new("InOutSingleLiteralStringMapKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3812,6 +3823,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "InOutSingleLiteralStringMapKey",
@@ -3822,7 +3834,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3831,7 +3843,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.anything)
     }
     def JsonTypeAliasCycle(
@@ -3843,8 +3855,8 @@ module Baml
         
         raise ArgumentError.new("JsonTypeAliasCycle may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3868,6 +3880,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "JsonTypeAliasCycle",
@@ -3878,7 +3891,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3887,7 +3900,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def LLMEcho(
@@ -3899,8 +3912,8 @@ module Baml
         
         raise ArgumentError.new("LLMEcho may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3924,6 +3937,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "LLMEcho",
@@ -3934,7 +3948,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3943,7 +3957,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.any(Integer, T::Boolean, String))
     }
     def LiteralUnionsTest(
@@ -3955,8 +3969,8 @@ module Baml
         
         raise ArgumentError.new("LiteralUnionsTest may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -3980,6 +3994,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "LiteralUnionsTest",
@@ -3990,7 +4005,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -3999,7 +4014,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Checked[Baml::Types::BlockConstraint])
     }
     def MakeBlockConstraint(
@@ -4011,8 +4026,8 @@ module Baml
         
         raise ArgumentError.new("MakeBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4036,6 +4051,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "MakeBlockConstraint",
@@ -4046,7 +4062,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4055,7 +4071,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::ClassWithBlockDone)
     }
     def MakeClassWithBlockDone(
@@ -4067,8 +4083,8 @@ module Baml
         
         raise ArgumentError.new("MakeClassWithBlockDone may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4092,6 +4108,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "MakeClassWithBlockDone",
@@ -4102,7 +4119,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4111,7 +4128,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::ClassWithoutDone)
     }
     def MakeClassWithExternalDone(
@@ -4123,8 +4140,8 @@ module Baml
         
         raise ArgumentError.new("MakeClassWithExternalDone may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4148,6 +4165,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "MakeClassWithExternalDone",
@@ -4158,7 +4176,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4167,7 +4185,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::NestedBlockConstraint)
     }
     def MakeNestedBlockConstraint(
@@ -4179,8 +4197,8 @@ module Baml
         
         raise ArgumentError.new("MakeNestedBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4204,6 +4222,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "MakeNestedBlockConstraint",
@@ -4214,7 +4233,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4223,7 +4242,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::SemanticContainer)
     }
     def MakeSemanticContainer(
@@ -4235,8 +4254,8 @@ module Baml
         
         raise ArgumentError.new("MakeSemanticContainer may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4260,6 +4279,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "MakeSemanticContainer",
@@ -4270,7 +4290,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4279,7 +4299,7 @@ module Baml
       params(
         varargs: T.untyped,
         m: T::Hash[String, T::Array[String]],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Hash[String, T::Array[String]])
     }
     def MapAlias(
@@ -4291,8 +4311,8 @@ module Baml
         
         raise ArgumentError.new("MapAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4316,6 +4336,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "MapAlias",
@@ -4326,7 +4347,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4335,7 +4356,7 @@ module Baml
       params(
         varargs: T.untyped,
         money: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::MergeAttrs)
     }
     def MergeAliasAttributes(
@@ -4347,8 +4368,8 @@ module Baml
         
         raise ArgumentError.new("MergeAliasAttributes may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4372,6 +4393,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "MergeAliasAttributes",
@@ -4382,7 +4404,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4391,7 +4413,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::DynamicOutput)
     }
     def MyFunc(
@@ -4403,8 +4425,8 @@ module Baml
         
         raise ArgumentError.new("MyFunc may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4428,6 +4450,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "MyFunc",
@@ -4438,7 +4461,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4447,7 +4470,7 @@ module Baml
       params(
         varargs: T.untyped,
         c: T.any(T.any(Integer, String, T::Boolean, Float), T::Array[String], T::Hash[String, T::Array[String]]),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.any(T.any(Integer, String, T::Boolean, Float), T::Array[String], T::Hash[String, T::Array[String]]))
     }
     def NestedAlias(
@@ -4459,8 +4482,8 @@ module Baml
         
         raise ArgumentError.new("NestedAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4484,6 +4507,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "NestedAlias",
@@ -4494,7 +4518,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4503,7 +4527,7 @@ module Baml
       params(
         varargs: T.untyped,
         s: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::ClassForNullLiteral)
     }
     def NullLiteralClassHello(
@@ -4515,8 +4539,8 @@ module Baml
         
         raise ArgumentError.new("NullLiteralClassHello may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4540,6 +4564,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "NullLiteralClassHello",
@@ -4550,7 +4575,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4559,7 +4584,7 @@ module Baml
       params(
         varargs: T.untyped,
         s: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def OpenAIWithAnthropicResponseHello(
@@ -4571,8 +4596,8 @@ module Baml
         
         raise ArgumentError.new("OpenAIWithAnthropicResponseHello may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4596,6 +4621,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "OpenAIWithAnthropicResponseHello",
@@ -4606,7 +4632,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4615,7 +4641,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)])
     }
     def OptionalTest_Function(
@@ -4627,8 +4653,8 @@ module Baml
         
         raise ArgumentError.new("OptionalTest_Function may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4652,6 +4678,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "OptionalTest_Function",
@@ -4662,7 +4689,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4671,7 +4698,7 @@ module Baml
       params(
         varargs: T.untyped,
         name: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::FooAny)
     }
     def PredictAge(
@@ -4683,8 +4710,8 @@ module Baml
         
         raise ArgumentError.new("PredictAge may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4708,6 +4735,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "PredictAge",
@@ -4718,7 +4746,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4727,7 +4755,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Checked[Integer])
     }
     def PredictAgeBare(
@@ -4739,8 +4767,8 @@ module Baml
         
         raise ArgumentError.new("PredictAgeBare may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4764,6 +4792,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "PredictAgeBare",
@@ -4774,7 +4803,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4783,7 +4812,7 @@ module Baml
       params(
         varargs: T.untyped,
         p: T.any(Integer, String, T::Boolean, Float),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.any(Integer, String, T::Boolean, Float))
     }
     def PrimitiveAlias(
@@ -4795,8 +4824,8 @@ module Baml
         
         raise ArgumentError.new("PrimitiveAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4820,6 +4849,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "PrimitiveAlias",
@@ -4830,7 +4860,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4839,7 +4869,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def PromptTestClaude(
@@ -4851,8 +4881,8 @@ module Baml
         
         raise ArgumentError.new("PromptTestClaude may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4876,6 +4906,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "PromptTestClaude",
@@ -4886,7 +4917,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4895,7 +4926,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def PromptTestClaudeChat(
@@ -4907,8 +4938,8 @@ module Baml
         
         raise ArgumentError.new("PromptTestClaudeChat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4932,6 +4963,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "PromptTestClaudeChat",
@@ -4942,7 +4974,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -4951,7 +4983,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def PromptTestClaudeChatNoSystem(
@@ -4963,8 +4995,8 @@ module Baml
         
         raise ArgumentError.new("PromptTestClaudeChatNoSystem may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -4988,6 +5020,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "PromptTestClaudeChatNoSystem",
@@ -4998,7 +5031,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5007,7 +5040,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def PromptTestOpenAI(
@@ -5019,8 +5052,8 @@ module Baml
         
         raise ArgumentError.new("PromptTestOpenAI may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5044,6 +5077,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "PromptTestOpenAI",
@@ -5054,7 +5088,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5063,7 +5097,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def PromptTestOpenAIChat(
@@ -5075,8 +5109,8 @@ module Baml
         
         raise ArgumentError.new("PromptTestOpenAIChat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5100,6 +5134,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "PromptTestOpenAIChat",
@@ -5110,7 +5145,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5119,7 +5154,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def PromptTestOpenAIChatNoSystem(
@@ -5131,8 +5166,8 @@ module Baml
         
         raise ArgumentError.new("PromptTestOpenAIChatNoSystem may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5156,6 +5191,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "PromptTestOpenAIChatNoSystem",
@@ -5166,7 +5202,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5175,7 +5211,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def PromptTestStreaming(
@@ -5187,8 +5223,8 @@ module Baml
         
         raise ArgumentError.new("PromptTestStreaming may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5212,6 +5248,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "PromptTestStreaming",
@@ -5222,7 +5259,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5231,7 +5268,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.anything)
     }
     def RecursiveAliasCycle(
@@ -5243,8 +5280,8 @@ module Baml
         
         raise ArgumentError.new("RecursiveAliasCycle may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5268,6 +5305,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "RecursiveAliasCycle",
@@ -5278,7 +5316,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5287,7 +5325,7 @@ module Baml
       params(
         varargs: T.untyped,
         cls: Baml::Types::NodeWithAliasIndirection,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::NodeWithAliasIndirection)
     }
     def RecursiveClassWithAliasIndirection(
@@ -5299,8 +5337,8 @@ module Baml
         
         raise ArgumentError.new("RecursiveClassWithAliasIndirection may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5324,6 +5362,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "RecursiveClassWithAliasIndirection",
@@ -5334,7 +5373,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5343,7 +5382,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.anything)
     }
     def RecursiveUnionTest(
@@ -5355,8 +5394,8 @@ module Baml
         
         raise ArgumentError.new("RecursiveUnionTest may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5380,6 +5419,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "RecursiveUnionTest",
@@ -5390,7 +5430,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5399,7 +5439,7 @@ module Baml
       params(
         varargs: T.untyped,
         money: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Checked[Integer])
     }
     def ReturnAliasWithMergedAttributes(
@@ -5411,8 +5451,8 @@ module Baml
         
         raise ArgumentError.new("ReturnAliasWithMergedAttributes may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5436,6 +5476,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ReturnAliasWithMergedAttributes",
@@ -5446,7 +5487,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5455,7 +5496,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Integer)
     }
     def ReturnFailingAssert(
@@ -5467,8 +5508,8 @@ module Baml
         
         raise ArgumentError.new("ReturnFailingAssert may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5492,6 +5533,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ReturnFailingAssert",
@@ -5502,7 +5544,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5511,7 +5553,7 @@ module Baml
       params(
         varargs: T.untyped,
         s: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.anything)
     }
     def ReturnJsonEntry(
@@ -5523,8 +5565,8 @@ module Baml
         
         raise ArgumentError.new("ReturnJsonEntry may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5548,6 +5590,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ReturnJsonEntry",
@@ -5558,7 +5601,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5567,7 +5610,7 @@ module Baml
       params(
         varargs: T.untyped,
         a: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::MalformedConstraints)
     }
     def ReturnMalformedConstraints(
@@ -5579,8 +5622,8 @@ module Baml
         
         raise ArgumentError.new("ReturnMalformedConstraints may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5604,6 +5647,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "ReturnMalformedConstraints",
@@ -5614,7 +5658,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5623,7 +5667,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::Schema)
     }
     def SchemaDescriptions(
@@ -5635,8 +5679,8 @@ module Baml
         
         raise ArgumentError.new("SchemaDescriptions may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5660,6 +5704,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "SchemaDescriptions",
@@ -5670,7 +5715,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5679,7 +5724,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.anything)
     }
     def SimpleRecursiveListAlias(
@@ -5691,8 +5736,8 @@ module Baml
         
         raise ArgumentError.new("SimpleRecursiveListAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5716,6 +5761,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "SimpleRecursiveListAlias",
@@ -5726,7 +5772,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5735,7 +5781,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.anything)
     }
     def SimpleRecursiveMapAlias(
@@ -5747,8 +5793,8 @@ module Baml
         
         raise ArgumentError.new("SimpleRecursiveMapAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5772,6 +5818,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "SimpleRecursiveMapAlias",
@@ -5782,7 +5829,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5791,7 +5838,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::BigNumbers)
     }
     def StreamBigNumbers(
@@ -5803,8 +5850,8 @@ module Baml
         
         raise ArgumentError.new("StreamBigNumbers may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5828,6 +5875,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "StreamBigNumbers",
@@ -5838,7 +5886,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5847,7 +5895,7 @@ module Baml
       params(
         varargs: T.untyped,
         theme: String,length: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::TwoStoriesOneTitle)
     }
     def StreamFailingAssertion(
@@ -5859,8 +5907,8 @@ module Baml
         
         raise ArgumentError.new("StreamFailingAssertion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5884,6 +5932,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "StreamFailingAssertion",
@@ -5894,7 +5943,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5903,7 +5952,7 @@ module Baml
       params(
         varargs: T.untyped,
         theme: String,length: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::TwoStoriesOneTitleCheck)
     }
     def StreamFailingCheck(
@@ -5915,8 +5964,8 @@ module Baml
         
         raise ArgumentError.new("StreamFailingCheck may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5940,6 +5989,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "StreamFailingCheck",
@@ -5950,7 +6000,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -5959,7 +6009,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Integer)
     }
     def StreamOneBigNumber(
@@ -5971,8 +6021,8 @@ module Baml
         
         raise ArgumentError.new("StreamOneBigNumber may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -5996,6 +6046,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "StreamOneBigNumber",
@@ -6006,7 +6057,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6015,7 +6066,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Array[T.any(Integer, String)])
     }
     def StreamUnionIntegers(
@@ -6027,8 +6078,8 @@ module Baml
         
         raise ArgumentError.new("StreamUnionIntegers may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6052,6 +6103,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "StreamUnionIntegers",
@@ -6062,7 +6114,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6071,7 +6123,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,yapping: T::Boolean,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::CompoundBigNumbers)
     }
     def StreamingCompoundNumbers(
@@ -6083,8 +6135,8 @@ module Baml
         
         raise ArgumentError.new("StreamingCompoundNumbers may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6108,6 +6160,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "StreamingCompoundNumbers",
@@ -6118,7 +6171,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6127,7 +6180,7 @@ module Baml
       params(
         varargs: T.untyped,
         document_txt: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::Document1559)
     }
     def StructureDocument1559(
@@ -6139,8 +6192,8 @@ module Baml
         
         raise ArgumentError.new("StructureDocument1559 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6164,6 +6217,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "StructureDocument1559",
@@ -6174,7 +6228,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6183,7 +6237,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::RecursiveAliasDependency,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::RecursiveAliasDependency)
     }
     def TakeRecAliasDep(
@@ -6195,8 +6249,8 @@ module Baml
         
         raise ArgumentError.new("TakeRecAliasDep may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6220,6 +6274,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TakeRecAliasDep",
@@ -6230,7 +6285,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6239,7 +6294,7 @@ module Baml
       params(
         varargs: T.untyped,
         story: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TellStory(
@@ -6251,8 +6306,8 @@ module Baml
         
         raise ArgumentError.new("TellStory may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6276,6 +6331,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TellStory",
@@ -6286,7 +6342,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6295,7 +6351,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAnthropic(
@@ -6307,8 +6363,8 @@ module Baml
         
         raise ArgumentError.new("TestAnthropic may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6332,6 +6388,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAnthropic",
@@ -6342,7 +6399,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6351,7 +6408,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAnthropicShorthand(
@@ -6363,8 +6420,8 @@ module Baml
         
         raise ArgumentError.new("TestAnthropicShorthand may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6388,6 +6445,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAnthropicShorthand",
@@ -6398,7 +6456,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6407,7 +6465,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAws(
@@ -6419,8 +6477,8 @@ module Baml
         
         raise ArgumentError.new("TestAws may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6444,6 +6502,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAws",
@@ -6454,7 +6513,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6463,7 +6522,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAwsClaude37(
@@ -6475,8 +6534,8 @@ module Baml
         
         raise ArgumentError.new("TestAwsClaude37 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6500,6 +6559,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAwsClaude37",
@@ -6510,7 +6570,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6519,7 +6579,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAwsInferenceProfile(
@@ -6531,8 +6591,8 @@ module Baml
         
         raise ArgumentError.new("TestAwsInferenceProfile may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6556,6 +6616,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAwsInferenceProfile",
@@ -6566,7 +6627,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6575,7 +6636,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAwsInvalidAccessKey(
@@ -6587,8 +6648,8 @@ module Baml
         
         raise ArgumentError.new("TestAwsInvalidAccessKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6612,6 +6673,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAwsInvalidAccessKey",
@@ -6622,7 +6684,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6631,7 +6693,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAwsInvalidProfile(
@@ -6643,8 +6705,8 @@ module Baml
         
         raise ArgumentError.new("TestAwsInvalidProfile may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6668,6 +6730,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAwsInvalidProfile",
@@ -6678,7 +6741,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6687,7 +6750,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAwsInvalidRegion(
@@ -6699,8 +6762,8 @@ module Baml
         
         raise ArgumentError.new("TestAwsInvalidRegion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6724,6 +6787,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAwsInvalidRegion",
@@ -6734,7 +6798,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6743,7 +6807,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAwsInvalidSessionToken(
@@ -6755,8 +6819,8 @@ module Baml
         
         raise ArgumentError.new("TestAwsInvalidSessionToken may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6780,6 +6844,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAwsInvalidSessionToken",
@@ -6790,7 +6855,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6799,7 +6864,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAzure(
@@ -6811,8 +6876,8 @@ module Baml
         
         raise ArgumentError.new("TestAzure may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6836,6 +6901,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAzure",
@@ -6846,7 +6912,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6855,7 +6921,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAzureFailure(
@@ -6867,8 +6933,8 @@ module Baml
         
         raise ArgumentError.new("TestAzureFailure may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6892,6 +6958,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAzureFailure",
@@ -6902,7 +6969,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6911,7 +6978,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAzureO1NoMaxTokens(
@@ -6923,8 +6990,8 @@ module Baml
         
         raise ArgumentError.new("TestAzureO1NoMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -6948,6 +7015,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAzureO1NoMaxTokens",
@@ -6958,7 +7026,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -6967,7 +7035,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAzureO1WithMaxCompletionTokens(
@@ -6979,8 +7047,8 @@ module Baml
         
         raise ArgumentError.new("TestAzureO1WithMaxCompletionTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7004,6 +7072,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAzureO1WithMaxCompletionTokens",
@@ -7014,7 +7083,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7023,7 +7092,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAzureO1WithMaxTokens(
@@ -7035,8 +7104,8 @@ module Baml
         
         raise ArgumentError.new("TestAzureO1WithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7060,6 +7129,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAzureO1WithMaxTokens",
@@ -7070,7 +7140,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7079,7 +7149,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAzureO3NoMaxTokens(
@@ -7091,8 +7161,8 @@ module Baml
         
         raise ArgumentError.new("TestAzureO3NoMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7116,6 +7186,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAzureO3NoMaxTokens",
@@ -7126,7 +7197,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7135,7 +7206,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAzureO3WithMaxCompletionTokens(
@@ -7147,8 +7218,8 @@ module Baml
         
         raise ArgumentError.new("TestAzureO3WithMaxCompletionTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7172,6 +7243,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAzureO3WithMaxCompletionTokens",
@@ -7182,7 +7254,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7191,7 +7263,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestAzureWithMaxTokens(
@@ -7203,8 +7275,8 @@ module Baml
         
         raise ArgumentError.new("TestAzureWithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7228,6 +7300,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestAzureWithMaxTokens",
@@ -7238,7 +7311,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7247,7 +7320,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,not_cached: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestCaching(
@@ -7259,8 +7332,8 @@ module Baml
         
         raise ArgumentError.new("TestCaching may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7284,6 +7357,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestCaching",
@@ -7294,7 +7368,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7303,7 +7377,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestFallbackClient(
@@ -7315,8 +7389,8 @@ module Baml
         
         raise ArgumentError.new("TestFallbackClient may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7340,6 +7414,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestFallbackClient",
@@ -7350,7 +7425,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7359,7 +7434,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestFallbackStrategy(
@@ -7371,8 +7446,8 @@ module Baml
         
         raise ArgumentError.new("TestFallbackStrategy may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7396,6 +7471,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestFallbackStrategy",
@@ -7406,7 +7482,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7415,7 +7491,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestFallbackToShorthand(
@@ -7427,8 +7503,8 @@ module Baml
         
         raise ArgumentError.new("TestFallbackToShorthand may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7452,6 +7528,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestFallbackToShorthand",
@@ -7462,7 +7539,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7471,7 +7548,7 @@ module Baml
       params(
         varargs: T.untyped,
         myBool: T::Boolean,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestFnNamedArgsSingleBool(
@@ -7483,8 +7560,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7508,6 +7585,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleBool",
@@ -7518,7 +7596,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7527,7 +7605,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: Baml::Types::NamedArgsSingleClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestFnNamedArgsSingleClass(
@@ -7539,8 +7617,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7564,6 +7642,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleClass",
@@ -7574,7 +7653,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7583,7 +7662,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T::Array[T.any(Baml::Types::NamedArgsSingleEnumList, String)],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestFnNamedArgsSingleEnumList(
@@ -7595,8 +7674,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleEnumList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7620,6 +7699,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleEnumList",
@@ -7630,7 +7710,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7639,7 +7719,7 @@ module Baml
       params(
         varargs: T.untyped,
         myFloat: Float,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestFnNamedArgsSingleFloat(
@@ -7651,8 +7731,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleFloat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7676,6 +7756,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleFloat",
@@ -7686,7 +7767,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7695,7 +7776,7 @@ module Baml
       params(
         varargs: T.untyped,
         myInt: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestFnNamedArgsSingleInt(
@@ -7707,8 +7788,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7732,6 +7813,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleInt",
@@ -7742,7 +7824,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7751,7 +7833,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, Baml::Types::StringToClassEntry],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Hash[String, Baml::Types::StringToClassEntry])
     }
     def TestFnNamedArgsSingleMapStringToClass(
@@ -7763,8 +7845,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleMapStringToClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7788,6 +7870,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleMapStringToClass",
@@ -7798,7 +7881,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7807,7 +7890,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, T::Hash[String, String]],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Hash[String, T::Hash[String, String]])
     }
     def TestFnNamedArgsSingleMapStringToMap(
@@ -7819,8 +7902,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleMapStringToMap may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7844,6 +7927,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleMapStringToMap",
@@ -7854,7 +7938,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7863,7 +7947,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Hash[String, String])
     }
     def TestFnNamedArgsSingleMapStringToString(
@@ -7875,8 +7959,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleMapStringToString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7900,6 +7984,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleMapStringToString",
@@ -7910,7 +7995,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7919,7 +8004,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestFnNamedArgsSingleString(
@@ -7931,8 +8016,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -7956,6 +8041,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleString",
@@ -7966,7 +8052,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -7975,7 +8061,7 @@ module Baml
       params(
         varargs: T.untyped,
         myStringArray: T::Array[String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestFnNamedArgsSingleStringArray(
@@ -7987,8 +8073,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleStringArray may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8012,6 +8098,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleStringArray",
@@ -8022,7 +8109,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8031,7 +8118,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T::Array[String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T::Array[String])
     }
     def TestFnNamedArgsSingleStringList(
@@ -8043,8 +8130,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleStringList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8068,6 +8155,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestFnNamedArgsSingleStringList",
@@ -8078,7 +8166,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8087,7 +8175,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestGemini(
@@ -8099,8 +8187,8 @@ module Baml
         
         raise ArgumentError.new("TestGemini may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8124,6 +8212,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestGemini",
@@ -8134,7 +8223,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8143,7 +8232,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestGeminiOpenAiGeneric(
@@ -8155,8 +8244,8 @@ module Baml
         
         raise ArgumentError.new("TestGeminiOpenAiGeneric may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8180,6 +8269,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestGeminiOpenAiGeneric",
@@ -8190,7 +8280,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8199,7 +8289,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestGeminiSystem(
@@ -8211,8 +8301,8 @@ module Baml
         
         raise ArgumentError.new("TestGeminiSystem may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8236,6 +8326,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestGeminiSystem",
@@ -8246,7 +8337,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8255,7 +8346,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestGeminiSystemAsChat(
@@ -8267,8 +8358,8 @@ module Baml
         
         raise ArgumentError.new("TestGeminiSystemAsChat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8292,6 +8383,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestGeminiSystemAsChat",
@@ -8302,7 +8394,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8311,7 +8403,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestGroq(
@@ -8323,8 +8415,8 @@ module Baml
         
         raise ArgumentError.new("TestGroq may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8348,6 +8440,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestGroq",
@@ -8358,7 +8451,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8367,7 +8460,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestImageInput(
@@ -8379,8 +8472,8 @@ module Baml
         
         raise ArgumentError.new("TestImageInput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8404,6 +8497,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestImageInput",
@@ -8414,7 +8508,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8423,7 +8517,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestImageInputAnthropic(
@@ -8435,8 +8529,8 @@ module Baml
         
         raise ArgumentError.new("TestImageInputAnthropic may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8460,6 +8554,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestImageInputAnthropic",
@@ -8470,7 +8565,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8479,7 +8574,7 @@ module Baml
       params(
         varargs: T.untyped,
         imgs: T::Array[Baml::Image],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestImageListInput(
@@ -8491,8 +8586,8 @@ module Baml
         
         raise ArgumentError.new("TestImageListInput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8516,6 +8611,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestImageListInput",
@@ -8526,7 +8622,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8535,7 +8631,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::TestMemoryOutput)
     }
     def TestMemory(
@@ -8547,8 +8643,8 @@ module Baml
         
         raise ArgumentError.new("TestMemory may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8572,6 +8668,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestMemory",
@@ -8582,7 +8679,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8591,7 +8688,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: Baml::Types::NamedArgsSingleClass,myArg2: Baml::Types::NamedArgsSingleClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestMulticlassNamedArgs(
@@ -8603,8 +8700,8 @@ module Baml
         
         raise ArgumentError.new("TestMulticlassNamedArgs may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8628,6 +8725,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestMulticlassNamedArgs",
@@ -8638,7 +8736,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8647,7 +8745,7 @@ module Baml
       params(
         varargs: T.untyped,
         myBool: T::Boolean,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestNamedArgsLiteralBool(
@@ -8659,8 +8757,8 @@ module Baml
         
         raise ArgumentError.new("TestNamedArgsLiteralBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8684,6 +8782,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestNamedArgsLiteralBool",
@@ -8694,7 +8793,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8703,7 +8802,7 @@ module Baml
       params(
         varargs: T.untyped,
         myInt: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestNamedArgsLiteralInt(
@@ -8715,8 +8814,8 @@ module Baml
         
         raise ArgumentError.new("TestNamedArgsLiteralInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8740,6 +8839,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestNamedArgsLiteralInt",
@@ -8750,7 +8850,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8759,7 +8859,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestNamedArgsLiteralString(
@@ -8771,8 +8871,8 @@ module Baml
         
         raise ArgumentError.new("TestNamedArgsLiteralString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8796,6 +8896,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestNamedArgsLiteralString",
@@ -8806,7 +8907,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8815,7 +8916,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(T.nilable(String))
     }
     def TestOllama(
@@ -8827,8 +8928,8 @@ module Baml
         
         raise ArgumentError.new("TestOllama may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8852,6 +8953,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestOllama",
@@ -8862,7 +8964,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8871,7 +8973,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::Haiku)
     }
     def TestOllamaHaiku(
@@ -8883,8 +8985,8 @@ module Baml
         
         raise ArgumentError.new("TestOllamaHaiku may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8908,6 +9010,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestOllamaHaiku",
@@ -8918,7 +9021,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8927,7 +9030,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestOpenAI(
@@ -8939,8 +9042,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAI may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -8964,6 +9067,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestOpenAI",
@@ -8974,7 +9078,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -8983,7 +9087,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestOpenAIDummyClient(
@@ -8995,8 +9099,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIDummyClient may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9020,6 +9124,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestOpenAIDummyClient",
@@ -9030,7 +9135,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9039,7 +9144,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestOpenAIGPT4oMini(
@@ -9051,8 +9156,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIGPT4oMini may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9076,6 +9181,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestOpenAIGPT4oMini",
@@ -9086,7 +9192,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9095,7 +9201,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestOpenAILegacyProvider(
@@ -9107,8 +9213,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAILegacyProvider may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9132,6 +9238,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestOpenAILegacyProvider",
@@ -9142,7 +9249,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9151,7 +9258,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestOpenAIO1NoMaxTokens(
@@ -9163,8 +9270,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIO1NoMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9188,6 +9295,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestOpenAIO1NoMaxTokens",
@@ -9198,7 +9306,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9207,7 +9315,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestOpenAIO1WithMaxCompletionTokens(
@@ -9219,8 +9327,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIO1WithMaxCompletionTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9244,6 +9352,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestOpenAIO1WithMaxCompletionTokens",
@@ -9254,7 +9363,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9263,7 +9372,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestOpenAIO1WithMaxTokens(
@@ -9275,8 +9384,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIO1WithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9300,6 +9409,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestOpenAIO1WithMaxTokens",
@@ -9310,7 +9420,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9319,7 +9429,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestOpenAIShorthand(
@@ -9331,8 +9441,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIShorthand may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9356,6 +9466,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestOpenAIShorthand",
@@ -9366,7 +9477,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9375,7 +9486,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestOpenAIWithFinishReasonError(
@@ -9387,8 +9498,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIWithFinishReasonError may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9412,6 +9523,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestOpenAIWithFinishReasonError",
@@ -9422,7 +9534,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9431,7 +9543,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestOpenAIWithMaxTokens(
@@ -9443,8 +9555,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIWithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9468,6 +9580,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestOpenAIWithMaxTokens",
@@ -9478,7 +9591,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9487,7 +9600,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestOpenAIWithNullMaxTokens(
@@ -9499,8 +9612,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIWithNullMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9524,6 +9637,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestOpenAIWithNullMaxTokens",
@@ -9534,7 +9648,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9543,7 +9657,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestOpenRouterMistralSmall3_1_24b(
@@ -9555,8 +9669,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenRouterMistralSmall3_1_24b may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9580,6 +9694,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestOpenRouterMistralSmall3_1_24b",
@@ -9590,7 +9705,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9599,7 +9714,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestRetryConstant(
@@ -9611,8 +9726,8 @@ module Baml
         
         raise ArgumentError.new("TestRetryConstant may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9636,6 +9751,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestRetryConstant",
@@ -9646,7 +9762,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9655,7 +9771,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestRetryExponential(
@@ -9667,8 +9783,8 @@ module Baml
         
         raise ArgumentError.new("TestRetryExponential may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9692,6 +9808,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestRetryExponential",
@@ -9702,7 +9819,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9711,7 +9828,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestRoundRobinStrategy(
@@ -9723,8 +9840,8 @@ module Baml
         
         raise ArgumentError.new("TestRoundRobinStrategy may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9748,6 +9865,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestRoundRobinStrategy",
@@ -9758,7 +9876,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9767,7 +9885,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestSingleFallbackClient(
@@ -9779,8 +9897,8 @@ module Baml
         
         raise ArgumentError.new("TestSingleFallbackClient may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9804,6 +9922,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestSingleFallbackClient",
@@ -9814,7 +9933,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9823,7 +9942,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::CustomStory)
     }
     def TestThinking(
@@ -9835,8 +9954,8 @@ module Baml
         
         raise ArgumentError.new("TestThinking may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9860,6 +9979,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestThinking",
@@ -9870,7 +9990,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9879,7 +9999,7 @@ module Baml
       params(
         varargs: T.untyped,
         question: Baml::Types::UniverseQuestionInput,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::UniverseQuestion)
     }
     def TestUniverseQuestion(
@@ -9891,8 +10011,8 @@ module Baml
         
         raise ArgumentError.new("TestUniverseQuestion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9916,6 +10036,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestUniverseQuestion",
@@ -9926,7 +10047,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9935,7 +10056,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestVertex(
@@ -9947,8 +10068,8 @@ module Baml
         
         raise ArgumentError.new("TestVertex may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -9972,6 +10093,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestVertex",
@@ -9982,7 +10104,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -9991,7 +10113,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestVertexClaude(
@@ -10003,8 +10125,8 @@ module Baml
         
         raise ArgumentError.new("TestVertexClaude may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10028,6 +10150,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestVertexClaude",
@@ -10038,7 +10161,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -10047,7 +10170,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)
     }
     def TestVertexWithSystemInstructions(
@@ -10059,8 +10182,8 @@ module Baml
         
         raise ArgumentError.new("TestVertexWithSystemInstructions may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10084,6 +10207,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "TestVertexWithSystemInstructions",
@@ -10094,7 +10218,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -10103,7 +10227,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.any(String, T::Boolean),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::UnionTest_ReturnType)
     }
     def UnionTest_Function(
@@ -10115,8 +10239,8 @@ module Baml
         
         raise ArgumentError.new("UnionTest_Function may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10140,6 +10264,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "UnionTest_Function",
@@ -10150,7 +10275,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -10159,7 +10284,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: Baml::Types::BlockConstraintForParam,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Integer)
     }
     def UseBlockConstraint(
@@ -10171,8 +10296,8 @@ module Baml
         
         raise ArgumentError.new("UseBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10196,6 +10321,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "UseBlockConstraint",
@@ -10206,7 +10332,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -10215,7 +10341,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::MaintainFieldOrder,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::Types::MaintainFieldOrder)
     }
     def UseMaintainFieldOrder(
@@ -10227,8 +10353,8 @@ module Baml
         
         raise ArgumentError.new("UseMaintainFieldOrder may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10252,6 +10378,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "UseMaintainFieldOrder",
@@ -10262,7 +10389,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -10271,7 +10398,7 @@ module Baml
       params(
         varargs: T.untyped,
         a: Baml::Types::MalformedConstraints2,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Integer)
     }
     def UseMalformedConstraints(
@@ -10283,8 +10410,8 @@ module Baml
         
         raise ArgumentError.new("UseMalformedConstraints may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10308,6 +10435,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "UseMalformedConstraints",
@@ -10318,7 +10446,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
@@ -10327,7 +10455,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: Baml::Types::NestedBlockConstraintForParam,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Integer)
     }
     def UseNestedBlockConstraint(
@@ -10339,8 +10467,8 @@ module Baml
         
         raise ArgumentError.new("UseNestedBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10364,6 +10492,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.call_function(
         "UseNestedBlockConstraint",
@@ -10374,23 +10503,23 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
     end
 
     
 
-    sig {params(collector: T.nilable(T.any(Baml::Collector, T::Array[Baml::Collector])), tb: T.nilable(Baml::TypeBuilder), client_registry: T.nilable(Baml::ClientRegistry)).returns(BamlClient)}
-    def with_options(collector: nil, tb: nil, client_registry: nil)
-      BamlClient.new(runtime: @runtime, ctx_manager: @ctx_manager, baml_options: {collector: collector, tb: tb, client_registry: client_registry})
+    sig {params(collector: T.nilable(T.any(Baml::Collector, T::Array[Baml::Collector])), tb: T.nilable(Baml::TypeBuilder), client_registry: T.nilable(Baml::ClientRegistry), env_vars: T.nilable(T::Hash[Symbol, String])).returns(BamlClient)}
+    def with_options(collector: nil, tb: nil, client_registry: nil, env_vars: nil)
+      BamlClient.new(runtime: @runtime, ctx_manager: @ctx_manager, baml_options: {collector: collector, tb: tb, client_registry: client_registry, env_vars: env_vars})
     end
   end
 
   class BamlStreamClient
     extend T::Sig
 
-    sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager, baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))])).void}
+    sig {params(runtime: Baml::Ffi::BamlRuntime, ctx_manager: Baml::Ffi::RuntimeContextManager, baml_options: T.nilable(T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])])).void}
     def initialize(runtime:, ctx_manager:, baml_options: nil)
       @runtime = runtime
       @ctx_manager = ctx_manager
@@ -10401,7 +10530,7 @@ module Baml
       params(
         varargs: T.untyped,
         recipe: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::Recipe])
     }
     def AaaSamOutputFormat(
@@ -10413,8 +10542,8 @@ module Baml
         
         raise ArgumentError.new("AaaSamOutputFormat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10425,6 +10554,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "AaaSamOutputFormat",
@@ -10435,7 +10565,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::Recipe), Baml::Types::Recipe].new(
         ffi_stream: raw,
@@ -10447,7 +10577,7 @@ module Baml
       params(
         varargs: T.untyped,
         data: Baml::Types::LinkedListAliasNode,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::LinkedListAliasNode])
     }
     def AliasThatPointsToRecursiveType(
@@ -10459,8 +10589,8 @@ module Baml
         
         raise ArgumentError.new("AliasThatPointsToRecursiveType may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10471,6 +10601,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "AliasThatPointsToRecursiveType",
@@ -10481,7 +10612,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::LinkedListAliasNode), Baml::Types::LinkedListAliasNode].new(
         ffi_stream: raw,
@@ -10493,7 +10624,7 @@ module Baml
       params(
         varargs: T.untyped,
         money: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Checked[Integer]])
     }
     def AliasWithMultipleAttrs(
@@ -10505,8 +10636,8 @@ module Baml
         
         raise ArgumentError.new("AliasWithMultipleAttrs may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10517,6 +10648,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "AliasWithMultipleAttrs",
@@ -10527,7 +10659,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::Checked[Integer]), Baml::Checked[Integer]].new(
         ffi_stream: raw,
@@ -10539,7 +10671,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::InputClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def AliasedInputClass(
@@ -10551,8 +10683,8 @@ module Baml
         
         raise ArgumentError.new("AliasedInputClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10563,6 +10695,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "AliasedInputClass",
@@ -10573,7 +10706,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -10585,7 +10718,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::InputClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def AliasedInputClass2(
@@ -10597,8 +10730,8 @@ module Baml
         
         raise ArgumentError.new("AliasedInputClass2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10609,6 +10742,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "AliasedInputClass2",
@@ -10619,7 +10753,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -10631,7 +10765,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::InputClassNested,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def AliasedInputClassNested(
@@ -10643,8 +10777,8 @@ module Baml
         
         raise ArgumentError.new("AliasedInputClassNested may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10655,6 +10789,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "AliasedInputClassNested",
@@ -10665,7 +10800,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -10677,7 +10812,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.any(Baml::Types::AliasedEnum, String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def AliasedInputEnum(
@@ -10689,8 +10824,8 @@ module Baml
         
         raise ArgumentError.new("AliasedInputEnum may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10701,6 +10836,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "AliasedInputEnum",
@@ -10711,7 +10847,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -10723,7 +10859,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T::Array[T.any(Baml::Types::AliasedEnum, String)],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def AliasedInputList(
@@ -10735,8 +10871,8 @@ module Baml
         
         raise ArgumentError.new("AliasedInputList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10747,6 +10883,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "AliasedInputList",
@@ -10757,7 +10894,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -10769,7 +10906,7 @@ module Baml
       params(
         varargs: T.untyped,
         optionals: Baml::Types::OptionalListAndMap,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::OptionalListAndMap])
     }
     def AllowedOptionals(
@@ -10781,8 +10918,8 @@ module Baml
         
         raise ArgumentError.new("AllowedOptionals may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10793,6 +10930,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "AllowedOptionals",
@@ -10803,7 +10941,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::OptionalListAndMap), Baml::Types::OptionalListAndMap].new(
         ffi_stream: raw,
@@ -10815,7 +10953,7 @@ module Baml
       params(
         varargs: T.untyped,
         a: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Integer])
     }
     def AssertFn(
@@ -10827,8 +10965,8 @@ module Baml
         
         raise ArgumentError.new("AssertFn may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10839,6 +10977,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "AssertFn",
@@ -10849,7 +10988,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,
@@ -10861,7 +11000,7 @@ module Baml
       params(
         varargs: T.untyped,
         aud: Baml::Audio,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def AudioInput(
@@ -10873,8 +11012,8 @@ module Baml
         
         raise ArgumentError.new("AudioInput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10885,6 +11024,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "AudioInput",
@@ -10895,7 +11035,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -10907,7 +11047,7 @@ module Baml
       params(
         varargs: T.untyped,
         aud: Baml::Audio,prompt: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def AudioInputOpenai(
@@ -10919,8 +11059,8 @@ module Baml
         
         raise ArgumentError.new("AudioInputOpenai may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -10931,6 +11071,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "AudioInputOpenai",
@@ -10941,51 +11082,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-      )
-      Baml::BamlStream[T.nilable(String), String].new(
-        ffi_stream: raw,
-        ctx_manager: @ctx_manager
-      )
-    end
-
-    sig {
-      params(
-        varargs: T.untyped,
-        aud: Baml::Audio,prompt: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
-      ).returns(Baml::BamlStream[String])
-    }
-    def AudioInputOpenai(
-        *varargs,
-        aud:,prompt:,
-        baml_options: {}
-    )
-      if varargs.any?
-        
-        raise ArgumentError.new("AudioInputOpenai may only be called with keyword arguments")
-      end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
-      end
-
-      # Merge options from initialization with those passed to the method
-      baml_options = (@baml_options || {}).merge(baml_options)
-
-      collector = if baml_options[:collector]
-        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
-      else
-        []
-      end
-
-      raw = @runtime.stream_function(
-        "AudioInputOpenai",
-        {
-          aud: aud,prompt: prompt,
-        },
-        @ctx_manager,
-        baml_options[:tb]&.instance_variable_get(:@registry),
-        baml_options[:client_registry],
-        collector,
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -10997,7 +11094,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T::Array[Integer],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::LinkedList])
     }
     def BuildLinkedList(
@@ -11009,8 +11106,8 @@ module Baml
         
         raise ArgumentError.new("BuildLinkedList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11021,6 +11118,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "BuildLinkedList",
@@ -11031,7 +11129,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::LinkedList), Baml::Types::LinkedList].new(
         ffi_stream: raw,
@@ -11043,7 +11141,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::BinaryNode,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::Tree])
     }
     def BuildTree(
@@ -11055,8 +11153,8 @@ module Baml
         
         raise ArgumentError.new("BuildTree may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11067,6 +11165,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "BuildTree",
@@ -11077,7 +11176,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::Tree), Baml::Types::Tree].new(
         ffi_stream: raw,
@@ -11089,7 +11188,7 @@ module Baml
       params(
         varargs: T.untyped,
         cls: Baml::Types::ClassToRecAlias,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::ClassToRecAlias])
     }
     def ClassThatPointsToRecursiveClassThroughAlias(
@@ -11101,8 +11200,8 @@ module Baml
         
         raise ArgumentError.new("ClassThatPointsToRecursiveClassThroughAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11113,6 +11212,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ClassThatPointsToRecursiveClassThroughAlias",
@@ -11123,7 +11223,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ClassToRecAlias), Baml::Types::ClassToRecAlias].new(
         ffi_stream: raw,
@@ -11135,7 +11235,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.any(Baml::Types::DynEnumTwo, String)])
     }
     def ClassifyDynEnumTwo(
@@ -11147,8 +11247,8 @@ module Baml
         
         raise ArgumentError.new("ClassifyDynEnumTwo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11159,6 +11259,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ClassifyDynEnumTwo",
@@ -11169,7 +11270,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::Types::DynEnumTwo), T.any(Baml::Types::DynEnumTwo, String)].new(
         ffi_stream: raw,
@@ -11181,7 +11282,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.any(Baml::Types::Category, String)])
     }
     def ClassifyMessage(
@@ -11193,8 +11294,8 @@ module Baml
         
         raise ArgumentError.new("ClassifyMessage may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11205,6 +11306,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ClassifyMessage",
@@ -11215,7 +11317,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::Types::Category), T.any(Baml::Types::Category, String)].new(
         ffi_stream: raw,
@@ -11227,7 +11329,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.any(Baml::Types::Category, String)])
     }
     def ClassifyMessage2(
@@ -11239,8 +11341,8 @@ module Baml
         
         raise ArgumentError.new("ClassifyMessage2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11251,6 +11353,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ClassifyMessage2",
@@ -11261,7 +11364,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::Types::Category), T.any(Baml::Types::Category, String)].new(
         ffi_stream: raw,
@@ -11273,7 +11376,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.any(Baml::Types::Category, String)])
     }
     def ClassifyMessage3(
@@ -11285,8 +11388,8 @@ module Baml
         
         raise ArgumentError.new("ClassifyMessage3 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11297,6 +11400,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ClassifyMessage3",
@@ -11307,7 +11411,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::Types::Category), T.any(Baml::Types::Category, String)].new(
         ffi_stream: raw,
@@ -11319,7 +11423,7 @@ module Baml
       params(
         varargs: T.untyped,
         prefix: String,suffix: String,language: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def Completion(
@@ -11331,8 +11435,8 @@ module Baml
         
         raise ArgumentError.new("Completion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11343,6 +11447,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "Completion",
@@ -11353,7 +11458,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -11365,7 +11470,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.any(Baml::Types::BookOrder, Baml::Types::FlightConfirmation, Baml::Types::GroceryReceipt)])
     }
     def CustomTask(
@@ -11377,8 +11482,8 @@ module Baml
         
         raise ArgumentError.new("CustomTask may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11389,6 +11494,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "CustomTask",
@@ -11399,7 +11505,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(T.any(T.nilable(Baml::PartialTypes::BookOrder), T.nilable(Baml::PartialTypes::FlightConfirmation), T.nilable(Baml::PartialTypes::GroceryReceipt))), T.any(Baml::Types::BookOrder, Baml::Types::FlightConfirmation, Baml::Types::GroceryReceipt)].new(
         ffi_stream: raw,
@@ -11411,7 +11517,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def DescribeImage(
@@ -11423,8 +11529,8 @@ module Baml
         
         raise ArgumentError.new("DescribeImage may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11435,6 +11541,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "DescribeImage",
@@ -11445,7 +11552,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -11457,7 +11564,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def DescribeImage2(
@@ -11469,8 +11576,8 @@ module Baml
         
         raise ArgumentError.new("DescribeImage2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11481,6 +11588,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "DescribeImage2",
@@ -11491,7 +11599,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -11503,7 +11611,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def DescribeImage3(
@@ -11515,8 +11623,8 @@ module Baml
         
         raise ArgumentError.new("DescribeImage3 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11527,6 +11635,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "DescribeImage3",
@@ -11537,7 +11646,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -11549,7 +11658,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def DescribeImage4(
@@ -11561,8 +11670,8 @@ module Baml
         
         raise ArgumentError.new("DescribeImage4 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11573,6 +11682,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "DescribeImage4",
@@ -11583,7 +11693,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -11595,7 +11705,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,client_sector: String,client_name: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def DescribeMedia1599(
@@ -11607,8 +11717,8 @@ module Baml
         
         raise ArgumentError.new("DescribeMedia1599 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11619,6 +11729,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "DescribeMedia1599",
@@ -11629,7 +11740,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -11641,7 +11752,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.any(Baml::Types::OriginalA, Baml::Types::OriginalB)])
     }
     def DifferentiateUnions(
@@ -11653,8 +11764,8 @@ module Baml
         
         raise ArgumentError.new("DifferentiateUnions may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11665,6 +11776,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "DifferentiateUnions",
@@ -11675,7 +11787,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(T.any(T.nilable(Baml::PartialTypes::OriginalA), T.nilable(Baml::PartialTypes::OriginalB))), T.any(Baml::Types::OriginalA, Baml::Types::OriginalB)].new(
         ffi_stream: raw,
@@ -11687,7 +11799,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::DummyOutput])
     }
     def DummyOutputFunction(
@@ -11699,8 +11811,8 @@ module Baml
         
         raise ArgumentError.new("DummyOutputFunction may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11711,6 +11823,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "DummyOutputFunction",
@@ -11721,7 +11834,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::DummyOutput), Baml::Types::DummyOutput].new(
         ffi_stream: raw,
@@ -11733,7 +11846,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::DynamicClassOne,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::DynamicClassTwo])
     }
     def DynamicFunc(
@@ -11745,8 +11858,8 @@ module Baml
         
         raise ArgumentError.new("DynamicFunc may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11757,6 +11870,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "DynamicFunc",
@@ -11767,7 +11881,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::DynamicClassTwo), Baml::Types::DynamicClassTwo].new(
         ffi_stream: raw,
@@ -11779,7 +11893,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::DynInputOutput,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::DynInputOutput])
     }
     def DynamicInputOutput(
@@ -11791,8 +11905,8 @@ module Baml
         
         raise ArgumentError.new("DynamicInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11803,6 +11917,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "DynamicInputOutput",
@@ -11813,7 +11928,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::DynInputOutput), Baml::Types::DynInputOutput].new(
         ffi_stream: raw,
@@ -11825,7 +11940,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T::Array[Baml::Types::DynInputOutput],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Array[Baml::Types::DynInputOutput]])
     }
     def DynamicListInputOutput(
@@ -11837,8 +11952,8 @@ module Baml
         
         raise ArgumentError.new("DynamicListInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11849,6 +11964,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "DynamicListInputOutput",
@@ -11859,7 +11975,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Array[T.nilable(Baml::PartialTypes::DynInputOutput)], T::Array[Baml::Types::DynInputOutput]].new(
         ffi_stream: raw,
@@ -11871,7 +11987,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def ExpectFailure(
@@ -11883,8 +11999,8 @@ module Baml
         
         raise ArgumentError.new("ExpectFailure may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11895,6 +12011,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ExpectFailure",
@@ -11905,7 +12022,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -11917,7 +12034,7 @@ module Baml
       params(
         varargs: T.untyped,
         document: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::ContactInfo])
     }
     def ExtractContactInfo(
@@ -11929,8 +12046,8 @@ module Baml
         
         raise ArgumentError.new("ExtractContactInfo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11941,6 +12058,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ExtractContactInfo",
@@ -11951,7 +12069,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ContactInfo), Baml::Types::ContactInfo].new(
         ffi_stream: raw,
@@ -11963,7 +12081,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::DynamicSchema])
     }
     def ExtractEntities(
@@ -11975,8 +12093,8 @@ module Baml
         
         raise ArgumentError.new("ExtractEntities may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -11987,6 +12105,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ExtractEntities",
@@ -11997,7 +12116,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::DynamicSchema), Baml::Types::DynamicSchema].new(
         ffi_stream: raw,
@@ -12009,7 +12128,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Array[T.any(Baml::Types::Hobby, String)]])
     }
     def ExtractHobby(
@@ -12021,8 +12140,8 @@ module Baml
         
         raise ArgumentError.new("ExtractHobby may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12033,6 +12152,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ExtractHobby",
@@ -12043,7 +12163,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Array[T.nilable(Baml::Types::Hobby)], T::Array[T.any(Baml::Types::Hobby, String)]].new(
         ffi_stream: raw,
@@ -12055,7 +12175,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Array[String]])
     }
     def ExtractNames(
@@ -12067,8 +12187,8 @@ module Baml
         
         raise ArgumentError.new("ExtractNames may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12079,6 +12199,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ExtractNames",
@@ -12089,7 +12210,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Array[T.nilable(String)], T::Array[String]].new(
         ffi_stream: raw,
@@ -12101,7 +12222,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Array[Baml::Types::Person]])
     }
     def ExtractPeople(
@@ -12113,8 +12234,8 @@ module Baml
         
         raise ArgumentError.new("ExtractPeople may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12125,6 +12246,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ExtractPeople",
@@ -12135,7 +12257,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Array[T.nilable(Baml::PartialTypes::Person)], T::Array[Baml::Types::Person]].new(
         ffi_stream: raw,
@@ -12147,7 +12269,7 @@ module Baml
       params(
         varargs: T.untyped,
         email: String,reason: T.any(String, String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::ReceiptInfo])
     }
     def ExtractReceiptInfo(
@@ -12159,8 +12281,8 @@ module Baml
         
         raise ArgumentError.new("ExtractReceiptInfo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12171,6 +12293,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ExtractReceiptInfo",
@@ -12181,7 +12304,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ReceiptInfo), Baml::Types::ReceiptInfo].new(
         ffi_stream: raw,
@@ -12193,7 +12316,7 @@ module Baml
       params(
         varargs: T.untyped,
         resume: String,img: T.nilable(Baml::Image),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::Resume])
     }
     def ExtractResume(
@@ -12205,8 +12328,8 @@ module Baml
         
         raise ArgumentError.new("ExtractResume may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12217,6 +12340,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ExtractResume",
@@ -12227,7 +12351,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::Resume), Baml::Types::Resume].new(
         ffi_stream: raw,
@@ -12239,7 +12363,7 @@ module Baml
       params(
         varargs: T.untyped,
         resume: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::Resume])
     }
     def ExtractResume2(
@@ -12251,8 +12375,8 @@ module Baml
         
         raise ArgumentError.new("ExtractResume2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12263,6 +12387,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ExtractResume2",
@@ -12273,7 +12398,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::Resume), Baml::Types::Resume].new(
         ffi_stream: raw,
@@ -12285,7 +12410,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.nilable(Baml::Types::ClassOptionalOutput)])
     }
     def FnClassOptionalOutput(
@@ -12297,8 +12422,8 @@ module Baml
         
         raise ArgumentError.new("FnClassOptionalOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12309,6 +12434,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnClassOptionalOutput",
@@ -12319,7 +12445,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ClassOptionalOutput), T.nilable(Baml::Types::ClassOptionalOutput)].new(
         ffi_stream: raw,
@@ -12331,7 +12457,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.nilable(Baml::Types::ClassOptionalOutput2)])
     }
     def FnClassOptionalOutput2(
@@ -12343,8 +12469,8 @@ module Baml
         
         raise ArgumentError.new("FnClassOptionalOutput2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12355,6 +12481,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnClassOptionalOutput2",
@@ -12365,7 +12492,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ClassOptionalOutput2), T.nilable(Baml::Types::ClassOptionalOutput2)].new(
         ffi_stream: raw,
@@ -12377,7 +12504,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Array[T.any(Baml::Types::EnumOutput, String)]])
     }
     def FnEnumListOutput(
@@ -12389,8 +12516,8 @@ module Baml
         
         raise ArgumentError.new("FnEnumListOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12401,6 +12528,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnEnumListOutput",
@@ -12411,7 +12539,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Array[T.nilable(Baml::Types::EnumOutput)], T::Array[T.any(Baml::Types::EnumOutput, String)]].new(
         ffi_stream: raw,
@@ -12423,7 +12551,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.any(Baml::Types::EnumOutput, String)])
     }
     def FnEnumOutput(
@@ -12435,8 +12563,8 @@ module Baml
         
         raise ArgumentError.new("FnEnumOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12447,6 +12575,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnEnumOutput",
@@ -12457,7 +12586,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::Types::EnumOutput), T.any(Baml::Types::EnumOutput, String)].new(
         ffi_stream: raw,
@@ -12469,7 +12598,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::LiteralClassHello,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::LiteralClassHello])
     }
     def FnLiteralClassInputOutput(
@@ -12481,8 +12610,8 @@ module Baml
         
         raise ArgumentError.new("FnLiteralClassInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12493,6 +12622,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnLiteralClassInputOutput",
@@ -12503,7 +12633,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::LiteralClassHello), Baml::Types::LiteralClassHello].new(
         ffi_stream: raw,
@@ -12515,7 +12645,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.any(Baml::Types::LiteralClassOne, Baml::Types::LiteralClassTwo),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.any(Baml::Types::LiteralClassOne, Baml::Types::LiteralClassTwo)])
     }
     def FnLiteralUnionClassInputOutput(
@@ -12527,8 +12657,8 @@ module Baml
         
         raise ArgumentError.new("FnLiteralUnionClassInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12539,6 +12669,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnLiteralUnionClassInputOutput",
@@ -12549,7 +12680,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(T.any(T.nilable(Baml::PartialTypes::LiteralClassOne), T.nilable(Baml::PartialTypes::LiteralClassTwo))), T.any(Baml::Types::LiteralClassOne, Baml::Types::LiteralClassTwo)].new(
         ffi_stream: raw,
@@ -12561,7 +12692,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: T.nilable(String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def FnNamedArgsSingleStringOptional(
@@ -12573,8 +12704,8 @@ module Baml
         
         raise ArgumentError.new("FnNamedArgsSingleStringOptional may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12585,6 +12716,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnNamedArgsSingleStringOptional",
@@ -12595,7 +12727,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -12607,7 +12739,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Boolean])
     }
     def FnOutputBool(
@@ -12619,8 +12751,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12631,6 +12763,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnOutputBool",
@@ -12641,7 +12774,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(T::Boolean), T::Boolean].new(
         ffi_stream: raw,
@@ -12653,7 +12786,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::TestOutputClass])
     }
     def FnOutputClass(
@@ -12665,8 +12798,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12677,6 +12810,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnOutputClass",
@@ -12687,7 +12821,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::TestOutputClass), Baml::Types::TestOutputClass].new(
         ffi_stream: raw,
@@ -12699,7 +12833,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Array[Baml::Types::TestOutputClass]])
     }
     def FnOutputClassList(
@@ -12711,8 +12845,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputClassList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12723,6 +12857,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnOutputClassList",
@@ -12733,7 +12868,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Array[T.nilable(Baml::PartialTypes::TestOutputClass)], T::Array[Baml::Types::TestOutputClass]].new(
         ffi_stream: raw,
@@ -12745,7 +12880,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::TestClassNested])
     }
     def FnOutputClassNested(
@@ -12757,8 +12892,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputClassNested may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12769,6 +12904,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnOutputClassNested",
@@ -12779,7 +12915,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::TestClassNested), Baml::Types::TestClassNested].new(
         ffi_stream: raw,
@@ -12791,7 +12927,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::TestClassWithEnum])
     }
     def FnOutputClassWithEnum(
@@ -12803,8 +12939,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputClassWithEnum may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12815,6 +12951,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnOutputClassWithEnum",
@@ -12825,7 +12962,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::TestClassWithEnum), Baml::Types::TestClassWithEnum].new(
         ffi_stream: raw,
@@ -12837,7 +12974,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Integer])
     }
     def FnOutputInt(
@@ -12849,8 +12986,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12861,6 +12998,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnOutputInt",
@@ -12871,7 +13009,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,
@@ -12883,7 +13021,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Boolean])
     }
     def FnOutputLiteralBool(
@@ -12895,8 +13033,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputLiteralBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12907,6 +13045,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnOutputLiteralBool",
@@ -12917,7 +13056,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(T::Boolean), T::Boolean].new(
         ffi_stream: raw,
@@ -12929,7 +13068,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Integer])
     }
     def FnOutputLiteralInt(
@@ -12941,8 +13080,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputLiteralInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12953,6 +13092,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnOutputLiteralInt",
@@ -12963,7 +13103,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,
@@ -12975,7 +13115,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def FnOutputLiteralString(
@@ -12987,8 +13127,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputLiteralString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -12999,6 +13139,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnOutputLiteralString",
@@ -13009,7 +13150,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -13021,7 +13162,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Array[String]])
     }
     def FnOutputStringList(
@@ -13033,8 +13174,8 @@ module Baml
         
         raise ArgumentError.new("FnOutputStringList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13045,6 +13186,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnOutputStringList",
@@ -13055,7 +13197,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Array[T.nilable(String)], T::Array[String]].new(
         ffi_stream: raw,
@@ -13067,7 +13209,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.any(Baml::Types::TestEnum, String)])
     }
     def FnTestAliasedEnumOutput(
@@ -13079,8 +13221,8 @@ module Baml
         
         raise ArgumentError.new("FnTestAliasedEnumOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13091,6 +13233,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnTestAliasedEnumOutput",
@@ -13101,7 +13244,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::Types::TestEnum), T.any(Baml::Types::TestEnum, String)].new(
         ffi_stream: raw,
@@ -13113,7 +13256,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::TestClassAlias])
     }
     def FnTestClassAlias(
@@ -13125,8 +13268,8 @@ module Baml
         
         raise ArgumentError.new("FnTestClassAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13137,6 +13280,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnTestClassAlias",
@@ -13147,7 +13291,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::TestClassAlias), Baml::Types::TestClassAlias].new(
         ffi_stream: raw,
@@ -13159,7 +13303,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T.any(Baml::Types::NamedArgsSingleEnum, String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def FnTestNamedArgsSingleEnum(
@@ -13171,8 +13315,8 @@ module Baml
         
         raise ArgumentError.new("FnTestNamedArgsSingleEnum may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13183,6 +13327,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "FnTestNamedArgsSingleEnum",
@@ -13193,7 +13338,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -13205,7 +13350,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::RaysData])
     }
     def GetDataType(
@@ -13217,8 +13362,8 @@ module Baml
         
         raise ArgumentError.new("GetDataType may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13229,6 +13374,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "GetDataType",
@@ -13239,7 +13385,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::RaysData), Baml::Types::RaysData].new(
         ffi_stream: raw,
@@ -13251,7 +13397,7 @@ module Baml
       params(
         varargs: T.untyped,
         email: Baml::Types::Email,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::OrderInfo])
     }
     def GetOrderInfo(
@@ -13263,8 +13409,8 @@ module Baml
         
         raise ArgumentError.new("GetOrderInfo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13275,6 +13421,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "GetOrderInfo",
@@ -13285,7 +13432,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::OrderInfo), Baml::Types::OrderInfo].new(
         ffi_stream: raw,
@@ -13297,7 +13444,7 @@ module Baml
       params(
         varargs: T.untyped,
         query: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::SearchParams])
     }
     def GetQuery(
@@ -13309,8 +13456,8 @@ module Baml
         
         raise ArgumentError.new("GetQuery may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13321,6 +13468,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "GetQuery",
@@ -13331,7 +13479,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::SearchParams), Baml::Types::SearchParams].new(
         ffi_stream: raw,
@@ -13343,7 +13491,7 @@ module Baml
       params(
         varargs: T.untyped,
         i1: T::Hash[String, String],i2: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Hash[String, String]])
     }
     def InOutEnumMapKey(
@@ -13355,8 +13503,8 @@ module Baml
         
         raise ArgumentError.new("InOutEnumMapKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13367,6 +13515,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "InOutEnumMapKey",
@@ -13377,7 +13526,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Hash[String, T.nilable(String)], T::Hash[String, String]].new(
         ffi_stream: raw,
@@ -13389,7 +13538,7 @@ module Baml
       params(
         varargs: T.untyped,
         i1: T::Hash[String, String],i2: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Hash[String, String]])
     }
     def InOutLiteralStringUnionMapKey(
@@ -13401,8 +13550,8 @@ module Baml
         
         raise ArgumentError.new("InOutLiteralStringUnionMapKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13413,6 +13562,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "InOutLiteralStringUnionMapKey",
@@ -13423,7 +13573,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Hash[String, T.nilable(String)], T::Hash[String, String]].new(
         ffi_stream: raw,
@@ -13435,7 +13585,7 @@ module Baml
       params(
         varargs: T.untyped,
         m: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Hash[String, String]])
     }
     def InOutSingleLiteralStringMapKey(
@@ -13447,8 +13597,8 @@ module Baml
         
         raise ArgumentError.new("InOutSingleLiteralStringMapKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13459,6 +13609,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "InOutSingleLiteralStringMapKey",
@@ -13469,7 +13620,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Hash[String, T.nilable(String)], T::Hash[String, String]].new(
         ffi_stream: raw,
@@ -13481,7 +13632,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.anything])
     }
     def JsonTypeAliasCycle(
@@ -13493,8 +13644,8 @@ module Baml
         
         raise ArgumentError.new("JsonTypeAliasCycle may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13505,6 +13656,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "JsonTypeAliasCycle",
@@ -13515,7 +13667,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.anything, T.anything].new(
         ffi_stream: raw,
@@ -13527,7 +13679,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def LLMEcho(
@@ -13539,8 +13691,8 @@ module Baml
         
         raise ArgumentError.new("LLMEcho may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13551,6 +13703,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "LLMEcho",
@@ -13561,7 +13714,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -13573,7 +13726,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.any(Integer, T::Boolean, String)])
     }
     def LiteralUnionsTest(
@@ -13585,8 +13738,8 @@ module Baml
         
         raise ArgumentError.new("LiteralUnionsTest may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13597,6 +13750,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "LiteralUnionsTest",
@@ -13607,7 +13761,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(T.any(T.nilable(Integer), T.nilable(T::Boolean), T.nilable(String))), T.any(Integer, T::Boolean, String)].new(
         ffi_stream: raw,
@@ -13619,7 +13773,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Checked[Baml::Types::BlockConstraint]])
     }
     def MakeBlockConstraint(
@@ -13631,8 +13785,8 @@ module Baml
         
         raise ArgumentError.new("MakeBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13643,6 +13797,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "MakeBlockConstraint",
@@ -13653,7 +13808,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::BlockConstraint), Baml::Checked[Baml::Types::BlockConstraint]].new(
         ffi_stream: raw,
@@ -13665,7 +13820,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::ClassWithBlockDone])
     }
     def MakeClassWithBlockDone(
@@ -13677,8 +13832,8 @@ module Baml
         
         raise ArgumentError.new("MakeClassWithBlockDone may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13689,6 +13844,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "MakeClassWithBlockDone",
@@ -13699,7 +13855,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ClassWithBlockDone), Baml::Types::ClassWithBlockDone].new(
         ffi_stream: raw,
@@ -13711,7 +13867,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::ClassWithoutDone])
     }
     def MakeClassWithExternalDone(
@@ -13723,8 +13879,8 @@ module Baml
         
         raise ArgumentError.new("MakeClassWithExternalDone may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13735,6 +13891,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "MakeClassWithExternalDone",
@@ -13745,7 +13902,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ClassWithoutDone), Baml::Types::ClassWithoutDone].new(
         ffi_stream: raw,
@@ -13757,7 +13914,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::NestedBlockConstraint])
     }
     def MakeNestedBlockConstraint(
@@ -13769,8 +13926,8 @@ module Baml
         
         raise ArgumentError.new("MakeNestedBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13781,6 +13938,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "MakeNestedBlockConstraint",
@@ -13791,7 +13949,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::NestedBlockConstraint), Baml::Types::NestedBlockConstraint].new(
         ffi_stream: raw,
@@ -13803,7 +13961,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::SemanticContainer])
     }
     def MakeSemanticContainer(
@@ -13815,8 +13973,8 @@ module Baml
         
         raise ArgumentError.new("MakeSemanticContainer may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13827,6 +13985,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "MakeSemanticContainer",
@@ -13837,7 +13996,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::SemanticContainer), Baml::Types::SemanticContainer].new(
         ffi_stream: raw,
@@ -13849,7 +14008,7 @@ module Baml
       params(
         varargs: T.untyped,
         m: T::Hash[String, T::Array[String]],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Hash[String, T::Array[String]]])
     }
     def MapAlias(
@@ -13861,8 +14020,8 @@ module Baml
         
         raise ArgumentError.new("MapAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13873,6 +14032,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "MapAlias",
@@ -13883,7 +14043,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Hash[String, T::Array[T.nilable(String)]], T::Hash[String, T::Array[String]]].new(
         ffi_stream: raw,
@@ -13895,7 +14055,7 @@ module Baml
       params(
         varargs: T.untyped,
         money: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::MergeAttrs])
     }
     def MergeAliasAttributes(
@@ -13907,8 +14067,8 @@ module Baml
         
         raise ArgumentError.new("MergeAliasAttributes may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13919,6 +14079,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "MergeAliasAttributes",
@@ -13929,7 +14090,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::MergeAttrs), Baml::Types::MergeAttrs].new(
         ffi_stream: raw,
@@ -13941,7 +14102,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::DynamicOutput])
     }
     def MyFunc(
@@ -13953,8 +14114,8 @@ module Baml
         
         raise ArgumentError.new("MyFunc may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -13965,6 +14126,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "MyFunc",
@@ -13975,7 +14137,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::DynamicOutput), Baml::Types::DynamicOutput].new(
         ffi_stream: raw,
@@ -13987,7 +14149,7 @@ module Baml
       params(
         varargs: T.untyped,
         c: T.any(T.any(Integer, String, T::Boolean, Float), T::Array[String], T::Hash[String, T::Array[String]]),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.any(T.any(Integer, String, T::Boolean, Float), T::Array[String], T::Hash[String, T::Array[String]])])
     }
     def NestedAlias(
@@ -13999,8 +14161,8 @@ module Baml
         
         raise ArgumentError.new("NestedAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14011,6 +14173,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "NestedAlias",
@@ -14021,7 +14184,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(T.any(T.nilable(T.any(T.nilable(Integer), T.nilable(String), T.nilable(T::Boolean), T.nilable(Float))), T::Array[T.nilable(String)], T::Hash[String, T::Array[T.nilable(String)]])), T.any(T.any(Integer, String, T::Boolean, Float), T::Array[String], T::Hash[String, T::Array[String]])].new(
         ffi_stream: raw,
@@ -14033,7 +14196,7 @@ module Baml
       params(
         varargs: T.untyped,
         s: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::ClassForNullLiteral])
     }
     def NullLiteralClassHello(
@@ -14045,8 +14208,8 @@ module Baml
         
         raise ArgumentError.new("NullLiteralClassHello may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14057,6 +14220,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "NullLiteralClassHello",
@@ -14067,7 +14231,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::ClassForNullLiteral), Baml::Types::ClassForNullLiteral].new(
         ffi_stream: raw,
@@ -14079,7 +14243,7 @@ module Baml
       params(
         varargs: T.untyped,
         s: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def OpenAIWithAnthropicResponseHello(
@@ -14091,8 +14255,8 @@ module Baml
         
         raise ArgumentError.new("OpenAIWithAnthropicResponseHello may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14103,6 +14267,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "OpenAIWithAnthropicResponseHello",
@@ -14113,7 +14278,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -14125,7 +14290,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)]])
     }
     def OptionalTest_Function(
@@ -14137,8 +14302,8 @@ module Baml
         
         raise ArgumentError.new("OptionalTest_Function may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14149,6 +14314,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "OptionalTest_Function",
@@ -14159,7 +14325,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Array[T.nilable(Baml::PartialTypes::OptionalTest_ReturnType)], T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)]].new(
         ffi_stream: raw,
@@ -14171,7 +14337,7 @@ module Baml
       params(
         varargs: T.untyped,
         name: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::FooAny])
     }
     def PredictAge(
@@ -14183,8 +14349,8 @@ module Baml
         
         raise ArgumentError.new("PredictAge may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14195,6 +14361,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "PredictAge",
@@ -14205,7 +14372,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::FooAny), Baml::Types::FooAny].new(
         ffi_stream: raw,
@@ -14217,7 +14384,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Checked[Integer]])
     }
     def PredictAgeBare(
@@ -14229,8 +14396,8 @@ module Baml
         
         raise ArgumentError.new("PredictAgeBare may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14241,6 +14408,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "PredictAgeBare",
@@ -14251,7 +14419,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::Checked[Integer]), Baml::Checked[Integer]].new(
         ffi_stream: raw,
@@ -14263,7 +14431,7 @@ module Baml
       params(
         varargs: T.untyped,
         p: T.any(Integer, String, T::Boolean, Float),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.any(Integer, String, T::Boolean, Float)])
     }
     def PrimitiveAlias(
@@ -14275,8 +14443,8 @@ module Baml
         
         raise ArgumentError.new("PrimitiveAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14287,6 +14455,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "PrimitiveAlias",
@@ -14297,7 +14466,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(T.any(T.nilable(Integer), T.nilable(String), T.nilable(T::Boolean), T.nilable(Float))), T.any(Integer, String, T::Boolean, Float)].new(
         ffi_stream: raw,
@@ -14309,7 +14478,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestClaude(
@@ -14321,8 +14490,8 @@ module Baml
         
         raise ArgumentError.new("PromptTestClaude may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14333,6 +14502,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "PromptTestClaude",
@@ -14343,7 +14513,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -14355,7 +14525,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestClaudeChat(
@@ -14367,8 +14537,8 @@ module Baml
         
         raise ArgumentError.new("PromptTestClaudeChat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14379,6 +14549,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "PromptTestClaudeChat",
@@ -14389,7 +14560,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -14401,7 +14572,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestClaudeChatNoSystem(
@@ -14413,8 +14584,8 @@ module Baml
         
         raise ArgumentError.new("PromptTestClaudeChatNoSystem may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14425,6 +14596,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "PromptTestClaudeChatNoSystem",
@@ -14435,7 +14607,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -14447,7 +14619,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestOpenAI(
@@ -14459,8 +14631,8 @@ module Baml
         
         raise ArgumentError.new("PromptTestOpenAI may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14471,6 +14643,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "PromptTestOpenAI",
@@ -14481,7 +14654,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -14493,7 +14666,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestOpenAIChat(
@@ -14505,8 +14678,8 @@ module Baml
         
         raise ArgumentError.new("PromptTestOpenAIChat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14517,6 +14690,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "PromptTestOpenAIChat",
@@ -14527,7 +14701,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -14539,7 +14713,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestOpenAIChatNoSystem(
@@ -14551,8 +14725,8 @@ module Baml
         
         raise ArgumentError.new("PromptTestOpenAIChatNoSystem may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14563,6 +14737,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "PromptTestOpenAIChatNoSystem",
@@ -14573,7 +14748,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -14585,7 +14760,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def PromptTestStreaming(
@@ -14597,8 +14772,8 @@ module Baml
         
         raise ArgumentError.new("PromptTestStreaming may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14609,6 +14784,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "PromptTestStreaming",
@@ -14619,7 +14795,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -14631,7 +14807,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.anything])
     }
     def RecursiveAliasCycle(
@@ -14643,8 +14819,8 @@ module Baml
         
         raise ArgumentError.new("RecursiveAliasCycle may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14655,6 +14831,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "RecursiveAliasCycle",
@@ -14665,7 +14842,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.anything, T.anything].new(
         ffi_stream: raw,
@@ -14677,7 +14854,7 @@ module Baml
       params(
         varargs: T.untyped,
         cls: Baml::Types::NodeWithAliasIndirection,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::NodeWithAliasIndirection])
     }
     def RecursiveClassWithAliasIndirection(
@@ -14689,8 +14866,8 @@ module Baml
         
         raise ArgumentError.new("RecursiveClassWithAliasIndirection may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14701,6 +14878,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "RecursiveClassWithAliasIndirection",
@@ -14711,7 +14889,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::NodeWithAliasIndirection), Baml::Types::NodeWithAliasIndirection].new(
         ffi_stream: raw,
@@ -14723,7 +14901,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.anything])
     }
     def RecursiveUnionTest(
@@ -14735,8 +14913,8 @@ module Baml
         
         raise ArgumentError.new("RecursiveUnionTest may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14747,6 +14925,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "RecursiveUnionTest",
@@ -14757,7 +14936,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.anything, T.anything].new(
         ffi_stream: raw,
@@ -14769,7 +14948,7 @@ module Baml
       params(
         varargs: T.untyped,
         money: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Checked[Integer]])
     }
     def ReturnAliasWithMergedAttributes(
@@ -14781,8 +14960,8 @@ module Baml
         
         raise ArgumentError.new("ReturnAliasWithMergedAttributes may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14793,6 +14972,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ReturnAliasWithMergedAttributes",
@@ -14803,7 +14983,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::Checked[Integer]), Baml::Checked[Integer]].new(
         ffi_stream: raw,
@@ -14815,7 +14995,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Integer])
     }
     def ReturnFailingAssert(
@@ -14827,8 +15007,8 @@ module Baml
         
         raise ArgumentError.new("ReturnFailingAssert may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14839,6 +15019,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ReturnFailingAssert",
@@ -14849,7 +15030,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,
@@ -14861,7 +15042,7 @@ module Baml
       params(
         varargs: T.untyped,
         s: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.anything])
     }
     def ReturnJsonEntry(
@@ -14873,8 +15054,8 @@ module Baml
         
         raise ArgumentError.new("ReturnJsonEntry may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14885,6 +15066,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ReturnJsonEntry",
@@ -14895,7 +15077,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.anything, T.anything].new(
         ffi_stream: raw,
@@ -14907,7 +15089,7 @@ module Baml
       params(
         varargs: T.untyped,
         a: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::MalformedConstraints])
     }
     def ReturnMalformedConstraints(
@@ -14919,8 +15101,8 @@ module Baml
         
         raise ArgumentError.new("ReturnMalformedConstraints may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14931,6 +15113,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "ReturnMalformedConstraints",
@@ -14941,7 +15124,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::MalformedConstraints), Baml::Types::MalformedConstraints].new(
         ffi_stream: raw,
@@ -14953,7 +15136,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::Schema])
     }
     def SchemaDescriptions(
@@ -14965,8 +15148,8 @@ module Baml
         
         raise ArgumentError.new("SchemaDescriptions may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -14977,6 +15160,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "SchemaDescriptions",
@@ -14987,7 +15171,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::Schema), Baml::Types::Schema].new(
         ffi_stream: raw,
@@ -14999,7 +15183,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.anything])
     }
     def SimpleRecursiveListAlias(
@@ -15011,8 +15195,8 @@ module Baml
         
         raise ArgumentError.new("SimpleRecursiveListAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15023,6 +15207,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "SimpleRecursiveListAlias",
@@ -15033,7 +15218,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.anything, T.anything].new(
         ffi_stream: raw,
@@ -15045,7 +15230,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.anything])
     }
     def SimpleRecursiveMapAlias(
@@ -15057,8 +15242,8 @@ module Baml
         
         raise ArgumentError.new("SimpleRecursiveMapAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15069,6 +15254,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "SimpleRecursiveMapAlias",
@@ -15079,7 +15265,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.anything, T.anything].new(
         ffi_stream: raw,
@@ -15091,7 +15277,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::BigNumbers])
     }
     def StreamBigNumbers(
@@ -15103,8 +15289,8 @@ module Baml
         
         raise ArgumentError.new("StreamBigNumbers may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15115,6 +15301,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "StreamBigNumbers",
@@ -15125,7 +15312,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::BigNumbers), Baml::Types::BigNumbers].new(
         ffi_stream: raw,
@@ -15137,7 +15324,7 @@ module Baml
       params(
         varargs: T.untyped,
         theme: String,length: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::TwoStoriesOneTitle])
     }
     def StreamFailingAssertion(
@@ -15149,8 +15336,8 @@ module Baml
         
         raise ArgumentError.new("StreamFailingAssertion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15161,6 +15348,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "StreamFailingAssertion",
@@ -15171,7 +15359,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::TwoStoriesOneTitle), Baml::Types::TwoStoriesOneTitle].new(
         ffi_stream: raw,
@@ -15183,7 +15371,7 @@ module Baml
       params(
         varargs: T.untyped,
         theme: String,length: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::TwoStoriesOneTitleCheck])
     }
     def StreamFailingCheck(
@@ -15195,8 +15383,8 @@ module Baml
         
         raise ArgumentError.new("StreamFailingCheck may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15207,6 +15395,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "StreamFailingCheck",
@@ -15217,7 +15406,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::TwoStoriesOneTitleCheck), Baml::Types::TwoStoriesOneTitleCheck].new(
         ffi_stream: raw,
@@ -15229,7 +15418,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Integer])
     }
     def StreamOneBigNumber(
@@ -15241,8 +15430,8 @@ module Baml
         
         raise ArgumentError.new("StreamOneBigNumber may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15253,6 +15442,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "StreamOneBigNumber",
@@ -15263,7 +15453,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,
@@ -15275,7 +15465,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Array[T.any(Integer, String)]])
     }
     def StreamUnionIntegers(
@@ -15287,8 +15477,8 @@ module Baml
         
         raise ArgumentError.new("StreamUnionIntegers may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15299,6 +15489,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "StreamUnionIntegers",
@@ -15309,7 +15500,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Array[T.nilable(T.any(T.nilable(Integer), T.nilable(String)))], T::Array[T.any(Integer, String)]].new(
         ffi_stream: raw,
@@ -15321,7 +15512,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,yapping: T::Boolean,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::CompoundBigNumbers])
     }
     def StreamingCompoundNumbers(
@@ -15333,8 +15524,8 @@ module Baml
         
         raise ArgumentError.new("StreamingCompoundNumbers may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15345,6 +15536,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "StreamingCompoundNumbers",
@@ -15355,7 +15547,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::CompoundBigNumbers), Baml::Types::CompoundBigNumbers].new(
         ffi_stream: raw,
@@ -15367,7 +15559,7 @@ module Baml
       params(
         varargs: T.untyped,
         document_txt: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::Document1559])
     }
     def StructureDocument1559(
@@ -15379,8 +15571,8 @@ module Baml
         
         raise ArgumentError.new("StructureDocument1559 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15391,6 +15583,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "StructureDocument1559",
@@ -15401,7 +15594,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::Document1559), Baml::Types::Document1559].new(
         ffi_stream: raw,
@@ -15413,7 +15606,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::RecursiveAliasDependency,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::RecursiveAliasDependency])
     }
     def TakeRecAliasDep(
@@ -15425,8 +15618,8 @@ module Baml
         
         raise ArgumentError.new("TakeRecAliasDep may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15437,6 +15630,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TakeRecAliasDep",
@@ -15447,7 +15641,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::RecursiveAliasDependency), Baml::Types::RecursiveAliasDependency].new(
         ffi_stream: raw,
@@ -15459,7 +15653,7 @@ module Baml
       params(
         varargs: T.untyped,
         story: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TellStory(
@@ -15471,8 +15665,8 @@ module Baml
         
         raise ArgumentError.new("TellStory may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15483,6 +15677,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TellStory",
@@ -15493,7 +15688,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15505,7 +15700,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAnthropic(
@@ -15517,8 +15712,8 @@ module Baml
         
         raise ArgumentError.new("TestAnthropic may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15529,6 +15724,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAnthropic",
@@ -15539,7 +15735,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15551,7 +15747,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAnthropicShorthand(
@@ -15563,8 +15759,8 @@ module Baml
         
         raise ArgumentError.new("TestAnthropicShorthand may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15575,6 +15771,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAnthropicShorthand",
@@ -15585,7 +15782,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15597,7 +15794,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAws(
@@ -15609,8 +15806,8 @@ module Baml
         
         raise ArgumentError.new("TestAws may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15621,6 +15818,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAws",
@@ -15631,7 +15829,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15643,7 +15841,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAwsClaude37(
@@ -15655,8 +15853,8 @@ module Baml
         
         raise ArgumentError.new("TestAwsClaude37 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15667,6 +15865,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAwsClaude37",
@@ -15677,7 +15876,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15689,7 +15888,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAwsInferenceProfile(
@@ -15701,8 +15900,8 @@ module Baml
         
         raise ArgumentError.new("TestAwsInferenceProfile may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15713,6 +15912,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAwsInferenceProfile",
@@ -15723,7 +15923,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15735,7 +15935,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAwsInvalidAccessKey(
@@ -15747,8 +15947,8 @@ module Baml
         
         raise ArgumentError.new("TestAwsInvalidAccessKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15759,6 +15959,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAwsInvalidAccessKey",
@@ -15769,7 +15970,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15781,7 +15982,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAwsInvalidProfile(
@@ -15793,8 +15994,8 @@ module Baml
         
         raise ArgumentError.new("TestAwsInvalidProfile may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15805,6 +16006,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAwsInvalidProfile",
@@ -15815,7 +16017,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15827,7 +16029,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAwsInvalidRegion(
@@ -15839,8 +16041,8 @@ module Baml
         
         raise ArgumentError.new("TestAwsInvalidRegion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15851,6 +16053,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAwsInvalidRegion",
@@ -15861,7 +16064,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15873,7 +16076,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAwsInvalidSessionToken(
@@ -15885,8 +16088,8 @@ module Baml
         
         raise ArgumentError.new("TestAwsInvalidSessionToken may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15897,6 +16100,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAwsInvalidSessionToken",
@@ -15907,7 +16111,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15919,7 +16123,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAzure(
@@ -15931,8 +16135,8 @@ module Baml
         
         raise ArgumentError.new("TestAzure may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15943,6 +16147,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAzure",
@@ -15953,7 +16158,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -15965,7 +16170,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAzureFailure(
@@ -15977,8 +16182,8 @@ module Baml
         
         raise ArgumentError.new("TestAzureFailure may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -15989,6 +16194,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAzureFailure",
@@ -15999,7 +16205,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16011,7 +16217,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAzureO1NoMaxTokens(
@@ -16023,8 +16229,8 @@ module Baml
         
         raise ArgumentError.new("TestAzureO1NoMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16035,6 +16241,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAzureO1NoMaxTokens",
@@ -16045,7 +16252,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16057,7 +16264,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAzureO1WithMaxCompletionTokens(
@@ -16069,8 +16276,8 @@ module Baml
         
         raise ArgumentError.new("TestAzureO1WithMaxCompletionTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16081,6 +16288,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAzureO1WithMaxCompletionTokens",
@@ -16091,7 +16299,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16103,7 +16311,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAzureO1WithMaxTokens(
@@ -16115,8 +16323,8 @@ module Baml
         
         raise ArgumentError.new("TestAzureO1WithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16127,6 +16335,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAzureO1WithMaxTokens",
@@ -16137,7 +16346,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16149,7 +16358,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAzureO3NoMaxTokens(
@@ -16161,8 +16370,8 @@ module Baml
         
         raise ArgumentError.new("TestAzureO3NoMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16173,6 +16382,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAzureO3NoMaxTokens",
@@ -16183,7 +16393,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16195,7 +16405,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAzureO3WithMaxCompletionTokens(
@@ -16207,8 +16417,8 @@ module Baml
         
         raise ArgumentError.new("TestAzureO3WithMaxCompletionTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16219,6 +16429,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAzureO3WithMaxCompletionTokens",
@@ -16229,7 +16440,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16241,7 +16452,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestAzureWithMaxTokens(
@@ -16253,8 +16464,8 @@ module Baml
         
         raise ArgumentError.new("TestAzureWithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16265,6 +16476,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestAzureWithMaxTokens",
@@ -16275,7 +16487,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16287,7 +16499,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,not_cached: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestCaching(
@@ -16299,8 +16511,8 @@ module Baml
         
         raise ArgumentError.new("TestCaching may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16311,6 +16523,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestCaching",
@@ -16321,7 +16534,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16333,7 +16546,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestFallbackClient(
@@ -16345,8 +16558,8 @@ module Baml
         
         raise ArgumentError.new("TestFallbackClient may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16357,6 +16570,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestFallbackClient",
@@ -16367,7 +16581,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16379,7 +16593,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestFallbackStrategy(
@@ -16391,8 +16605,8 @@ module Baml
         
         raise ArgumentError.new("TestFallbackStrategy may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16403,6 +16617,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestFallbackStrategy",
@@ -16413,7 +16628,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16425,7 +16640,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestFallbackToShorthand(
@@ -16437,8 +16652,8 @@ module Baml
         
         raise ArgumentError.new("TestFallbackToShorthand may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16449,6 +16664,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestFallbackToShorthand",
@@ -16459,7 +16675,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16471,7 +16687,7 @@ module Baml
       params(
         varargs: T.untyped,
         myBool: T::Boolean,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleBool(
@@ -16483,8 +16699,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16495,6 +16711,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleBool",
@@ -16505,7 +16722,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16517,7 +16734,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: Baml::Types::NamedArgsSingleClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleClass(
@@ -16529,8 +16746,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16541,6 +16758,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleClass",
@@ -16551,7 +16769,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16563,7 +16781,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T::Array[T.any(Baml::Types::NamedArgsSingleEnumList, String)],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleEnumList(
@@ -16575,8 +16793,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleEnumList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16587,6 +16805,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleEnumList",
@@ -16597,7 +16816,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16609,7 +16828,7 @@ module Baml
       params(
         varargs: T.untyped,
         myFloat: Float,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleFloat(
@@ -16621,8 +16840,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleFloat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16633,6 +16852,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleFloat",
@@ -16643,7 +16863,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16655,7 +16875,7 @@ module Baml
       params(
         varargs: T.untyped,
         myInt: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleInt(
@@ -16667,8 +16887,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16679,6 +16899,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleInt",
@@ -16689,7 +16910,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16701,7 +16922,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, Baml::Types::StringToClassEntry],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Hash[String, Baml::Types::StringToClassEntry]])
     }
     def TestFnNamedArgsSingleMapStringToClass(
@@ -16713,8 +16934,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleMapStringToClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16725,6 +16946,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleMapStringToClass",
@@ -16735,7 +16957,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Hash[String, T.nilable(Baml::PartialTypes::StringToClassEntry)], T::Hash[String, Baml::Types::StringToClassEntry]].new(
         ffi_stream: raw,
@@ -16747,7 +16969,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, T::Hash[String, String]],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Hash[String, T::Hash[String, String]]])
     }
     def TestFnNamedArgsSingleMapStringToMap(
@@ -16759,8 +16981,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleMapStringToMap may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16771,6 +16993,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleMapStringToMap",
@@ -16781,7 +17004,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Hash[String, T::Hash[String, T.nilable(String)]], T::Hash[String, T::Hash[String, String]]].new(
         ffi_stream: raw,
@@ -16793,7 +17016,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Hash[String, String]])
     }
     def TestFnNamedArgsSingleMapStringToString(
@@ -16805,8 +17028,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleMapStringToString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16817,6 +17040,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleMapStringToString",
@@ -16827,7 +17051,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Hash[String, T.nilable(String)], T::Hash[String, String]].new(
         ffi_stream: raw,
@@ -16839,7 +17063,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleString(
@@ -16851,8 +17075,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16863,6 +17087,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleString",
@@ -16873,7 +17098,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16885,7 +17110,7 @@ module Baml
       params(
         varargs: T.untyped,
         myStringArray: T::Array[String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestFnNamedArgsSingleStringArray(
@@ -16897,8 +17122,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleStringArray may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16909,6 +17134,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleStringArray",
@@ -16919,7 +17145,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -16931,7 +17157,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T::Array[String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T::Array[String]])
     }
     def TestFnNamedArgsSingleStringList(
@@ -16943,8 +17169,8 @@ module Baml
         
         raise ArgumentError.new("TestFnNamedArgsSingleStringList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -16955,6 +17181,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestFnNamedArgsSingleStringList",
@@ -16965,7 +17192,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T::Array[T.nilable(String)], T::Array[String]].new(
         ffi_stream: raw,
@@ -16977,7 +17204,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestGemini(
@@ -16989,8 +17216,8 @@ module Baml
         
         raise ArgumentError.new("TestGemini may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17001,6 +17228,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestGemini",
@@ -17011,7 +17239,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17023,7 +17251,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestGeminiOpenAiGeneric(
@@ -17035,8 +17263,8 @@ module Baml
         
         raise ArgumentError.new("TestGeminiOpenAiGeneric may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17047,6 +17275,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestGeminiOpenAiGeneric",
@@ -17057,7 +17286,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17069,7 +17298,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestGeminiSystem(
@@ -17081,8 +17310,8 @@ module Baml
         
         raise ArgumentError.new("TestGeminiSystem may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17093,6 +17322,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestGeminiSystem",
@@ -17103,7 +17333,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17115,7 +17345,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestGeminiSystemAsChat(
@@ -17127,8 +17357,8 @@ module Baml
         
         raise ArgumentError.new("TestGeminiSystemAsChat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17139,6 +17369,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestGeminiSystemAsChat",
@@ -17149,7 +17380,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17161,7 +17392,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestGroq(
@@ -17173,8 +17404,8 @@ module Baml
         
         raise ArgumentError.new("TestGroq may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17185,6 +17416,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestGroq",
@@ -17195,7 +17427,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17207,7 +17439,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestImageInput(
@@ -17219,8 +17451,8 @@ module Baml
         
         raise ArgumentError.new("TestImageInput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17231,6 +17463,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestImageInput",
@@ -17241,7 +17474,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17253,7 +17486,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestImageInputAnthropic(
@@ -17265,8 +17498,8 @@ module Baml
         
         raise ArgumentError.new("TestImageInputAnthropic may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17277,6 +17510,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestImageInputAnthropic",
@@ -17287,7 +17521,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17299,7 +17533,7 @@ module Baml
       params(
         varargs: T.untyped,
         imgs: T::Array[Baml::Image],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestImageListInput(
@@ -17311,8 +17545,8 @@ module Baml
         
         raise ArgumentError.new("TestImageListInput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17323,6 +17557,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestImageListInput",
@@ -17333,7 +17568,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17345,7 +17580,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::TestMemoryOutput])
     }
     def TestMemory(
@@ -17357,8 +17592,8 @@ module Baml
         
         raise ArgumentError.new("TestMemory may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17369,6 +17604,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestMemory",
@@ -17379,7 +17615,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::TestMemoryOutput), Baml::Types::TestMemoryOutput].new(
         ffi_stream: raw,
@@ -17391,7 +17627,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: Baml::Types::NamedArgsSingleClass,myArg2: Baml::Types::NamedArgsSingleClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestMulticlassNamedArgs(
@@ -17403,8 +17639,8 @@ module Baml
         
         raise ArgumentError.new("TestMulticlassNamedArgs may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17415,6 +17651,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestMulticlassNamedArgs",
@@ -17425,7 +17662,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17437,7 +17674,7 @@ module Baml
       params(
         varargs: T.untyped,
         myBool: T::Boolean,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestNamedArgsLiteralBool(
@@ -17449,8 +17686,8 @@ module Baml
         
         raise ArgumentError.new("TestNamedArgsLiteralBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17461,6 +17698,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestNamedArgsLiteralBool",
@@ -17471,7 +17709,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17483,7 +17721,7 @@ module Baml
       params(
         varargs: T.untyped,
         myInt: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestNamedArgsLiteralInt(
@@ -17495,8 +17733,8 @@ module Baml
         
         raise ArgumentError.new("TestNamedArgsLiteralInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17507,6 +17745,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestNamedArgsLiteralInt",
@@ -17517,7 +17756,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17529,7 +17768,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestNamedArgsLiteralString(
@@ -17541,8 +17780,8 @@ module Baml
         
         raise ArgumentError.new("TestNamedArgsLiteralString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17553,6 +17792,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestNamedArgsLiteralString",
@@ -17563,7 +17803,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17575,7 +17815,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[T.nilable(String)])
     }
     def TestOllama(
@@ -17587,8 +17827,8 @@ module Baml
         
         raise ArgumentError.new("TestOllama may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17599,6 +17839,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestOllama",
@@ -17609,7 +17850,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), T.nilable(String)].new(
         ffi_stream: raw,
@@ -17621,7 +17862,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::Haiku])
     }
     def TestOllamaHaiku(
@@ -17633,8 +17874,8 @@ module Baml
         
         raise ArgumentError.new("TestOllamaHaiku may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17645,6 +17886,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestOllamaHaiku",
@@ -17655,7 +17897,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::Haiku), Baml::Types::Haiku].new(
         ffi_stream: raw,
@@ -17667,7 +17909,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestOpenAI(
@@ -17679,8 +17921,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAI may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17691,6 +17933,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestOpenAI",
@@ -17701,7 +17944,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17713,7 +17956,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestOpenAIDummyClient(
@@ -17725,8 +17968,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIDummyClient may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17737,6 +17980,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestOpenAIDummyClient",
@@ -17747,7 +17991,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17759,7 +18003,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestOpenAIGPT4oMini(
@@ -17771,8 +18015,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIGPT4oMini may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17783,6 +18027,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestOpenAIGPT4oMini",
@@ -17793,7 +18038,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17805,7 +18050,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestOpenAILegacyProvider(
@@ -17817,8 +18062,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAILegacyProvider may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17829,6 +18074,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestOpenAILegacyProvider",
@@ -17839,7 +18085,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17851,7 +18097,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestOpenAIO1NoMaxTokens(
@@ -17863,8 +18109,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIO1NoMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17875,6 +18121,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestOpenAIO1NoMaxTokens",
@@ -17885,7 +18132,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17897,7 +18144,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestOpenAIO1WithMaxCompletionTokens(
@@ -17909,8 +18156,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIO1WithMaxCompletionTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17921,6 +18168,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestOpenAIO1WithMaxCompletionTokens",
@@ -17931,7 +18179,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17943,7 +18191,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestOpenAIO1WithMaxTokens(
@@ -17955,8 +18203,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIO1WithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -17967,6 +18215,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestOpenAIO1WithMaxTokens",
@@ -17977,7 +18226,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -17989,7 +18238,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestOpenAIShorthand(
@@ -18001,8 +18250,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIShorthand may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18013,6 +18262,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestOpenAIShorthand",
@@ -18023,7 +18273,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -18035,7 +18285,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestOpenAIWithFinishReasonError(
@@ -18047,8 +18297,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIWithFinishReasonError may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18059,6 +18309,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestOpenAIWithFinishReasonError",
@@ -18069,7 +18320,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -18081,7 +18332,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestOpenAIWithMaxTokens(
@@ -18093,8 +18344,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIWithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18105,6 +18356,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestOpenAIWithMaxTokens",
@@ -18115,7 +18367,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -18127,7 +18379,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestOpenAIWithNullMaxTokens(
@@ -18139,8 +18391,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenAIWithNullMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18151,6 +18403,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestOpenAIWithNullMaxTokens",
@@ -18161,7 +18414,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -18173,7 +18426,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestOpenRouterMistralSmall3_1_24b(
@@ -18185,8 +18438,8 @@ module Baml
         
         raise ArgumentError.new("TestOpenRouterMistralSmall3_1_24b may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18197,6 +18450,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestOpenRouterMistralSmall3_1_24b",
@@ -18207,7 +18461,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -18219,7 +18473,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestRetryConstant(
@@ -18231,8 +18485,8 @@ module Baml
         
         raise ArgumentError.new("TestRetryConstant may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18243,6 +18497,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestRetryConstant",
@@ -18253,7 +18508,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -18265,7 +18520,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestRetryExponential(
@@ -18277,8 +18532,8 @@ module Baml
         
         raise ArgumentError.new("TestRetryExponential may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18289,6 +18544,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestRetryExponential",
@@ -18299,7 +18555,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -18311,7 +18567,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestRoundRobinStrategy(
@@ -18323,8 +18579,8 @@ module Baml
         
         raise ArgumentError.new("TestRoundRobinStrategy may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18335,6 +18591,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestRoundRobinStrategy",
@@ -18345,7 +18602,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -18357,7 +18614,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestSingleFallbackClient(
@@ -18369,8 +18626,8 @@ module Baml
         
         raise ArgumentError.new("TestSingleFallbackClient may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18381,6 +18638,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestSingleFallbackClient",
@@ -18391,7 +18649,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -18403,7 +18661,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::CustomStory])
     }
     def TestThinking(
@@ -18415,8 +18673,8 @@ module Baml
         
         raise ArgumentError.new("TestThinking may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18427,6 +18685,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestThinking",
@@ -18437,7 +18696,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::CustomStory), Baml::Types::CustomStory].new(
         ffi_stream: raw,
@@ -18449,7 +18708,7 @@ module Baml
       params(
         varargs: T.untyped,
         question: Baml::Types::UniverseQuestionInput,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::UniverseQuestion])
     }
     def TestUniverseQuestion(
@@ -18461,8 +18720,8 @@ module Baml
         
         raise ArgumentError.new("TestUniverseQuestion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18473,6 +18732,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestUniverseQuestion",
@@ -18483,7 +18743,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::UniverseQuestion), Baml::Types::UniverseQuestion].new(
         ffi_stream: raw,
@@ -18495,7 +18755,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestVertex(
@@ -18507,8 +18767,8 @@ module Baml
         
         raise ArgumentError.new("TestVertex may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18519,6 +18779,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestVertex",
@@ -18529,7 +18790,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -18541,7 +18802,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestVertexClaude(
@@ -18553,8 +18814,8 @@ module Baml
         
         raise ArgumentError.new("TestVertexClaude may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18565,6 +18826,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestVertexClaude",
@@ -18575,7 +18837,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -18587,7 +18849,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[String])
     }
     def TestVertexWithSystemInstructions(
@@ -18599,8 +18861,8 @@ module Baml
         
         raise ArgumentError.new("TestVertexWithSystemInstructions may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18611,6 +18873,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "TestVertexWithSystemInstructions",
@@ -18621,7 +18884,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(String), String].new(
         ffi_stream: raw,
@@ -18633,7 +18896,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.any(String, T::Boolean),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::UnionTest_ReturnType])
     }
     def UnionTest_Function(
@@ -18645,8 +18908,8 @@ module Baml
         
         raise ArgumentError.new("UnionTest_Function may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18657,6 +18920,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "UnionTest_Function",
@@ -18667,7 +18931,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::UnionTest_ReturnType), Baml::Types::UnionTest_ReturnType].new(
         ffi_stream: raw,
@@ -18679,7 +18943,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: Baml::Types::BlockConstraintForParam,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Integer])
     }
     def UseBlockConstraint(
@@ -18691,8 +18955,8 @@ module Baml
         
         raise ArgumentError.new("UseBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18703,6 +18967,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "UseBlockConstraint",
@@ -18713,7 +18978,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,
@@ -18725,7 +18990,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::MaintainFieldOrder,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Baml::Types::MaintainFieldOrder])
     }
     def UseMaintainFieldOrder(
@@ -18737,8 +19002,8 @@ module Baml
         
         raise ArgumentError.new("UseMaintainFieldOrder may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18749,6 +19014,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "UseMaintainFieldOrder",
@@ -18759,7 +19025,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::MaintainFieldOrder), Baml::Types::MaintainFieldOrder].new(
         ffi_stream: raw,
@@ -18771,7 +19037,7 @@ module Baml
       params(
         varargs: T.untyped,
         a: Baml::Types::MalformedConstraints2,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Integer])
     }
     def UseMalformedConstraints(
@@ -18783,8 +19049,8 @@ module Baml
         
         raise ArgumentError.new("UseMalformedConstraints may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18795,6 +19061,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "UseMalformedConstraints",
@@ -18805,7 +19072,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,
@@ -18817,7 +19084,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: Baml::Types::NestedBlockConstraintForParam,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(Baml::BamlStream[Integer])
     }
     def UseNestedBlockConstraint(
@@ -18829,8 +19096,8 @@ module Baml
         
         raise ArgumentError.new("UseNestedBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      if (baml_options.keys - [:client_registry, :tb, :collector, :env_vars]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector, :env_vars): #{baml_options.keys - [:client_registry, :tb, :collector, :env_vars]}")
       end
 
       # Merge options from initialization with those passed to the method
@@ -18841,6 +19108,7 @@ module Baml
       else
         []
       end
+      env_vars = (baml_options[:env_vars] || {}).merge(ENV.to_h)
 
       raw = @runtime.stream_function(
         "UseNestedBlockConstraint",
@@ -18851,7 +19119,7 @@ module Baml
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
         collector,
-        Hash.new
+        env_vars,
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
         ffi_stream: raw,

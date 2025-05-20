@@ -58,7 +58,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -82,7 +82,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -106,7 +106,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -130,7 +130,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -154,7 +154,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -178,7 +178,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -202,7 +202,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -226,7 +226,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -250,7 +250,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -274,7 +274,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -298,7 +298,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -322,7 +322,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -346,7 +346,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -370,7 +370,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -394,7 +394,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -418,7 +418,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -442,7 +442,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -466,7 +466,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -490,7 +490,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -514,7 +514,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -538,7 +538,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -562,7 +562,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -586,7 +586,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -610,7 +610,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -634,7 +634,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -658,7 +658,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -682,7 +682,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -706,7 +706,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -730,7 +730,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -754,7 +754,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -778,7 +778,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -802,7 +802,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -826,7 +826,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -850,7 +850,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -874,7 +874,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -898,7 +898,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -922,7 +922,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -946,7 +946,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -970,7 +970,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -994,7 +994,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1018,7 +1018,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1042,7 +1042,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1066,7 +1066,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1090,7 +1090,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1114,7 +1114,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1138,7 +1138,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1162,7 +1162,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1186,7 +1186,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1210,7 +1210,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1234,7 +1234,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1258,7 +1258,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1282,7 +1282,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1306,7 +1306,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1330,7 +1330,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1354,7 +1354,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1378,7 +1378,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1402,7 +1402,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1426,7 +1426,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1450,7 +1450,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1474,7 +1474,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1498,7 +1498,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1522,7 +1522,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1546,7 +1546,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1570,7 +1570,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1594,7 +1594,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1618,7 +1618,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1642,7 +1642,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1666,7 +1666,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1690,7 +1690,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1714,7 +1714,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1738,7 +1738,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1762,7 +1762,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1786,7 +1786,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1810,7 +1810,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1834,7 +1834,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1858,7 +1858,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1882,7 +1882,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1906,7 +1906,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1930,7 +1930,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1954,7 +1954,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -1978,7 +1978,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2002,7 +2002,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2026,7 +2026,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2050,7 +2050,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2074,7 +2074,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2098,7 +2098,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2122,7 +2122,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2146,7 +2146,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2170,7 +2170,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2194,7 +2194,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2218,7 +2218,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2242,7 +2242,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2266,7 +2266,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2290,7 +2290,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2314,7 +2314,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2338,7 +2338,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2362,7 +2362,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2386,7 +2386,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2410,7 +2410,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2434,7 +2434,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2458,7 +2458,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2482,7 +2482,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2506,7 +2506,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2530,7 +2530,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2554,7 +2554,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2578,7 +2578,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2602,7 +2602,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2626,7 +2626,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2650,7 +2650,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2674,7 +2674,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2698,7 +2698,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2722,7 +2722,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2746,7 +2746,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2770,7 +2770,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2794,7 +2794,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2818,7 +2818,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2842,7 +2842,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2866,7 +2866,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2890,7 +2890,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2914,7 +2914,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2938,7 +2938,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2962,7 +2962,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -2986,7 +2986,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3010,7 +3010,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3034,7 +3034,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3058,7 +3058,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3082,7 +3082,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3106,7 +3106,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3130,7 +3130,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3154,7 +3154,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3178,7 +3178,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3202,7 +3202,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3226,7 +3226,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3250,7 +3250,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3274,7 +3274,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3298,7 +3298,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3322,7 +3322,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3346,7 +3346,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3370,7 +3370,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3394,7 +3394,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3418,7 +3418,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3442,7 +3442,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3466,7 +3466,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3490,7 +3490,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3514,7 +3514,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3538,7 +3538,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3562,7 +3562,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3586,7 +3586,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3610,7 +3610,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3634,7 +3634,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3658,7 +3658,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3682,7 +3682,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3706,7 +3706,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3730,7 +3730,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3754,7 +3754,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3778,7 +3778,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3802,7 +3802,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3826,7 +3826,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3850,7 +3850,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3874,7 +3874,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3898,7 +3898,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3922,7 +3922,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3946,7 +3946,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3970,7 +3970,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -3994,7 +3994,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4018,7 +4018,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4042,7 +4042,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4066,7 +4066,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4090,7 +4090,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4114,7 +4114,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4138,7 +4138,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4162,7 +4162,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4186,7 +4186,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4210,7 +4210,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4234,7 +4234,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4258,7 +4258,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4282,7 +4282,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4306,7 +4306,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4330,7 +4330,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4354,7 +4354,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4378,7 +4378,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4402,7 +4402,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4426,7 +4426,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4450,7 +4450,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         False,
       )
     
@@ -4485,7 +4485,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4509,7 +4509,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4533,7 +4533,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4557,7 +4557,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4581,7 +4581,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4605,7 +4605,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4629,7 +4629,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4653,7 +4653,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4677,7 +4677,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4701,7 +4701,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4725,7 +4725,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4749,7 +4749,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4773,7 +4773,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4797,7 +4797,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4821,7 +4821,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4845,7 +4845,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4869,7 +4869,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4893,7 +4893,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4917,7 +4917,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4941,7 +4941,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4965,7 +4965,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -4989,7 +4989,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5013,7 +5013,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5037,7 +5037,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5061,7 +5061,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5085,7 +5085,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5109,7 +5109,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5133,7 +5133,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5157,7 +5157,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5181,7 +5181,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5205,7 +5205,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5229,7 +5229,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5253,7 +5253,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5277,7 +5277,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5301,7 +5301,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5325,7 +5325,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5349,7 +5349,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5373,7 +5373,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5397,7 +5397,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5421,7 +5421,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5445,7 +5445,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5469,7 +5469,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5493,7 +5493,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5517,7 +5517,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5541,7 +5541,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5565,7 +5565,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5589,7 +5589,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5613,7 +5613,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5637,7 +5637,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5661,7 +5661,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5685,7 +5685,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5709,7 +5709,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5733,7 +5733,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5757,7 +5757,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5781,7 +5781,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5805,7 +5805,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5829,7 +5829,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5853,7 +5853,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5877,7 +5877,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5901,7 +5901,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5925,7 +5925,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5949,7 +5949,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5973,7 +5973,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -5997,7 +5997,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6021,7 +6021,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6045,7 +6045,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6069,7 +6069,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6093,7 +6093,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6117,7 +6117,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6141,7 +6141,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6165,7 +6165,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6189,7 +6189,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6213,7 +6213,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6237,7 +6237,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6261,7 +6261,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6285,7 +6285,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6309,7 +6309,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6333,7 +6333,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6357,7 +6357,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6381,7 +6381,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6405,7 +6405,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6429,7 +6429,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6453,7 +6453,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6477,7 +6477,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6501,7 +6501,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6525,7 +6525,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6549,7 +6549,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6573,7 +6573,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6597,7 +6597,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6621,7 +6621,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6645,7 +6645,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6669,7 +6669,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6693,7 +6693,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6717,7 +6717,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6741,7 +6741,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6765,7 +6765,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6789,7 +6789,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6813,7 +6813,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6837,7 +6837,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6861,7 +6861,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6885,7 +6885,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6909,7 +6909,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6933,7 +6933,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6957,7 +6957,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -6981,7 +6981,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7005,7 +7005,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7029,7 +7029,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7053,7 +7053,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7077,7 +7077,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7101,7 +7101,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7125,7 +7125,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7149,7 +7149,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7173,7 +7173,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7197,7 +7197,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7221,7 +7221,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7245,7 +7245,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7269,7 +7269,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7293,7 +7293,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7317,7 +7317,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7341,7 +7341,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7365,7 +7365,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7389,7 +7389,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7413,7 +7413,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7437,7 +7437,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7461,7 +7461,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7485,7 +7485,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7509,7 +7509,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7533,7 +7533,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7557,7 +7557,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7581,7 +7581,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7605,7 +7605,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7629,7 +7629,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7653,7 +7653,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7677,7 +7677,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7701,7 +7701,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7725,7 +7725,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7749,7 +7749,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7773,7 +7773,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7797,7 +7797,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7821,7 +7821,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7845,7 +7845,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7869,7 +7869,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7893,7 +7893,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7917,7 +7917,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7941,7 +7941,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7965,7 +7965,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -7989,7 +7989,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8013,7 +8013,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8037,7 +8037,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8061,7 +8061,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8085,7 +8085,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8109,7 +8109,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8133,7 +8133,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8157,7 +8157,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8181,7 +8181,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8205,7 +8205,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8229,7 +8229,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8253,7 +8253,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8277,7 +8277,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8301,7 +8301,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8325,7 +8325,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8349,7 +8349,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8373,7 +8373,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8397,7 +8397,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8421,7 +8421,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8445,7 +8445,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8469,7 +8469,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8493,7 +8493,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8517,7 +8517,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8541,7 +8541,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8565,7 +8565,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8589,7 +8589,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8613,7 +8613,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8637,7 +8637,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8661,7 +8661,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8685,7 +8685,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8709,7 +8709,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8733,7 +8733,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8757,7 +8757,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8781,7 +8781,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8805,7 +8805,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8829,7 +8829,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8853,7 +8853,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     
@@ -8877,7 +8877,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        os.environ.copy(),
+        {**os.environ.copy(), **(baml_options.get("env_vars", {}))},
         True,
       )
     

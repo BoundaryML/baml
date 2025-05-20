@@ -115,7 +115,7 @@ class BamlSyncClient:
         tb,
         __cr__,
         collectors,
-        options.get("env_vars", os.environ.copy()),
+        {**os.environ.copy(), **(options.get("env_vars", {}))},
       )
       return cast({{fn.return_type}}, raw.cast_to(types, types, partial_types, False))
     {% endfor %}
