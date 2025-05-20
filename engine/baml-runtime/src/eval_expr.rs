@@ -1,4 +1,4 @@
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use futures::channel::mpsc;
 use futures::stream::{self as stream, StreamExt};
 use internal_baml_core::internal_baml_diagnostics::SerializedSpan;
@@ -260,11 +260,9 @@ async fn beta_reduce<'a>(
                     let val = res?
                         .parsed()
                         .as_ref()
-                        .ok_or(anyhow::anyhow!(
-                            "Impossible case - empty value in parsed result."
-                        ))?
+                        .ok_or(anyhow!("Impossible case - empty value in parsed result."))?
                         .as_ref()
-                        .map_err(|e| anyhow::anyhow!("{e}"))?
+                        .map_err(|e| anyhow!("{e}"))?
                         .clone()
                         .0
                         .map_meta(|_| ());
@@ -293,67 +291,55 @@ async fn beta_reduce<'a>(
                     let evaluated_args = eval_args(env, args).await?;
 
                     let BamlValue::Class(cls, fields) = &evaluated_args[0] else {
-                        return Err(anyhow::anyhow!(
+                        return Err(anyhow!(
                             "{fetch_value} expects a {request_type} parameter but got: {evaluated_args:?}",
                             fetch_value = builtin::functions::FETCH_VALUE,
                             request_type = builtin::classes::REQUEST,
                         ));
                     };
 
-                    // Builtin meta shoulld be set.
+                    // Builtin meta should be set.
                     let arrow = match builtin_meta.1.as_ref() {
                         Some(FieldType::Arrow(arrow)) => arrow,
 
                         other => {
-                            return Err(anyhow::anyhow!(
-                            "Internal error: {fetch_value} meta contains no arrow type: {other:?}",
-                            fetch_value = builtin::functions::FETCH_VALUE
-                        ))
+                            return Err(anyhow!(
+                                "Internal error: {fetch} meta contains no arrow type: {other:?}",
+                                fetch = builtin::functions::FETCH_VALUE,
+                            ))
                         }
                     };
 
+                    // TODO: Type checking / validation elsewhere.
                     let base_url = fields
                         .get("base_url")
-                        .map(|u| u.as_str())
-                        .ok_or(anyhow::anyhow!(
+                        .map(BamlValue::as_str)
+                        .ok_or(anyhow!(
                             "{fetch_value} argument has no 'base_url' field",
                             fetch_value = builtin::functions::FETCH_VALUE
                         ))?
-                        .ok_or(anyhow::anyhow!("Can't convert 'base_url' to string"))?;
+                        .ok_or(anyhow!("Can't convert 'base_url' to string"))?;
 
-                    let res = reqwest::Client::new()
-                        .get(base_url)
-                        .send()
-                        .await?
-                        .bytes()
-                        .await
-                        .map_err(|e| anyhow::anyhow!("Failed to fetch {}: {}", base_url, e))?;
+                    let response = reqwest::get(base_url).await?;
+                    let body = response.text().await?;
 
-                    let body = jsonish::from_str(
-                        &render_output_format(
-                            &env.runtime.inner.ir,
-                            &arrow.return_type,
-                            &EvaluationContext::new(&HashMap::new(), false),
-                        )
-                        .map_err(|e| {
-                            anyhow::anyhow!("Failed rendering output format during fetch: {}", e)
-                        })?,
+                    let output_format = render_output_format(
+                        &env.runtime.inner.ir,
                         &arrow.return_type,
-                        &String::from_utf8(res.to_vec()).unwrap(),
-                        false,
-                    )
-                    .map_err(|e| anyhow::anyhow!("(jsonish) failed parsing response: {}", e))?;
+                        &EvaluationContext::default(),
+                    )?;
 
-                    let baml_value_with_meta_flags: BamlValueWithMeta<Vec<Flag>> =
-                        body.clone().into();
+                    let parsed =
+                        jsonish::from_str(&output_format, &arrow.return_type, &body, false)
+                            .context("(jsonish) Failed parsing response of fetch_value call")?;
 
                     Ok(Expr::Atom(
-                        baml_value_with_meta_flags.map_meta(|_| meta.clone()),
+                        BamlValueWithMeta::<Vec<Flag>>::from(parsed).map_meta(|_| meta.clone()),
                     ))
                 }
             },
 
-            _ => Err(anyhow::anyhow!("Not a function: {:?}", func)),
+            _ => Err(anyhow!("Not a function: {:?}", func)),
         },
         Expr::FreeVar(name, _) => {
             if let Some(cached) = env.evaluated_cache.lock().unwrap().get(name) {
@@ -399,7 +385,7 @@ async fn beta_reduce<'a>(
                 meta.clone(),
             ))
         }
-        _ => panic!("Tried to beta reduce a {}", expr.dump_str()), // Err(anyhow::anyhow!("Not an application: {:?}", expr)),
+        _ => panic!("Tried to beta reduce a {}", expr.dump_str()), // Err(anyhow!("Not an application: {:?}", expr)),
     }
 }
 
@@ -512,12 +498,12 @@ pub async fn eval_to_value_or_llm_call<'a>(
                         match res {
                             Some(BamlValueWithMeta::Class(spread_class_name, spread_fields, _)) => {
                                 if name != spread_class_name {
-                                    return Err(anyhow::anyhow!("Class constructor name mismatch"));
+                                    return Err(anyhow!("Class constructor name mismatch"));
                                 }
                                 spread_fields.clone()
                             }
                             _ => {
-                                return Err(anyhow::anyhow!("Spread is not a class"));
+                                return Err(anyhow!("Spread is not a class"));
                             }
                         }
                     }
@@ -531,14 +517,14 @@ pub async fn eval_to_value_or_llm_call<'a>(
                 });
             }
             Expr::LLMFunction(_, _, _) => {
-                return Err(anyhow::anyhow!("Bare LLM function found"));
+                return Err(anyhow!("Bare LLM function found"));
             }
             Expr::Lambda(_, _, _) => {
-                return Err(anyhow::anyhow!("Bare lambda found: {}", expr.dump_str()));
+                return Err(anyhow!("Bare lambda found: {}", expr.dump_str()));
             }
             Expr::Builtin(builtin, meta) => match builtin {
                 Builtin::FetchValue => {
-                    return Err(anyhow::anyhow!(
+                    return Err(anyhow!(
                         "Bare builtin fetch_value found: {}",
                         expr.dump_str()
                     ));
@@ -547,7 +533,7 @@ pub async fn eval_to_value_or_llm_call<'a>(
             Expr::Let(var_name, value, body, meta) => {
                 let res = beta_reduce(env, &expr, false).await?;
                 if res.temporary_same_state(expr) {
-                    return Err(anyhow::anyhow!("Failed to make progress"));
+                    return Err(anyhow!("Failed to make progress"));
                 }
                 current_expr = res;
             }
@@ -568,17 +554,17 @@ pub async fn eval_to_value_or_llm_call<'a>(
                 }
             }
             Expr::BoundVar(_, _) => {
-                return Err(anyhow::anyhow!("Bare bound variable found"));
+                return Err(anyhow!("Bare bound variable found"));
             }
             Expr::FreeVar(_, _) => {
-                return Err(anyhow::anyhow!("Bare free variable found"));
+                return Err(anyhow!("Bare free variable found"));
             }
             Expr::ArgsTuple(_, _) => {
-                return Err(anyhow::anyhow!("Bare args tuple found"));
+                return Err(anyhow!("Bare args tuple found"));
             }
         }
     }
-    Err(anyhow::anyhow!("Max steps reached. {:?}", current_expr))
+    Err(anyhow!("Max steps reached. {:?}", current_expr))
 }
 
 #[derive(Clone, Debug)]
@@ -643,12 +629,12 @@ pub async fn eval_to_value<'a>(
                         match res {
                             Some(BamlValueWithMeta::Class(spread_class_name, spread_fields, _)) => {
                                 if name != spread_class_name {
-                                    return Err(anyhow::anyhow!("Class constructor name mismatch"));
+                                    return Err(anyhow!("Class constructor name mismatch"));
                                 }
                                 spread_fields.clone()
                             }
                             _ => {
-                                return Err(anyhow::anyhow!("Spread is not a class"));
+                                return Err(anyhow!("Spread is not a class"));
                             }
                         }
                     }
@@ -681,13 +667,13 @@ pub async fn eval_to_value<'a>(
 
                 if new_expr.temporary_same_state(expr) {
                     eprintln!("Value: {:?}", new_expr);
-                    return Err(anyhow::anyhow!("Failed to make progress."));
+                    return Err(anyhow!("Failed to make progress."));
                 }
                 current_expr = new_expr;
             }
         }
     }
-    Err(anyhow::anyhow!("Max steps reached."))
+    Err(anyhow!("Max steps reached."))
 }
 
 #[cfg(test)]
