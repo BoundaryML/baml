@@ -571,7 +571,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             true,
             GeneratorDefaultClientMode::Sync,
             Vec::new(),
-            None,
+            GeneratorOutputType::OpenApi,
             None,
             None,
         )

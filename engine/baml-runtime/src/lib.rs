@@ -924,7 +924,7 @@ impl BamlRuntime {
                         no_version_check,
                         generator.default_client_mode(),
                         generator.on_generate.clone(),
-                        Some(generator.output_type),
+                        generator.output_type,
                         generator.client_package_name.clone(),
                         generator.module_format,
                     )?,

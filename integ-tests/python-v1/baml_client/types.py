@@ -16,7 +16,8 @@
 import baml_py
 from enum import Enum
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, Extra
+from pydantic.generics import GenericModel
 
 from typing_extensions import TypeAlias, Literal
 from typing import Dict, Generic, List, Optional, TypeVar, Union
@@ -29,7 +30,7 @@ class Check(BaseModel):
     name: str
     expression: str
     status: str
-class Checked(BaseModel, Generic[T,CheckName]):
+class Checked(GenericModel, Generic[T,CheckName]):
     value: T
     checks: Dict[CheckName, Check]
 
@@ -157,65 +158,95 @@ class TestEnum(str, Enum):
     G = "G"
 
 class AnotherObject(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     id: str
     thingy2: str
     thingy3: str
 
 class BigNumbers(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     a: int
     b: float
 
 class BinaryNode(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     data: int
     left: Optional["BinaryNode"] = None
     right: Optional["BinaryNode"] = None
 
 class Blah(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     prop4: Optional[str] = None
 
 class BlockConstraint(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     foo: int
     bar: str
 
 class BlockConstraintForParam(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     bcfp: int
     bcfp2: str
 
 class BookOrder(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     orderId: str
     title: str
     quantity: int
     price: float
 
 class ClassForNullLiteral(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     a: Literal["hi"]
 
 class ClassOptionalOutput(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     prop1: str
     prop2: str
 
 class ClassOptionalOutput2(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     prop1: Optional[str] = None
     prop2: Optional[str] = None
     prop3: Optional["Blah"] = None
 
 class ClassToRecAlias(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     list: "LinkedListAliasNode"
 
 class ClassWithBlockDone(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     i_16_digits: int
     s_20_words: str
 
 class ClassWithImage(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     myImage: baml_py.Image
     param2: str
     fake_image: "FakeImage"
 
 class ClassWithoutDone(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     i_16_digits: int
     s_20_words: str
 
 class ClientDetails1559(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     client_name: Optional[str] = None
     client_address: Optional[str] = None
     client_postal_code: Optional[str] = None
@@ -225,62 +256,90 @@ class ClientDetails1559(BaseModel):
     client_email: Optional[str] = None
 
 class ComplexMemoryObject(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     id: str
     name: str
     description: str
     metadata: List[Union[str, int, float]]
 
 class CompoundBigNumbers(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     big: "BigNumbers"
     big_nums: List["BigNumbers"]
     another: "BigNumbers"
 
 class ContactInfo(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     primary: Union["PhoneNumber", "EmailAddress"]
     secondary: Union["PhoneNumber", "EmailAddress", None] = None
 
 class CustomStory(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     title: str
     characters: List[str]
     content: str
 
 class CustomTaskResult(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     bookOrder: Union["BookOrder", Optional[None]] = None
     flightConfirmation: Union["FlightConfirmation", Optional[None]] = None
     groceryReceipt: Union["GroceryReceipt", Optional[None]] = None
 
 class Document1559(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     client_details: "ClientDetails1559"
     notes: List["Note1599"]
 
 class DummyOutput(BaseModel):
-    model_config = ConfigDict(extra='allow')
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
     nonce: str
     nonce2: str
 
 class DynInputOutput(BaseModel):
-    model_config = ConfigDict(extra='allow')
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
     testKey: str
 
 class DynamicClassOne(BaseModel):
-    model_config = ConfigDict(extra='allow')
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
 
 class DynamicClassTwo(BaseModel):
-    model_config = ConfigDict(extra='allow')
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
     hi: str
     some_class: "SomeClassNestedDynamic"
     status: Union["DynEnumOne", str]
 
 class DynamicOutput(BaseModel):
-    model_config = ConfigDict(extra='allow')
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
 
 class DynamicSchema(BaseModel):
-    model_config = ConfigDict(extra='allow')
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
 
 class Earthling(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     age: Checked[int,Literal["earth_aged", "no_infants"]]
 
 class Education(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     institution: str
     location: str
     degree: str
@@ -288,23 +347,33 @@ class Education(BaseModel):
     graduation_date: Optional[str] = None
 
 class Email(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     subject: str
     body: str
     from_address: str
 
 class EmailAddress(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     value: str
 
 class Event(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     title: str
     date: str
     location: str
     description: str
 
 class FakeImage(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     url: str
 
 class FlightConfirmation(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     confirmationNumber: str
     flightNumber: str
     departureTime: str
@@ -312,193 +381,285 @@ class FlightConfirmation(BaseModel):
     seatNumber: str
 
 class FooAny(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     planetary_age: Union["Martian", "Earthling"]
     certainty: Checked[int,Literal["unreasonably_certain"]]
     species: Checked[str,Literal["regex_bad", "regex_good", "trivial"]]
 
 class Forest(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     trees: List["Tree"]
 
 class FormatterTest0(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     lorem: str
     ipsum: str
 
 class FormatterTest1(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     lorem: str
     ipsum: str
 
 class FormatterTest2(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     lorem: str
     ipsum: str
 
 class FormatterTest3(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     lorem: str
     ipsum: str
 
 class GroceryReceipt(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     receiptId: str
     storeName: str
     items: List[Union[str, int, float]]
     totalAmount: float
 
 class Haiku(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     line1: str
     line2: str
     line3: str
 
 class InnerClass(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     prop1: str
     prop2: str
     inner: "InnerClass2"
 
 class InnerClass2(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     prop2: int
     prop3: float
 
 class InputClass(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     key: str
     key2: str
 
 class InputClassNested(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     key: str
     nested: "InputClass"
 
 class LinkedList(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     head: Optional["Node"] = None
     len: int
 
 class LinkedListAliasNode(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     value: int
     next: Optional["LinkedListAliasNode"] = None
 
 class LiteralClassHello(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     prop: Literal["hello"]
 
 class LiteralClassOne(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     prop: Literal["one"]
 
 class LiteralClassTwo(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     prop: Literal["two"]
 
 class MaintainFieldOrder(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     a: str
     b: str
     c: str
 
 class MalformedConstraints(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     foo: Checked[int,Literal["foo_check"]]
 
 class MalformedConstraints2(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     foo: int
 
 class Martian(BaseModel):
     """A Martian organism with an age.
     Such a nice type."""
+    class Config:
+        arbitrary_types_allowed = True
     age: Checked[int,Literal["young_enough"]]
     """The age of the Martian in Mars years.
     So many Mars years."""
 
 class MemoryObject(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     id: str
     name: str
     description: str
 
 class MergeAttrs(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     amount: Checked[int,Literal["gt_ten"]]
 
 class NamedArgsSingleClass(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     key: str
     key_two: bool
     key_three: int
 
 class Nested(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     prop3: Union[str, Optional[None]] = None
     prop4: Union[str, Optional[None]] = None
     prop20: "Nested2"
 
 class Nested2(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     prop11: Union[str, Optional[None]] = None
     prop12: Union[str, Optional[None]] = None
 
 class NestedBlockConstraint(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     nbc: Checked["BlockConstraint",Literal["cross_field"]]
 
 class NestedBlockConstraintForParam(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     nbcfp: "BlockConstraintForParam"
 
 class Node(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     data: int
     next: Optional["Node"] = None
 
 class NodeWithAliasIndirection(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     value: int
     next: Optional["NodeWithAliasIndirection"] = None
 
 class Note1599(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     note_title: str
     note_description: Optional[str] = None
     note_amount: Optional[str] = None
 
 class OptionalListAndMap(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     p: Optional[List[str]] = None
     q: Optional[Dict[str, str]] = None
 
 class OptionalTest_Prop1(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     omega_a: str
     omega_b: int
 
 class OptionalTest_ReturnType(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     omega_1: Optional["OptionalTest_Prop1"] = None
     omega_2: Optional[str] = None
     omega_3: List[Optional["OptionalTest_CategoryType"]]
 
 class OrderInfo(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     order_status: "OrderStatus"
     tracking_number: Optional[str] = None
     estimated_arrival_date: Optional[str] = None
 
 class OriginalA(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     value: int
 
 class OriginalB(BaseModel):
-    model_config = ConfigDict(extra='allow')
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
     value: int
 
 class Person(BaseModel):
-    model_config = ConfigDict(extra='allow')
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
     name: Optional[str] = None
     hair_color: Optional[Union["Color", str]] = None
 
 class PhoneNumber(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     value: str
 
 class Quantity(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     amount: Union[int, float]
     unit: Optional[str] = None
 
 class RaysData(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     dataType: "DataType"
     value: Union["Resume", "Event"]
 
 class ReceiptInfo(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     items: List["ReceiptItem"]
     total_cost: Optional[float] = None
     venue: Union[Literal["barisa"], Literal["ox_burger"]]
 
 class ReceiptItem(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     name: str
     description: Optional[str] = None
     quantity: int
     price: float
 
 class Recipe(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     ingredients: Dict[str, "Quantity"]
     recipe_type: Union[Literal["breakfast"], Literal["dinner"]]
 
 class RecursiveAliasDependency(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     value: "JsonValue"
 
 class Resume(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     name: str
     email: str
     phone: str
@@ -507,6 +668,8 @@ class Resume(BaseModel):
     skills: List[str]
 
 class Schema(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     prop1: Union[str, Optional[None]] = None
     prop2: Union["Nested", str]
     prop5: List[Union[str, Optional[None]]]
@@ -516,6 +679,8 @@ class Schema(BaseModel):
     other_group: Union[str, Union[int, str]]
 
 class SearchParams(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     dateRange: Optional[int] = None
     location: List[str]
     jobTitle: Optional["WithReasoning"] = None
@@ -524,6 +689,8 @@ class SearchParams(BaseModel):
     tags: List[Union["Tag", str]]
 
 class SemanticContainer(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     sixteen_digit_number: int
     string_with_twenty_words: str
     class_1: "ClassWithoutDone"
@@ -534,20 +701,30 @@ class SemanticContainer(BaseModel):
     final_string: str
 
 class SimpleTag(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     field: str
 
 class SmallThing(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     i_16_digits: int
     i_8_digits: int
 
 class SomeClassNestedDynamic(BaseModel):
-    model_config = ConfigDict(extra='allow')
+    class Config:
+        extra = Extra.allow
+        arbitrary_types_allowed = True
     hi: str
 
 class StringToClassEntry(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     word: str
 
 class TestClassAlias(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     key: str
     key2: str
     key3: str
@@ -555,49 +732,71 @@ class TestClassAlias(BaseModel):
     key5: str
 
 class TestClassNested(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     prop1: str
     prop2: "InnerClass"
 
 class TestClassWithEnum(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     prop1: str
     prop2: "EnumInClass"
 
 class TestMemoryOutput(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     items: List[Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]
     more_items: List[Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]
 
 class TestOutputClass(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     prop1: str
     prop2: int
 
 class Tree(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     data: int
     children: "Forest"
 
 class TwoStoriesOneTitle(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     title: str
     story_a: str
     story_b: str
 
 class TwoStoriesOneTitleCheck(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     title: str
     story_a: Checked[str,Literal["too_long_story"]]
     story_b: Checked[str,Literal["too_long_story"]]
 
 class UnionTest_ReturnType(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     prop1: Union[str, bool]
     prop2: List[Union[float, bool]]
     prop3: Union[List[bool], List[int]]
 
 class UniverseQuestion(BaseModel):
     """my docs"""
+    class Config:
+        arbitrary_types_allowed = True
     question: str
     answer: str
 
 class UniverseQuestionInput(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     question: str
 
 class WithReasoning(BaseModel):
+    class Config:
+        arbitrary_types_allowed = True
     value: str
     reasoning: str
 

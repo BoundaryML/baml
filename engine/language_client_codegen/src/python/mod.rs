@@ -119,6 +119,7 @@ struct InlinedBaml {
 pub(crate) fn generate(
     ir: &IntermediateRepr,
     generator: &crate::GeneratorArgs,
+    legacy_pydantic: bool,
 ) -> Result<IndexMap<PathBuf, String>> {
     let mut collector = FileCollector::<PythonLanguageFeatures>::new();
 
@@ -587,7 +588,7 @@ client<llm> GPT35 {
             true,
             GeneratorDefaultClientMode::Async,
             Vec::new(),
-            Some(GeneratorOutputType::PythonPydantic),
+            GeneratorOutputType::PythonPydantic,
             None,
             None,
         )
@@ -600,7 +601,7 @@ client<llm> GPT35 {
     fn generate_streaming_python() {
         let ir = mk_ir();
         let generator_args = mk_gen();
-        let res = generate(&ir, &generator_args).unwrap();
+        let res = generate(&ir, &generator_args, false).unwrap();
         let partial_types = res.get(&PathBuf::from("partial_types.py")).unwrap();
         let async_client = res.get(&PathBuf::from("async_client.py")).unwrap();
         //eprintln!("{}", partial_types);

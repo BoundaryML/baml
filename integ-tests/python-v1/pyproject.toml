@@ -1,0 +1,12 @@
+[project]
+name = "python-v1"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = "~=3.8"
+dependencies = [
+    "maturin>=1.8.6",
+    "pydantic==1",
+    "pytest-asyncio>=0.24.0",
+    "pytest>=8.3.5",
+]
