@@ -37,11 +37,19 @@ func castOptional[T any](result any, castResult func(any) T) *T {
 	return &val
 }
 
+{% macro return_type_name(fn) -%}
+{% if fn.return_type.is_slice || fn.return_type.is_map -%}
+{{ fn.return_type.name }}
+{%- else -%}
+*{{ fn.return_type.name }}
+{%- endif %}
+{%- endmacro %}
+
 {% for fn in funcs %}
 
 func {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
         , {{name}} {{type}}
-        {%- endfor %}) (*{{ fn.return_type }}, error) {
+        {%- endfor %}) ({% call return_type_name(fn) %}, error) {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{ {% for (name, type) in fn.args -%}"{{name}}": {{name}},{% endfor %} },
 	}
@@ -58,18 +66,18 @@ func {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
 		return nil, result.Error
 	}
 
-	castResult := func (result any) {{ fn.return_type }} {
-		return {{ crate::go::cast_value("result", fn.return_type_type) }}
+	castResult := func (result any) {% call return_type_name(fn) %} {
+		return {{ crate::go::cast_value("result", fn.return_type) }}
 	}
 
 	casted := castResult(*result.Data)
 
-	return &casted, nil
+	return casted, nil
 }
 
 func (*stream) {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
 		, {{name}} {{type}}
-		{%- endfor %}) <-chan {{ fn.return_type }} {
+		{%- endfor %}) <-chan {% call return_type_name(fn) %} {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{ {% for (name, type) in fn.args -%}"{{name}}": {{name}},{% endfor %} },
 	}
@@ -77,7 +85,7 @@ func (*stream) {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -
 	if err != nil {
 		panic(err)
 	}
-	channel := make(chan {{ fn.return_type }})
+	channel := make(chan {% call return_type_name(fn) %})
 	raw, err := bamlRuntime.CallFunctionStream(ctx, "{{ fn.name }}", encoded)
 	if err != nil {
 		close(channel)
@@ -98,7 +106,7 @@ func (*stream) {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -
 					close(channel)
 					return
 				}
-				channel <- (*result.Data).({{ fn.return_type }})
+				channel <- (*result.Data).({% call return_type_name(fn) %})
 			}
 		}
 	}()

@@ -26,8 +26,7 @@ struct GoFunction {
     name: String,
     go_name: String,
     partial_return_type: String,
-    return_type: String,
-    return_type_type: GoType,
+    return_type: GoType,
     args: Vec<(String, String)>,
 }
 
@@ -90,8 +89,7 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for GoClient {
                                 name
                             },
                             partial_return_type: f.elem().output().to_partial_type_ref(ir, true),
-                            return_type: f.elem().output().to_type_ref(ir, true),
-                            return_type_type: f.elem().output().to_type_ref_2(ir, true),
+                            return_type: f.elem().output().to_type_ref_2(ir, true),
                             args: f
                                 .inputs()
                                 .iter()
