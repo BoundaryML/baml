@@ -4,6 +4,7 @@ mod ctypes;
 use std::{collections::HashMap, ffi::CStr, ptr::null, sync::Arc};
 
 use anyhow::Result;
+use baml_runtime::client_registry::ClientRegistry;
 use baml_runtime::{BamlRuntime, FunctionResult};
 use once_cell::sync::{Lazy, OnceCell};
 
@@ -11,6 +12,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 struct BamlFunctionArguments {
     kwargs: baml_types::BamlMap<String, BamlValue>,
+    client_registry: Option<ClientRegistry>,
 }
 
 #[no_mangle]
@@ -210,9 +212,8 @@ fn call_function_from_c_inner(
                 &function_args.kwargs,
                 &ctx,
                 None,
+                function_args.client_registry.as_ref(),
                 None,
-                None,
-                env_vars,
             )
             .await;
         safe_trigger_callback(id, true, result);

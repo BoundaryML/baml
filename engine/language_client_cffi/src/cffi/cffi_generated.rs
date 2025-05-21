@@ -5599,6 +5599,7 @@ impl<'a> flatbuffers::Follow<'a> for CFFIFunctionArguments<'a> {
 
 impl<'a> CFFIFunctionArguments<'a> {
   pub const VT_KWARGS: flatbuffers::VOffsetT = 4;
+  pub const VT_CLIENT_REGISTRY: flatbuffers::VOffsetT = 6;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -5610,6 +5611,7 @@ impl<'a> CFFIFunctionArguments<'a> {
     args: &'args CFFIFunctionArgumentsArgs<'args>
   ) -> flatbuffers::WIPOffset<CFFIFunctionArguments<'bldr>> {
     let mut builder = CFFIFunctionArgumentsBuilder::new(_fbb);
+    if let Some(x) = args.client_registry { builder.add_client_registry(x); }
     if let Some(x) = args.kwargs { builder.add_kwargs(x); }
     builder.finish()
   }
@@ -5622,6 +5624,13 @@ impl<'a> CFFIFunctionArguments<'a> {
     // which contains a valid value in this slot
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIMapEntry>>>>(CFFIFunctionArguments::VT_KWARGS, None)}
   }
+  #[inline]
+  pub fn client_registry(&self) -> Option<CFFIClientRegistry<'a>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<CFFIClientRegistry>>(CFFIFunctionArguments::VT_CLIENT_REGISTRY, None)}
+  }
 }
 
 impl flatbuffers::Verifiable for CFFIFunctionArguments<'_> {
@@ -5632,18 +5641,21 @@ impl flatbuffers::Verifiable for CFFIFunctionArguments<'_> {
     use self::flatbuffers::Verifiable;
     v.visit_table(pos)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<CFFIMapEntry>>>>("kwargs", Self::VT_KWARGS, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<CFFIClientRegistry>>("client_registry", Self::VT_CLIENT_REGISTRY, false)?
      .finish();
     Ok(())
   }
 }
 pub struct CFFIFunctionArgumentsArgs<'a> {
     pub kwargs: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIMapEntry<'a>>>>>,
+    pub client_registry: Option<flatbuffers::WIPOffset<CFFIClientRegistry<'a>>>,
 }
 impl<'a> Default for CFFIFunctionArgumentsArgs<'a> {
   #[inline]
   fn default() -> Self {
     CFFIFunctionArgumentsArgs {
       kwargs: None,
+      client_registry: None,
     }
   }
 }
@@ -5656,6 +5668,10 @@ impl<'a: 'b, 'b> CFFIFunctionArgumentsBuilder<'a, 'b> {
   #[inline]
   pub fn add_kwargs(&mut self, kwargs: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<CFFIMapEntry<'b >>>>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(CFFIFunctionArguments::VT_KWARGS, kwargs);
+  }
+  #[inline]
+  pub fn add_client_registry(&mut self, client_registry: flatbuffers::WIPOffset<CFFIClientRegistry<'b >>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<CFFIClientRegistry>>(CFFIFunctionArguments::VT_CLIENT_REGISTRY, client_registry);
   }
   #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> CFFIFunctionArgumentsBuilder<'a, 'b> {
@@ -5676,6 +5692,269 @@ impl core::fmt::Debug for CFFIFunctionArguments<'_> {
   fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
     let mut ds = f.debug_struct("CFFIFunctionArguments");
       ds.field("kwargs", &self.kwargs());
+      ds.field("client_registry", &self.client_registry());
+      ds.finish()
+  }
+}
+pub enum CFFIClientRegistryOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct CFFIClientRegistry<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for CFFIClientRegistry<'a> {
+  type Inner = CFFIClientRegistry<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> CFFIClientRegistry<'a> {
+  pub const VT_PRIMARY: flatbuffers::VOffsetT = 4;
+  pub const VT_CLIENTS: flatbuffers::VOffsetT = 6;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    CFFIClientRegistry { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args CFFIClientRegistryArgs<'args>
+  ) -> flatbuffers::WIPOffset<CFFIClientRegistry<'bldr>> {
+    let mut builder = CFFIClientRegistryBuilder::new(_fbb);
+    if let Some(x) = args.clients { builder.add_clients(x); }
+    if let Some(x) = args.primary { builder.add_primary(x); }
+    builder.finish()
+  }
+
+
+  #[inline]
+  pub fn primary(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(CFFIClientRegistry::VT_PRIMARY, None)}
+  }
+  #[inline]
+  pub fn clients(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIClientProperty<'a>>>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIClientProperty>>>>(CFFIClientRegistry::VT_CLIENTS, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for CFFIClientRegistry<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("primary", Self::VT_PRIMARY, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<CFFIClientProperty>>>>("clients", Self::VT_CLIENTS, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct CFFIClientRegistryArgs<'a> {
+    pub primary: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub clients: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIClientProperty<'a>>>>>,
+}
+impl<'a> Default for CFFIClientRegistryArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    CFFIClientRegistryArgs {
+      primary: None,
+      clients: None,
+    }
+  }
+}
+
+pub struct CFFIClientRegistryBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> CFFIClientRegistryBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_primary(&mut self, primary: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(CFFIClientRegistry::VT_PRIMARY, primary);
+  }
+  #[inline]
+  pub fn add_clients(&mut self, clients: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<CFFIClientProperty<'b >>>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(CFFIClientRegistry::VT_CLIENTS, clients);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> CFFIClientRegistryBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    CFFIClientRegistryBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<CFFIClientRegistry<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for CFFIClientRegistry<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("CFFIClientRegistry");
+      ds.field("primary", &self.primary());
+      ds.field("clients", &self.clients());
+      ds.finish()
+  }
+}
+pub enum CFFIClientPropertyOffset {}
+#[derive(Copy, Clone, PartialEq)]
+
+pub struct CFFIClientProperty<'a> {
+  pub _tab: flatbuffers::Table<'a>,
+}
+
+impl<'a> flatbuffers::Follow<'a> for CFFIClientProperty<'a> {
+  type Inner = CFFIClientProperty<'a>;
+  #[inline]
+  unsafe fn follow(buf: &'a [u8], loc: usize) -> Self::Inner {
+    Self { _tab: flatbuffers::Table::new(buf, loc) }
+  }
+}
+
+impl<'a> CFFIClientProperty<'a> {
+  pub const VT_NAME: flatbuffers::VOffsetT = 4;
+  pub const VT_PROVIDER: flatbuffers::VOffsetT = 6;
+  pub const VT_RETRY_POLICY: flatbuffers::VOffsetT = 8;
+  pub const VT_OPTIONS: flatbuffers::VOffsetT = 10;
+
+  #[inline]
+  pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
+    CFFIClientProperty { _tab: table }
+  }
+  #[allow(unused_mut)]
+  pub fn create<'bldr: 'args, 'args: 'mut_bldr, 'mut_bldr>(
+    _fbb: &'mut_bldr mut flatbuffers::FlatBufferBuilder<'bldr>,
+    args: &'args CFFIClientPropertyArgs<'args>
+  ) -> flatbuffers::WIPOffset<CFFIClientProperty<'bldr>> {
+    let mut builder = CFFIClientPropertyBuilder::new(_fbb);
+    if let Some(x) = args.options { builder.add_options(x); }
+    if let Some(x) = args.retry_policy { builder.add_retry_policy(x); }
+    if let Some(x) = args.provider { builder.add_provider(x); }
+    if let Some(x) = args.name { builder.add_name(x); }
+    builder.finish()
+  }
+
+
+  #[inline]
+  pub fn name(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(CFFIClientProperty::VT_NAME, None)}
+  }
+  #[inline]
+  pub fn provider(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(CFFIClientProperty::VT_PROVIDER, None)}
+  }
+  #[inline]
+  pub fn retry_policy(&self) -> Option<&'a str> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<&str>>(CFFIClientProperty::VT_RETRY_POLICY, None)}
+  }
+  #[inline]
+  pub fn options(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIMapEntry<'a>>>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIMapEntry>>>>(CFFIClientProperty::VT_OPTIONS, None)}
+  }
+}
+
+impl flatbuffers::Verifiable for CFFIClientProperty<'_> {
+  #[inline]
+  fn run_verifier(
+    v: &mut flatbuffers::Verifier, pos: usize
+  ) -> Result<(), flatbuffers::InvalidFlatbuffer> {
+    use self::flatbuffers::Verifiable;
+    v.visit_table(pos)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("name", Self::VT_NAME, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("provider", Self::VT_PROVIDER, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<&str>>("retry_policy", Self::VT_RETRY_POLICY, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<CFFIMapEntry>>>>("options", Self::VT_OPTIONS, false)?
+     .finish();
+    Ok(())
+  }
+}
+pub struct CFFIClientPropertyArgs<'a> {
+    pub name: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub provider: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub retry_policy: Option<flatbuffers::WIPOffset<&'a str>>,
+    pub options: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIMapEntry<'a>>>>>,
+}
+impl<'a> Default for CFFIClientPropertyArgs<'a> {
+  #[inline]
+  fn default() -> Self {
+    CFFIClientPropertyArgs {
+      name: None,
+      provider: None,
+      retry_policy: None,
+      options: None,
+    }
+  }
+}
+
+pub struct CFFIClientPropertyBuilder<'a: 'b, 'b> {
+  fbb_: &'b mut flatbuffers::FlatBufferBuilder<'a>,
+  start_: flatbuffers::WIPOffset<flatbuffers::TableUnfinishedWIPOffset>,
+}
+impl<'a: 'b, 'b> CFFIClientPropertyBuilder<'a, 'b> {
+  #[inline]
+  pub fn add_name(&mut self, name: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(CFFIClientProperty::VT_NAME, name);
+  }
+  #[inline]
+  pub fn add_provider(&mut self, provider: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(CFFIClientProperty::VT_PROVIDER, provider);
+  }
+  #[inline]
+  pub fn add_retry_policy(&mut self, retry_policy: flatbuffers::WIPOffset<&'b  str>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(CFFIClientProperty::VT_RETRY_POLICY, retry_policy);
+  }
+  #[inline]
+  pub fn add_options(&mut self, options: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<CFFIMapEntry<'b >>>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(CFFIClientProperty::VT_OPTIONS, options);
+  }
+  #[inline]
+  pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> CFFIClientPropertyBuilder<'a, 'b> {
+    let start = _fbb.start_table();
+    CFFIClientPropertyBuilder {
+      fbb_: _fbb,
+      start_: start,
+    }
+  }
+  #[inline]
+  pub fn finish(self) -> flatbuffers::WIPOffset<CFFIClientProperty<'a>> {
+    let o = self.fbb_.end_table(self.start_);
+    flatbuffers::WIPOffset::new(o.value())
+  }
+}
+
+impl core::fmt::Debug for CFFIClientProperty<'_> {
+  fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+    let mut ds = f.debug_struct("CFFIClientProperty");
+      ds.field("name", &self.name());
+      ds.field("provider", &self.provider());
+      ds.field("retry_policy", &self.retry_policy());
+      ds.field("options", &self.options());
       ds.finish()
   }
 }

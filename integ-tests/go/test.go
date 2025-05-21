@@ -5,12 +5,17 @@ import (
 	"fmt"
 
 	b "example.com/integ-tests/baml_client"
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
 func main() {
 	ctx := context.Background()
 
-	v2, err := b.AaaSamOutputFormat(ctx, "oranges")
+	registry := baml.NewClientRegistry()
+	registry.AddLlmClient("a", "openai", map[string]any{"a": "b"})
+	registry.SetPrimaryClient("a")
+
+	v2, err := b.AaaSamOutputFormat(ctx, "oranges", b.WithClientRegistry(registry))
 	if err != nil {
 		panic(err)
 	}

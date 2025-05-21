@@ -24,7 +24,39 @@ type BamlRuntime struct {
 }
 
 type BamlFunctionArguments struct {
-	Kwargs map[string]any
+	Kwargs         map[string]any
+	ClientRegistry *ClientRegistry
+}
+
+type ClientRegistry struct {
+	primary *string
+	clients ClientRegistryMap
+}
+
+type clientProperty struct {
+	provider    string
+	retryPolicy string
+	options     map[string]any
+}
+
+type ClientRegistryMap map[string]clientProperty
+
+func NewClientRegistry() *ClientRegistry {
+	return &ClientRegistry{
+		primary: nil,
+		clients: ClientRegistryMap{},
+	}
+}
+
+func (c *ClientRegistry) AddLlmClient(name string, provider string, options map[string]any) {
+	c.clients[name] = clientProperty{
+		provider: provider,
+		options:  options,
+	}
+}
+
+func (c *ClientRegistry) SetPrimaryClient(name string) {
+	c.primary = &name
 }
 
 var instance *BamlRuntime

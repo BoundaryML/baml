@@ -396,9 +396,62 @@ func encodeFunctionArguments(builder *flatbuffers.Builder, functionArgumentsVal 
 		return 0, fmt.Errorf("encoding function arguments: %w", err)
 	}
 
+	var clientRegistryOffset flatbuffers.UOffsetT
+	if functionArgumentsVal.ClientRegistry != nil {
+		clientRegistryOffset, err = encodeClientRegistry(builder, functionArgumentsVal.ClientRegistry)
+		if err != nil {
+			return 0, fmt.Errorf("encoding client registry: %w", err)
+		}
+	}
+
 	cffi.CFFIFunctionArgumentsStart(builder)
 	cffi.CFFIFunctionArgumentsAddKwargs(builder, kwargsOffset)
+	if clientRegistryOffset > 0 {
+		cffi.CFFIFunctionArgumentsAddClientRegistry(builder, clientRegistryOffset)
+	}
+
 	return cffi.CFFIFunctionArgumentsEnd(builder), nil
+}
+
+func encodeClientRegistry(builder *flatbuffers.Builder, clientRegistryVal *ClientRegistry) (flatbuffers.UOffsetT, error) {
+	var primaryClientOffset flatbuffers.UOffsetT
+	if clientRegistryVal.primary != nil {
+		primaryClientOffset = builder.CreateString(*clientRegistryVal.primary)
+	}
+
+	clientOffsets := make([]flatbuffers.UOffsetT, 0, len(clientRegistryVal.clients))
+	if len(clientRegistryVal.clients) > 0 {
+		for name, client := range clientRegistryVal.clients {
+			nameOffset := builder.CreateString(name)
+			providerOffset := builder.CreateString(client.provider)
+			optionsOffset, err := encodeMapEntries(builder, client.options, "client options")
+			if err != nil {
+				return 0, fmt.Errorf("encoding client options: %w", err)
+			}
+
+			cffi.CFFIClientPropertyStart(builder)
+			cffi.CFFIClientPropertyAddName(builder, nameOffset)
+			cffi.CFFIClientPropertyAddProvider(builder, providerOffset)
+			cffi.CFFIClientPropertyAddOptions(builder, optionsOffset)
+			clientOffset := cffi.CFFIClientPropertyEnd(builder)
+			clientOffsets = append(clientOffsets, clientOffset)
+		}
+	}
+
+	cffi.CFFIClientRegistryStartClientsVector(builder, len(clientOffsets))
+	for i := len(clientOffsets) - 1; i >= 0; i-- {
+		builder.PrependUOffsetT(clientOffsets[i])
+	}
+	clientsVectorOffset := builder.EndVector(len(clientOffsets))
+
+	cffi.CFFIClientRegistryStart(builder)
+	if primaryClientOffset > 0 {
+		cffi.CFFIClientRegistryAddPrimary(builder, primaryClientOffset)
+	}
+	if clientsVectorOffset > 0 {
+		cffi.CFFIClientRegistryAddClients(builder, clientsVectorOffset)
+	}
+	return cffi.CFFIClientRegistryEnd(builder), nil
 }
 
 func encodeFieldType(builder *flatbuffers.Builder, fieldType reflect.Type) flatbuffers.UOffsetT {
