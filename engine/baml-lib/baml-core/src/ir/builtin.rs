@@ -1,10 +1,10 @@
+use super::repr::{Class, ExprFunction, Field, Node, NodeAttributes};
+use crate::{ir::repr::IntermediateRepr, Configuration};
 use baml_types::{
     expr::{Builtin, Expr, ExprMetadata},
     Arrow, FieldType,
 };
 use internal_baml_diagnostics::Span;
-
-use super::repr::{Class, ExprFunction, Node, NodeAttributes};
 
 pub mod functions {
     pub const FETCH_VALUE: &str = "std::fetch_value";
@@ -12,6 +12,25 @@ pub mod functions {
 
 pub mod classes {
     pub const REQUEST: &str = "std::Request";
+}
+
+/// Builtins are exposed through a separate IR, which can be combined with
+/// the user's IR via `IntermediateRepr::extend`.
+pub fn builtin_ir() -> IntermediateRepr {
+    IntermediateRepr {
+        enums: vec![],
+        classes: builtin_classes(),
+        type_aliases: vec![],
+        functions: vec![],
+        expr_fns: vec![],
+        toplevel_assignments: vec![],
+        clients: vec![],
+        retry_policies: vec![],
+        template_strings: vec![],
+        finite_recursive_cycles: vec![],
+        structural_recursive_alias_cycles: vec![],
+        configuration: Configuration::default(),
+    }
 }
 
 fn builtin<T, const N: usize>(elems: [T; N]) -> Vec<Node<T>> {
@@ -26,20 +45,44 @@ fn builtin<T, const N: usize>(elems: [T; N]) -> Vec<Node<T>> {
 
 pub fn builtin_classes() -> Vec<Node<Class>> {
     builtin([Class {
-        name: String::from(functions::FETCH_VALUE),
+        name: String::from(classes::REQUEST),
         docstring: None,
-        static_fields: vec![],
-        inputs: vec![
-            (String::from("base_url"), FieldType::string()),
-            (
-                String::from("headers"),
-                FieldType::map(FieldType::string(), FieldType::string()),
-            ),
-            (
-                String::from("query_params"),
-                FieldType::map(FieldType::string(), FieldType::string()),
-            ),
+        static_fields: vec![
+            Node {
+                attributes: NodeAttributes::default(),
+                elem: Field {
+                    name: String::from("base_url"),
+                    r#type: Node {
+                        elem: FieldType::string(),
+                        attributes: NodeAttributes::default(),
+                    },
+                    docstring: None,
+                },
+            },
+            Node {
+                attributes: NodeAttributes::default(),
+                elem: Field {
+                    name: String::from("headers"),
+                    r#type: Node {
+                        elem: FieldType::map(FieldType::string(), FieldType::string()),
+                        attributes: NodeAttributes::default(),
+                    },
+                    docstring: None,
+                },
+            },
+            Node {
+                attributes: NodeAttributes::default(),
+                elem: Field {
+                    name: String::from("query_params"),
+                    r#type: Node {
+                        elem: FieldType::map(FieldType::string(), FieldType::string()),
+                        attributes: NodeAttributes::default(),
+                    },
+                    docstring: None,
+                },
+            },
         ],
+        inputs: vec![],
     }])
 }
 

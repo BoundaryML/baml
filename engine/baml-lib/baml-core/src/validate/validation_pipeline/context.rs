@@ -1,4 +1,5 @@
 use crate::PreviewFeature;
+use baml_types::FieldType;
 use enumflags2::BitFlags;
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics};
 
