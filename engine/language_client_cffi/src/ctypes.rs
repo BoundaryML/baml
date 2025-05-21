@@ -7,7 +7,6 @@ use baml_types::{BamlMedia, BamlValue, BamlValueWithMeta, HasFieldType, ToUnionN
 mod cffi_generated;
 
 use cffi_generated::cffi::*;
-use serde::de::Expected;
 
 use crate::BamlFunctionArguments;
 
@@ -109,23 +108,17 @@ impl From<CFFIMapEntry<'_>> for (String, BamlValue) {
     }
 }
 
-pub trait IntoStringPair {
-    fn into_string_pair(self) -> (String, String);
-}
-
-impl IntoStringPair for CFFIMapEntry<'_> {
-    fn into_string_pair(self) -> (String, String) {
-        let key = self
+impl From<CFFIEnvVar<'_>> for (String, String) {
+    fn from(value: CFFIEnvVar<'_>) -> (String, String) {
+        let key = value
             .key()
-            .expect("Failed to have CFFIMapEntry key")
+            .expect("Failed to have CFFIEnvVar key")
             .to_string();
-        let value: BamlValue = self
+        let value = value
             .value()
-            .expect("Failed to have CFFIMapEntry value")
-            .into();
-        // TODO: we first convert value to a BamlValue, then to a string.
-        // Instead should we just ditch CFFIMapEntry and define a new type that is just a map of string to string?
-        (key, value.to_string())
+            .expect("Failed to have CFFIEnvVar value")
+            .to_string();
+        (key, value)
     }
 }
 
@@ -249,9 +242,8 @@ impl From<CFFIFunctionArguments<'_>> for BamlFunctionArguments {
         let client_registry = value.client_registry().map(|r| r.into());
         let env_vars = value
             .env()
-            .map(|env| env.into_iter().map(|v| v.into_string_pair()).collect())
+            .map(|e| e.iter().map(|v| v.into()).collect())
             .unwrap_or_default();
-
         BamlFunctionArguments {
             kwargs,
             client_registry,

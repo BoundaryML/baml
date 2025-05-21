@@ -26,6 +26,7 @@ type BamlRuntime struct {
 type BamlFunctionArguments struct {
 	Kwargs         map[string]any
 	ClientRegistry *ClientRegistry
+	Env            map[string]string
 }
 
 type ClientRegistry struct {
@@ -106,7 +107,7 @@ func CreateRuntime(
 	return BamlRuntime{runtime: runtime}, nil
 }
 
-func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, encoded_args []byte, env_vars map[string]string) (*ResultCallback, error) {
+func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, encoded_args []byte) (*ResultCallback, error) {
 	callback_id, callback := create_unique_id(ctx)
 	return_channel := make(chan ResultCallback)
 	go func() {
@@ -123,12 +124,7 @@ func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, enc
 		}
 	}()
 
-	env_vars_json, err := json.Marshal(env_vars)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = baml_go.CallFunctionFromC(r.runtime, functionName, encoded_args, callback_id, string(env_vars_json))
+	_, err := baml_go.CallFunctionFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
 		close(return_channel)
 		return nil, err
@@ -142,7 +138,7 @@ func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, enc
 	}
 }
 
-func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName string, encoded_args []byte, env_vars map[string]string) (<-chan ResultCallback, error) {
+func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName string, encoded_args []byte) (<-chan ResultCallback, error) {
 	callback_id, callback := create_unique_id(ctx)
 
 	return_channel := make(chan ResultCallback)
@@ -164,12 +160,7 @@ func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName strin
 		}
 	}()
 
-	env_vars_json, err := json.Marshal(env_vars)
-	if err != nil {
-		return nil, err
-	}
-
-	_, err = baml_go.CallFunctionStreamFromC(r.runtime, functionName, encoded_args, callback_id, string(env_vars_json))
+	_, err := baml_go.CallFunctionStreamFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
 		close(return_channel)
 		return nil, err

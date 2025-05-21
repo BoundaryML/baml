@@ -62,30 +62,24 @@ func RegisterCallbacks(callbackFn unsafe.Pointer, errorFn unsafe.Pointer) error 
 	return nil
 }
 
-func CallFunctionFromC(runtime unsafe.Pointer, functionName string, encodedArgs []byte, id uint32, envVarsJson string) (unsafe.Pointer, error) {
+func CallFunctionFromC(runtime unsafe.Pointer, functionName string, encodedArgs []byte, id uint32) (unsafe.Pointer, error) {
 	cFunctionName := C.CString(functionName)
 	defer C.free(unsafe.Pointer(cFunctionName))
 
 	cEncodedArgs := (*C.char)(unsafe.Pointer(&encodedArgs[0]))
 
-	cEnvVarsJson := C.CString(envVarsJson)
-	defer C.free(unsafe.Pointer(cEnvVarsJson))
-
-	result := C.WrapCallFunctionFromC(runtime, cFunctionName, cEncodedArgs, C.uintptr_t(len(encodedArgs)), C.uint32_t(id), cEnvVarsJson)
+	result := C.WrapCallFunctionFromC(runtime, cFunctionName, cEncodedArgs, C.uintptr_t(len(encodedArgs)), C.uint32_t(id))
 
 	return result, nil
 }
 
-func CallFunctionStreamFromC(runtime unsafe.Pointer, functionName string, encodedArgs []byte, id uint32, envVarsJson string) (unsafe.Pointer, error) {
+func CallFunctionStreamFromC(runtime unsafe.Pointer, functionName string, encodedArgs []byte, id uint32) (unsafe.Pointer, error) {
 	cFunctionName := C.CString(functionName)
 	defer C.free(unsafe.Pointer(cFunctionName))
 
 	cEncodedArgs := (*C.char)(unsafe.Pointer(&encodedArgs[0]))
 
-	cEnvVarsJson := C.CString(envVarsJson)
-	defer C.free(unsafe.Pointer(cEnvVarsJson))
-
-	result := C.WrapCallFunctionStreamFromC(runtime, cFunctionName, cEncodedArgs, C.uintptr_t(len(encodedArgs)), C.uint32_t(id), cEnvVarsJson)
+	result := C.WrapCallFunctionStreamFromC(runtime, cFunctionName, cEncodedArgs, C.uintptr_t(len(encodedArgs)), C.uint32_t(id))
 
 	return result, nil
 }

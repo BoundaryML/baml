@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"os"
 	"testing"
 
 	b "example.com/integ-tests/baml_client"
@@ -12,27 +11,61 @@ import (
 func TestEnvVar(t *testing.T) {
 	var tests = map[string]struct {
 		envVar string
-		expected string
+		envValue string
 		err string
 	}{
-		"OPENAI_API_KEY": {
+		"required env var": {
 			envVar: "OPENAI_API_KEY",
-			expected: "sk-proj-1234567890",
+			envValue: "sk-proj-1234567890",
 			err: "InvalidAuthentication (401)",
 		},
-		"NOT_REQUIRED_ENV_VAR": {
+		"not required env var": {
 			envVar: "NOT_REQUIRED_ENV_VAR",
-			expected: "",
+			envValue: "",
 			err: "",
 		},
 	}
 
 	for name, test := range tests {
 		t.Run(name, func(t *testing.T) {
-			t.Setenv(test.envVar, test.expected)
-			assert.Equal(t, test.expected, os.Getenv(test.envVar))
+			t.Setenv(test.envVar, test.envValue)
 			ctx := context.Background()
 			_, err := b.AaaSamOutputFormat(ctx, "pineapple")
+			if test.err != "" {
+				assert.Error(t, err)
+				assert.Contains(t, err.Error(), test.err)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestEnvVarWithOptions(t *testing.T) {
+	var tests = map[string]struct {
+		envVar string
+		envValue string
+		err string
+	}{
+		"test override with env var": {
+			envVar: "OPENAI_API_KEY",
+			envValue: "sk-proj-1234567890",
+			err: "InvalidAuthentication (401)",
+		},
+		"test override with unsetting env var": {
+			envVar: "OPENAI_API_KEY",
+			envValue: "",
+			err: "InvalidAuthentication (401)",
+		},
+		
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			ctx := context.Background()
+			_, err := b.AaaSamOutputFormat(ctx, "pineapple", b.WithEnv(map[string]string{
+				test.envVar: test.envValue,
+			}))
 			if test.err != "" {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), test.err)
