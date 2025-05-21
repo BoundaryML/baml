@@ -17,7 +17,7 @@ export class LlmResponseParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): {{fn.return_type}} {
     try {
-      const envVars = __baml_options__?.envVars ? { ...process.env, ...__baml_options__.envVars } : { ...process.env };
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       return this.runtime.parseLlmResponse(
         "{{fn.name}}",
         llmResponse,
@@ -25,7 +25,7 @@ export class LlmResponseParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        envVars,
+        env,
       ) as {{fn.return_type}}
     } catch (error) {
       throw toBamlError(error);
@@ -43,7 +43,7 @@ export class LlmStreamParser {
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
   ): {{fn.partial_return_type}} {
     try {
-      const envVars = __baml_options__?.envVars ? { ...process.env, ...__baml_options__.envVars } : { ...process.env };
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       return this.runtime.parseLlmResponse(
         "{{fn.name}}",
         llmResponse,
@@ -51,7 +51,7 @@ export class LlmStreamParser {
         this.ctxManager.cloneContext(),
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
-        envVars,
+        env,
       ) as {{fn.partial_return_type}}
     } catch (error) {
       throw toBamlError(error);

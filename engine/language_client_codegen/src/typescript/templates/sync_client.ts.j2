@@ -23,7 +23,7 @@ type BamlCallOptions = {
   tb?: TypeBuilder
   clientRegistry?: ClientRegistry
   collector?: Collector | Collector[]
-  envVars?: Record<string, string | undefined>
+  env?: Record<string, string | undefined>
 }
 
 export class BamlSyncClient {
@@ -80,7 +80,7 @@ export class BamlSyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const envVars = options.envVars ? { ...process.env, ...options.envVars } : { ...process.env };
+      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
       const raw = this.runtime.callFunctionSync(
         "{{fn.name}}",
         {
@@ -92,7 +92,7 @@ export class BamlSyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
-        envVars,
+        env,
       )
       return raw.parsed(false) as {{fn.return_type}}
     } catch (error: any) {
