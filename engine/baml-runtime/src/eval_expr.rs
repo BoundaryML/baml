@@ -311,7 +311,7 @@ async fn beta_reduce<'a>(
                     };
 
                     // TODO: Type checking / validation elsewhere.
-                    let base_url = fields
+                    let mut base_url = fields
                         .get("base_url")
                         .map(BamlValue::as_str)
                         .ok_or(anyhow!(
@@ -320,8 +320,44 @@ async fn beta_reduce<'a>(
                         ))?
                         .ok_or(anyhow!("Can't convert 'base_url' to string"))?;
 
-                    let response = reqwest::get(base_url).await?;
+                    // Highlight.
+                    let app_span = SerializedSpan::serialize(&expr.meta().0);
+                    if let Some(tx) = &env.expr_tx {
+                        tx.unbounded_send(vec![app_span]).unwrap();
+                    }
+
+                    // TODO: There's some code that handles proxy URL extraction
+                    // better in baml-lib/llm-client/src/clients/helpers.rs
+                    // use that here.
+                    let client = {
+                        let mut client = reqwest::Client::builder();
+
+                        if let Some(proxy_url) = env.runtime.env_vars().get("BOUNDARY_PROXY_URL") {
+                            client = client.default_headers({
+                                let mut headers = reqwest::header::HeaderMap::new();
+                                headers.insert(
+                                    reqwest::header::HeaderName::from_static("baml-original-url"),
+                                    reqwest::header::HeaderValue::from_str(base_url)?,
+                                );
+                                headers
+                            });
+                            base_url = &proxy_url;
+                        }
+
+                        client.build()?
+                    };
+
+                    // TODO: Headers, query params, etc.
+                    let response = client.get(base_url).send().await?;
                     let body = response.text().await?;
+
+                    // TODO: If the lines above fail (? operator) then this
+                    // won't run. We need to wrap this function in another
+                    // function that empties the channel no matter if beta
+                    // reduction succeeds or fails.
+                    if let Some(tx) = &env.expr_tx {
+                        tx.unbounded_send(vec![]).unwrap();
+                    }
 
                     let output_format = render_output_format(
                         &env.runtime.inner.ir,

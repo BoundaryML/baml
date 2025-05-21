@@ -1,13 +1,14 @@
-class Weather {
-  city string
-  temperature int
+class Todo {
+  id int
+  todo string
+  completed bool
+  userId int 
 }
 
-fn GetWheatherValue(city: string) -> Weather {
-  std::fetch_value<Weather>(std::Request {
-    method: Get,
-    base_url: "api.weather.com",
-    query_params: null,
-    body: { "city": city },
+fn GetTodo() -> Todo {
+  std::fetch_value<Todo>(std::Request {
+    base_url: "https://dummyjson.com/todos/1",
+    headers: {},
+    query_params: {},
   })
 }
