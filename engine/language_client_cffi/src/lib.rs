@@ -13,6 +13,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 struct BamlFunctionArguments {
     kwargs: baml_types::BamlMap<String, BamlValue>,
     client_registry: Option<ClientRegistry>,
+    env_vars: HashMap<String, String>,
 }
 
 #[no_mangle]
@@ -162,9 +163,8 @@ pub extern "C" fn call_function_from_c(
     encoded_args: *const libc::c_char,
     length: usize,
     id: u32,
-    env_vars_json: *const libc::c_char,
 ) -> *const libc::c_void {
-    match call_function_from_c_inner(runtime, function_name, encoded_args, length, id, env_vars_json) {
+    match call_function_from_c_inner(runtime, function_name, encoded_args, length, id) {
         Ok(_) => null(),
         Err(e) => {
             Box::into_raw(Box::new(CString::new(e.to_string()).unwrap())) as *const libc::c_void
@@ -178,7 +178,6 @@ fn call_function_from_c_inner(
     encoded_args: *const libc::c_char,
     length: usize,
     id: u32,
-    env_vars_json: *const libc::c_char,
 ) -> Result<()> {
     // Safety: assume that the pointers provided are valid.
     let runtime = unsafe { &*(runtime as *const BamlRuntime) };
@@ -194,11 +193,7 @@ fn call_function_from_c_inner(
     // Convert keyword arguments.
     let buffer = unsafe { std::slice::from_raw_parts(encoded_args as *const u8, length) };
     let function_args = ctypes::buffer_to_cffi_function_arguments(buffer)?;
-
-    let env_vars = serde_json::from_str::<HashMap<String, String>>(unsafe {
-        CStr::from_ptr(env_vars_json).to_str().unwrap()
-    })
-    .unwrap();
+    let env_vars = function_args.env_vars.clone();
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
@@ -214,6 +209,7 @@ fn call_function_from_c_inner(
                 None,
                 function_args.client_registry.as_ref(),
                 None,
+                env_vars,
             )
             .await;
         safe_trigger_callback(id, true, result);
@@ -231,9 +227,8 @@ pub extern "C" fn call_function_stream_from_c(
     encoded_args: *const libc::c_char,
     length: usize,
     id: u32,
-    env_vars_json: *const libc::c_char,
 ) -> *const libc::c_void {
-    match call_function_stream_from_c_inner(runtime, function_name, encoded_args, length, id, env_vars_json) {
+    match call_function_stream_from_c_inner(runtime, function_name, encoded_args, length, id) {
         Ok(_) => null(),
         Err(e) => {
             Box::into_raw(Box::new(CString::new(e.to_string()).unwrap())) as *const libc::c_void
@@ -247,7 +242,6 @@ fn call_function_stream_from_c_inner(
     encoded_args: *const libc::c_char,
     length: usize,
     id: u32,
-    env_vars_json: *const libc::c_char,
 ) -> Result<()> {
     // Safety: assume that the pointers provided are valid.
     let runtime = unsafe { &*(runtime as *const BamlRuntime) };
@@ -263,11 +257,7 @@ fn call_function_stream_from_c_inner(
     // Convert keyword arguments.
     let buffer = unsafe { std::slice::from_raw_parts(encoded_args as *const u8, length) };
     let function_args = ctypes::buffer_to_cffi_function_arguments(buffer)?;
-
-    let env_vars = serde_json::from_str::<HashMap<String, String>>(unsafe {
-        CStr::from_ptr(env_vars_json).to_str().unwrap()
-    })
-    .unwrap();
+    let env_vars = function_args.env_vars.clone();
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
     let mut stream = match runtime.stream_function(

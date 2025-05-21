@@ -5600,6 +5600,7 @@ impl<'a> flatbuffers::Follow<'a> for CFFIFunctionArguments<'a> {
 impl<'a> CFFIFunctionArguments<'a> {
   pub const VT_KWARGS: flatbuffers::VOffsetT = 4;
   pub const VT_CLIENT_REGISTRY: flatbuffers::VOffsetT = 6;
+  pub const VT_ENV: flatbuffers::VOffsetT = 8;
 
   #[inline]
   pub unsafe fn init_from_table(table: flatbuffers::Table<'a>) -> Self {
@@ -5611,6 +5612,7 @@ impl<'a> CFFIFunctionArguments<'a> {
     args: &'args CFFIFunctionArgumentsArgs<'args>
   ) -> flatbuffers::WIPOffset<CFFIFunctionArguments<'bldr>> {
     let mut builder = CFFIFunctionArgumentsBuilder::new(_fbb);
+    if let Some(x) = args.env { builder.add_env(x); }
     if let Some(x) = args.client_registry { builder.add_client_registry(x); }
     if let Some(x) = args.kwargs { builder.add_kwargs(x); }
     builder.finish()
@@ -5631,6 +5633,13 @@ impl<'a> CFFIFunctionArguments<'a> {
     // which contains a valid value in this slot
     unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<CFFIClientRegistry>>(CFFIFunctionArguments::VT_CLIENT_REGISTRY, None)}
   }
+  #[inline]
+  pub fn env(&self) -> Option<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIMapEntry<'a>>>> {
+    // Safety:
+    // Created from valid Table for this object
+    // which contains a valid value in this slot
+    unsafe { self._tab.get::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIMapEntry>>>>(CFFIFunctionArguments::VT_ENV, None)}
+  }
 }
 
 impl flatbuffers::Verifiable for CFFIFunctionArguments<'_> {
@@ -5642,6 +5651,7 @@ impl flatbuffers::Verifiable for CFFIFunctionArguments<'_> {
     v.visit_table(pos)?
      .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<CFFIMapEntry>>>>("kwargs", Self::VT_KWARGS, false)?
      .visit_field::<flatbuffers::ForwardsUOffset<CFFIClientRegistry>>("client_registry", Self::VT_CLIENT_REGISTRY, false)?
+     .visit_field::<flatbuffers::ForwardsUOffset<flatbuffers::Vector<'_, flatbuffers::ForwardsUOffset<CFFIMapEntry>>>>("env", Self::VT_ENV, false)?
      .finish();
     Ok(())
   }
@@ -5649,6 +5659,7 @@ impl flatbuffers::Verifiable for CFFIFunctionArguments<'_> {
 pub struct CFFIFunctionArgumentsArgs<'a> {
     pub kwargs: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIMapEntry<'a>>>>>,
     pub client_registry: Option<flatbuffers::WIPOffset<CFFIClientRegistry<'a>>>,
+    pub env: Option<flatbuffers::WIPOffset<flatbuffers::Vector<'a, flatbuffers::ForwardsUOffset<CFFIMapEntry<'a>>>>>,
 }
 impl<'a> Default for CFFIFunctionArgumentsArgs<'a> {
   #[inline]
@@ -5656,6 +5667,7 @@ impl<'a> Default for CFFIFunctionArgumentsArgs<'a> {
     CFFIFunctionArgumentsArgs {
       kwargs: None,
       client_registry: None,
+      env: None,
     }
   }
 }
@@ -5672,6 +5684,10 @@ impl<'a: 'b, 'b> CFFIFunctionArgumentsBuilder<'a, 'b> {
   #[inline]
   pub fn add_client_registry(&mut self, client_registry: flatbuffers::WIPOffset<CFFIClientRegistry<'b >>) {
     self.fbb_.push_slot_always::<flatbuffers::WIPOffset<CFFIClientRegistry>>(CFFIFunctionArguments::VT_CLIENT_REGISTRY, client_registry);
+  }
+  #[inline]
+  pub fn add_env(&mut self, env: flatbuffers::WIPOffset<flatbuffers::Vector<'b , flatbuffers::ForwardsUOffset<CFFIMapEntry<'b >>>>) {
+    self.fbb_.push_slot_always::<flatbuffers::WIPOffset<_>>(CFFIFunctionArguments::VT_ENV, env);
   }
   #[inline]
   pub fn new(_fbb: &'b mut flatbuffers::FlatBufferBuilder<'a>) -> CFFIFunctionArgumentsBuilder<'a, 'b> {
@@ -5693,6 +5709,7 @@ impl core::fmt::Debug for CFFIFunctionArguments<'_> {
     let mut ds = f.debug_struct("CFFIFunctionArguments");
       ds.field("kwargs", &self.kwargs());
       ds.field("client_registry", &self.client_registry());
+      ds.field("env", &self.env());
       ds.finish()
   }
 }

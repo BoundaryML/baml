@@ -236,6 +236,7 @@ table CFFIFieldTypeStreamState {
 table CFFIFunctionArguments {
   kwargs: [CFFIMapEntry];
   client_registry: CFFIClientRegistry;
+  env: [CFFIMapEntry];
 }
 
 table CFFIClientRegistry {

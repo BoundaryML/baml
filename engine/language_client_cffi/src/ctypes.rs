@@ -109,6 +109,26 @@ impl From<CFFIMapEntry<'_>> for (String, BamlValue) {
     }
 }
 
+pub trait IntoStringPair {
+    fn into_string_pair(self) -> (String, String);
+}
+
+impl IntoStringPair for CFFIMapEntry<'_> {
+    fn into_string_pair(self) -> (String, String) {
+        let key = self
+            .key()
+            .expect("Failed to have CFFIMapEntry key")
+            .to_string();
+        let value: BamlValue = self
+            .value()
+            .expect("Failed to have CFFIMapEntry value")
+            .into();
+        // TODO: we first convert value to a BamlValue, then to a string.
+        // Instead should we just ditch CFFIMapEntry and define a new type that is just a map of string to string?
+        (key, value.to_string())
+    }
+}
+
 impl From<CFFIValueClass<'_>> for BamlValue {
     fn from(value: CFFIValueClass) -> Self {
         BamlValue::Class(
@@ -227,10 +247,15 @@ impl From<CFFIFunctionArguments<'_>> for BamlFunctionArguments {
             .map(|v| v.into())
             .collect();
         let client_registry = value.client_registry().map(|r| r.into());
+        let env_vars = value
+            .env()
+            .map(|env| env.into_iter().map(|v| v.into_string_pair()).collect())
+            .unwrap_or_default();
 
         BamlFunctionArguments {
             kwargs,
             client_registry,
+            env_vars,
         }
     }
 }
