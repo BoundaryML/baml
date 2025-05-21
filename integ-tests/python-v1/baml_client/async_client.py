@@ -72,6 +72,7 @@ class BamlAsyncClient:
       tb: Optional[TypeBuilder] = None,
       client_registry: Optional[baml_py.baml_py.ClientRegistry] = None,
       collector: Optional[Union[baml_py.baml_py.Collector, List[baml_py.baml_py.Collector]]] = None,
+      env_vars: Optional[Dict[str, Optional[str]]] = None,
     ) -> "BamlAsyncClient":
       """
       Returns a new instance of BamlAsyncClient with explicitly typed baml options
@@ -86,6 +87,8 @@ class BamlAsyncClient:
           new_options["client_registry"] = client_registry
       if collector is not None:
           new_options["collector"] = collector
+      if env_vars is not None:
+          new_options["env_vars"] = env_vars
 
       return BamlAsyncClient(self.__runtime, self.__ctx_manager, new_options)
 
