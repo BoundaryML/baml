@@ -41,8 +41,12 @@ pub struct ListFunctionCallsRequest {
 #[ts(export)]
 pub struct ListFunctionCallsResponse {
     pub function_calls: Vec<ui_types::FunctionCall>,
-    pub function_definitions: Vec<ui_types::FunctionDefinition>,
-    pub type_definitions: Vec<ui_types::TypeDefinition>,
+    // pub function_definitions: Vec<ui_types::FunctionDefinition>,
+    // pub type_definitions: Vec<ui_types::TypeDefinition>,
+    #[ts(type = "Record<string, any>")]
+    pub function_definitions: Vec<serde_json::Value>,
+    #[ts(type = "Record<string, any>")]
+    pub type_definitions: Vec<serde_json::Value>,
 }
 
 pub struct ListFunctionCalls;

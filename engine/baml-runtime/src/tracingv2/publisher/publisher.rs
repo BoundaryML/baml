@@ -71,26 +71,29 @@ fn get_publish_channel(
 struct RuntimeAST {
     ast: Arc<AstSignatureWrapper>,
     #[serde(skip)]
-    client: reqwest::Client,
+    pub client: reqwest::Client,
 }
 
 impl RuntimeAST {
+    #[allow(dead_code)]
     pub fn base_url(&self) -> String {
+        const SAM_API_URL: &str = "https://abe8c5ez29.execute-api.us-east-1.amazonaws.com";
+        const CHRIS_API_URL: &str = "https://o2em3sulde.execute-api.us-east-1.amazonaws.com";
+        return SAM_API_URL.to_string();
         self.ast
             .env_var("BOUNDARY_API_URL")
             .cloned()
-            // .expect("BOUNDARY_API_URL is not set")
-            // .unwrap_or_else(|| "https://api.boundaryml.com".to_string())
-            // .unwrap_or_else(|| "https://o2em3sulde.execute-api.us-east-1.amazonaws.com".to_string())
-            .unwrap_or_else(|| "https://abe8c5ez29.execute-api.us-east-1.amazonaws.com".to_string())
+            .unwrap_or_else(|| "https://api.boundaryml.com".to_string())
     }
 
+    #[allow(dead_code)]
     pub fn api_key(&self) -> String {
+        const CHRIS_API_KEY: &str = "7fc9adc617ed731ba6048daffe0e0de2ec168283624d07a94c2ed520183ea3f722633aa2a5eee9109098254e294f995e";
+        return CHRIS_API_KEY.to_string();
         self.ast
             .env_var("BOUNDARY_API_KEY")
             .cloned()
-            .unwrap_or_else(|| "7fc9adc617ed731ba6048daffe0e0de2ec168283624d07a94c2ed520183ea3f722633aa2a5eee9109098254e294f995e".to_string())
-        // .expect("BOUNDARY_API_KEY is not set")
+            .expect("BOUNDARY_API_KEY is not set")
     }
 
     async fn api_request<'req, 'resp, TEndpoint>(
@@ -456,8 +459,8 @@ impl TracePublisher {
             }
         };
 
-        let client = reqwest::Client::new();
-        client
+        self.lookup
+            .client
             .put(upload_url_details.upload_url)
             .json(&trace_event_batch)
             .headers(

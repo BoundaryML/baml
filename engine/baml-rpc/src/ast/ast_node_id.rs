@@ -2,68 +2,68 @@ use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 // Helper function to deserialize string to u64
-fn deserialize_string_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum StringOrNum {
-        String(String),
-        Num(u64),
-    }
+// fn deserialize_string_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
+// where
+//     D: serde::Deserializer<'de>,
+// {
+//     #[derive(Deserialize)]
+//     #[serde(untagged)]
+//     enum StringOrNum {
+//         String(String),
+//         Num(u64),
+//     }
 
-    match StringOrNum::deserialize(deserializer)? {
-        StringOrNum::String(s) => s.parse::<u64>().map_err(serde::de::Error::custom),
-        StringOrNum::Num(i) => Ok(i),
-    }
-}
+//     match StringOrNum::deserialize(deserializer)? {
+//         StringOrNum::String(s) => s.parse::<u64>().map_err(serde::de::Error::custom),
+//         StringOrNum::Num(i) => Ok(i),
+//     }
+// }
 
-// Helper function to deserialize optional string to Option<u64>
-fn deserialize_optional_string_to_optional_u64<'de, D>(
-    deserializer: D,
-) -> Result<Option<u64>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum StringOrNumOrNull {
-        String(String),
-        Num(u64),
-        Null,
-    }
+// // Helper function to deserialize optional string to Option<u64>
+// fn deserialize_optional_string_to_optional_u64<'de, D>(
+//     deserializer: D,
+// ) -> Result<Option<u64>, D::Error>
+// where
+//     D: serde::Deserializer<'de>,
+// {
+//     #[derive(Deserialize)]
+//     #[serde(untagged)]
+//     enum StringOrNumOrNull {
+//         String(String),
+//         Num(u64),
+//         Null,
+//     }
 
-    match StringOrNumOrNull::deserialize(deserializer)? {
-        StringOrNumOrNull::String(s) => {
-            s.parse::<u64>().map(Some).map_err(serde::de::Error::custom)
-        }
-        StringOrNumOrNull::Num(i) => Ok(Some(i)),
-        StringOrNumOrNull::Null => Ok(None),
-    }
-}
+//     match StringOrNumOrNull::deserialize(deserializer)? {
+//         StringOrNumOrNull::String(s) => {
+//             s.parse::<u64>().map(Some).map_err(serde::de::Error::custom)
+//         }
+//         StringOrNumOrNull::Num(i) => Ok(Some(i)),
+//         StringOrNumOrNull::Null => Ok(None),
+//     }
+// }
 
-// Helper function to serialize u64 to string
-fn serialize_u64_to_string<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    serializer.serialize_str(&value.to_string())
-}
+// // Helper function to serialize u64 to string
+// fn serialize_u64_to_string<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
+// where
+//     S: serde::Serializer,
+// {
+//     serializer.serialize_str(&value.to_string())
+// }
 
-// Helper function to serialize Option<u64> to string
-fn serialize_optional_u64_to_string<S>(
-    value: &Option<u64>,
-    serializer: S,
-) -> Result<S::Ok, S::Error>
-where
-    S: serde::Serializer,
-{
-    match value {
-        Some(v) => serializer.serialize_str(&v.to_string()),
-        None => serializer.serialize_none(),
-    }
-}
+// // Helper function to serialize Option<u64> to string
+// fn serialize_optional_u64_to_string<S>(
+//     value: &Option<u64>,
+//     serializer: S,
+// ) -> Result<S::Ok, S::Error>
+// where
+//     S: serde::Serializer,
+// {
+//     match value {
+//         Some(v) => serializer.serialize_str(&v.to_string()),
+//         None => serializer.serialize_none(),
+//     }
+// }
 
 #[derive(Debug, PartialEq, Eq, Hash, Deserialize, Serialize, Clone, TS)]
 #[ts(export)]
@@ -71,15 +71,15 @@ pub struct AstNodeId {
     type_name: String,
     name: String,
     // For clickhouse compatibility, since it transforms these u64 to strings. TBD on how to make clickhouse Json support u64 but this is a quick fix.
-    #[serde(
-        serialize_with = "serialize_u64_to_string",
-        deserialize_with = "deserialize_string_to_u64"
-    )]
+    // #[serde(
+    //     serialize_with = "serialize_u64_to_string",
+    //     deserialize_with = "deserialize_string_to_u64"
+    // )]
     interface_hash: u64,
-    #[serde(
-        serialize_with = "serialize_optional_u64_to_string",
-        deserialize_with = "deserialize_optional_string_to_optional_u64"
-    )]
+    // #[serde(
+    //     serialize_with = "serialize_optional_u64_to_string",
+    //     deserialize_with = "deserialize_optional_string_to_optional_u64"
+    // )]
     impl_hash: Option<u64>,
 }
 
