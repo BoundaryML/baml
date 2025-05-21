@@ -24,8 +24,8 @@ module Baml
       ).returns({{fn.return_type}})
     }
     def {{fn.name}}(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env_vars]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env_vars): #{baml_options.keys - [:client_registry, :tb, :env_vars]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.parse_llm_response(
@@ -37,7 +37,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env_vars] || ENV.to_h
+        baml_options[:env] || ENV.to_h
       )
     end
 
@@ -61,8 +61,8 @@ module Baml
       ).returns({{fn.partial_return_type}})
     }
     def {{fn.name}}(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env_vars]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env_vars): #{baml_options.keys - [:client_registry, :tb, :env_vars]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.parse_llm_response(
@@ -74,7 +74,7 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env_vars] || ENV.to_h
+        baml_options[:env] || ENV.to_h
       )
     end
 

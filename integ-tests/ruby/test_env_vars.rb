@@ -41,11 +41,10 @@ class TestEnvVarsWithSetup < Minitest::Test
 
   def test_system_env_vars_are_preserved
     # Make a request without any baml_options
-    begin
+    error = assert_raises(RuntimeError) do
       @b.ExtractPeople(text: "John and Jane went to the store")
-    rescue RuntimeError
-      # Ignore error
     end
+    assert_includes error.message, "Incorrect API key provided"
   end
 
   def test_user_env_vars_override_system_vars
@@ -55,14 +54,13 @@ class TestEnvVarsWithSetup < Minitest::Test
       'AZURE_OPENAI_API_KEY' => 'azure-user-key'
     }
     
-    begin
+    error = assert_raises(RuntimeError) do
       @b.ExtractPeople(
         text: "John and Jane went to the store",
         baml_options: { env_vars: user_vars }
       )
-    rescue RuntimeError
-      # Ignore error
     end
+    assert_includes error.message, "Incorrect API key provided"
   end
 
   def test_env_vars_are_merged_correctly
@@ -73,35 +71,32 @@ class TestEnvVarsWithSetup < Minitest::Test
     }
     
     # Test OpenAI request
-    begin
+    error = assert_raises(RuntimeError) do
       @b.ExtractPeople(
         text: "John and Jane went to the store",
         baml_options: { env_vars: user_vars }
       )
-    rescue RuntimeError
-      # Ignore error
     end
+    assert_includes error.message, "Incorrect API key provided"
 
     # Test Anthropic request
-    begin
+    error = assert_raises(RuntimeError) do
       @b.TestRoundRobinStrategy(
         input: "test",
         baml_options: { env_vars: user_vars }
       )
-    rescue RuntimeError
-      # Ignore error
     end
+    assert_includes error.message, "invalid x-api-key"
   end
 
   def test_nil_env_vars_handling
     # Test that nil env_vars are handled gracefully
-    begin
+    error = assert_raises(RuntimeError) do
       @b.ExtractPeople(
         text: "John and Jane went to the store",
         baml_options: { env_vars: nil }
       )
-    rescue RuntimeError
-      # Ignore error
     end
+    assert_includes error.message, "Incorrect API key provided"
   end
 end
