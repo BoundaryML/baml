@@ -27,7 +27,7 @@ from .type_builder import TypeBuilder
 class BamlCallOptions(TypedDict, total=False):
     tb: NotRequired[TypeBuilder]
     client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
-    env_vars: NotRequired[Dict[str, Optional[str]]]
+    env: NotRequired[Dict[str, Optional[str]]]
 
 def env_vars_to_dict(overrides: Dict[str, Optional[str]]) -> Dict[str, str]:
     base = os.environ.copy()
@@ -59,7 +59,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AaaSamOutputFormat",
@@ -71,7 +71,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.Recipe, parsed)
@@ -88,7 +88,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AliasThatPointsToRecursiveType",
@@ -100,7 +100,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.LinkedListAliasNode, parsed)
@@ -117,7 +117,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AliasWithMultipleAttrs",
@@ -129,7 +129,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Checked[int, Literal["gt_ten"]], parsed)
@@ -146,7 +146,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputClass",
@@ -158,7 +158,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -175,7 +175,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputClass2",
@@ -187,7 +187,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -204,7 +204,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputClassNested",
@@ -216,7 +216,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -233,7 +233,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputEnum",
@@ -245,7 +245,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -262,7 +262,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputList",
@@ -274,7 +274,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -291,7 +291,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AllowedOptionals",
@@ -303,7 +303,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.OptionalListAndMap, parsed)
@@ -320,7 +320,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AssertFn",
@@ -332,7 +332,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(int, parsed)
@@ -349,7 +349,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AudioInput",
@@ -361,7 +361,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -378,7 +378,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AudioInputOpenai",
@@ -390,7 +390,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -407,7 +407,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "BuildLinkedList",
@@ -419,7 +419,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.LinkedList, parsed)
@@ -436,7 +436,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "BuildTree",
@@ -448,7 +448,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.Tree, parsed)
@@ -465,7 +465,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ClassThatPointsToRecursiveClassThroughAlias",
@@ -477,7 +477,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.ClassToRecAlias, parsed)
@@ -494,7 +494,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ClassifyDynEnumTwo",
@@ -506,7 +506,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Union[types.DynEnumTwo, str], parsed)
@@ -523,7 +523,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ClassifyMessage",
@@ -535,7 +535,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.Category, parsed)
@@ -552,7 +552,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ClassifyMessage2",
@@ -564,7 +564,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.Category, parsed)
@@ -581,7 +581,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ClassifyMessage3",
@@ -593,7 +593,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.Category, parsed)
@@ -610,7 +610,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "Completion",
@@ -622,7 +622,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -639,7 +639,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "CustomTask",
@@ -651,7 +651,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Union[types.BookOrder, types.FlightConfirmation, types.GroceryReceipt], parsed)
@@ -668,7 +668,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage",
@@ -680,7 +680,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -697,7 +697,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage2",
@@ -709,7 +709,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -726,7 +726,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage3",
@@ -738,7 +738,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -755,7 +755,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage4",
@@ -767,7 +767,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -784,7 +784,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DescribeMedia1599",
@@ -796,7 +796,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -813,7 +813,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DifferentiateUnions",
@@ -825,7 +825,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Union[types.OriginalA, types.OriginalB], parsed)
@@ -842,7 +842,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DummyOutputFunction",
@@ -854,7 +854,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.DummyOutput, parsed)
@@ -871,7 +871,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DynamicFunc",
@@ -883,7 +883,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.DynamicClassTwo, parsed)
@@ -900,7 +900,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DynamicInputOutput",
@@ -912,7 +912,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.DynInputOutput, parsed)
@@ -929,7 +929,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DynamicListInputOutput",
@@ -941,7 +941,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[types.DynInputOutput], parsed)
@@ -958,7 +958,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExpectFailure",
@@ -970,7 +970,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -987,7 +987,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractContactInfo",
@@ -999,7 +999,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.ContactInfo, parsed)
@@ -1016,7 +1016,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractEntities",
@@ -1028,7 +1028,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.DynamicSchema, parsed)
@@ -1045,7 +1045,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractHobby",
@@ -1057,7 +1057,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[Union[types.Hobby, str]], parsed)
@@ -1074,7 +1074,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractNames",
@@ -1086,7 +1086,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[str], parsed)
@@ -1103,7 +1103,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractPeople",
@@ -1115,7 +1115,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[types.Person], parsed)
@@ -1132,7 +1132,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractReceiptInfo",
@@ -1144,7 +1144,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.ReceiptInfo, parsed)
@@ -1161,7 +1161,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractResume",
@@ -1173,7 +1173,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.Resume, parsed)
@@ -1190,7 +1190,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractResume2",
@@ -1202,7 +1202,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.Resume, parsed)
@@ -1219,7 +1219,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnClassOptionalOutput",
@@ -1231,7 +1231,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[types.ClassOptionalOutput], parsed)
@@ -1248,7 +1248,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnClassOptionalOutput2",
@@ -1260,7 +1260,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[types.ClassOptionalOutput2], parsed)
@@ -1277,7 +1277,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnEnumListOutput",
@@ -1289,7 +1289,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[types.EnumOutput], parsed)
@@ -1306,7 +1306,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnEnumOutput",
@@ -1318,7 +1318,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.EnumOutput, parsed)
@@ -1335,7 +1335,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnLiteralClassInputOutput",
@@ -1347,7 +1347,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.LiteralClassHello, parsed)
@@ -1364,7 +1364,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnLiteralUnionClassInputOutput",
@@ -1376,7 +1376,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Union[types.LiteralClassOne, types.LiteralClassTwo], parsed)
@@ -1393,7 +1393,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnNamedArgsSingleStringOptional",
@@ -1405,7 +1405,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -1422,7 +1422,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputBool",
@@ -1434,7 +1434,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(bool, parsed)
@@ -1451,7 +1451,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClass",
@@ -1463,7 +1463,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.TestOutputClass, parsed)
@@ -1480,7 +1480,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClassList",
@@ -1492,7 +1492,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[types.TestOutputClass], parsed)
@@ -1509,7 +1509,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClassNested",
@@ -1521,7 +1521,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.TestClassNested, parsed)
@@ -1538,7 +1538,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClassWithEnum",
@@ -1550,7 +1550,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.TestClassWithEnum, parsed)
@@ -1567,7 +1567,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputInt",
@@ -1579,7 +1579,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(int, parsed)
@@ -1596,7 +1596,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputLiteralBool",
@@ -1608,7 +1608,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Literal[False], parsed)
@@ -1625,7 +1625,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputLiteralInt",
@@ -1637,7 +1637,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Literal[5], parsed)
@@ -1654,7 +1654,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputLiteralString",
@@ -1666,7 +1666,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Literal["example output"], parsed)
@@ -1683,7 +1683,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputStringList",
@@ -1695,7 +1695,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[str], parsed)
@@ -1712,7 +1712,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnTestAliasedEnumOutput",
@@ -1724,7 +1724,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.TestEnum, parsed)
@@ -1741,7 +1741,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnTestClassAlias",
@@ -1753,7 +1753,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.TestClassAlias, parsed)
@@ -1770,7 +1770,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnTestNamedArgsSingleEnum",
@@ -1782,7 +1782,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -1799,7 +1799,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "GetDataType",
@@ -1811,7 +1811,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.RaysData, parsed)
@@ -1828,7 +1828,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "GetOrderInfo",
@@ -1840,7 +1840,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.OrderInfo, parsed)
@@ -1857,7 +1857,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "GetQuery",
@@ -1869,7 +1869,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.SearchParams, parsed)
@@ -1886,7 +1886,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "InOutEnumMapKey",
@@ -1898,7 +1898,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Dict[types.MapKey, str], parsed)
@@ -1915,7 +1915,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "InOutLiteralStringUnionMapKey",
@@ -1927,7 +1927,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str], parsed)
@@ -1944,7 +1944,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "InOutSingleLiteralStringMapKey",
@@ -1956,7 +1956,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Dict[Literal["key"], str], parsed)
@@ -1973,7 +1973,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "JsonTypeAliasCycle",
@@ -1985,7 +1985,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.JsonValue, parsed)
@@ -2002,7 +2002,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "LLMEcho",
@@ -2014,7 +2014,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -2031,7 +2031,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "LiteralUnionsTest",
@@ -2043,7 +2043,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Union[Literal[1], Literal[True], Literal["string output"]], parsed)
@@ -2060,7 +2060,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MakeBlockConstraint",
@@ -2072,7 +2072,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Checked[types.BlockConstraint, Literal["cross_field"]], parsed)
@@ -2089,7 +2089,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MakeClassWithBlockDone",
@@ -2101,7 +2101,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.ClassWithBlockDone, parsed)
@@ -2118,7 +2118,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MakeClassWithExternalDone",
@@ -2130,7 +2130,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.ClassWithoutDone, parsed)
@@ -2147,7 +2147,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MakeNestedBlockConstraint",
@@ -2159,7 +2159,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.NestedBlockConstraint, parsed)
@@ -2176,7 +2176,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MakeSemanticContainer",
@@ -2188,7 +2188,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.SemanticContainer, parsed)
@@ -2205,7 +2205,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MapAlias",
@@ -2217,7 +2217,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Dict[str, List[str]], parsed)
@@ -2234,7 +2234,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MergeAliasAttributes",
@@ -2246,7 +2246,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.MergeAttrs, parsed)
@@ -2263,7 +2263,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MyFunc",
@@ -2275,7 +2275,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.DynamicOutput, parsed)
@@ -2292,7 +2292,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "NestedAlias",
@@ -2304,7 +2304,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]], parsed)
@@ -2321,7 +2321,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "NullLiteralClassHello",
@@ -2333,7 +2333,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.ClassForNullLiteral, parsed)
@@ -2350,7 +2350,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "OpenAIWithAnthropicResponseHello",
@@ -2362,7 +2362,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -2379,7 +2379,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "OptionalTest_Function",
@@ -2391,7 +2391,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[Optional[types.OptionalTest_ReturnType]], parsed)
@@ -2408,7 +2408,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PredictAge",
@@ -2420,7 +2420,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.FooAny, parsed)
@@ -2437,7 +2437,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PredictAgeBare",
@@ -2449,7 +2449,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Checked[int, Literal["too_big"]], parsed)
@@ -2466,7 +2466,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PrimitiveAlias",
@@ -2478,7 +2478,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Union[int, str, bool, float], parsed)
@@ -2495,7 +2495,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PromptTestClaude",
@@ -2507,7 +2507,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -2524,7 +2524,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PromptTestClaudeChat",
@@ -2536,7 +2536,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -2553,7 +2553,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PromptTestClaudeChatNoSystem",
@@ -2565,7 +2565,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -2582,7 +2582,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PromptTestOpenAI",
@@ -2594,7 +2594,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -2611,7 +2611,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PromptTestOpenAIChat",
@@ -2623,7 +2623,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -2640,7 +2640,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PromptTestOpenAIChatNoSystem",
@@ -2652,7 +2652,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -2669,7 +2669,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PromptTestStreaming",
@@ -2681,7 +2681,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -2698,7 +2698,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "RecursiveAliasCycle",
@@ -2710,7 +2710,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.RecAliasOne, parsed)
@@ -2727,7 +2727,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "RecursiveClassWithAliasIndirection",
@@ -2739,7 +2739,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.NodeWithAliasIndirection, parsed)
@@ -2756,7 +2756,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "RecursiveUnionTest",
@@ -2768,7 +2768,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.RecursiveUnion, parsed)
@@ -2785,7 +2785,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ReturnAliasWithMergedAttributes",
@@ -2797,7 +2797,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Checked[int, Literal["gt_ten"]], parsed)
@@ -2814,7 +2814,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ReturnFailingAssert",
@@ -2826,7 +2826,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(int, parsed)
@@ -2843,7 +2843,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ReturnJsonEntry",
@@ -2855,7 +2855,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.JsonTemplate, parsed)
@@ -2872,7 +2872,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ReturnMalformedConstraints",
@@ -2884,7 +2884,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.MalformedConstraints, parsed)
@@ -2901,7 +2901,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "SchemaDescriptions",
@@ -2913,7 +2913,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.Schema, parsed)
@@ -2930,7 +2930,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "SimpleRecursiveListAlias",
@@ -2942,7 +2942,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.RecursiveListAlias, parsed)
@@ -2959,7 +2959,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "SimpleRecursiveMapAlias",
@@ -2971,7 +2971,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.RecursiveMapAlias, parsed)
@@ -2988,7 +2988,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "StreamBigNumbers",
@@ -3000,7 +3000,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.BigNumbers, parsed)
@@ -3017,7 +3017,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "StreamFailingAssertion",
@@ -3029,7 +3029,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.TwoStoriesOneTitle, parsed)
@@ -3046,7 +3046,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "StreamFailingCheck",
@@ -3058,7 +3058,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.TwoStoriesOneTitleCheck, parsed)
@@ -3075,7 +3075,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "StreamOneBigNumber",
@@ -3087,7 +3087,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(int, parsed)
@@ -3104,7 +3104,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "StreamUnionIntegers",
@@ -3116,7 +3116,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[Union[int, str]], parsed)
@@ -3133,7 +3133,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "StreamingCompoundNumbers",
@@ -3145,7 +3145,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.CompoundBigNumbers, parsed)
@@ -3162,7 +3162,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "StructureDocument1559",
@@ -3174,7 +3174,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.Document1559, parsed)
@@ -3191,7 +3191,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TakeRecAliasDep",
@@ -3203,7 +3203,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.RecursiveAliasDependency, parsed)
@@ -3220,7 +3220,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TellStory",
@@ -3232,7 +3232,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3249,7 +3249,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAnthropic",
@@ -3261,7 +3261,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3278,7 +3278,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAnthropicShorthand",
@@ -3290,7 +3290,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3307,7 +3307,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAws",
@@ -3319,7 +3319,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3336,7 +3336,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAwsClaude37",
@@ -3348,7 +3348,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3365,7 +3365,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInferenceProfile",
@@ -3377,7 +3377,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3394,7 +3394,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidAccessKey",
@@ -3406,7 +3406,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3423,7 +3423,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidProfile",
@@ -3435,7 +3435,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3452,7 +3452,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidRegion",
@@ -3464,7 +3464,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3481,7 +3481,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidSessionToken",
@@ -3493,7 +3493,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3510,7 +3510,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzure",
@@ -3522,7 +3522,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3539,7 +3539,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzureFailure",
@@ -3551,7 +3551,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3568,7 +3568,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO1NoMaxTokens",
@@ -3580,7 +3580,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3597,7 +3597,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO1WithMaxCompletionTokens",
@@ -3609,7 +3609,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3626,7 +3626,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO1WithMaxTokens",
@@ -3638,7 +3638,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3655,7 +3655,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO3NoMaxTokens",
@@ -3667,7 +3667,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3684,7 +3684,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO3WithMaxCompletionTokens",
@@ -3696,7 +3696,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3713,7 +3713,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzureWithMaxTokens",
@@ -3725,7 +3725,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3742,7 +3742,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestCaching",
@@ -3754,7 +3754,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3771,7 +3771,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFallbackClient",
@@ -3783,7 +3783,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3800,7 +3800,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFallbackStrategy",
@@ -3812,7 +3812,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3829,7 +3829,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFallbackToShorthand",
@@ -3841,7 +3841,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3858,7 +3858,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleBool",
@@ -3870,7 +3870,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3887,7 +3887,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleClass",
@@ -3899,7 +3899,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3916,7 +3916,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleEnumList",
@@ -3928,7 +3928,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3945,7 +3945,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleFloat",
@@ -3957,7 +3957,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -3974,7 +3974,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleInt",
@@ -3986,7 +3986,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4003,7 +4003,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleMapStringToClass",
@@ -4015,7 +4015,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Dict[str, types.StringToClassEntry], parsed)
@@ -4032,7 +4032,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleMapStringToMap",
@@ -4044,7 +4044,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Dict[str, Dict[str, str]], parsed)
@@ -4061,7 +4061,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleMapStringToString",
@@ -4073,7 +4073,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Dict[str, str], parsed)
@@ -4090,7 +4090,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleString",
@@ -4102,7 +4102,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4119,7 +4119,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleStringArray",
@@ -4131,7 +4131,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4148,7 +4148,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleStringList",
@@ -4160,7 +4160,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[str], parsed)
@@ -4177,7 +4177,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestGemini",
@@ -4189,7 +4189,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4206,7 +4206,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestGeminiOpenAiGeneric",
@@ -4218,7 +4218,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4235,7 +4235,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestGeminiSystem",
@@ -4247,7 +4247,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4264,7 +4264,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestGeminiSystemAsChat",
@@ -4276,7 +4276,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4293,7 +4293,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestGroq",
@@ -4305,7 +4305,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4322,7 +4322,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestImageInput",
@@ -4334,7 +4334,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4351,7 +4351,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestImageInputAnthropic",
@@ -4363,7 +4363,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4380,7 +4380,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestImageListInput",
@@ -4392,7 +4392,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4409,7 +4409,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestMemory",
@@ -4421,7 +4421,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.TestMemoryOutput, parsed)
@@ -4438,7 +4438,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestMulticlassNamedArgs",
@@ -4450,7 +4450,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4467,7 +4467,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestNamedArgsLiteralBool",
@@ -4479,7 +4479,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4496,7 +4496,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestNamedArgsLiteralInt",
@@ -4508,7 +4508,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4525,7 +4525,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestNamedArgsLiteralString",
@@ -4537,7 +4537,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4554,7 +4554,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOllama",
@@ -4566,7 +4566,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -4583,7 +4583,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOllamaHaiku",
@@ -4595,7 +4595,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.Haiku, parsed)
@@ -4612,7 +4612,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAI",
@@ -4624,7 +4624,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4641,7 +4641,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIDummyClient",
@@ -4653,7 +4653,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4670,7 +4670,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIGPT4oMini",
@@ -4682,7 +4682,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4699,7 +4699,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAILegacyProvider",
@@ -4711,7 +4711,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4728,7 +4728,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIO1NoMaxTokens",
@@ -4740,7 +4740,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4757,7 +4757,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIO1WithMaxCompletionTokens",
@@ -4769,7 +4769,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4786,7 +4786,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIO1WithMaxTokens",
@@ -4798,7 +4798,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4815,7 +4815,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIShorthand",
@@ -4827,7 +4827,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4844,7 +4844,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIWithFinishReasonError",
@@ -4856,7 +4856,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4873,7 +4873,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIWithMaxTokens",
@@ -4885,7 +4885,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4902,7 +4902,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIWithNullMaxTokens",
@@ -4914,7 +4914,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4931,7 +4931,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenRouterMistralSmall3_1_24b",
@@ -4943,7 +4943,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4960,7 +4960,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestRetryConstant",
@@ -4972,7 +4972,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -4989,7 +4989,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestRetryExponential",
@@ -5001,7 +5001,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -5018,7 +5018,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestRoundRobinStrategy",
@@ -5030,7 +5030,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -5047,7 +5047,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestSingleFallbackClient",
@@ -5059,7 +5059,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -5076,7 +5076,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestThinking",
@@ -5088,7 +5088,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.CustomStory, parsed)
@@ -5105,7 +5105,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestUniverseQuestion",
@@ -5117,7 +5117,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.UniverseQuestion, parsed)
@@ -5134,7 +5134,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestVertex",
@@ -5146,7 +5146,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -5163,7 +5163,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestVertexClaude",
@@ -5175,7 +5175,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -5192,7 +5192,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestVertexWithSystemInstructions",
@@ -5204,7 +5204,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -5221,7 +5221,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "UnionTest_Function",
@@ -5233,7 +5233,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.UnionTest_ReturnType, parsed)
@@ -5250,7 +5250,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "UseBlockConstraint",
@@ -5262,7 +5262,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(int, parsed)
@@ -5279,7 +5279,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "UseMaintainFieldOrder",
@@ -5291,7 +5291,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.MaintainFieldOrder, parsed)
@@ -5308,7 +5308,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "UseMalformedConstraints",
@@ -5320,7 +5320,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(int, parsed)
@@ -5337,7 +5337,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "UseNestedBlockConstraint",
@@ -5349,7 +5349,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(int, parsed)
@@ -5366,7 +5366,7 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "EchoWorkflow",
@@ -5378,7 +5378,7 @@ class LlmResponseParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(str, parsed)
@@ -5406,7 +5406,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AaaSamOutputFormat",
@@ -5418,7 +5418,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.Recipe, parsed)
@@ -5435,7 +5435,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AliasThatPointsToRecursiveType",
@@ -5447,7 +5447,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.LinkedListAliasNode, parsed)
@@ -5464,7 +5464,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AliasWithMultipleAttrs",
@@ -5476,7 +5476,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Checked[Optional[int], Literal["gt_ten"]], parsed)
@@ -5493,7 +5493,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputClass",
@@ -5505,7 +5505,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -5522,7 +5522,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputClass2",
@@ -5534,7 +5534,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -5551,7 +5551,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputClassNested",
@@ -5563,7 +5563,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -5580,7 +5580,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputEnum",
@@ -5592,7 +5592,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -5609,7 +5609,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputList",
@@ -5621,7 +5621,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -5638,7 +5638,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AllowedOptionals",
@@ -5650,7 +5650,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.OptionalListAndMap, parsed)
@@ -5667,7 +5667,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AssertFn",
@@ -5679,7 +5679,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[int], parsed)
@@ -5696,7 +5696,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AudioInput",
@@ -5708,7 +5708,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -5725,7 +5725,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "AudioInputOpenai",
@@ -5737,7 +5737,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -5754,7 +5754,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "BuildLinkedList",
@@ -5766,7 +5766,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.LinkedList, parsed)
@@ -5783,7 +5783,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "BuildTree",
@@ -5795,7 +5795,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.Tree, parsed)
@@ -5812,7 +5812,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ClassThatPointsToRecursiveClassThroughAlias",
@@ -5824,7 +5824,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.ClassToRecAlias, parsed)
@@ -5841,7 +5841,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ClassifyDynEnumTwo",
@@ -5853,7 +5853,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[Union[types.DynEnumTwo, str]], parsed)
@@ -5870,7 +5870,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ClassifyMessage",
@@ -5882,7 +5882,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[types.Category], parsed)
@@ -5899,7 +5899,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ClassifyMessage2",
@@ -5911,7 +5911,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[types.Category], parsed)
@@ -5928,7 +5928,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ClassifyMessage3",
@@ -5940,7 +5940,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[types.Category], parsed)
@@ -5957,7 +5957,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "Completion",
@@ -5969,7 +5969,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -5986,7 +5986,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "CustomTask",
@@ -5998,7 +5998,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[Union[partial_types.BookOrder, partial_types.FlightConfirmation, partial_types.GroceryReceipt]], parsed)
@@ -6015,7 +6015,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage",
@@ -6027,7 +6027,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -6044,7 +6044,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage2",
@@ -6056,7 +6056,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -6073,7 +6073,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage3",
@@ -6085,7 +6085,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -6102,7 +6102,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage4",
@@ -6114,7 +6114,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -6131,7 +6131,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DescribeMedia1599",
@@ -6143,7 +6143,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -6160,7 +6160,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DifferentiateUnions",
@@ -6172,7 +6172,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[Union[partial_types.OriginalA, partial_types.OriginalB]], parsed)
@@ -6189,7 +6189,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DummyOutputFunction",
@@ -6201,7 +6201,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.DummyOutput, parsed)
@@ -6218,7 +6218,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DynamicFunc",
@@ -6230,7 +6230,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.DynamicClassTwo, parsed)
@@ -6247,7 +6247,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DynamicInputOutput",
@@ -6259,7 +6259,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.DynInputOutput, parsed)
@@ -6276,7 +6276,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "DynamicListInputOutput",
@@ -6288,7 +6288,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[partial_types.DynInputOutput], parsed)
@@ -6305,7 +6305,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExpectFailure",
@@ -6317,7 +6317,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -6334,7 +6334,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractContactInfo",
@@ -6346,7 +6346,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.ContactInfo, parsed)
@@ -6363,7 +6363,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractEntities",
@@ -6375,7 +6375,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.DynamicSchema, parsed)
@@ -6392,7 +6392,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractHobby",
@@ -6404,7 +6404,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[Optional[Union[types.Hobby, str]]], parsed)
@@ -6421,7 +6421,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractNames",
@@ -6433,7 +6433,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[Optional[str]], parsed)
@@ -6450,7 +6450,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractPeople",
@@ -6462,7 +6462,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[partial_types.Person], parsed)
@@ -6479,7 +6479,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractReceiptInfo",
@@ -6491,7 +6491,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.ReceiptInfo, parsed)
@@ -6508,7 +6508,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractResume",
@@ -6520,7 +6520,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.Resume, parsed)
@@ -6537,7 +6537,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ExtractResume2",
@@ -6549,7 +6549,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.Resume, parsed)
@@ -6566,7 +6566,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnClassOptionalOutput",
@@ -6578,7 +6578,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[partial_types.ClassOptionalOutput], parsed)
@@ -6595,7 +6595,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnClassOptionalOutput2",
@@ -6607,7 +6607,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[partial_types.ClassOptionalOutput2], parsed)
@@ -6624,7 +6624,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnEnumListOutput",
@@ -6636,7 +6636,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[Optional[types.EnumOutput]], parsed)
@@ -6653,7 +6653,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnEnumOutput",
@@ -6665,7 +6665,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[types.EnumOutput], parsed)
@@ -6682,7 +6682,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnLiteralClassInputOutput",
@@ -6694,7 +6694,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.LiteralClassHello, parsed)
@@ -6711,7 +6711,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnLiteralUnionClassInputOutput",
@@ -6723,7 +6723,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[Union[partial_types.LiteralClassOne, partial_types.LiteralClassTwo]], parsed)
@@ -6740,7 +6740,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnNamedArgsSingleStringOptional",
@@ -6752,7 +6752,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -6769,7 +6769,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputBool",
@@ -6781,7 +6781,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[bool], parsed)
@@ -6798,7 +6798,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClass",
@@ -6810,7 +6810,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.TestOutputClass, parsed)
@@ -6827,7 +6827,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClassList",
@@ -6839,7 +6839,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[partial_types.TestOutputClass], parsed)
@@ -6856,7 +6856,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClassNested",
@@ -6868,7 +6868,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.TestClassNested, parsed)
@@ -6885,7 +6885,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClassWithEnum",
@@ -6897,7 +6897,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.TestClassWithEnum, parsed)
@@ -6914,7 +6914,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputInt",
@@ -6926,7 +6926,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[int], parsed)
@@ -6943,7 +6943,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputLiteralBool",
@@ -6955,7 +6955,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[Literal[False]], parsed)
@@ -6972,7 +6972,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputLiteralInt",
@@ -6984,7 +6984,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[Literal[5]], parsed)
@@ -7001,7 +7001,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputLiteralString",
@@ -7013,7 +7013,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[Literal["example output"]], parsed)
@@ -7030,7 +7030,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnOutputStringList",
@@ -7042,7 +7042,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[Optional[str]], parsed)
@@ -7059,7 +7059,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnTestAliasedEnumOutput",
@@ -7071,7 +7071,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[types.TestEnum], parsed)
@@ -7088,7 +7088,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnTestClassAlias",
@@ -7100,7 +7100,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.TestClassAlias, parsed)
@@ -7117,7 +7117,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "FnTestNamedArgsSingleEnum",
@@ -7129,7 +7129,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -7146,7 +7146,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "GetDataType",
@@ -7158,7 +7158,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.RaysData, parsed)
@@ -7175,7 +7175,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "GetOrderInfo",
@@ -7187,7 +7187,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.OrderInfo, parsed)
@@ -7204,7 +7204,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "GetQuery",
@@ -7216,7 +7216,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.SearchParams, parsed)
@@ -7233,7 +7233,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "InOutEnumMapKey",
@@ -7245,7 +7245,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Dict[types.MapKey, Optional[str]], parsed)
@@ -7262,7 +7262,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "InOutLiteralStringUnionMapKey",
@@ -7274,7 +7274,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], Optional[str]], parsed)
@@ -7291,7 +7291,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "InOutSingleLiteralStringMapKey",
@@ -7303,7 +7303,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Dict[Literal["key"], Optional[str]], parsed)
@@ -7320,7 +7320,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "JsonTypeAliasCycle",
@@ -7332,7 +7332,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.JsonValue, parsed)
@@ -7349,7 +7349,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "LLMEcho",
@@ -7361,7 +7361,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -7378,7 +7378,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "LiteralUnionsTest",
@@ -7390,7 +7390,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]], parsed)
@@ -7407,7 +7407,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MakeBlockConstraint",
@@ -7419,7 +7419,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Checked[partial_types.BlockConstraint, Literal["cross_field"]], parsed)
@@ -7436,7 +7436,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MakeClassWithBlockDone",
@@ -7448,7 +7448,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.ClassWithBlockDone, parsed)
@@ -7465,7 +7465,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MakeClassWithExternalDone",
@@ -7477,7 +7477,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.ClassWithoutDone, parsed)
@@ -7494,7 +7494,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MakeNestedBlockConstraint",
@@ -7506,7 +7506,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.NestedBlockConstraint, parsed)
@@ -7523,7 +7523,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MakeSemanticContainer",
@@ -7535,7 +7535,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.SemanticContainer, parsed)
@@ -7552,7 +7552,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MapAlias",
@@ -7564,7 +7564,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Dict[str, List[Optional[str]]], parsed)
@@ -7581,7 +7581,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MergeAliasAttributes",
@@ -7593,7 +7593,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.MergeAttrs, parsed)
@@ -7610,7 +7610,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "MyFunc",
@@ -7622,7 +7622,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.DynamicOutput, parsed)
@@ -7639,7 +7639,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "NestedAlias",
@@ -7651,7 +7651,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[Union[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], List[Optional[str]], Dict[str, List[Optional[str]]]]], parsed)
@@ -7668,7 +7668,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "NullLiteralClassHello",
@@ -7680,7 +7680,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.ClassForNullLiteral, parsed)
@@ -7697,7 +7697,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "OpenAIWithAnthropicResponseHello",
@@ -7709,7 +7709,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -7726,7 +7726,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "OptionalTest_Function",
@@ -7738,7 +7738,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[Optional[partial_types.OptionalTest_ReturnType]], parsed)
@@ -7755,7 +7755,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PredictAge",
@@ -7767,7 +7767,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.FooAny, parsed)
@@ -7784,7 +7784,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PredictAgeBare",
@@ -7796,7 +7796,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Checked[Optional[int], Literal["too_big"]], parsed)
@@ -7813,7 +7813,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PrimitiveAlias",
@@ -7825,7 +7825,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], parsed)
@@ -7842,7 +7842,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PromptTestClaude",
@@ -7854,7 +7854,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -7871,7 +7871,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PromptTestClaudeChat",
@@ -7883,7 +7883,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -7900,7 +7900,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PromptTestClaudeChatNoSystem",
@@ -7912,7 +7912,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -7929,7 +7929,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PromptTestOpenAI",
@@ -7941,7 +7941,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -7958,7 +7958,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PromptTestOpenAIChat",
@@ -7970,7 +7970,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -7987,7 +7987,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PromptTestOpenAIChatNoSystem",
@@ -7999,7 +7999,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8016,7 +8016,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "PromptTestStreaming",
@@ -8028,7 +8028,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8045,7 +8045,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "RecursiveAliasCycle",
@@ -8057,7 +8057,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.RecAliasOne, parsed)
@@ -8074,7 +8074,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "RecursiveClassWithAliasIndirection",
@@ -8086,7 +8086,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.NodeWithAliasIndirection, parsed)
@@ -8103,7 +8103,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "RecursiveUnionTest",
@@ -8115,7 +8115,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.RecursiveUnion, parsed)
@@ -8132,7 +8132,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ReturnAliasWithMergedAttributes",
@@ -8144,7 +8144,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Checked[Optional[int], Literal["gt_ten"]], parsed)
@@ -8161,7 +8161,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ReturnFailingAssert",
@@ -8173,7 +8173,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[int], parsed)
@@ -8190,7 +8190,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ReturnJsonEntry",
@@ -8202,7 +8202,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.JsonTemplate, parsed)
@@ -8219,7 +8219,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "ReturnMalformedConstraints",
@@ -8231,7 +8231,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.MalformedConstraints, parsed)
@@ -8248,7 +8248,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "SchemaDescriptions",
@@ -8260,7 +8260,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.Schema, parsed)
@@ -8277,7 +8277,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "SimpleRecursiveListAlias",
@@ -8289,7 +8289,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.RecursiveListAlias, parsed)
@@ -8306,7 +8306,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "SimpleRecursiveMapAlias",
@@ -8318,7 +8318,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(types.RecursiveMapAlias, parsed)
@@ -8335,7 +8335,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "StreamBigNumbers",
@@ -8347,7 +8347,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.BigNumbers, parsed)
@@ -8364,7 +8364,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "StreamFailingAssertion",
@@ -8376,7 +8376,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.TwoStoriesOneTitle, parsed)
@@ -8393,7 +8393,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "StreamFailingCheck",
@@ -8405,7 +8405,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.TwoStoriesOneTitleCheck, parsed)
@@ -8422,7 +8422,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "StreamOneBigNumber",
@@ -8434,7 +8434,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[int], parsed)
@@ -8451,7 +8451,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "StreamUnionIntegers",
@@ -8463,7 +8463,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[Optional[Union[Optional[int], Optional[str]]]], parsed)
@@ -8480,7 +8480,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "StreamingCompoundNumbers",
@@ -8492,7 +8492,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.CompoundBigNumbers, parsed)
@@ -8509,7 +8509,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "StructureDocument1559",
@@ -8521,7 +8521,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.Document1559, parsed)
@@ -8538,7 +8538,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TakeRecAliasDep",
@@ -8550,7 +8550,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.RecursiveAliasDependency, parsed)
@@ -8567,7 +8567,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TellStory",
@@ -8579,7 +8579,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8596,7 +8596,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAnthropic",
@@ -8608,7 +8608,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8625,7 +8625,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAnthropicShorthand",
@@ -8637,7 +8637,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8654,7 +8654,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAws",
@@ -8666,7 +8666,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8683,7 +8683,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAwsClaude37",
@@ -8695,7 +8695,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8712,7 +8712,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInferenceProfile",
@@ -8724,7 +8724,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8741,7 +8741,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidAccessKey",
@@ -8753,7 +8753,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8770,7 +8770,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidProfile",
@@ -8782,7 +8782,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8799,7 +8799,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidRegion",
@@ -8811,7 +8811,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8828,7 +8828,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidSessionToken",
@@ -8840,7 +8840,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8857,7 +8857,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzure",
@@ -8869,7 +8869,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8886,7 +8886,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzureFailure",
@@ -8898,7 +8898,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8915,7 +8915,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO1NoMaxTokens",
@@ -8927,7 +8927,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8944,7 +8944,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO1WithMaxCompletionTokens",
@@ -8956,7 +8956,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -8973,7 +8973,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO1WithMaxTokens",
@@ -8985,7 +8985,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9002,7 +9002,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO3NoMaxTokens",
@@ -9014,7 +9014,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9031,7 +9031,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO3WithMaxCompletionTokens",
@@ -9043,7 +9043,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9060,7 +9060,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestAzureWithMaxTokens",
@@ -9072,7 +9072,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9089,7 +9089,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestCaching",
@@ -9101,7 +9101,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9118,7 +9118,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFallbackClient",
@@ -9130,7 +9130,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9147,7 +9147,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFallbackStrategy",
@@ -9159,7 +9159,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9176,7 +9176,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFallbackToShorthand",
@@ -9188,7 +9188,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9205,7 +9205,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleBool",
@@ -9217,7 +9217,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9234,7 +9234,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleClass",
@@ -9246,7 +9246,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9263,7 +9263,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleEnumList",
@@ -9275,7 +9275,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9292,7 +9292,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleFloat",
@@ -9304,7 +9304,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9321,7 +9321,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleInt",
@@ -9333,7 +9333,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9350,7 +9350,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleMapStringToClass",
@@ -9362,7 +9362,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Dict[str, partial_types.StringToClassEntry], parsed)
@@ -9379,7 +9379,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleMapStringToMap",
@@ -9391,7 +9391,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Dict[str, Dict[str, Optional[str]]], parsed)
@@ -9408,7 +9408,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleMapStringToString",
@@ -9420,7 +9420,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Dict[str, Optional[str]], parsed)
@@ -9437,7 +9437,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleString",
@@ -9449,7 +9449,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9466,7 +9466,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleStringArray",
@@ -9478,7 +9478,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9495,7 +9495,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleStringList",
@@ -9507,7 +9507,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(List[Optional[str]], parsed)
@@ -9524,7 +9524,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestGemini",
@@ -9536,7 +9536,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9553,7 +9553,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestGeminiOpenAiGeneric",
@@ -9565,7 +9565,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9582,7 +9582,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestGeminiSystem",
@@ -9594,7 +9594,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9611,7 +9611,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestGeminiSystemAsChat",
@@ -9623,7 +9623,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9640,7 +9640,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestGroq",
@@ -9652,7 +9652,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9669,7 +9669,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestImageInput",
@@ -9681,7 +9681,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9698,7 +9698,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestImageInputAnthropic",
@@ -9710,7 +9710,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9727,7 +9727,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestImageListInput",
@@ -9739,7 +9739,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9756,7 +9756,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestMemory",
@@ -9768,7 +9768,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.TestMemoryOutput, parsed)
@@ -9785,7 +9785,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestMulticlassNamedArgs",
@@ -9797,7 +9797,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9814,7 +9814,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestNamedArgsLiteralBool",
@@ -9826,7 +9826,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9843,7 +9843,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestNamedArgsLiteralInt",
@@ -9855,7 +9855,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9872,7 +9872,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestNamedArgsLiteralString",
@@ -9884,7 +9884,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9901,7 +9901,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOllama",
@@ -9913,7 +9913,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9930,7 +9930,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOllamaHaiku",
@@ -9942,7 +9942,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.Haiku, parsed)
@@ -9959,7 +9959,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAI",
@@ -9971,7 +9971,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -9988,7 +9988,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIDummyClient",
@@ -10000,7 +10000,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10017,7 +10017,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIGPT4oMini",
@@ -10029,7 +10029,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10046,7 +10046,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAILegacyProvider",
@@ -10058,7 +10058,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10075,7 +10075,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIO1NoMaxTokens",
@@ -10087,7 +10087,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10104,7 +10104,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIO1WithMaxCompletionTokens",
@@ -10116,7 +10116,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10133,7 +10133,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIO1WithMaxTokens",
@@ -10145,7 +10145,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10162,7 +10162,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIShorthand",
@@ -10174,7 +10174,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10191,7 +10191,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIWithFinishReasonError",
@@ -10203,7 +10203,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10220,7 +10220,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIWithMaxTokens",
@@ -10232,7 +10232,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10249,7 +10249,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIWithNullMaxTokens",
@@ -10261,7 +10261,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10278,7 +10278,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenRouterMistralSmall3_1_24b",
@@ -10290,7 +10290,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10307,7 +10307,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestRetryConstant",
@@ -10319,7 +10319,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10336,7 +10336,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestRetryExponential",
@@ -10348,7 +10348,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10365,7 +10365,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestRoundRobinStrategy",
@@ -10377,7 +10377,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10394,7 +10394,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestSingleFallbackClient",
@@ -10406,7 +10406,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10423,7 +10423,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestThinking",
@@ -10435,7 +10435,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.CustomStory, parsed)
@@ -10452,7 +10452,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestUniverseQuestion",
@@ -10464,7 +10464,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.UniverseQuestion, parsed)
@@ -10481,7 +10481,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestVertex",
@@ -10493,7 +10493,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10510,7 +10510,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestVertexClaude",
@@ -10522,7 +10522,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10539,7 +10539,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "TestVertexWithSystemInstructions",
@@ -10551,7 +10551,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
@@ -10568,7 +10568,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "UnionTest_Function",
@@ -10580,7 +10580,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.UnionTest_ReturnType, parsed)
@@ -10597,7 +10597,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "UseBlockConstraint",
@@ -10609,7 +10609,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[int], parsed)
@@ -10626,7 +10626,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "UseMaintainFieldOrder",
@@ -10638,7 +10638,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(partial_types.MaintainFieldOrder, parsed)
@@ -10655,7 +10655,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "UseMalformedConstraints",
@@ -10667,7 +10667,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[int], parsed)
@@ -10684,7 +10684,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "UseNestedBlockConstraint",
@@ -10696,7 +10696,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[int], parsed)
@@ -10713,7 +10713,7 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env_vars = env_vars_to_dict(baml_options.get("env_vars", {}))
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "EchoWorkflow",
@@ -10725,7 +10725,7 @@ class LlmStreamParser:
         self.__ctx_manager.get(),
         tb,
         __cr__,
-        env_vars,
+        env,
       )
 
       return cast(Optional[str], parsed)
