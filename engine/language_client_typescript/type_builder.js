@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EnumBuilder = exports.ClassBuilder = exports.TypeBuilder = void 0;
+exports.EnumBuilder = exports.EnumValueViewer = exports.EnumViewer = exports.EnumAst = exports.ClassBuilder = exports.ClassViewer = exports.ClassAst = exports.TypeBuilder = void 0;
 const native_1 = require("./native");
 class TypeBuilder {
     tb;
@@ -49,8 +49,14 @@ class TypeBuilder {
     union(types) {
         return this.tb.union(types);
     }
+    classViewer(name, properties) {
+        return new ClassViewer(this.tb, name, new Set(properties));
+    }
     classBuilder(name, properties) {
         return new ClassBuilder(this.tb, name, new Set(properties));
+    }
+    enumViewer(name, values) {
+        return new EnumViewer(this.tb, name, new Set(values));
     }
     enumBuilder(name, values) {
         return new EnumBuilder(this.tb, name, new Set(values));
@@ -80,7 +86,7 @@ class TypeBuilder {
     }
 }
 exports.TypeBuilder = TypeBuilder;
-class ClassBuilder {
+class ClassAst {
     properties;
     bldr;
     constructor(tb, name, properties = new Set()) {
@@ -90,8 +96,26 @@ class ClassBuilder {
     type() {
         return this.bldr.field();
     }
+}
+exports.ClassAst = ClassAst;
+class ClassViewer extends ClassAst {
+    constructor(tb, name, properties = new Set()) {
+        super(tb, name, properties);
+    }
     listProperties() {
-        return Array.from(this.properties).map((name) => [name, new ClassPropertyBuilder(this.bldr.property(name))]);
+        return Array.from(this.properties).map((name) => [name, new ClassPropertyViewer()]);
+    }
+    property(name) {
+        if (!this.properties.has(name)) {
+            throw new Error(`Property ${name} not found.`);
+        }
+        return new ClassPropertyViewer();
+    }
+}
+exports.ClassViewer = ClassViewer;
+class ClassBuilder extends ClassAst {
+    constructor(tb, name, properties = new Set()) {
+        super(tb, name, properties);
     }
     addProperty(name, type) {
         if (this.properties.has(name)) {
@@ -99,6 +123,9 @@ class ClassBuilder {
         }
         this.properties.add(name);
         return new ClassPropertyBuilder(this.bldr.property(name).setType(type));
+    }
+    listProperties() {
+        return Array.from(this.properties).map((name) => [name, new ClassPropertyBuilder(this.bldr.property(name))]);
     }
     property(name) {
         if (!this.properties.has(name)) {
@@ -108,6 +135,9 @@ class ClassBuilder {
     }
 }
 exports.ClassBuilder = ClassBuilder;
+class ClassPropertyViewer {
+    constructor() { }
+}
 class ClassPropertyBuilder {
     bldr;
     constructor(bldr) {
@@ -122,7 +152,7 @@ class ClassPropertyBuilder {
         return this;
     }
 }
-class EnumBuilder {
+class EnumAst {
     values;
     bldr;
     constructor(tb, name, values = new Set()) {
@@ -132,20 +162,42 @@ class EnumBuilder {
     type() {
         return this.bldr.field();
     }
+}
+exports.EnumAst = EnumAst;
+class EnumViewer extends EnumAst {
+    constructor(tb, name, values = new Set()) {
+        super(tb, name, values);
+    }
+    listValues() {
+        return Array.from(this.values).map((name) => [name, new EnumValueViewer()]);
+    }
     value(name) {
         if (!this.values.has(name)) {
             throw new Error(`Value ${name} not found.`);
         }
-        return this.bldr.value(name);
+        return new EnumValueViewer();
     }
-    listValues() {
-        return Array.from(this.values).map((name) => [name, this.bldr.value(name)]);
+}
+exports.EnumViewer = EnumViewer;
+class EnumValueViewer {
+    constructor() { }
+}
+exports.EnumValueViewer = EnumValueViewer;
+class EnumBuilder extends EnumAst {
+    constructor(tb, name, values = new Set()) {
+        super(tb, name, values);
     }
     addValue(name) {
         if (this.values.has(name)) {
             throw new Error(`Value ${name} already exists.`);
         }
         this.values.add(name);
+        return this.bldr.value(name);
+    }
+    listValues() {
+        return Array.from(this.values).map((name) => [name, this.bldr.value(name)]);
+    }
+    value(name) {
         return this.bldr.value(name);
     }
 }

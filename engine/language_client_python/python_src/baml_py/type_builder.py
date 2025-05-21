@@ -11,7 +11,9 @@ from .baml_py import (
 
 
 class TypeBuilder:
-    def __init__(self, classes: typing.Set[str], enums: typing.Set[str], runtime: BamlRuntime):
+    def __init__(
+        self, classes: typing.Set[str], enums: typing.Set[str], runtime: BamlRuntime
+    ):
         self.__classes = classes
         self.__enums = enums
         self.__tb = _TypeBuilder()
@@ -146,6 +148,11 @@ class ClassPropertyBuilder:
         return self
 
 
+class ClassPropertyViewer:
+    def __init__(self, bldr: _ClassPropertyBuilder):
+        self.__bldr = bldr
+
+
 class NewClassProperties:
     def __init__(self, cls_bldr: ClassBuilder, properties: typing.Set[str]):
         self.__bldr = cls_bldr
@@ -190,3 +197,8 @@ class NewEnumValues:
         if name not in self.__values:
             raise AttributeError(f"Value {name} not found.")
         return self.__bldr.value(name)
+
+
+class EnumValueViewer:
+    def __init__(self, bldr: "EnumValueBuilder"):
+        self.__bldr = bldr

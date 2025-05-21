@@ -1,21 +1,58 @@
 {
-  "fileTypes": ["baml"],
+  "fileTypes": [
+    "baml"
+  ],
   "name": "baml",
-  "patterns": [{ "include": "#comment" }, { "include": "#schema" }],
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#schema"
+    }
+  ],
   "repository": {
     "schema": {
       "patterns": [
-        { "include": "#enum_declaration" },
-        { "include": "#interface_declaration" },
-        { "include": "#template_string_declaration" },
-        { "include": "#function_declaration" },
-        { "include": "#config_block" },
-        { "include": "#type_alias" },
-        { "include": "#function" },
-        { "include": "#language_block_python" },
-        { "include": "#language_block_ts" },
-        { "include": "#language_block_jinja" },
-        { "include": "#type_builder" }
+        {
+          "include": "#enum_declaration"
+        },
+        {
+          "include": "#interface_declaration"
+        },
+        {
+          "include": "#template_string_declaration"
+        },
+        {
+          "include": "#function_declaration"
+        },
+        {
+          "include": "#function_application"
+        },
+        {
+          "include": "#let_declaration"
+        },
+        {
+          "include": "#config_block"
+        },
+        {
+          "include": "#type_alias"
+        },
+        {
+          "include": "#function"
+        },
+        {
+          "include": "#language_block_python"
+        },
+        {
+          "include": "#language_block_ts"
+        },
+        {
+          "include": "#language_block_jinja"
+        },
+        {
+          "include": "#type_builder"
+        }
       ]
     },
     "comment": {
@@ -40,17 +77,24 @@
         }
       ]
     },
-
     "enum_declaration": {
       "begin": "(enum)\\s+(\\w+)",
       "beginCaptures": {
-        "1": { "name": "storage.type.enum" },
-        "2": { "name": "entity.name.type" }
+        "1": {
+          "name": "storage.type.enum"
+        },
+        "2": {
+          "name": "entity.name.type"
+        }
       },
       "end": "\\}",
       "patterns": [
-        { "include": "#comment" },
-        { "include": "#block_attribute" },
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#block_attribute"
+        },
         {
           "name": "variable.other.field",
           "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b"
@@ -60,96 +104,231 @@
     "interface_declaration": {
       "begin": "(class|override)\\s+(\\w+)\\s*\\{",
       "beginCaptures": {
-        "1": { "name": "storage.type.declaration.interface" },
-        "2": { "name": "entity.name.type" }
+        "1": {
+          "name": "storage.type.declaration.interface"
+        },
+        "2": {
+          "name": "entity.name.type"
+        }
       },
       "end": "\\}",
       "patterns": [
-        { "include": "#comment" },
+        {
+          "include": "#comment"
+        },
         {
           "comment": "Property + Type",
           "begin": "(\\w+)",
           "beginCaptures": {
-            "1": { "name": "variable.other.readwrite.interface" }
+            "1": {
+              "name": "variable.other.readwrite.interface"
+            }
           },
           "end": "(?=$|\\n|@|\\}|/)",
-          "patterns": [{ "include": "#type_definition" }]
+          "patterns": [
+            {
+              "include": "#type_definition"
+            }
+          ]
         },
-        { "include": "#block_attribute" }
+        {
+          "include": "#block_attribute"
+        }
       ]
     },
     "dynamic_declaration": {
       "begin": "(dynamic)\\s+(\\w+)\\s*\\{",
       "beginCaptures": {
-        "1": { "name": "storage.type.dynamic" },
-        "2": { "name": "entity.name.type.dynamic" }
+        "1": {
+          "name": "storage.type.dynamic"
+        },
+        "2": {
+          "name": "entity.name.type.dynamic"
+        }
       },
       "end": "\\}",
       "patterns": [
-        { "include": "#comment" },
+        {
+          "include": "#comment"
+        },
         {
           "comment": "Property + Type",
           "begin": "(\\w+)",
           "beginCaptures": {
-            "1": { "name": "variable.other.readwrite.interface" }
+            "1": {
+              "name": "variable.other.readwrite.interface"
+            }
           },
           "end": "(?=$|\\n|@|\\}|/)",
-          "patterns": [{ "include": "#type_definition" }]
+          "patterns": [
+            {
+              "include": "#type_definition"
+            }
+          ]
         },
         {
           "name": "variable.other.field",
           "match": "\\b[A-Za-z_][A-Za-z0-9_]*\\b"
         },
-        { "include": "#block_attribute" }
+        {
+          "include": "#block_attribute"
+        }
       ]
     },
     "template_string_declaration": {
       "begin": "(template_string)\\s+(\\w+)",
       "beginCaptures": {
-        "1": { "name": "storage.type.declaration.function" },
-        "2": { "name": "entity.name.function" }
+        "1": {
+          "name": "storage.type.declaration.function"
+        },
+        "2": {
+          "name": "entity.name.function"
+        }
       },
-
       "end": "^(\"#{1,3})",
       "endCaptures": {
-        "1": { "name": "string.quoted.block.baml.end" }
+        "1": {
+          "name": "string.quoted.block.baml.end"
+        }
       },
       "patterns": [
-        { "include": "#comment" },
-        { "include": "#function_parameters" },
-        { "include": "#template_string_body" }
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#function_parameters"
+        },
+        {
+          "include": "#template_string_body"
+        }
       ]
     },
     "template_string_body": {
       "begin": "\\s+(#{1,3})(\")",
       "beginCaptures": {
-        "1": { "name": "string.quoted.block.baml.body.start" },
-        "2": { "name": "string.quoted.block.baml.body.start" }
+        "1": {
+          "name": "string.quoted.block.baml.body.start"
+        },
+        "2": {
+          "name": "string.quoted.block.baml.body.start"
+        }
       },
       "end": "(?=\"\\1)",
       "contentName": "string.quoted.block.baml.body",
-      "patterns": [{ "include": "source.baml-jinja" }]
+      "patterns": [
+        {
+          "include": "source.baml-jinja"
+        }
+      ]
     },
     "function_declaration": {
       "comment": "Function declaration",
       "begin": "(function)\\s+(\\w+)",
       "beginCaptures": {
-        "1": { "name": "storage.type.declaration.function" },
-        "2": { "name": "entity.name.function" }
+        "1": {
+          "name": "storage.type.declaration.function"
+        },
+        "2": {
+          "name": "entity.name.function"
+        }
       },
       "end": "\\}",
       "patterns": [
-        { "include": "#comment" },
-        { "include": "#function_parameters" },
-        { "include": "#arrow_return_type" },
-        { "include": "#function_body" }
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#function_parameters"
+        },
+        {
+          "include": "#arrow_return_type"
+        },
+        {
+          "include": "#function_body"
+        }
       ]
     },
-
+    "function_application": {
+      "begin": "(\\w+)\\s*\\(",
+      "beginCaptures": {
+        "1": {
+          "name": "entity.name.function"
+        }
+      },
+      "end": "\\)",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#string_literal"
+        },
+        {
+          "include": "#constant_numeric"
+        },
+        {
+          "match": "(\\w+)\\s*(?:,|$|\\))",
+          "captures": {
+            "1": {
+              "name": "variable.parameter"
+            }
+          }
+        },
+        {
+          "include": "#function_application"
+        }
+      ]
+    },
+    "let_declaration": {
+      "comment": "Let declaration",
+      "begin": "(let)\\s+(\\w+)\\s*(=)",
+      "beginCaptures": {
+        "1": {
+          "name": "storage.type.declaration.let"
+        },
+        "2": {
+          "name": "variable.other.readwrite"
+        },
+        "3": {
+          "name": "keyword.operator.assignment"
+        }
+      },
+      "end": ";",
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#string_literal"
+        },
+        {
+          "include": "#constant_numeric"
+        },
+        {
+          "include": "#function_parameters"
+        },
+        {
+          "include": "#arrow_return_type"
+        },
+        {
+          "include": "#function_application"
+        },
+        {
+          "include": "#function_body"
+        }
+      ]
+    },
     "function_parameters": {
       "begin": "\\(",
       "end": "\\)",
-      "patterns": [{ "include": "#comment" }, { "include": "#function_name_type" }],
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#function_name_type"
+        }
+      ],
       "contentName": "function.params"
     },
     "function_name_type": {
@@ -157,7 +336,9 @@
         {
           "match": "(\\w+)\\s*:",
           "captures": {
-            "1": { "name": "variable.other.readwrite.function_name" }
+            "1": {
+              "name": "variable.other.readwrite.function_name"
+            }
           }
         },
         {
@@ -174,9 +355,18 @@
         {
           "begin": "(map)\\s*<",
           "beginCaptures": {
-            "1": { "name": "storage.type.baml" }
+            "1": {
+              "name": "storage.type.baml"
+            }
           },
-          "patterns": [{ "include": "#type_definition" }, { "include": "#type_definition" }],
+          "patterns": [
+            {
+              "include": "#type_definition"
+            },
+            {
+              "include": "#type_definition"
+            }
+          ],
           "end": ">"
         },
         {
@@ -207,22 +397,36 @@
           "comment": "Groups",
           "begin": "\\(",
           "beginCaptures": {
-            "0": { "name": "keyword.control" }
+            "0": {
+              "name": "keyword.control"
+            }
           },
           "end": "(\\))(\\[\\])*(\\?)?",
           "endCaptures": {
-            "1": { "name": "keyword.control" },
-            "2": { "name": "keyword.control" },
-            "3": { "name": "keyword.control" }
+            "1": {
+              "name": "keyword.control"
+            },
+            "2": {
+              "name": "keyword.control"
+            },
+            "3": {
+              "name": "keyword.control"
+            }
           },
-          "patterns": [{ "include": "#type_definition" }]
+          "patterns": [
+            {
+              "include": "#type_definition"
+            }
+          ]
         }
       ]
     },
     "arrow_return_type": {
       "begin": "(?<=\\))\\s*(->)\\s*",
       "beginCaptures": {
-        "1": { "name": "keyword.control.baml.arrow" }
+        "1": {
+          "name": "keyword.control.baml.arrow"
+        }
       },
       "end": "(?=\\{)",
       "patterns": [
@@ -238,22 +442,36 @@
       "begin": "(?<=\\{)\\s*",
       "end": "(?=\\})",
       "patterns": [
-        { "include": "#comment" },
-        { "include": "#block_attribute" },
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#block_attribute"
+        },
+        {
+          "include": "#let_declaration"
+        },
+        {
+          "include": "#function_declaration"
+        },
         {
           "comment": "Function client properties",
           "patterns": [
             {
               "match": "(client)\\s+(\\w+|\"[^\"]*\")",
               "captures": {
-                "1": { "name": "variable.other.readwrite.client" },
+                "1": {
+                  "name": "variable.other.readwrite.client"
+                },
                 "2": {
                   "patterns": [
                     {
                       "match": "\\w+",
                       "name": "entity.name.other.client"
                     },
-                    { "include": "#string_literal" }
+                    {
+                      "include": "#string_literal"
+                    }
                   ]
                 }
               },
@@ -262,16 +480,28 @@
             {
               "begin": "\\s+(prompt)\\s+(#{1,5})(\")",
               "beginCaptures": {
-                "1": { "name": "variable.other.readwrite.prompt" },
-                "2": { "name": "string.quoted.block.baml.prompt" },
-                "3": { "name": "string.quoted.block.baml.prompt" }
+                "1": {
+                  "name": "variable.other.readwrite.prompt"
+                },
+                "2": {
+                  "name": "string.quoted.block.baml.prompt"
+                },
+                "3": {
+                  "name": "string.quoted.block.baml.prompt"
+                }
               },
               "end": "\\s*(\"\\2)",
               "contentName": "string.quoted.block.baml.prompt",
               "endCaptures": {
-                "0": { "name": "string.quoted.block.baml.prompt" }
+                "0": {
+                  "name": "string.quoted.block.baml.prompt"
+                }
               },
-              "patterns": [{ "include": "source.baml-jinja" }]
+              "patterns": [
+                {
+                  "include": "source.baml-jinja"
+                }
+              ]
             }
           ]
         }
@@ -280,56 +510,17 @@
     "key_value_pair": {
       "begin": "(\\w+)\\s*",
       "beginCaptures": {
-        "1": { "name": "variable.other.readwrite.key_value_pair" }
+        "1": {
+          "name": "variable.other.readwrite.key_value_pair"
+        }
       },
       "end": "(?=\\n)",
-      "patterns": [{ "include": "#string_literal" }]
-    },
-    "function_declaration2": {
-      "begin": "(function)\\s+(\\w+)\\(([^)]*)\\)\\s*(->)\\s*([\\w\\s\\[\\]|,?]+)\\s+\\{",
-      "beginCaptures": {
-        "1": { "name": "storage.type.declaration.function" },
-        "2": { "name": "entity.name.function" },
-        "3": { "name": "variable.parameter.function" },
-        "4": { "name": "keyword.operator" },
-        "5": { "name": "support.type" }
-      },
-      "end": "\\}",
       "patterns": [
-        { "include": "#comment" },
         {
-          "match": "(client)\\s+(\\w+|\"[^\"]*\")",
-          "captures": {
-            "1": { "name": "variable.other.readwrite.client" },
-            "2": {
-              "patterns": [
-                {
-                  "match": "\\w+",
-                  "name": "entity.name.other.client"
-                },
-                { "include": "#string_literal" }
-              ]
-            }
-          },
-          "name": "meta.client.declaration"
-        },
-        {
-          "begin": "\\s+(prompt)\\s+(#{1,3}\")",
-          "beginCaptures": {
-            "1": { "name": "variable.other.readwrite.prompt" },
-            "2": { "name": "string.quoted.block.baml.prompt" }
-          },
-          "end": "\\s*(\"#{1,3})",
-          "contentName": "string.quoted.block.baml.prompt",
-          "endCaptures": {
-            "1": { "name": "string.quoted.block.baml.prompt" }
-          },
-          "patterns": [{ "include": "source.baml-jinja" }]
-        },
-        { "include": "#block_attribute" }
+          "include": "#string_literal"
+        }
       ]
     },
-
     "keyword": {
       "patterns": [
         {
@@ -345,63 +536,113 @@
     "config_block": {
       "begin": "(client|generator|retry_policy|printer|test)\\s*(<([^>]+)>)?\\s+(\\w+)\\s*\\{",
       "beginCaptures": {
-        "1": { "name": "storage.type.declaration" },
-        "3": { "name": "storage.type.declaration" },
-        "4": { "name": "entity.name.type" }
+        "1": {
+          "name": "storage.type.declaration"
+        },
+        "3": {
+          "name": "storage.type.declaration"
+        },
+        "4": {
+          "name": "entity.name.type"
+        }
       },
       "end": "\\}",
       "patterns": [
-        { "include": "#comment" },
-        { "include": "#block_attribute" },
-        { "include": "#type_builder" },
-        { "include": "#property_assignment_expression" }
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#block_attribute"
+        },
+        {
+          "include": "#type_builder"
+        },
+        {
+          "include": "#property_assignment_expression"
+        }
       ]
     },
     "block_attribute": {
-       "patterns": [
+      "patterns": [
         {
           "begin": "(@{1,2}(?:check|assert))\\s*\\(\\s*(?=\\{\\{)",
           "beginCaptures": {
-            "1": { "name": "entity.name.function.attribute" }
+            "1": {
+              "name": "entity.name.function.attribute"
+            }
           },
           "end": "\\)\\s*",
           "contentName": "string.quoted.block.thing",
-          "patterns": [{ "include": "source.baml-jinja" }]
+          "patterns": [
+            {
+              "include": "source.baml-jinja"
+            }
+          ]
         },
         {
           "begin": "(@{1,2}(?:check|assert))\\s*\\(([^,]+)?\\s*,\\s*(?=\\{\\{)",
           "beginCaptures": {
-            "1": { "name": "entity.name.function.attribute" },
-            "2": { "name": "variable.parameter.checkName" }
+            "1": {
+              "name": "entity.name.function.attribute"
+            },
+            "2": {
+              "name": "variable.parameter.checkName"
+            }
           },
           "end": "\\)\\s*",
           "contentName": "string.quoted.block.thing",
-          "patterns": [{ "include": "source.baml-jinja" }]
+          "patterns": [
+            {
+              "include": "source.baml-jinja"
+            }
+          ]
         },
         {
           "begin": "(@{1,2}(?:check|assert))\\(([^,]+)?\\s*,\\s*()",
           "beginCaptures": {
-            "1": { "name": "entity.name.function.attribute" },
-            "2": { "name": "variable.parameter.checkName" }
+            "1": {
+              "name": "entity.name.function.attribute"
+            },
+            "2": {
+              "name": "variable.parameter.checkName"
+            }
           },
           "end": "\\)",
           "contentName": "string.quoted.block.thing",
-          "patterns": [{ "include": "source.baml-jinja" }]
+          "patterns": [
+            {
+              "include": "source.baml-jinja"
+            }
+          ]
         },
         {
           "begin": "(@{1,2}\\w+)\\(#\"",
           "beginCaptures": {
-            "1": { "name": "entity.name.function.attribute" }
+            "1": {
+              "name": "entity.name.function.attribute"
+            }
           },
           "end": "\"#\\)",
           "name": "string.quoted.block.baml",
           "patterns": [
-            { "include": "#comment" },
-            { "include": "#language_block_python" },
-            { "include": "#language_block_ts" },
-            { "include": "#key_value" },
-            { "include": "#block_string_pair" },
-            { "include": "#string_literal" },
+            {
+              "include": "#comment"
+            },
+            {
+              "include": "#language_block_python"
+            },
+            {
+              "include": "#language_block_ts"
+            },
+            {
+              "include": "#key_value"
+            },
+            {
+              "include": "#block_string_pair"
+            },
+            {
+              "include": "#string_literal"
+            },
             {
               "match": "\\(",
               "name": "punctuation.section.parens.open"
@@ -415,17 +656,31 @@
         {
           "begin": "(@{1,2}\\w+)\\(#{1,3}\"",
           "beginCaptures": {
-            "1": { "name": "entity.name.function.attribute" }
+            "1": {
+              "name": "entity.name.function.attribute"
+            }
           },
           "end": "\"#{1,3}\\)",
           "name": "string.quoted.block.baml",
           "patterns": [
-            { "include": "#comment" },
-            { "include": "#language_block_python" },
-            { "include": "#language_block_ts" },
-            { "include": "#key_value" },
-            { "include": "#block_string_pair" },
-            { "include": "#string_literal" },
+            {
+              "include": "#comment"
+            },
+            {
+              "include": "#language_block_python"
+            },
+            {
+              "include": "#language_block_ts"
+            },
+            {
+              "include": "#key_value"
+            },
+            {
+              "include": "#block_string_pair"
+            },
+            {
+              "include": "#string_literal"
+            },
             {
               "match": "\\(",
               "name": "punctuation.section.parens.open"
@@ -439,16 +694,30 @@
         {
           "begin": "(@{1,2}\\w+)\\(",
           "beginCaptures": {
-            "1": { "name": "entity.name.function.attribute" }
+            "1": {
+              "name": "entity.name.function.attribute"
+            }
           },
           "end": "\\)",
           "patterns": [
-            { "include": "#string_unquoted" },
-            { "include": "#comment" },
-            { "include": "#language_block_python" },
-            { "include": "#language_block_ts" },
-            { "include": "#key_value" },
-            { "include": "#block_string_pair" },
+            {
+              "include": "#string_unquoted"
+            },
+            {
+              "include": "#comment"
+            },
+            {
+              "include": "#language_block_python"
+            },
+            {
+              "include": "#language_block_ts"
+            },
+            {
+              "include": "#key_value"
+            },
+            {
+              "include": "#block_string_pair"
+            },
             {
               "include": "#string_literal",
               "name": "string.quoted.double"
@@ -466,7 +735,9 @@
         {
           "begin": "(@{1,2}\\w+)\\(\"",
           "beginCaptures": {
-            "1": { "name": "entity.name.function.attribute" }
+            "1": {
+              "name": "entity.name.function.attribute"
+            }
           },
           "end": "\"\\)",
           "patterns": [
@@ -479,7 +750,9 @@
         {
           "begin": "(@{1,2}\\w+)\\(",
           "beginCaptures": {
-            "1": { "name": "entity.name.function.attribute" }
+            "1": {
+              "name": "entity.name.function.attribute"
+            }
           },
           "end": "\\)",
           "patterns": [
@@ -492,7 +765,9 @@
         {
           "begin": "(@{1,2}\\w+)\\(#{1,3}",
           "beginCaptures": {
-            "1": { "name": "entity.name.function.attribute" }
+            "1": {
+              "name": "entity.name.function.attribute"
+            }
           },
           "end": "#{1,3}\\)",
           "name": "string.quoted.block.baml",
@@ -506,12 +781,24 @@
               "begin": "\\(",
               "end": "\\)"
             },
-            { "include": "#comment" },
-            { "include": "#language_block_python" },
-            { "include": "#language_block_ts" },
-            { "include": "#key_value" },
-            { "include": "#block_string_pair" },
-            { "include": "#string_literal" },
+            {
+              "include": "#comment"
+            },
+            {
+              "include": "#language_block_python"
+            },
+            {
+              "include": "#language_block_ts"
+            },
+            {
+              "include": "#key_value"
+            },
+            {
+              "include": "#block_string_pair"
+            },
+            {
+              "include": "#string_literal"
+            },
             {
               "match": ".",
               "name": "text.plain"
@@ -523,61 +810,121 @@
     "key_value": {
       "begin": "\\s*\\{",
       "end": "\\s*\\}",
-      "patterns": [{ "include": "#comment" }, { "include": "#property_assignment_expression" }]
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#property_assignment_expression"
+        }
+      ]
     },
     "property_assignment_expression": {
       "patterns": [
-        { "include": "#key_null_pair" },
-        { "include": "#language_block_python" },
-        { "include": "#language_block_ts" },
-
-        { "include": "#block_string_pair" },
-
-        { "include": "#key_value" },
-        { "include": "#comment" },
-
-        { "include": "#key_string_pair" },
-
-        { "include": "#key_quoted_string_pair" },
-        { "include": "#key_number_pair" },
-        { "include": "#key_boolean_pair" },
-        { "include": "#key_array_pair" },
-        { "include": "#key_custom_string_pair" },
-        { "include": "#nested_key_value" }
+        {
+          "include": "#key_null_pair"
+        },
+        {
+          "include": "#language_block_python"
+        },
+        {
+          "include": "#language_block_ts"
+        },
+        {
+          "include": "#block_string_pair"
+        },
+        {
+          "include": "#key_value"
+        },
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#key_string_pair"
+        },
+        {
+          "include": "#key_quoted_string_pair"
+        },
+        {
+          "include": "#key_number_pair"
+        },
+        {
+          "include": "#key_boolean_pair"
+        },
+        {
+          "include": "#key_array_pair"
+        },
+        {
+          "include": "#key_custom_string_pair"
+        },
+        {
+          "include": "#nested_key_value"
+        }
       ]
     },
     "nested_key_value": {
       "begin": "(\"\\w+\"|\\b\\w+\\b)\\s+\\{",
       "end": "\\}",
       "captures": {
-        "1": { "name": "variable.other.readwrite.nested_key" }
+        "1": {
+          "name": "variable.other.readwrite.nested_key"
+        }
       },
       "contentName": "variable.other.readwrite.nested",
       "patterns": [
-        { "include": "#comment" },
-        { "include": "#key_value" },
-        { "include": "#key_null_pair" },
-        { "include": "#key_string_pair" },
-        { "include": "#language_block_python" },
-        { "include": "#language_block_ts" },
-
-        { "include": "#block_string_pair" },
-        { "include": "#key_quoted_string_pair" },
-        { "include": "#key_number_pair" },
-        { "include": "#key_boolean_pair" },
-        { "include": "#key_array_pair" },
-        { "include": "#key_custom_string_pair" }
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#key_value"
+        },
+        {
+          "include": "#key_null_pair"
+        },
+        {
+          "include": "#key_string_pair"
+        },
+        {
+          "include": "#language_block_python"
+        },
+        {
+          "include": "#language_block_ts"
+        },
+        {
+          "include": "#block_string_pair"
+        },
+        {
+          "include": "#key_quoted_string_pair"
+        },
+        {
+          "include": "#key_number_pair"
+        },
+        {
+          "include": "#key_boolean_pair"
+        },
+        {
+          "include": "#key_array_pair"
+        },
+        {
+          "include": "#key_custom_string_pair"
+        }
       ]
     },
     "language_block_jinja": {
       "begin": "(jinja)(#{1,3}\")",
       "beginCaptures": {
-        "1": { "name": "comment.line" },
-        "2": { "name": "string.quoted" }
+        "1": {
+          "name": "comment.line"
+        },
+        "2": {
+          "name": "string.quoted"
+        }
       },
       "end": "\\s*(\"{1,3}#)",
       "endCaptures": {
-        "1": { "name": "string.quoted" }
+        "1": {
+          "name": "string.quoted"
+        }
       },
       "contentName": "source.baml-jinja.embedded",
       "patterns": [
@@ -589,12 +936,18 @@
     "language_block_python": {
       "begin": "(python)(#{1,3}\")",
       "beginCaptures": {
-        "1": { "name": "comment.line" },
-        "2": { "name": "string.quoted" }
+        "1": {
+          "name": "comment.line"
+        },
+        "2": {
+          "name": "string.quoted"
+        }
       },
       "end": "\\s*(\"{1,3}#)",
       "endCaptures": {
-        "1": { "name": "string.quoted" }
+        "1": {
+          "name": "string.quoted"
+        }
       },
       "contentName": "source.python.embedded",
       "patterns": [
@@ -606,12 +959,18 @@
     "language_block_ts": {
       "begin": "(typescript)(#{1,3}\")",
       "beginCaptures": {
-        "1": { "name": "comment.line" },
-        "2": { "name": "string.quoted" }
+        "1": {
+          "name": "comment.line"
+        },
+        "2": {
+          "name": "string.quoted"
+        }
       },
       "end": "\\s*(\"{1,3}#)",
       "endCaptures": {
-        "1": { "name": "string.quoted" }
+        "1": {
+          "name": "string.quoted"
+        }
       },
       "contentName": "source.ts.embedded",
       "patterns": [
@@ -623,12 +982,18 @@
     "block_string_pair": {
       "begin": "(\\w+)?\\s+(#{1,3}(\"){1,3})",
       "beginCaptures": {
-        "1": { "name": "variable.other.readwrite.block_string_pair" },
-        "2": { "name": "string.quoted.block.baml.startquote" }
+        "1": {
+          "name": "variable.other.readwrite.block_string_pair"
+        },
+        "2": {
+          "name": "string.quoted.block.baml.startquote"
+        }
       },
       "end": "((\"){1,3}#{1,3})",
       "endCaptures": {
-        "1": { "name": "string.quoted.block.baml.endquote" }
+        "1": {
+          "name": "string.quoted.block.baml.endquote"
+        }
       },
       "contentName": "string.quoted.block.baml.stringpair",
       "patterns": [
@@ -663,19 +1028,29 @@
     "key_quoted_string_pair": {
       "match": "(\"[^\"]+\")\\s+(\"[^\"]+\")",
       "captures": {
-        "1": { "name": "string.quoted.double" },
-        "2": { "name": "string.quoted.double" }
+        "1": {
+          "name": "string.quoted.double"
+        },
+        "2": {
+          "name": "string.quoted.double"
+        }
       }
     },
     "key_string_pair": {
       "begin": "(\"\\w+\"|\\b\\w+\\b)\\s+(\")",
       "beginCaptures": {
-        "1": { "name": "variable.other.readwrite.key_string_pair" },
-        "2": { "name": "string.quoted.double" }
+        "1": {
+          "name": "variable.other.readwrite.key_string_pair"
+        },
+        "2": {
+          "name": "string.quoted.double"
+        }
       },
       "end": "\"",
       "endCaptures": {
-        "0": { "name": "string.quoted.double" }
+        "0": {
+          "name": "string.quoted.double"
+        }
       },
       "patterns": [
         {
@@ -691,42 +1066,66 @@
     "key_custom_string_pair": {
       "match": "(\"\\w+\"|\\b\\w+\\b)\\s+((?!null)[^\\s\\[\\{]+)",
       "captures": {
-        "1": { "name": "variable.other.readwrite.custom_string" },
-        "2": { "name": "string.unquoted" }
+        "1": {
+          "name": "variable.other.readwrite.custom_string"
+        },
+        "2": {
+          "name": "string.unquoted"
+        }
       }
     },
     "key_number_pair": {
       "match": "(\"\\w+\"|\\b\\w+\\b)\\s+(\\b\\d+\\b)",
       "captures": {
-        "1": { "name": "variable.other.readwrite.number_pair" },
-        "2": { "name": "constant.numeric" }
+        "1": {
+          "name": "variable.other.readwrite.number_pair"
+        },
+        "2": {
+          "name": "constant.numeric"
+        }
       }
     },
     "key_boolean_pair": {
       "match": "(\"\\w+\"|\\b\\w+\\b)\\s+(\\btrue\\b|\\bfalse\\b)",
       "captures": {
-        "1": { "name": "variable.other.readwrite" },
-        "2": { "name": "constant.language.boolean" }
+        "1": {
+          "name": "variable.other.readwrite"
+        },
+        "2": {
+          "name": "constant.language.boolean"
+        }
       }
     },
     "key_null_pair": {
       "match": "(\"\\w+\"|\\b\\w+\\b)\\s+(\\bnull\\b)",
       "captures": {
-        "1": { "name": "variable.other.readwrite.null" },
-        "2": { "name": "constant.language.nil.null" }
+        "1": {
+          "name": "variable.other.readwrite.null"
+        },
+        "2": {
+          "name": "constant.language.nil.null"
+        }
       }
     },
     "key_array_pair": {
       "begin": "(\"\\w+\"|\\b\\w+\\b)\\s+\\[",
       "end": "\\]",
       "captures": {
-        "1": { "name": "variable.other.readwrite" }
+        "1": {
+          "name": "variable.other.readwrite"
+        }
       },
       "contentName": "variable.other.readwrite.array",
       "patterns": [
-        { "include": "#key_array_pair" },
-        { "include": "#string_quoted2" },
-        { "include": "#constant_numeric" }
+        {
+          "include": "#key_array_pair"
+        },
+        {
+          "include": "#string_quoted2"
+        },
+        {
+          "include": "#constant_numeric"
+        }
       ]
     },
     "string_quoted2": {
@@ -751,19 +1150,31 @@
     "type_alias": {
       "begin": "(type)\\s+(\\w+)\\s*(=)",
       "beginCaptures": {
-        "1": { "name": "storage.type.declaration" },
-        "2": { "name": "entity.name.type" },
-        "3": { "name": "keyword.operator.assignment" }
+        "1": {
+          "name": "storage.type.declaration"
+        },
+        "2": {
+          "name": "entity.name.type"
+        },
+        "3": {
+          "name": "keyword.operator.assignment"
+        }
       },
       "end": "(?=$|\\n)",
       "patterns": [
-        { "include": "#comment" },
+        {
+          "include": "#comment"
+        },
         {
           "begin": "(?<=\\=)\\s*",
           "end": "(?=//|$|\\n)",
           "patterns": [
-            { "include": "#type_definition" },
-            { "include": "#block_attribute" }
+            {
+              "include": "#type_definition"
+            },
+            {
+              "include": "#block_attribute"
+            }
           ]
         }
       ]
@@ -779,15 +1190,27 @@
     "type_builder": {
       "begin": "(type_builder)\\s*\\{",
       "beginCaptures": {
-        "1": { "name": "keyword.control.type_builder" }
+        "1": {
+          "name": "keyword.control.type_builder"
+        }
       },
       "end": "\\}",
       "patterns": [
-        { "include": "#interface_declaration" },
-        { "include": "#enum_declaration" },
-        { "include": "#dynamic_declaration" },
-        { "include": "#type_alias" },
-        { "include": "#comment" }
+        {
+          "include": "#interface_declaration"
+        },
+        {
+          "include": "#enum_declaration"
+        },
+        {
+          "include": "#dynamic_declaration"
+        },
+        {
+          "include": "#type_alias"
+        },
+        {
+          "include": "#comment"
+        }
       ]
     }
   },

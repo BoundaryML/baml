@@ -4,6 +4,7 @@ use std::str::FromStr;
 
 use minijinja::{value::Kwargs, ErrorKind, Value};
 use strum::VariantNames;
+use types::HoistClasses;
 
 use crate::{types::RenderOptions, RenderContext};
 
@@ -132,6 +133,28 @@ impl minijinja::value::Object for OutputFormat {
             None
         };
 
+        let hoist_classes = if kwargs.has("hoist_classes") {
+            // true | false
+            match kwargs.get::<bool>("hoist_classes") {
+                Ok(true) => Some(HoistClasses::All),
+                Ok(false) => Some(HoistClasses::Auto),
+                // auto
+                Err(_) => match kwargs.get::<String>("hoist_classes") {
+                    Ok(s) if s == "auto" => Some(HoistClasses::Auto),
+                    // subset
+                    _ => match kwargs.get::<Vec<String>>("hoist_classes") {
+                        Ok(classes) => Some(HoistClasses::Subset(classes)),
+                        Err(e) => return Err(Error::new(
+                            ErrorKind::SyntaxError,
+                            format!("Invalid value for hoist_classes (expected one of bool | \"auto\" | string[]): {e}")
+                        ))
+                    }
+                }
+            }
+        } else {
+            None
+        };
+
         let map_style = if kwargs.has("map_style") {
             match kwargs
                 .get::<String>("map_style")
@@ -177,6 +200,7 @@ impl minijinja::value::Object for OutputFormat {
             always_hoist_enums,
             map_style,
             hoisted_class_prefix,
+            hoist_classes,
         ))?;
 
         match content {

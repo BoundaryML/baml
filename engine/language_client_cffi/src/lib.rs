@@ -4,6 +4,7 @@ mod ctypes;
 use std::{collections::HashMap, ffi::CStr, ptr::null, sync::Arc};
 
 use anyhow::Result;
+use baml_runtime::client_registry::ClientRegistry;
 use baml_runtime::{BamlRuntime, FunctionResult};
 use once_cell::sync::{Lazy, OnceCell};
 
@@ -11,6 +12,7 @@ const VERSION: &str = env!("CARGO_PKG_VERSION");
 
 struct BamlFunctionArguments {
     kwargs: baml_types::BamlMap<String, BamlValue>,
+    client_registry: Option<ClientRegistry>,
 }
 
 #[no_mangle]
@@ -87,7 +89,7 @@ use std::os::raw::c_char;
 
 use baml_types::BamlValue;
 
-pub type CallbackFn = extern "C" fn(call_id: u32, is_done: bool, content: *const i8, length: usize);
+pub type CallbackFn = extern "C" fn(call_id: u32, is_done: i32, content: *const i8, length: usize);
 
 /// cbindgen:ignore
 static RESULT_CALLBACK_FN: OnceCell<CallbackFn> = OnceCell::new();
@@ -122,21 +124,27 @@ fn safe_trigger_callback(id: u32, is_done: bool, result: Result<FunctionResult>)
             Some(Ok(content)) => {
                 let mut builder = flatbuffers::FlatBufferBuilder::new();
                 let content = ctypes::serialize_baml_value_with_meta(&content.0, &mut builder);
-                callback_fn(id, is_done, content.as_ptr() as *const i8, content.len());
+                let is_done_int = if is_done { 1 } else { 0 };
+                callback_fn(
+                    id,
+                    is_done_int,
+                    content.as_ptr() as *const i8,
+                    content.len(),
+                );
             }
             Some(Err(e)) => {
                 // let c_message = CString::new(e.to_string()).unwrap();
                 let message = e.to_string();
-                error_callback_fn(id, true, message.as_ptr() as *const i8, message.len());
+                error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
             }
             None => {
                 let message = "No result from baml".to_string();
-                error_callback_fn(id, true, message.as_ptr() as *const i8, message.len());
+                error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
             }
         },
         Err(e) => {
             let message = format!("Error: {}", e);
-            error_callback_fn(id, true, message.as_ptr() as *const i8, message.len());
+            error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
         }
     }
 }
@@ -192,7 +200,14 @@ fn call_function_from_c_inner(
     let rt = RUNTIME.clone();
     rt.spawn(async move {
         let (result, _) = runtime
-            .call_function(func_name, &function_args.kwargs, &ctx, None, None, None)
+            .call_function(
+                func_name,
+                &function_args.kwargs,
+                &ctx,
+                None,
+                function_args.client_registry.as_ref(),
+                None,
+            )
             .await;
         safe_trigger_callback(id, true, result);
     });

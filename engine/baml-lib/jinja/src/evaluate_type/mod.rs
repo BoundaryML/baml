@@ -140,6 +140,10 @@ impl TypeError {
         }
     }
 
+    // TODO: There's a bug with the suggestions, they are not consistent due to
+    // either some ordering issue or closest match algorithm does weird stuff
+    // and returns results non-deterministically. See commented test in
+    // baml-lib/jinja/src/evaluate_type/test_expr.rs
     fn new_unknown_arg(func: &str, span: Span, name: &str, valid_args: HashSet<&String>) -> Self {
         let names = valid_args.into_iter().collect::<Vec<_>>();
         let mut close_names = sort_by_match(name, &names, Some(3));

@@ -26,8 +26,7 @@ struct GoFunction {
     name: String,
     go_name: String,
     partial_return_type: String,
-    return_type: String,
-    return_type_type: GoType,
+    return_type: GoType,
     args: Vec<(String, String)>,
 }
 
@@ -90,8 +89,7 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for GoClient {
                                 name
                             },
                             partial_return_type: f.elem().output().to_partial_type_ref(ir, true),
-                            return_type: f.elem().output().to_type_ref(ir, true),
-                            return_type_type: f.elem().output().to_type_ref_2(ir, true),
+                            return_type: f.elem().output().to_type_ref_2(ir, true),
                             args: f
                                 .inputs()
                                 .iter()
@@ -175,7 +173,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             FieldType::Enum(name) => {
                 if ir
                     .find_enum(name)
-                    .map(|e| e.item.attributes.dynamic())
+                    .map(|e| e.item.attributes.get("dynamic_type").is_some())
                     .unwrap_or(false)
                 {
                     format!("*Union[types.{name}, str]")
@@ -273,14 +271,14 @@ class Foo {
 
     fn mk_gen() -> GeneratorArgs {
         GeneratorArgs::new(
-            "../baml_client",
+            "baml_client",
             "baml_src",
             vec![],
             "no_version".to_string(),
             true,
             GeneratorDefaultClientMode::Async,
             Vec::new(),
-            Some(GeneratorOutputType::Go),
+            GeneratorOutputType::Go,
             Some("example.com/integ-tests".to_string()),
             None,
         )

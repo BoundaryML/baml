@@ -2529,6 +2529,57 @@ func (c LiteralClassTwo) BamlTypeName() string {
 	return "LiteralClassTwo"
 }
 
+type MaintainFieldOrder struct {
+	A string `json:"a"`
+
+	B string `json:"b"`
+
+	C string `json:"c"`
+}
+
+func (c *MaintainFieldOrder) Decode(holder cffi.CFFIValueClass) {
+	if string(holder.Name()) != "MaintainFieldOrder" {
+		panic(fmt.Sprintf("expected MaintainFieldOrder, got %s", string(holder.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "a":
+				c.A = *baml.Decode(valueHolder).(*string)
+
+			case "b":
+				c.B = *baml.Decode(valueHolder).(*string)
+
+			case "c":
+				c.C = *baml.Decode(valueHolder).(*string)
+
+			}
+		}
+	}
+
+}
+
+func (c MaintainFieldOrder) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+	fields := map[string]any{}
+
+	fields["a"] = c.A
+
+	fields["b"] = c.B
+
+	fields["c"] = c.C
+
+	return baml.EncodeClass(builder, "MaintainFieldOrder", fields, nil)
+}
+
+func (c MaintainFieldOrder) BamlTypeName() string {
+	return "MaintainFieldOrder"
+}
+
 type MalformedConstraints struct {
 	Foo Checked[int64] `json:"foo"`
 }
@@ -3798,7 +3849,7 @@ func (c *Recipe) Decode(holder cffi.CFFIValueClass) {
 			switch key {
 
 			case "ingredients":
-				c.Ingredients = *baml.Decode(valueHolder).(*map[string]Quantity)
+				c.Ingredients = baml.Decode(valueHolder).(map[string]Quantity)
 
 			case "recipe_type":
 				c.Recipe_type = *baml.Decode(valueHolder).(*Union__string_breakfast__string_dinner)
@@ -4969,11 +5020,39 @@ type JsonArray []JsonValue
 
 type JsonEntry Union__SimpleTag__JsonTemplate
 
+func (c JsonEntry) BamlTypeName() string {
+	return Union__SimpleTag__JsonTemplate(c).BamlTypeName()
+}
+
+func (c JsonEntry) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+	return Union__SimpleTag__JsonTemplate(c).Encode(builder)
+}
+
+func (u *JsonEntry) Decode(holder *cffi.CFFIValueUnionVariant) {
+	decodedUnion := Union__SimpleTag__JsonTemplate{}
+	decodedUnion.Decode(holder)
+	*u = JsonEntry(decodedUnion)
+}
+
 type JsonObject map[string]JsonValue
 
 type JsonTemplate map[string]JsonEntry
 
 type JsonValue Union__int__string__bool__float__JsonObject__JsonArray
+
+func (c JsonValue) BamlTypeName() string {
+	return Union__int__string__bool__float__JsonObject__JsonArray(c).BamlTypeName()
+}
+
+func (c JsonValue) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+	return Union__int__string__bool__float__JsonObject__JsonArray(c).Encode(builder)
+}
+
+func (u *JsonValue) Decode(holder *cffi.CFFIValueUnionVariant) {
+	decodedUnion := Union__int__string__bool__float__JsonObject__JsonArray{}
+	decodedUnion.Decode(holder)
+	*u = JsonValue(decodedUnion)
+}
 
 type RecAliasOne RecAliasTwo
 
@@ -4984,3 +5063,19 @@ type RecAliasTwo RecAliasThree
 type RecursiveListAlias []RecursiveListAlias
 
 type RecursiveMapAlias map[string]RecursiveMapAlias
+
+type RecursiveUnion Union__string__Map__string_RecursiveUnion
+
+func (c RecursiveUnion) BamlTypeName() string {
+	return Union__string__Map__string_RecursiveUnion(c).BamlTypeName()
+}
+
+func (c RecursiveUnion) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+	return Union__string__Map__string_RecursiveUnion(c).Encode(builder)
+}
+
+func (u *RecursiveUnion) Decode(holder *cffi.CFFIValueUnionVariant) {
+	decodedUnion := Union__string__Map__string_RecursiveUnion{}
+	decodedUnion.Decode(holder)
+	*u = RecursiveUnion(decodedUnion)
+}

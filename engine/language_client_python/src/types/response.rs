@@ -32,7 +32,7 @@ impl HTTPResponse {
     #[getter]
     pub fn headers<'py>(&self, py: Python<'py>) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
-        if let Some(obj) = &self.inner.headers {
+        if let Some(obj) = self.inner.headers.as_object() {
             for (k, v) in obj {
                 dict.set_item(k, v.to_string())?;
             }

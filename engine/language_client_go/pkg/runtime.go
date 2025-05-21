@@ -2,10 +2,10 @@ package baml
 
 /*
 #include <stdlib.h>
-#include <stdbool.h>
+#include <stdint.h>
 
-extern void trigger_callback(uint32_t, bool, const int8_t *, int);
-extern void error_callback(uint32_t, bool, const int8_t *, int);
+extern void trigger_callback(uint32_t id, int is_done, const int8_t *content, int length);
+extern void error_callback(uint32_t id, int is_done, const int8_t *content, int length);
 */
 import "C"
 
@@ -24,7 +24,39 @@ type BamlRuntime struct {
 }
 
 type BamlFunctionArguments struct {
-	Kwargs map[string]any
+	Kwargs         map[string]any
+	ClientRegistry *ClientRegistry
+}
+
+type ClientRegistry struct {
+	primary *string
+	clients ClientRegistryMap
+}
+
+type clientProperty struct {
+	provider    string
+	retryPolicy string
+	options     map[string]any
+}
+
+type ClientRegistryMap map[string]clientProperty
+
+func NewClientRegistry() *ClientRegistry {
+	return &ClientRegistry{
+		primary: nil,
+		clients: ClientRegistryMap{},
+	}
+}
+
+func (c *ClientRegistry) AddLlmClient(name string, provider string, options map[string]any) {
+	c.clients[name] = clientProperty{
+		provider: provider,
+		options:  options,
+	}
+}
+
+func (c *ClientRegistry) SetPrimaryClient(name string) {
+	c.primary = &name
 }
 
 var instance *BamlRuntime

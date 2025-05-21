@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::sync::Arc;
 
 use baml_types::EvaluationContext;
@@ -199,25 +198,13 @@ impl minijinja::value::StructObject for MinijinjaBamlClass {
     }
 
     fn fields(&self) -> Vec<Arc<str>> {
-        self.class.keys().into_iter().map(|k| intern(k)).collect()       
+        self.class.keys().into_iter().map(|k| intern(k)).collect()
     }
 }
 
 struct MinijinjaBamlClass {
     class: IndexMap<String, minijinja::Value>,
     key_to_alias: IndexMap<String, String>,
-}
-
-impl IntoIterator for MinijinjaBamlClass {
-    type Item = (String, minijinja::Value);
-    type IntoIter = std::collections::hash_map::IntoIter<String, minijinja::Value>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.class
-            .into_iter()
-            .collect::<HashMap<String, minijinja::Value>>()
-            .into_iter()
-    }
 }
 
 impl std::fmt::Display for MinijinjaBamlClass {

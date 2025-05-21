@@ -14,6 +14,7 @@ export const bamlConfigSchema = z
       server: z.enum(['off', 'messages', 'verbose']).default('off'),
     }),
     bamlPanelOpen: z.boolean().default(false),
+    syncExtensionToGeneratorVersion: z.enum(['auto', 'never', 'always']).default('auto'),
   })
   .partial()
 type BamlConfig = z.infer<typeof bamlConfigSchema>

@@ -9,12 +9,12 @@ use internal_llm_client::ClientSpec;
 
 use std::collections::HashSet;
 
-use super::{
-    repr::{self, ExprFunction, FunctionConfig, TypeBuilderEntry, WithRepr},
-    Class, Client, Enum, EnumValue, ExprFunctionNode, Field, FieldType, FunctionNode, IRHelper,
-    Impl, RetryPolicy, TemplateString, TestCase, TypeAlias, Walker,
-};
 use crate::ir::jinja_helpers::render_expression;
+use crate::ir::{
+    repr::{self, ExprFunction, FunctionConfig, Node, TypeBuilderEntry, WithRepr},
+    Class, Client, Enum, EnumValue, ExprFunctionNode, Field, FieldType, Function, FunctionNode,
+    IRHelper, Impl, IntermediateRepr, RetryPolicy, TemplateString, TestCase, TypeAlias, Walker,
+};
 
 impl<'a> Walker<'a, &'a ExprFunctionNode> {
     pub fn name(&self) -> &'a str {
@@ -474,5 +474,30 @@ impl<'a> Walker<'a, &'a Field> {
 
     pub fn span(&self) -> Option<&crate::Span> {
         self.item.attributes.span.as_ref()
+    }
+}
+
+pub struct ExprFnAsFunctionWalker<'ir> {
+    pub ir: &'ir IntermediateRepr,
+    pub functions: Vec<FunctionNode>,
+}
+
+impl<'ir> ExprFnAsFunctionWalker<'ir> {
+    pub fn new(ir: &'ir IntermediateRepr) -> Self {
+        let functions = ir.expr_fns_as_functions();
+        Self { ir, functions }
+    }
+
+    pub fn walk_functions(&'ir self) -> impl Iterator<Item = Walker<'ir, &'ir FunctionNode>> {
+        self.functions.iter().map(|f| Walker {
+            ir: self.ir,
+            item: f,
+        })
+    }
+}
+
+impl<'ir> Walker<'ir, &'ir ExprFnAsFunctionWalker<'ir>> {
+    pub fn walk_functions(&'ir self) -> impl Iterator<Item = Walker<'ir, &'ir FunctionNode>> {
+        self.item.walk_functions()
     }
 }

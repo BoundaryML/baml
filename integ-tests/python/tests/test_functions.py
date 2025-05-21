@@ -17,12 +17,9 @@ from ..baml_client.globals import (
 )
 from ..baml_client import partial_types
 from ..baml_client.types import (
-    DynInputOutput,
-    Hobby,
-    NamedArgsSingleEnumList,
     NamedArgsSingleClass,
+    NamedArgsSingleEnumList,
     Nested,
-    OriginalB,
     StringToClassEntry,
     MalformedConstraints2,
     LiteralClassHello,
@@ -40,8 +37,6 @@ from ..baml_client.types import (
     ClassToRecAlias,
     NodeWithAliasIndirection,
     OptionalListAndMap,
-    Person,
-    Color,
     SimpleTag,
 )
 
@@ -156,10 +151,10 @@ class TestAllInputs:
 
     @pytest.mark.asyncio
     async def test_use_malformed_constraint(self):
-        with pytest.raises(errors.BamlInvalidArgumentError) as e:
+        with pytest.raises(errors.BamlError) as e:
             res = await b.UseMalformedConstraints(MalformedConstraints2(foo=2))
             assert res == 3
-        assert "a: Failed to evaluate assert:" in str(e)
+        assert "object has no method named length" in str(e)
 
     @pytest.mark.asyncio
     async def test_single_class(self):
@@ -513,6 +508,28 @@ async def test_should_work_with_audio_url():
 
 
 @pytest.mark.asyncio
+async def test_should_work_with_audio_base64_gpt4o():
+
+    res = await b.AudioInputOpenai(
+        aud=baml_py.Audio.from_base64("audio/mp3", audio_b64),
+        prompt="does this sound like a roar? yes or no",
+    )
+    assert "yes" in res.lower()
+
+
+@pytest.mark.asyncio
+async def test_should_work_with_audio_url_gpt4o():
+
+    res = await b.AudioInputOpenai(
+        aud=baml_py.Audio.from_url(
+            "https://github.com/sourcesounds/tf/raw/refs/heads/master/sound/vo/engineer_cloakedspyidentify09.mp3"
+        ),
+        prompt="transcribe this",
+    )
+    assert "spy" in res.lower()
+
+
+@pytest.mark.asyncio
 async def test_works_with_retries2():
     try:
         await b.TestRetryExponential()
@@ -532,6 +549,14 @@ async def test_works_with_failing_azure_fallback():
     with pytest.raises(errors.BamlClientError) as e:
         _ = await b.TestSingleFallbackClient()
     assert "ConnectError" in str(e.value)
+
+
+@pytest.mark.asyncio
+async def test_works_with_finish_reason_error():
+    with pytest.raises(errors.BamlClientFinishReasonError) as e:
+        _ = await b.TestOpenAIWithFinishReasonError("test")
+    print(e)
+    assert "finish_reason" in str(e.value)
 
 
 @pytest.mark.asyncio
@@ -785,6 +810,56 @@ async def test_streaming_gemini():
 
 
 @pytest.mark.asyncio
+async def test_gemini_models():
+    client_registry = baml_py.ClientRegistry()
+    # # Test with gemini-1.5-flash-thinking-exp-1219
+    # client_registry.add_llm_client(
+    #     "MyCustomGeminiClient",
+    #     "google-ai",
+    #     {"model": "gemini-1.5-flash-thinking-exp-1219"},
+    # )
+    # client_registry.set_primary("MyCustomGeminiClient")
+    # res = await b.TestGemini(
+    #     input="Dr.Pepper", baml_options={"client_registry": client_registry}
+    # )
+    # assert len(res) > 0, "Expected non-empty result but got empty."
+
+    # Test with gemini-2.5-pro-preview-05-06
+    # client_registry.add_llm_client(
+    #     "Gemini25ProMay", "google-ai", {"model": "gemini-2.5-pro-preview-05-06"}
+    # )
+    # client_registry.set_primary("Gemini25ProMay")
+    # res = await b.TestGemini(
+    #     input="sea. Actually output the multiplication of 23*12/12+3 and take square root of 10.",
+    #     baml_options={"client_registry": client_registry},
+    # )
+    # assert len(res) > 0, "Expected non-empty result but got empty."
+
+    # Test with gemini-2.5-pro-preview-03-25
+    # client_registry.add_llm_client(
+    #     "Gemini25ProMarch", "google-ai", {"model": "gemini-2.5-pro-preview-03-25"}
+    # )
+    # client_registry.set_primary("Gemini25ProMarch")
+    # res = await b.TestGemini(
+    #     input="sea. Actually just output a json object with the keys 'name' and 'age'.",
+    #     baml_options={"client_registry": client_registry},
+    # )
+    # assert len(res) > 0, "Expected non-empty result but got empty."
+
+    # Test with gemini-2.0-flash-thinking-exp-1219
+    client_registry.add_llm_client(
+        "GeminiFlashThinking",
+        "google-ai",
+        {"model": "gemini-2.0-flash-thinking-exp-1219"},
+    )
+    client_registry.set_primary("GeminiFlashThinking")
+    res = await b.TestGemini(
+        input="sea", baml_options={"client_registry": client_registry}
+    )
+    assert len(res) > 0, "Expected non-empty result but got empty."
+
+
+@pytest.mark.asyncio
 async def test_tracing_async_only():
     @trace
     async def top_level_async_tracing():
@@ -919,356 +994,6 @@ def sync_dummy_func(dummyFuncArg: str):
 def cleanup():
     """Cleanup a testing directory once we are finished."""
     flush()
-
-
-@pytest.mark.asyncio
-async def test_dynamic():
-    tb = TypeBuilder()
-    tb.Person.add_property("last_name", tb.string().list())
-    tb.Person.add_property("height", tb.float().optional()).description(
-        "Height in meters"
-    )
-
-    tb.Hobby.add_value("chess")
-    for name, val in tb.Hobby.list_values():
-        val.alias(name.lower())
-
-    tb.Person.add_property("hobbies", tb.Hobby.type().list()).description(
-        "Some suggested hobbies they might be good at"
-    )
-
-    # no_tb_res = await b.ExtractPeople("My name is Harrison. My hair is black and I'm 6 feet tall.")
-    tb_res = await b.ExtractPeople(
-        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.",
-        {"tb": tb},
-    )
-
-    assert len(tb_res) > 0, "Expected non-empty result but got empty."
-
-    for r in tb_res:
-        print(r.model_dump())
-
-
-@pytest.mark.asyncio
-async def test_typebuilder_print():
-    tb = TypeBuilder()
-    tb.Person.add_property("candy", tb.string().list())
-    print("Typebuilder print repr: ", tb)
-    expected = """TypeBuilder(
-  Classes: [
-    Person {
-      candy string[]
-    }
-  ]
-)"""
-    assert str(tb) == expected
-
-
-@pytest.mark.asyncio
-async def test_dynamic_class_output():
-    tb = TypeBuilder()
-    tb.DynamicOutput.add_property("hair_color", tb.string())
-    print(tb.DynamicOutput.list_properties())
-    for prop in tb.DynamicOutput.list_properties():
-        print(f"Property: {prop}")
-
-    output = await b.MyFunc(
-        input="My name is Harrison. My hair is black and I'm 6 feet tall.",
-        baml_options={"tb": tb},
-    )
-    output = await b.MyFunc(
-        input="My name is Harrison. My hair is black and I'm 6 feet tall.",
-        baml_options={"tb": tb},
-    )
-    print(output.model_dump_json())
-    assert output.hair_color == "black"  # type: ignore (dynamic property)
-
-
-@pytest.mark.asyncio
-async def test_dynamic_class_nested_output_no_stream():
-    tb = TypeBuilder()
-    nested_class = tb.add_class("Name")
-    nested_class.add_property("first_name", tb.string())
-    nested_class.add_property("last_name", tb.string().optional())
-    nested_class.add_property("middle_name", tb.string().optional())
-
-    other_nested_class = tb.add_class("Address")
-    other_nested_class.add_property("street", tb.string())
-    other_nested_class.add_property("city", tb.string())
-    other_nested_class.add_property("state", tb.string())
-    other_nested_class.add_property("zip", tb.string())
-
-    # name should be first in the prompt schema
-    tb.DynamicOutput.add_property("name", nested_class.type().optional())
-    tb.DynamicOutput.add_property("address", other_nested_class.type().optional())
-    tb.DynamicOutput.add_property("hair_color", tb.string()).alias("hairColor")
-    tb.DynamicOutput.add_property("height", tb.float().optional())
-
-    output = await b.MyFunc(
-        input="My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
-        baml_options={"tb": tb},
-    )
-    print(output.model_dump_json())
-    # assert the order of the properties inside output dict:
-    assert (
-        output.model_dump_json()
-        == '{"name":{"first_name":"Mark","last_name":"Gonzalez","middle_name":null},"address":null,"hair_color":"black","height":6.0}'
-    )
-
-
-@pytest.mark.asyncio
-async def test_dynamic_class_nested_output_stream():
-    tb = TypeBuilder()
-    nested_class = tb.add_class("Name")
-    nested_class.add_property("first_name", tb.string())
-    nested_class.add_property("last_name", tb.string().optional())
-
-    # name should be first in the prompt schema
-    tb.DynamicOutput.add_property("name", nested_class.type().optional())
-    tb.DynamicOutput.add_property("hair_color", tb.string())
-
-    stream = b.stream.MyFunc(
-        input="My name is Mark Gonzalez. My hair is black and I'm 6 feet tall.",
-        baml_options={"tb": tb},
-    )
-    msgs: List[partial_types.DynamicOutput] = []
-    async for msg in stream:
-        print("streamed ", msg)
-        print("streamed ", msg.model_dump())
-        msgs.append(msg)
-    output = await stream.get_final_response()
-
-    print(output.model_dump_json())
-    # assert the order of the properties inside output dict:
-    assert (
-        output.model_dump_json()
-        == '{"name":{"first_name":"Mark","last_name":"Gonzalez"},"hair_color":"black"}'
-    )
-
-
-@pytest.mark.asyncio
-async def test_stream_dynamic_class_output():
-    tb = TypeBuilder()
-    tb.DynamicOutput.add_property("hair_color", tb.string())
-    print(tb.DynamicOutput.list_properties())
-    for prop, _ in tb.DynamicOutput.list_properties():
-        print(f"Property: {prop}")
-
-    cr = baml_py.ClientRegistry()
-    cr.add_llm_client("MyClient", "openai", {"model": "gpt-4o-mini"})
-    cr.set_primary("MyClient")
-    stream = b.stream.MyFunc(
-        input="My name is Harrison. My hair is black and I'm 6 feet tall.",
-        baml_options={"tb": tb, "client_registry": cr},
-    )
-    msgs: List[partial_types.DynamicOutput] = []
-    async for msg in stream:
-        print("streamed ", msg.model_dump())
-        msgs.append(msg)
-    final = await stream.get_final_response()
-
-    assert len(msgs) > 0, "Expected at least one streamed response but got none."
-    print("final ", final)
-    print("final ", final.model_dump())
-    print("final ", final.model_dump_json())
-    assert final.hair_color == "black"  # type: ignore (dynamic property)
-
-
-@pytest.mark.asyncio
-async def test_dynamic_inputs_list2():
-    tb = TypeBuilder()
-    tb.DynInputOutput.add_property("new_key", tb.string().optional())
-    custom_class = tb.add_class("MyBlah")
-    custom_class.add_property("nestedKey1", tb.string())
-    tb.DynInputOutput.add_property("blah", custom_class.type())
-
-    res = await b.DynamicListInputOutput(
-        [
-            DynInputOutput.model_validate(
-                {
-                    "new_key": "hi1",
-                    "testKey": "myTest",
-                    "blah": {
-                        "nestedKey1": "nestedVal",
-                    },
-                }
-            ),
-            DynInputOutput.model_validate(
-                {
-                    "new_key": "hi",
-                    "testKey": "myTest",
-                    "blah": {
-                        "nestedKey1": "nestedVal",
-                    },
-                }
-            ),
-        ],
-        {"tb": tb},
-    )
-    assert res[0].new_key == "hi1"  # type: ignore (dynamic property)
-    assert res[0].testKey == "myTest"
-    assert res[0].blah["nestedKey1"] == "nestedVal"  # type: ignore (dynamic property)
-    assert res[1].new_key == "hi"  # type: ignore (dynamic property)
-    assert res[1].testKey == "myTest"
-    assert res[1].blah["nestedKey1"] == "nestedVal"  # type: ignore (dynamic property)
-
-
-@pytest.mark.asyncio
-async def test_dynamic_types_new_enum():
-    tb = TypeBuilder()
-    field_enum = tb.add_enum("Animal")
-    animals = ["giraffe", "elephant", "lion"]
-    for animal in animals:
-        field_enum.add_value(animal.upper())
-    tb.Person.add_property("animalLiked", field_enum.type())
-    res = await b.ExtractPeople(
-        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
-        {"tb": tb},
-    )
-    assert len(res) > 0
-    assert res[0].animalLiked == "GIRAFFE", res[0]
-
-
-@pytest.mark.asyncio
-async def test_dynamic_types_existing_enum():
-    tb = TypeBuilder()
-    tb.Hobby.add_value("Golfing")
-    res = await b.ExtractHobby(
-        "My name is Harrison. My hair is black and I'm 6 feet tall. golf and music are my favorite!.",
-        {"tb": tb},
-    )
-    assert len(res) > 0
-    assert "Golfing" in res, res
-    assert Hobby.MUSIC in res, res
-
-
-@pytest.mark.asyncio
-async def test_dynamic_literals():
-    tb = TypeBuilder()
-    animals = tb.union(
-        [
-            tb.literal_string(animal.upper())
-            for animal in ["giraffe", "elephant", "lion"]
-        ]
-    )
-    tb.Person.add_property("animalLiked", animals)
-    res = await b.ExtractPeople(
-        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
-        {"tb": tb},
-    )
-    assert len(res) > 0
-    assert res[0].animalLiked == "GIRAFFE"
-
-
-@pytest.mark.asyncio
-async def test_dynamic_inputs_list():
-    tb = TypeBuilder()
-    tb.DynInputOutput.add_property("new_key", tb.string().optional())
-    custom_class = tb.add_class("MyBlah")
-    custom_class.add_property("nestedKey1", tb.string())
-    tb.DynInputOutput.add_property("blah", custom_class.type())
-
-    res = await b.DynamicListInputOutput(
-        [
-            DynInputOutput.model_validate(
-                {
-                    "new_key": "hi",
-                    "testKey": "myTest",
-                    "blah": {
-                        "nestedKey1": "nestedVal",
-                    },
-                }
-            ),
-            DynInputOutput.model_validate(
-                {
-                    "new_key": "hi",
-                    "testKey": "myTest",
-                    "blah": {
-                        "nestedKey1": "nestedVal",
-                    },
-                }
-            ),
-        ],
-        {"tb": tb},
-    )
-    assert res[0].new_key == "hi"  # type: ignore (dynamic property)
-    assert res[0].testKey == "myTest"
-    assert res[0].blah["nestedKey1"] == "nestedVal"  # type: ignore (dynamic property)
-    assert res[1].new_key == "hi"  # type: ignore (dynamic property)
-    assert res[1].testKey == "myTest"
-    assert res[1].blah["nestedKey1"] == "nestedVal"  # type: ignore (dynamic property)
-
-
-@pytest.mark.asyncio
-async def test_dynamic_output_map():
-    tb = TypeBuilder()
-    tb.DynamicOutput.add_property("hair_color", tb.string())
-    tb.DynamicOutput.add_property(
-        "attributes", tb.map(tb.string(), tb.string())
-    ).description("Things like 'eye_color' or 'facial_hair'")
-    print(tb.DynamicOutput.list_properties())
-    for prop, _ in tb.DynamicOutput.list_properties():
-        print(f"Property: {prop}")
-
-    res = await b.MyFunc(
-        input="My name is Harrison. My hair is black and I'm 6 feet tall. I have blue eyes and a beard.",
-        baml_options={"tb": tb},
-    )
-
-    print("final ", res)
-    print("final ", res.model_dump())
-    print("final ", res.model_dump_json())
-    assert res.hair_color == "black"  # type: ignore (dynamic property)
-    assert res.attributes["eye_color"] == "blue"  # type: ignore (dynamic property)
-    assert res.attributes["facial_hair"] == "beard"  # type: ignore (dynamic property)
-
-
-@pytest.mark.asyncio
-async def test_dynamic_output_union():
-    tb = TypeBuilder()
-    tb.DynamicOutput.add_property("hair_color", tb.string())
-    tb.DynamicOutput.add_property(
-        "attributes", tb.map(tb.string(), tb.string())
-    ).description("Things like 'eye_color' or 'facial_hair'")
-    # Define two classes
-    class1 = tb.add_class("Class1")
-    class1.add_property("meters", tb.float())
-
-    class2 = tb.add_class("Class2")
-    class2.add_property("feet", tb.float())
-    class2.add_property("inches", tb.float().optional())
-
-    # Use the classes in a union property
-    tb.DynamicOutput.add_property("height", tb.union([class1.type(), class2.type()]))
-    print(tb.DynamicOutput.list_properties())
-    for prop, _ in tb.DynamicOutput.list_properties():
-        print(f"Property: {prop}")
-
-    res = await b.MyFunc(
-        input="My name is Harrison. My hair is black and I'm 6 feet tall. I have blue eyes and a beard. I am 30 years old.",
-        baml_options={"tb": tb},
-    )
-
-    print("final ", res)
-    print("final ", res.model_dump())
-    print("final ", res.model_dump_json())
-    assert res.hair_color == "black"  # type: ignore (dynamic property)
-    assert res.attributes["eye_color"] == "blue"  # type: ignore (dynamic property)
-    assert res.attributes["facial_hair"] == "beard"  # type: ignore (dynamic property)
-    assert res.height["feet"] == 6  # type: ignore (dynamic property)
-
-    res = await b.MyFunc(
-        input="My name is Harrison. My hair is black and I'm 1.8 meters tall. I have blue eyes and a beard. I am 30 years old.",
-        baml_options={"tb": tb},
-    )
-
-    print("final ", res)
-    print("final ", res.model_dump())
-    print("final ", res.model_dump_json())
-    assert res.hair_color == "black"  # type: ignore (dynamic property)
-    assert res.attributes["eye_color"] == "blue"  # type: ignore (dynamic property)
-    assert res.attributes["facial_hair"] == "beard"  # type: ignore (dynamic property)
-    assert res.height["meters"] == 1.8  # type: ignore (dynamic property)
 
 
 @pytest.mark.asyncio
@@ -1632,161 +1357,6 @@ async def test_no_stream_compound_object_with_yapping():
 
 
 @pytest.mark.asyncio
-async def test_differing_unions():
-    tb = TypeBuilder()
-    tb.OriginalB.add_property("value2", tb.string())
-    res = await b.DifferentiateUnions({"tb": tb})
-    assert isinstance(res, OriginalB)
-
-
-@pytest.mark.asyncio
-async def test_add_baml_existing_class():
-    tb = TypeBuilder()
-    tb.add_baml(
-        """
-        class ExtraPersonInfo {
-            height int
-            weight int
-        }
-
-        dynamic class Person {
-            age int?
-            extra ExtraPersonInfo?
-        }
-    """
-    )
-    res = await b.ExtractPeople(
-        "My name is John Doe. I'm 30 years old. I'm 6 feet tall and weigh 180 pounds. My hair is yellow.",
-        {"tb": tb},
-    )
-    assert res == [
-        Person(
-            name="John Doe",
-            hair_color=Color.YELLOW,
-            age=30,
-            extra={"height": 6, "weight": 180},
-        )
-    ]
-
-
-@pytest.mark.asyncio
-async def test_add_baml_existing_enum():
-    tb = TypeBuilder()
-    tb.add_baml(
-        """
-        dynamic enum Hobby {
-            VideoGames
-            BikeRiding
-        }
-    """
-    )
-    res = await b.ExtractHobby("I play video games", {"tb": tb})
-    assert res == ["VideoGames"]
-
-
-@pytest.mark.asyncio
-async def test_add_baml_both_classes_and_enums():
-    tb = TypeBuilder()
-    tb.add_baml(
-        """
-        class ExtraPersonInfo {
-            height int
-            weight int
-        }
-
-        enum Job {
-            Programmer
-            Architect
-            Musician
-        }
-
-        dynamic enum Hobby {
-            VideoGames
-            BikeRiding
-        }
-
-        dynamic enum Color {
-            BROWN
-        }
-
-        dynamic class Person {
-            age int?
-            extra ExtraPersonInfo?
-            job Job?
-            hobbies Hobby[]
-        }
-    """
-    )
-    res = await b.ExtractPeople(
-        "My name is John Doe. I'm 30 years old. My height is 6 feet and I weigh 180 pounds. My hair is brown. I work as a programmer and enjoy bike riding.",
-        {"tb": tb},
-    )
-    assert res == [
-        Person(
-            name="John Doe",
-            hair_color="BROWN",
-            age=30,
-            extra={"height": 6, "weight": 180},
-            job="Programmer",
-            hobbies=["BikeRiding"],
-        )
-    ]
-
-
-@pytest.mark.asyncio
-async def test_add_baml_with_attrs():
-    tb = TypeBuilder()
-    tb.add_baml(
-        """
-        class ExtraPersonInfo {
-            height int @description("In centimeters and rounded to the nearest whole number")
-            weight int @description("In kilograms and rounded to the nearest whole number")
-        }
-
-        dynamic class Person {
-            extra ExtraPersonInfo?
-        }
-    """
-    )
-    res = await b.ExtractPeople(
-        "My name is John Doe. I'm 30 years old. I'm 6 feet tall and weigh 180 pounds. My hair is yellow.",
-        {"tb": tb},
-    )
-    assert res == [
-        Person(
-            name="John Doe",
-            hair_color=Color.YELLOW,
-            extra={"height": 183, "weight": 82},
-        )
-    ]
-
-
-@pytest.mark.asyncio
-async def test_add_baml_error():
-    tb = TypeBuilder()
-    with pytest.raises(errors.BamlError):
-        tb.add_baml(
-            """
-            dynamic Hobby {
-                VideoGames
-                BikeRiding
-            }
-        """
-        )
-
-
-@pytest.mark.asyncio
-async def test_add_baml_parser_error():
-    tb = TypeBuilder()
-    with pytest.raises(errors.BamlError):
-        tb.add_baml(
-            """
-            syntaxerror
-        """
-        )
-
-
-@pytest.mark.asyncio
 async def test_return_failing_assert():
     with pytest.raises(errors.BamlValidationError):
         await b.ReturnFailingAssert(1)
@@ -1995,3 +1565,19 @@ async def test_thinking_streaming():
     assert len(res.title) > 0, "title should be non-empty"
     assert len(res.content) > 0, "content should be non-empty"
     assert len(res.characters) > 0, "characters should be non-empty"
+
+
+@pytest.mark.asyncio
+async def test_echo_workflow():
+    res = await b.EchoWorkflow()
+    assert res == "Hello, world!"
+
+
+# @pytest.mark.asyncio
+# async def test_streaming_echo_workflow():
+#     stream = b.stream.EchoWorkflow()
+#     chunks = []
+#     async for msg in stream:
+#         chunks.push(msg)
+#     print(chunks)
+#     assert False

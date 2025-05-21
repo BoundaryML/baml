@@ -1,6 +1,6 @@
 use anyhow::Result;
 
-use super::types::GoogleResponse;
+use super::types::{GoogleResponse, Part};
 use crate::internal::llm_client::{
     primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse,
     LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
@@ -26,6 +26,7 @@ pub fn parse_google_response<C: WithClient + RequestBuilder>(
     instant_now: web_time::Instant,
     model_name: Option<String>,
 ) -> LLMResponse {
+    // baml_log::info!("Parsing Google response: {:#?}", response_body);
     let response = match GoogleResponse::deserialize(&response_body)
         .context(format!(
             "Failed to parse into a response accepted by {}: {}",
@@ -78,11 +79,11 @@ pub fn parse_google_response<C: WithClient + RequestBuilder>(
     };
 
     let model_name = model_name.unwrap_or("<unknown>".to_string());
-    let part_index = content_part(&model_name);
+    let text_content = text_content_part(&content.parts);
     LLMResponse::Success(LLMCompleteResponse {
         client: client.context().name.to_string(),
         prompt: to_prompt(prompt),
-        content: content.parts[part_index].text.clone(),
+        content: text_content.unwrap_or_default(),
         start_time: system_now,
         latency: instant_now.elapsed(),
         request_options: client.request_options().clone(),
@@ -101,12 +102,11 @@ pub fn parse_google_response<C: WithClient + RequestBuilder>(
     })
 }
 
-fn content_part(model_name: &str) -> usize {
-    if model_name.contains("gemini-2.0-flash-thinking-exp-1219") {
-        1
-    } else {
-        0
-    }
+fn text_content_part(parts: &Vec<Part>) -> Option<String> {
+    parts
+        .iter()
+        .position(|part| !part.text.is_empty() && part.thought.unwrap_or(false) == false)
+        .map(|index| parts[index].text.clone())
 }
 
 pub fn scan_google_response_stream(
@@ -145,18 +145,13 @@ pub fn scan_google_response_stream(
         Err(e) => return Err(e),
     };
     if let Some(choice) = event.candidates.get(0) {
-        let part_index = content_part(
-            model_name
-                .as_ref()
-                .map(|s| s.as_str())
-                .unwrap_or("<unknown>"),
-        );
-        if let Some(content) = choice
+        let text_content = &choice
             .content
             .as_ref()
-            .and_then(|c| c.parts.get(part_index))
-        {
-            inner.content += &content.text;
+            .and_then(|c| text_content_part(&c.parts));
+
+        if let Some(text_content) = text_content {
+            inner.content += &text_content;
         }
         inner.metadata.finish_reason = choice.finish_reason.as_ref().map(|r| r.to_string());
         if choice
@@ -235,6 +230,7 @@ mod tests {
                         function_call: None,
                         function_response: None,
                         video_metadata: None,
+                        thought: None,
                     }],
                     role: Some("model".to_string()),
                 }),

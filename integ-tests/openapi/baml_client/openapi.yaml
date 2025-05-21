@@ -177,6 +177,19 @@ paths:
                 title: AudioInputResponse
                 type: string
       operationId: AudioInput
+  /call/AudioInputOpenai:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/AudioInputOpenai'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: AudioInputOpenaiResponse
+                type: string
+      operationId: AudioInputOpenai
   /call/BuildLinkedList:
     post:
       requestBody:
@@ -919,6 +932,19 @@ paths:
                 title: JsonTypeAliasCycleResponse
                 AnyValue: {}
       operationId: JsonTypeAliasCycle
+  /call/LLMEcho:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/LLMEcho'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: LLMEchoResponse
+                type: string
+      operationId: LLMEcho
   /call/LiteralUnionsTest:
     post:
       requestBody:
@@ -1300,6 +1326,19 @@ paths:
                 title: RecursiveClassWithAliasIndirectionResponse
                 $ref: '#/components/schemas/NodeWithAliasIndirection'
       operationId: RecursiveClassWithAliasIndirection
+  /call/RecursiveUnionTest:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/RecursiveUnionTest'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: RecursiveUnionTestResponse
+                AnyValue: {}
+      operationId: RecursiveUnionTest
   /call/ReturnAliasWithMergedAttributes:
     post:
       requestBody:
@@ -2252,6 +2291,19 @@ paths:
                 title: TestOpenAIShorthandResponse
                 type: string
       operationId: TestOpenAIShorthand
+  /call/TestOpenAIWithFinishReasonError:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIWithFinishReasonError'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIWithFinishReasonErrorResponse
+                type: string
+      operationId: TestOpenAIWithFinishReasonError
   /call/TestOpenAIWithMaxTokens:
     post:
       requestBody:
@@ -2434,6 +2486,19 @@ paths:
                 title: UseBlockConstraintResponse
                 type: integer
       operationId: UseBlockConstraint
+  /call/UseMaintainFieldOrder:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/UseMaintainFieldOrder'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: UseMaintainFieldOrderResponse
+                $ref: '#/components/schemas/MaintainFieldOrder'
+      operationId: UseMaintainFieldOrder
   /call/UseMalformedConstraints:
     post:
       requestBody:
@@ -2639,6 +2704,25 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - aud
+            additionalProperties: false
+    AudioInputOpenai:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: AudioInputOpenaiRequest
+            type: object
+            properties:
+              aud:
+                $ref: '#/components/schemas/BamlAudio'
+              prompt:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - aud
+            - prompt
             additionalProperties: false
     BuildLinkedList:
       required: true
@@ -3563,6 +3647,22 @@ components:
             required:
             - input
             additionalProperties: false
+    LLMEcho:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: LLMEchoRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     LiteralUnionsTest:
       required: true
       content:
@@ -3968,6 +4068,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - cls
+            additionalProperties: false
+    RecursiveUnionTest:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: RecursiveUnionTestRequest
+            type: object
+            properties:
+              input:
+                AnyValue: {}
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     ReturnAliasWithMergedAttributes:
       required: true
@@ -5130,6 +5246,22 @@ components:
             required:
             - input
             additionalProperties: false
+    TestOpenAIWithFinishReasonError:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIWithFinishReasonErrorRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
     TestOpenAIWithMaxTokens:
       required: true
       content:
@@ -5343,6 +5475,22 @@ components:
                 $ref: '#/components/schemas/BamlOptions'
             required:
             - inp
+            additionalProperties: false
+    UseMaintainFieldOrder:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: UseMaintainFieldOrderRequest
+            type: object
+            properties:
+              input:
+                $ref: '#/components/schemas/MaintainFieldOrder'
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
             additionalProperties: false
     UseMalformedConstraints:
       required: true
@@ -6191,6 +6339,20 @@ components:
           type: string
       required:
       - prop
+      additionalProperties: false
+    MaintainFieldOrder:
+      type: object
+      properties:
+        a:
+          type: string
+        b:
+          type: string
+        c:
+          type: string
+      required:
+      - a
+      - b
+      - c
       additionalProperties: false
     MalformedConstraints:
       type: object

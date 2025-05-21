@@ -293,3 +293,21 @@ test_failing_deserializer!(
     "The answer is not car or car-2!",
     FieldType::Enum("Car".to_string())
 );
+
+test_deserializer!(
+    test_weird_characters,
+    r#"
+enum MessageType {
+  SPAM
+  NOT_SPAM
+}
+    "#,
+    r#"
+The text "Buy cheap watches now! Limited time offer!!!" is typically characterized by unsolicited 
+offers and urgency ($^{$_{Ω}$rel}$), which are common traits of spam messages. Therefore, it should be classified as:
+
+- **SPAM**
+    "#,
+    FieldType::Enum("MessageType".to_string()),
+    "SPAM"
+);

@@ -49,9 +49,8 @@ impl Collector {
 
     #[napi]
     pub fn id(&self, function_log_id: String) -> Option<FunctionLog> {
-        let call_id = function_log_id.parse().expect("Invalid callid");
         self.inner
-            .function_log_by_id(&call_id)
+            .function_log_by_id(&baml_types::tracing::events::FunctionId(function_log_id))
             .map(|inner_function_log| FunctionLog {
                 inner: Arc::new(Mutex::new(inner_function_log.clone())),
             })
@@ -67,9 +66,9 @@ impl Collector {
     #[napi]
     pub fn to_string(&self) -> String {
         let logs = self.logs();
-        let log_ids: Vec<_> = logs
+        let log_ids: Vec<String> = logs
             .iter()
-            .map(|log| log.inner.lock().unwrap().id().to_string())
+            .map(|log| log.inner.lock().unwrap().id().0.clone())
             .collect();
         format!(
             "LogCollector(name={}, function_log_ids=[{}])",
@@ -78,10 +77,10 @@ impl Collector {
         )
     }
 
-    #[napi(js_name = "__functionCallCount")]
-    pub fn function_call_count() -> u32 {
-        let call_count = BAML_TRACER.lock().unwrap().function_call_count();
-        call_count as u32
+    #[napi(js_name = "__functionSpanCount")]
+    pub fn function_span_count() -> u32 {
+        let span_count = BAML_TRACER.lock().unwrap().function_span_count();
+        span_count as u32
     }
 
     #[napi(js_name = "__printStorage")]
@@ -124,7 +123,7 @@ impl FunctionLog {
 
         format!(
             "FunctionLog(id={}, function_name={}, type={}, timing={}, usage={}, calls=[{}], raw_llm_response={})",
-            inner.id(),
+            inner.id().0,
             inner.function_name(),
             inner.log_type().to_string(),
             Timing { inner: inner.timing() }.to_string(),
@@ -136,7 +135,7 @@ impl FunctionLog {
 
     #[napi(getter)]
     pub fn id(&self) -> String {
-        self.inner.lock().unwrap().id().to_string()
+        self.inner.lock().unwrap().id().0.clone()
     }
 
     #[napi(getter)]

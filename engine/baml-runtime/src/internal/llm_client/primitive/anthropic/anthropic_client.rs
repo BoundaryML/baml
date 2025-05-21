@@ -11,7 +11,9 @@ use secrecy::{ExposeSecret, SecretString};
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use baml_types::{BamlMap, BamlMedia, BamlMediaContent};
+use baml_types::{
+    tracing::events::HttpRequestId, ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent,
+};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
@@ -154,7 +156,8 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_media_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: ResolveMediaUrls::Never,
+                resolve_image_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client.retry_policy.clone(),
@@ -177,7 +180,8 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_media_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: ResolveMediaUrls::Never,
+                resolve_image_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
             retry_policy: client
@@ -210,7 +214,8 @@ impl AnthropicClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_media_urls: ResolveMediaUrls::Never,
+                resolve_audio_urls: ResolveMediaUrls::Never,
+                resolve_image_urls: ResolveMediaUrls::Never,
                 allowed_metadata: AllowedRoleMetadata::None,
             },
             client: create_client()?,
@@ -316,6 +321,10 @@ impl ToProviderMessage for AnthropicClient {
         mut content: serde_json::Map<String, serde_json::Value>,
         media: &baml_types::BamlMedia,
     ) -> Result<serde_json::Map<String, serde_json::Value>> {
+        let resolve_mode = match media.media_type {
+            baml_types::BamlMediaType::Audio => self.features.resolve_audio_urls,
+            baml_types::BamlMediaType::Image => self.features.resolve_image_urls,
+        };
         match &media.content {
             BamlMediaContent::Base64(data) => {
                 content.insert("type".into(), media.media_type.to_string().into());

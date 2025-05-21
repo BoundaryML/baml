@@ -28,10 +28,11 @@ impl HTTPResponse {
 
     #[napi(getter)]
     pub fn headers(&self, env: Env) -> napi::Result<JsObject> {
-        let mut obj = env.create_object()?;
-        if let Some(headers) = &self.inner.headers {
+        let obj = env.create_object()?;
+        if let Some(headers) = self.inner.headers.as_object() {
             for (k, v) in headers {
-                obj.set_named_property(k, v.to_string())?;
+                // let js_value = serde_value_to_js(env, v)?;
+                // obj.set_named_property(k, js_value)?;
             }
         }
         Ok(obj)

@@ -38,7 +38,7 @@ pub struct GeneratorArgs {
     on_generate: Vec<String>,
 
     // The type of client to generate
-    client_type: Option<GeneratorOutputType>,
+    client_type: GeneratorOutputType,
     client_package_name: Option<String>,
 
     // For TS generators, we can choose between CJS and ESM module formats
@@ -64,7 +64,7 @@ impl GeneratorArgs {
         no_version_check: bool,
         default_client_mode: GeneratorDefaultClientMode,
         on_generate: Vec<String>,
-        client_type: Option<GeneratorOutputType>,
+        client_type: GeneratorOutputType,
         client_package_name: Option<String>,
         module_format: Option<ModuleFormat>,
     ) -> Result<Self> {
@@ -207,7 +207,8 @@ impl GenerateClient for GeneratorOutputType {
         // Generate files
         let files = match self {
             GeneratorOutputType::OpenApi => openapi::generate(ir, gen),
-            GeneratorOutputType::PythonPydantic => python::generate(ir, gen),
+            GeneratorOutputType::PythonPydantic => python::generate(ir, gen, false),
+            GeneratorOutputType::PythonPydanticV1 => python::generate(ir, gen, true),
             GeneratorOutputType::RubySorbet => ruby::generate(ir, gen),
             GeneratorOutputType::Typescript => typescript::generate(ir, gen),
             GeneratorOutputType::TypescriptReact => typescript::generate(ir, gen),

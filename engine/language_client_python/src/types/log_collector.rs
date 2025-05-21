@@ -33,7 +33,7 @@ impl Collector {
         let logs = self.logs();
         let log_ids: Vec<String> = logs
             .iter()
-            .map(|log| log.inner.lock().unwrap().id().to_string().clone())
+            .map(|log| log.inner.lock().unwrap().id().0.clone())
             .collect();
         format!(
             "LogCollector(name={}, function_log_ids=[{}])",
@@ -63,9 +63,8 @@ impl Collector {
     }
 
     pub fn id(&self, function_log_id: String) -> Option<FunctionLog> {
-        let call_id = function_log_id.parse().expect("Invalid call id");
         self.inner
-            .function_log_by_id(&call_id)
+            .function_log_by_id(&baml_types::tracing::events::FunctionId(function_log_id))
             .map(|inner_function_log| FunctionLog {
                 inner: Arc::new(Mutex::new(inner_function_log.clone())),
             })
@@ -79,8 +78,8 @@ impl Collector {
     }
 
     #[staticmethod]
-    pub fn __function_call_count() -> usize {
-        BAML_TRACER.lock().unwrap().function_call_count()
+    pub fn __function_span_count() -> usize {
+        BAML_TRACER.lock().unwrap().function_span_count()
     }
 
     #[staticmethod]
@@ -116,7 +115,7 @@ impl FunctionLog {
 
     #[getter]
     pub fn id(&self) -> String {
-        self.inner.lock().unwrap().id().to_string()
+        self.inner.lock().unwrap().id().0
     }
 
     #[getter]
@@ -454,3 +453,10 @@ impl StreamTiming {
         )
     }
 }
+// impl Drop for FunctionLog {
+//     fn drop(&mut self) {
+//         BAML_TRACER
+//             .blocking_lock()
+//             .dec_function_id(&FunctionId(self.id.clone()));
+//     }
+// }

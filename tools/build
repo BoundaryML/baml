@@ -194,12 +194,10 @@ case "$_path" in
     command="${command} && uv run baml-cli generate --from ${_repo_root}/integ-tests/baml_src"
     if [ "$_test_mode" -eq 1 ]; then
       #command="${command} && BAML_LOG=trace infisical run --env=test -- uv run python baml_example_tracing.py"
-      command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=test -- uv run pytest -s tests/test_functions.py::TestAllInputs::test_multiple_args"
-      # command="${command} && BOUNDARY_API_KEY=da5b944a40a999e25665e50d56db659979adc737289cb631fbc2290b2b3f5e7fdf6844cc40545224cf9699b10503b311 BOUNDARY_API_URL=https://o2em3sulde.execute-api.us-east-1.amazonaws.com BAML_LOG=debug,baml_runtime=trace infisical run --env=test -- uv run pytest -s tests/test_functions.py::TestAllInputs"
-      # command="${command} && BOUNDARY_API_KEY=da5b944a40a999e25665e50d56db659979adc737289cb631fbc2290b2b3f5e7fdf6844cc40545224cf9699b10503b311 BOUNDARY_API_URL=https://o2em3sulde.execute-api.us-east-1.amazonaws.com BAML_LOG=debug,baml_runtime=trace infisical run --env=test -- uv run pytest -s tests/test_functions.py::TestAllInputs"
+      # command="${command} && BAML_LOG=debug,baml_runtime=trace infisical run --env=test -- uv run pytest -s tests/test_functions.py::test_streaming"
       # command="${command} && BAML_LOG=debug,baml_runtime=trace  uv run pytest -s tests/test_functions.py::test_should_work_with_vertex_claude"
       # command="${command} && BAML_LOG=info infisical run --env=test -- uv run pytest"
-      # command="${command} && BAML_LOG=info  uv run pytest -s"
+      command="${command} && BAML_LOG=info  uv run pytest -s"
     fi
     if [ "$_watch_mode" -eq 1 ]; then
       npx nodemon \

@@ -21,6 +21,10 @@ In BAML, you can get represent a `tool` or a `function` you want to call as a BA
 
 ```baml BAML
 class WeatherAPI {
+  // we can use literals to denote the name of the tool
+  // the field can be named anything we want! "api_name" "tool" "function_name"
+  // whatever you feel the LLM would understand best
+  api_name "weather_request"
   city string @description("the user's city")
   timeOfDay string @description("As an ISO8601 timestamp")
 }
@@ -288,6 +292,36 @@ main
 ```
 </CodeGroup>
 
+## Disambiguating Between Similar Tools
+
+When building functions that can call multiple tools (represented as BAML classes), you might encounter situations where different tools accept arguments with the same name. For instance, consider `GetWeather` and `GetTimezone` classes, both taking a `city: string` argument. How does the system determine whether a user query like "What's the time in London?" corresponds to `GetTimezone` or potentially `GetWeather`?
+
+You can use string literals to solve this problem:
+
+```baml BAML
+class GetWeather {
+  tool_name "get_weather" @description("Use this tool to get the current weather forecast for a specific city.")
+  city string @description("The city for which to get the weather.")
+}
+
+class GetTimezone {
+  tool_name "get_timezone" @description("Use this tool to find the current timezone of a specific city.")
+  city string @description("The city for which to find the timezone.")
+}
+
+function ChooseTool(query: string) -> GetWeather | GetTimezone {
+  client "openai/gpt-4o"
+  prompt #"
+    Given the user query, determine the primary intent and select the appropriate tool to call.
+
+    {# special macro to add tool structures + descriptions here #}
+    {{ ctx.output_format }} 
+
+    {{ _.role('user') }}
+    {{ query }}
+  "#
+}
+```
 
 ## Dynamically Generate the tool signature
 It might be cumbersome to define schemas in baml and code, so you can define them from code as well. Read more about dynamic types [here](/guide/baml-advanced/dynamic-runtime-types)
@@ -367,11 +401,13 @@ This is what it looks in the BAML file:
 
 ``` Rust tools.baml
 class WeatherAPI {
+  intent "weather_request"
   city string
   time string @description("Current time in ISO8601 format")
 }
 
 class CalculatorAPI {
+  intent "basic_calculator"
   operation "add" | "subtract" | "multiply" | "divide"
   numbers float[]
 }
@@ -388,11 +424,12 @@ function SelectTool(message: string) -> WeatherAPI | CalculatorAPI {
 }
 ```
 
-In our Python code, we'll:
+In our agent code, we'll:
 1. Implement our APIs
 2. Implement our Agent that continuously will use different tools
 
-``` Python toolAgent.py
+<CodeGroup>
+```python toolAgent.py
 from baml_client import b
 from baml_client.types import WeatherAPI, CalculatorAPI
 
@@ -440,6 +477,81 @@ def main():
 if __name__ == "__main__":
     main()
 ```
+
+```typescript toolAgent.ts
+import { b } from "@/baml_client";
+import { WeatherAPI, CalculatorAPI } from "@/baml-client/types";
+
+function handleWeather(weather: WeatherAPI): string {
+  // Simulate weather API call
+  return `The weather in ${weather.city} at ${weather.time} is sunny.`;
+}
+
+function handleCalculator(calc: CalculatorAPI): string {
+  const numbers = calc.numbers;
+  let result: number;
+
+  switch (calc.operation) {
+    case "add":
+      result = numbers.reduce((a, b) => a + b, 0);
+      break;
+    case "subtract":
+      result = numbers.slice(1).reduce((a, b) => a - b, numbers[0]);
+      break;
+    case "multiply":
+      result = numbers.reduce((a, b) => a * b, 1);
+      break;
+    case "divide":
+      result = numbers.slice(1).reduce((a, b) => a / b, numbers[0]);
+      break;
+    default:
+      return "Unknown operation.";
+  }
+
+  return `The result is ${result}`;
+}
+
+async function main() {
+  console.log("Agent started! Type 'exit' to quit.");
+
+  const readline = await import("readline");
+
+  const rl = readline.createInterface({
+    input: process.stdin,
+    output: process.stdout,
+  });
+
+  rl.on("line", async (input) => {
+    if (input.toLowerCase() === "exit") {
+      rl.close();
+      return;
+    }
+
+    const toolResponse = await b.SelectTool(input);
+
+    switch (toolResponse.intent) {
+      case "weather_request":
+      const result = handleWeather(toolResponse as WeatherAPI);
+      console.log(`Agent (Weather): ${result}`);
+    }
+    if () {
+      const result = handleWeather(toolResponse as WeatherAPI);
+      console.log(`Agent (Weather): ${result}`);
+    } else if ("numbers" in toolResponse && "operation" in toolResponse) {
+      const result = handleCalculator(toolResponse as CalculatorAPI);
+      console.log(`Agent (Calculator): ${result}`);
+    } else {
+      console.log("Agent: Sorry, I couldn't handle that input.");
+    }
+  });
+}
+
+main();
+
+```
+
+</CodeGroup>
+
 
 We can test this by asking things like:
 1. What is the weather in Seattle?

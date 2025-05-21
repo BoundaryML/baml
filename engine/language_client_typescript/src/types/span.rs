@@ -6,7 +6,7 @@ use super::runtime_ctx_manager::RuntimeContextManager;
 use crate::{errors::invalid_argument_error, BamlRuntime};
 
 crate::lang_wrapper!(BamlSpan,
-  Option<baml_runtime::tracing::TracingCall>,
+  Option<Option<baml_runtime::tracing::TracingSpan>>,
   no_from,
   rt: std::sync::Arc<baml_runtime::BamlRuntime>
 );
@@ -28,7 +28,7 @@ impl BamlSpan {
 
         let span = runtime
             .inner
-            .start_call(&function_name, args_map, &ctx.inner);
+            .start_span(&function_name, args_map, &ctx.inner);
         log::trace!("Starting span: {:#?} for {:?}\n", span, function_name);
         Ok(Self {
             inner: span.into(),
@@ -43,18 +43,18 @@ impl BamlSpan {
         result: serde_json::Value,
         ctx: &RuntimeContextManager,
     ) -> napi::Result<serde_json::Value> {
-        log::trace!("Finishing call: {:?}", self.inner);
+        log::trace!("Finishing span: {:?}", self.inner);
         let result: BamlValue = serde_json::from_value(result)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
 
-        let call = self
+        let span = self
             .inner
             .take()
             .ok_or_else(|| napi::Error::new(napi::Status::GenericFailure, "Already used span"))?;
 
         self.rt
-            .finish_call(call, Some(result), &ctx.inner)
-            .map(|u| u.to_string())
+            .finish_span(span, Some(result), &ctx.inner)
+            .map(|u| u.map(|id| id.to_string()))
             .map(|u| serde_json::json!(u))
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))
     }

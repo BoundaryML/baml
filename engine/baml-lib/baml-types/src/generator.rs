@@ -17,6 +17,9 @@ pub enum GeneratorOutputType {
     #[strum(serialize = "python/pydantic")]
     PythonPydantic,
 
+    #[strum(serialize = "python/pydantic/v1")]
+    PythonPydanticV1,
+
     #[strum(serialize = "typescript")]
     Typescript,
 
@@ -43,6 +46,9 @@ impl GeneratorOutputType {
             // Due to legacy reasons, PythonPydantic and Typescript default to async
             // DO NOT CHANGE THIS DEFAULT EVER OR YOU WILL BREAK EXISTING USERS
             Self::PythonPydantic => GeneratorDefaultClientMode::Async,
+            // mimic legacy version
+            Self::PythonPydanticV1 => GeneratorDefaultClientMode::Async,
+
             Self::Typescript => GeneratorDefaultClientMode::Async,
             Self::TypescriptReact => GeneratorDefaultClientMode::Async,
             Self::RubySorbet => GeneratorDefaultClientMode::Sync,
@@ -55,6 +61,7 @@ impl GeneratorOutputType {
         match self {
             Self::OpenApi => GeneratorDefaultClientMode::Sync,
             Self::PythonPydantic => GeneratorDefaultClientMode::Sync,
+            Self::PythonPydanticV1 => GeneratorDefaultClientMode::Sync,
             Self::Typescript => GeneratorDefaultClientMode::Async,
             Self::TypescriptReact => GeneratorDefaultClientMode::Async,
             Self::RubySorbet => GeneratorDefaultClientMode::Sync,

@@ -119,6 +119,20 @@ fn subst<'a>(
                 meta: meta.clone(),
             })
         }
+        Expr::If(cond, then, else_, meta) => {
+            let new_cond = subst(cond, var_name, val, env)?;
+            let new_then = subst(then, var_name, val, env)?;
+            let new_else = else_
+                .as_ref()
+                .map(|e| subst(e, var_name, val, env))
+                .transpose()?;
+            Ok(Expr::If(
+                Arc::new(new_cond),
+                Arc::new(new_then),
+                new_else.map(|e| Arc::new(e)),
+                meta.clone(),
+            ))
+        }
     };
     let res = res?;
     Ok(res)
@@ -280,6 +294,23 @@ async fn beta_reduce<'a>(
         Expr::ClassConstructor { .. } => Ok(expr.clone()),
         Expr::ArgsTuple(_, _) => Ok(expr.clone()),
         Expr::Lambda(_, _, _) => Ok(expr.clone()),
+        Expr::If(cond, then, else_, meta) => {
+            let new_cond = Box::pin(beta_reduce(env, cond, eval_final_llm_fn)).await?;
+            let new_then = Box::pin(beta_reduce(env, then, eval_final_llm_fn)).await?;
+            let new_else = match else_ {
+                None => None,
+                Some(else_) => {
+                    let new_else = Box::pin(beta_reduce(env, else_, eval_final_llm_fn)).await?;
+                    Some(Arc::new(new_else))
+                }
+            };
+            Ok(Expr::If(
+                Arc::new(new_cond),
+                Arc::new(new_then),
+                new_else,
+                meta.clone(),
+            ))
+        }
         _ => panic!("Tried to beta reduce a {}", expr.dump_str()), // Err(anyhow::anyhow!("Not an application: {:?}", expr)),
     }
 }
@@ -407,6 +438,22 @@ pub async fn eval_to_value_or_llm_call<'a>(
                 }
                 current_expr = res;
             }
+            Expr::If(cond, then, else_, meta) => {
+                let predicate = eval_to_value(env, cond.as_ref()).await?;
+                match predicate {
+                    Some(BamlValueWithMeta::Bool(predicate, _)) => {
+                        if predicate {
+                            current_expr = Arc::unwrap_or_clone(then.clone());
+                        } else {
+                            current_expr = else_
+                                .as_ref()
+                                .map(|e| Arc::unwrap_or_clone(e.clone()))
+                                .unwrap_or(Expr::Atom(BamlValueWithMeta::Null(meta.clone())));
+                        }
+                    }
+                    _ => todo!("Type error"),
+                }
+            }
             Expr::BoundVar(_, _) => {
                 return Err(anyhow::anyhow!("Bare bound variable found"));
             }
@@ -499,6 +546,22 @@ pub async fn eval_to_value<'a>(
                 let val = BamlValueWithMeta::Class(name.clone(), spread_fields, ());
                 return Ok(Some(val));
             }
+            Expr::If(cond, then, else_, meta) => {
+                let predicate = Box::pin(eval_to_value(env, cond.as_ref())).await?;
+                match predicate {
+                    Some(BamlValueWithMeta::Bool(predicate, _)) => {
+                        if predicate {
+                            current_expr = Arc::unwrap_or_clone(then.clone());
+                        } else {
+                            current_expr = else_
+                                .as_ref()
+                                .map(|e| Arc::unwrap_or_clone(e.clone()))
+                                .unwrap_or(Expr::Atom(BamlValueWithMeta::Null(meta.clone())));
+                        }
+                    }
+                    _ => todo!("Type error"),
+                }
+            }
             other => {
                 // let new_expr = step(env, &other).await?;
                 let new_expr = Box::pin(beta_reduce(env, &other, true)).await?;
@@ -565,7 +628,7 @@ let another = {
   CombinePoems(x,y)
 };
 
-fn Pipeline() -> string {
+function Pipeline() -> string {
     let x = MakePoem(4);
     let y = MakePoem(5);
     let a = MakePoem(6);
@@ -575,7 +638,7 @@ fn Pipeline() -> string {
     CombinePoems(xy, ab)
 }
 
-fn Pyramid() -> string {
+function Pyramid() -> string {
   CombinePoems( CombinePoems( MakePoem(10), MakePoem(10)), MakePoem(10))
 }
 
@@ -591,15 +654,15 @@ class Person {
   poem string
 }
 
-fn MakePerson() -> Person {
+function MakePerson() -> Person {
   Person { name: "Greg", poem: "Hello, world!", ..default_person }
 }
 
-fn OuterPyramid() -> string {
+function OuterPyramid() -> string {
   CombinePoems(poem, another)
 }
 
-fn ExprList() -> string[] {
+function ExprList() -> string[] {
   [ MakePoem(10), MakePoem(2) ]
 }
 
@@ -643,11 +706,18 @@ test TestMakePerson() {
 
 function Echo(msg: string) -> string {
     client GPT4o
-    prompt #"Please repeat the message back to me, with three words of elaboration and a twist: {{ msg }}"#
-  }
+    prompt #"Please repeat the message back to me exactly as it is: {{ msg }}"#
+}
+
+function Quiz(msg: string) -> bool {
+  client GPT4o
+  prompt #"Is the following message true or false? {{ msg }}
+  {{ ctx.output_format }}
+  "#
+}
   
-  fn Go() -> string {
-    Echo("Hello")
+  function Go() -> string {
+    if Quiz("The sky is green") { Echo("Hello") } else { Echo("World") }
   }
   
   test Go {
@@ -664,6 +734,131 @@ function Echo(msg: string) -> string {
         };
         let f = rt.inner.ir.find_expr_fn("OuterPyramid").unwrap();
         dbg!(&f.item);
+        let (res, _) = rt
+            // .run_test("Second", "TestSecond", &ctx, Some(on_event))
+            .run_test("Go", "Go", &ctx, Some(on_event), None)
+            // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
+            // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
+            // .run_test("LlmParseInt", "TestParse", &ctx, Some(on_event))
+            .await;
+        dbg!(res);
+        assert!(false);
+    }
+
+    // #[tokio::test]
+    async fn test_fn_stream() {
+        let rt = runtime(
+            r##"
+function MakePoem(length: int) -> string {
+    client GPT4o
+    prompt #"Write a poem {{ length }} lines long."#
+}
+
+function CombinePoems(poem1: string, poem2: string) -> string {
+    client GPT4o
+    prompt #"Combine the following two poems into one poem.
+
+    Poem 1:
+    {{ poem1 }}
+
+    Poem 2:
+    {{ poem2 }}
+    "#
+}
+
+let poem = MakePoem(1);
+
+let another = {
+  let x = MakePoem(2);
+  let y = MakePoem(3);
+  CombinePoems(x,y)
+};
+
+function Pipeline() -> string {
+    let x = MakePoem(4);
+    let y = MakePoem(5);
+    let a = MakePoem(6);
+    let b = MakePoem(7);
+    let xy = CombinePoems(x,y);
+    let ab = CombinePoems(a,b);
+    CombinePoems(xy, ab)
+}
+
+function Pyramid() -> string {
+  CombinePoems( CombinePoems( MakePoem(8), MakePoem(9)), MakePoem(10))
+}
+
+let default_person = Person {
+  name: "John Doe",
+  age: 20,
+  poem: "Never was there a man more plain."
+};
+
+class Person {
+  name string
+  age int
+  poem string
+}
+
+function MakePerson() -> Person {
+  Person { name: "Greg", poem: "Hello, world!", ..default_person }
+}
+
+function OuterPyramid() -> string {
+  CombinePoems(poem, another)
+}
+
+function ExprList() -> string[] {
+  [ MakePoem(11), MakePoem(12) ]
+}
+
+test TestPipeline() {
+  functions [Pipeline]
+  args { }
+}
+
+test TestPyramid() {
+  functions [Pyramid]
+  args { }
+}
+
+test OuterPyramid() {
+  functions [OuterPyramid]
+  args { }
+}
+
+client<llm> GPT4o {
+  provider openai
+  options {
+    model gpt-4o
+    api_key env.OPENAI_API_KEY
+  }
+}
+
+test TestMakePoem() {
+    functions [MakePoem]
+    args { length 4 }
+}
+
+test TestExprList() {
+  functions [ExprList]
+  args { }
+}
+
+test TestMakePerson() {
+  functions [MakePerson]
+  args { }
+}
+        "##,
+        );
+        // dbg!(&rt.inner.ir.find_function("OuterPyramid").unwrap().item);
+        let ctx = rt.create_ctx_manager(BamlValue::String("test".to_string()), None);
+
+        let on_event = |res: FunctionResult| {
+            eprintln!("on_event: {:?}", res);
+        };
+        let f = rt.inner.ir.find_expr_fn("OuterPyramid").unwrap();
+        // dbg!(&f.item);
         let (res, _) = rt
             // .run_test("Second", "TestSecond", &ctx, Some(on_event))
             .run_test("Go", "Go", &ctx, Some(on_event), None)

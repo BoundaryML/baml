@@ -16,6 +16,7 @@ use internal_baml_core::ir::{
 pub(crate) struct PythonTypes<'ir> {
     enums: Vec<PythonEnum<'ir>>,
     classes: Vec<PythonClass<'ir>>,
+    is_pydantic_2: bool,
     structural_recursive_alias_cycles: Vec<PythonTypeAlias<'ir>>,
 }
 
@@ -51,6 +52,7 @@ struct PythonTypeAlias<'ir> {
 #[template(path = "partial_types.py.j2", escape = "none")]
 pub(crate) struct PythonStreamTypes<'ir> {
     partial_classes: Vec<PartialPythonClass<'ir>>,
+    is_pydantic_2: bool,
     structural_recursive_alias_cycles: Vec<PythonTypeAlias<'ir>>,
 }
 
@@ -68,11 +70,12 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonT
     type Error = anyhow::Error;
 
     fn try_from(
-        (ir, _): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs),
+        (ir, gen): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs),
     ) -> Result<PythonTypes<'ir>> {
         Ok(PythonTypes {
             enums: ir.walk_enums().map(PythonEnum::from).collect::<Vec<_>>(),
             classes: ir.walk_classes().map(PythonClass::from).collect::<Vec<_>>(),
+            is_pydantic_2: matches!(gen.client_type, baml_types::GeneratorOutputType::PythonPydantic),
             structural_recursive_alias_cycles: {
                 let mut cycles = ir
                     .walk_alias_cycles()
@@ -102,7 +105,7 @@ impl<'ir> From<EnumWalker<'ir>> for PythonEnum<'ir> {
     fn from(e: EnumWalker<'ir>) -> PythonEnum<'ir> {
         PythonEnum {
             name: e.name(),
-            dynamic: e.item.attributes.dynamic(),
+            dynamic: e.item.attributes.get("dynamic_type").is_some(),
             values: e
                 .item
                 .elem
@@ -119,7 +122,7 @@ impl<'ir> From<ClassWalker<'ir>> for PythonClass<'ir> {
     fn from(c: ClassWalker<'ir>) -> Self {
         PythonClass {
             name: Cow::Borrowed(c.name()),
-            dynamic: c.item.attributes.dynamic(),
+            dynamic: c.item.attributes.get("dynamic_type").is_some(),
             fields: c
                 .item
                 .elem
@@ -160,12 +163,13 @@ impl<'ir> From<Walker<'ir, (&'ir String, &'ir FieldType)>> for PythonTypeAlias<'
 impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonStreamTypes<'ir> {
     type Error = anyhow::Error;
 
-    fn try_from((ir, _): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+    fn try_from((ir, gen): (&'ir IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
         Ok(Self {
             partial_classes: ir
                 .walk_classes()
                 .map(PartialPythonClass::from)
                 .collect::<Vec<_>>(),
+            is_pydantic_2: matches!(gen.client_type, baml_types::GeneratorOutputType::PythonPydantic),
             structural_recursive_alias_cycles: {
                 let mut cycles = ir
                     .walk_alias_cycles()
@@ -182,7 +186,7 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
     fn from(c: ClassWalker<'ir>) -> PartialPythonClass<'ir> {
         PartialPythonClass {
             name: c.name(),
-            dynamic: c.item.attributes.dynamic(),
+            dynamic: c.item.attributes.get("dynamic_type").is_some(),
             fields: c
                 .item
                 .elem
@@ -190,23 +194,24 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
                 .iter()
                 .map(|f| {
                     // Fields with @stream.done should take their type from
-                    let needed: bool = f.attributes.streaming_behavior().needed;
+                    let needed: bool = f.attributes.get("stream.not_null").is_some();
                     let (_, metadata) = c.ir.distribute_metadata(&f.elem.r#type.elem);
                     let done: bool = metadata.1.done;
                     let (field, optional) = match (done, needed) {
                         (false, false) => {
                             f.elem.r#type.elem.to_partial_type_ref(c.ir, false, false)
                         }
-                        (true, false) => (
-                            format!("Optional[{}]", f.elem.r#type.elem.to_type_ref(c.ir, true)),
-                            true,
-                        ),
+                        (true, false) => (format!("Optional[{}]",f.elem.r#type.elem.to_type_ref(c.ir, true)), true),
                         (false, true) => f.elem.r#type.elem.to_partial_type_ref(c.ir, true, true),
                         (true, true) => (f.elem.r#type.elem.to_type_ref(c.ir, true), false),
                     };
                     (
                         f.elem.name.as_str(),
-                        add_default_value(c.ir, &f.elem.r#type.elem, &field),
+                        add_default_value(
+                            c.ir,
+                            &f.elem.r#type.elem,
+                            &field,
+                        ),
                         f.elem.docstring.as_ref().map(render_docstring),
                     )
                 })
@@ -307,7 +312,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             FieldType::Enum(name) => {
                 if ir
                     .find_enum(name)
-                    .map(|e| e.item.attributes.dynamic())
+                    .map(|e| e.item.attributes.get("dynamic_type").is_some())
                     .unwrap_or(false)
                 {
                     format!("Union[\"{module_prefix}{name}\", str]")
@@ -385,7 +390,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             FieldType::Enum(name) => {
                 if ir
                     .find_enum(name)
-                    .map(|e| e.item.attributes.dynamic())
+                    .map(|e| e.item.attributes.get("dynamic_type").is_some())
                     .unwrap_or(false)
                 {
                     if needed || wrapped {
@@ -551,7 +556,6 @@ mod tests {
             streaming_behavior: StreamingBehavior {
                 done: true,
                 state: false,
-                needed: false,
             },
             constraints: vec![],
         };

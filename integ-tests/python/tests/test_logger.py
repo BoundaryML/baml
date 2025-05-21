@@ -17,7 +17,7 @@ def reset_log_level():
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("reset_log_level")
-async def test_logger(capfd):
+async def test_logger(capfd: pytest.CaptureFixture[str]):
     """
     Test that the logger works as expected.
 
@@ -47,7 +47,7 @@ async def test_logger(capfd):
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("reset_log_level")
-async def test_logger_initializes_correctly(capfd):
+async def test_logger_initializes_correctly(capfd: pytest.CaptureFixture[str]):
     # default if not set should be INFO
     # make sure BAML_LOG is not set in infisical when running this test.
     assert os.environ.get("BAML_LOG") is None

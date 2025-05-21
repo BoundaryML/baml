@@ -29,15 +29,6 @@ type stream struct {}
 
 var Stream = &stream{}
 
-func castSlice[T any](result any, castResult func(any) T) []T {
-	items := result.([]any)
-	casted := make([]T, len(items))
-	for i, item := range items {
-		casted[i] = castResult(item)
-	}
-	return casted
-}
-
 func castOptional[T any](result any, castResult func(any) T) *T {
 	if result == nil {
 		return nil
@@ -46,14 +37,44 @@ func castOptional[T any](result any, castResult func(any) T) *T {
 	return &val
 }
 
+type callOption struct {
+	clientRegistry *baml.ClientRegistry
+}
+
+type CallOptionFunc func(*callOption)
+
+func WithClientRegistry(clientRegistry *baml.ClientRegistry) CallOptionFunc {
+	return func(o *callOption) {
+		o.clientRegistry = clientRegistry
+	}
+}
+
+{% macro return_type_name(fn) -%}
+{% if fn.return_type.is_slice || fn.return_type.is_map -%}
+{{ fn.return_type.name }}
+{%- else -%}
+*{{ fn.return_type.name }}
+{%- endif %}
+{%- endmacro %}
+
 {% for fn in funcs %}
 
 func {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
         , {{name}} {{type}}
-        {%- endfor %}) (*{{ fn.return_type }}, error) {
+        {%- endfor %}, opts ...CallOptionFunc) ({% call return_type_name(fn) %}, error) {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{ {% for (name, type) in fn.args -%}"{{name}}": {{name}},{% endfor %} },
 	}
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -67,18 +88,18 @@ func {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
 		return nil, result.Error
 	}
 
-	castResult := func (result any) {{ fn.return_type }} {
-		return {{ crate::go::cast_value("result", fn.return_type_type) }}
+	castResult := func (result any) {% call return_type_name(fn) %} {
+		return {{ crate::go::cast_value("result", fn.return_type) }}
 	}
 
 	casted := castResult(*result.Data)
 
-	return &casted, nil
+	return casted, nil
 }
 
 func (*stream) {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -%}
 		, {{name}} {{type}}
-		{%- endfor %}) <-chan {{ fn.return_type }} {
+		{%- endfor %}) <-chan {% call return_type_name(fn) %} {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{ {% for (name, type) in fn.args -%}"{{name}}": {{name}},{% endfor %} },
 	}
@@ -86,7 +107,7 @@ func (*stream) {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -
 	if err != nil {
 		panic(err)
 	}
-	channel := make(chan {{ fn.return_type }})
+	channel := make(chan {% call return_type_name(fn) %})
 	raw, err := bamlRuntime.CallFunctionStream(ctx, "{{ fn.name }}", encoded)
 	if err != nil {
 		close(channel)
@@ -107,7 +128,7 @@ func (*stream) {{ fn.name }}(ctx context.Context{% for (name, type) in fn.args -
 					close(channel)
 					return
 				}
-				channel <- (*result.Data).({{ fn.return_type }})
+				channel <- (*result.Data).({% call return_type_name(fn) %})
 			}
 		}
 	}()

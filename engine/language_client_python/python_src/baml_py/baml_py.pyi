@@ -6,9 +6,7 @@ def get_version() -> str:
     """Get the version of the BAML Python client."""
     ...
 
-def set_log_level(
-    level: Literal["DEBUG", "INFO", "WARN", "ERROR", "OFF"] | str,
-) -> None:
+def set_log_level(level: Literal["DEBUG", "INFO", "WARN", "ERROR", "OFF"] | str) -> None:
     """Set the log level for the BAML Python client."""
     ...
 
@@ -22,10 +20,6 @@ def get_log_level() -> str:
 
 def set_log_max_chunk_length(length: int) -> None:
     """Set the maximum log chunk length for the BAML Python client."""
-    ...
-
-def cleanup() -> None:
-    """Cleanup the BAML Python client. should be called when the program is exiting."""
     ...
 
 class FunctionResult:
@@ -45,13 +39,7 @@ class FunctionResult:
     def __str__(self) -> str: ...
     # Returns True if the function call was successful, False otherwise
     def is_ok(self) -> bool: ...
-    def cast_to(
-        self,
-        enum_module: Any,
-        class_module: Any,
-        partial_class_module: Any,
-        allow_partials: bool,
-    ) -> Any: ...
+    def cast_to(self, enum_module: Any, class_module: Any, partial_class_module: Any, allow_partials: bool) -> Any: ...
 
     # This is a debug function that returns the internal representation of the response
     # This is not to be relied upon and is subject to change
@@ -199,6 +187,7 @@ class BamlRuntime:
         cr: Optional[ClientRegistry],
     ) -> Any: ...
 
+
 class LogEventMetadata:
     event_id: str
     parent_id: Optional[str]
@@ -277,14 +266,12 @@ class Collector:
     def id(self, function_log_id: str) -> Optional[FunctionLog]: ...
     # For debugging
     @staticmethod
-    def __function_call_count() -> int: ...
+    def __function_span_count() -> int: ...
     @staticmethod
     def __print_storage() -> None: ...
 
 class FunctionLog:
-    def __init__(
-        self, name: str, args: Dict[str, Any], result: FunctionResult
-    ) -> None: ...
+    def __init__(self, name: str, args: Dict[str, Any], result: FunctionResult) -> None: ...
     def __str__(self) -> str: ...
     @property
     def id(self) -> str: ...
@@ -305,16 +292,9 @@ class FunctionLog:
     @property
     def selected_call(self) -> Optional[Union[LLMCall, LLMStreamCall]]: ...
 
+
 class LLMCall:
-    def __init__(
-        self,
-        client_name: str,
-        provider: str,
-        timing: Timing,
-        request: Dict[str, Any],
-        response: Dict[str, Any],
-        usage: Usage,
-    ) -> None: ...
+    def __init__(self, client_name: str, provider: str, timing: Timing, request: Dict[str, Any], response: Dict[str, Any], usage: Usage) -> None: ...
     @property
     def selected(self) -> bool: ...
     @property
@@ -331,38 +311,24 @@ class LLMCall:
     @property
     def client_name(self) -> str: ...
 
+
 class LLMStreamCall(LLMCall):
-    def __init__(
-        self,
-        client_name: str,
-        provider: str,
-        timing: StreamTiming,
-        request: Dict[str, Any],
-        response: Dict[str, Any],
-        usage: Usage,
-    ) -> None: ...
+    def __init__(self, client_name: str, provider: str, timing: StreamTiming, request: Dict[str, Any], response: Dict[str, Any],
+    usage: Usage) -> None: ...
     # TODO: add chunks
     # def chunks(self) -> List[str]: ...
     @property
     def timing(self) -> StreamTiming: ...
 
 class Usage:
-    def __init__(
-        self, input_tokens: Optional[int], output_tokens: Optional[int]
-    ) -> None: ...
+    def __init__(self, input_tokens: Optional[int], output_tokens: Optional[int]) -> None: ...
     @property
     def input_tokens(self) -> Optional[int]: ...
     @property
     def output_tokens(self) -> Optional[int]: ...
 
 class Timing:
-    def __init__(
-        self,
-        start_time: str,
-        end_time: str,
-        duration: Optional[int],
-        time_to_first_parsed_ms: Optional[int],
-    ) -> None: ...
+    def __init__(self, start_time: str, end_time: str, duration: Optional[int], time_to_first_parsed_ms: Optional[int]) -> None: ...
     @property
     def start_time_utc_ms(self) -> int: ...
     @property
@@ -371,20 +337,12 @@ class Timing:
     def time_to_first_parsed_ms(self) -> Optional[int]: ...
 
 class StreamTiming(Timing):
-    def __init__(
-        self,
-        start_time_utc_ms: int,
-        duration_ms: int,
-        time_to_first_parsed_ms: int,
-        time_to_first_token_ms: int,
-    ) -> None: ...
+    def __init__(self, start_time_utc_ms: int, duration_ms: int, time_to_first_parsed_ms: int, time_to_first_token_ms: int) -> None: ...
     @property
     def time_to_first_token_ms(self) -> Optional[int]: ...
 
 class HTTPRequest:
-    def __init__(
-        self, url: str, method: str, headers: Dict[str, Any], body: str
-    ) -> None: ...
+    def __init__(self, url: str, method: str, headers: Dict[str, Any], body: str) -> None: ...
     @property
     def id(self) -> str: ...
     @property

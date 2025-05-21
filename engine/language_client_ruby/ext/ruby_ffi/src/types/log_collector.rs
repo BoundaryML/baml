@@ -101,9 +101,8 @@ impl Collector {
     }
 
     pub fn id(&self, function_log_id: String) -> Option<FunctionLog> {
-        let call_id = function_log_id.parse().expect("Invalid call id");
         self.inner
-            .function_log_by_id(&call_id)
+            .function_log_by_id(&baml_types::tracing::events::FunctionId(function_log_id))
             .map(|inner_function_log| FunctionLog {
                 inner: Arc::new(Mutex::new(inner_function_log.clone())),
             })
@@ -117,7 +116,7 @@ impl Collector {
 
     pub fn to_s(&self) -> String {
         let logs = self.inner.function_logs();
-        let log_ids: Vec<String> = logs.iter().map(|log| log.id().to_string()).collect();
+        let log_ids: Vec<String> = logs.iter().map(|log| log.id().0.clone()).collect();
         format!(
             "LogCollector(name={}, function_log_ids=[{}])",
             self.inner.name(),
@@ -125,9 +124,9 @@ impl Collector {
         )
     }
 
-    pub fn __function_call_count() -> u32 {
-        let call_count = BAML_TRACER.lock().unwrap().function_call_count();
-        call_count as u32
+    pub fn __function_span_count() -> u32 {
+        let span_count = BAML_TRACER.lock().unwrap().function_span_count();
+        span_count as u32
     }
 
     pub fn __print_storage() {
@@ -145,8 +144,8 @@ impl Collector {
         cls.define_method("usage", method!(Collector::usage, 0))?;
         cls.define_method("to_s", method!(Collector::to_s, 0))?;
         cls.define_singleton_method(
-            "__function_call_count",
-            function!(Collector::__function_call_count, 0),
+            "__function_span_count",
+            function!(Collector::__function_span_count, 0),
         )?;
         cls.define_singleton_method("__print_storage", function!(Collector::__print_storage, 0))?;
 
@@ -158,7 +157,7 @@ impl FunctionLog {
     pub fn to_s(&self) -> String {
         // Acquire the lock once and extract all needed data
         let mut guard = self.inner.lock().unwrap();
-        let id = guard.id().to_string();
+        let id = guard.id().0.clone();
         let function_name = guard.function_name();
         let log_type = guard.log_type().to_string();
         let timing_data = guard.timing().clone();
@@ -210,7 +209,7 @@ impl FunctionLog {
     }
 
     pub fn id(&self) -> String {
-        self.inner.lock().unwrap().id().to_string()
+        self.inner.lock().unwrap().id().0.clone()
     }
 
     pub fn function_name(&self) -> String {

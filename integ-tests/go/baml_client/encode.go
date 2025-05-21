@@ -126,6 +126,8 @@ var typeMap = map[string]reflect.Type{
 
 	"LiteralClassTwo": reflect.TypeOf(types.LiteralClassTwo{}),
 
+	"MaintainFieldOrder": reflect.TypeOf(types.MaintainFieldOrder{}),
+
 	"MalformedConstraints": reflect.TypeOf(types.MalformedConstraints{}),
 
 	"MalformedConstraints2": reflect.TypeOf(types.MalformedConstraints2{}),
@@ -293,6 +295,8 @@ var typeMap = map[string]reflect.Type{
 	"Union__int__string__bool__float__List__string__Map__string_List__string": reflect.TypeOf(types.Union__int__string__bool__float__List__string__Map__string_List__string{}),
 
 	"Union__string__List__Nested": reflect.TypeOf(types.Union__string__List__Nested{}),
+
+	"Union__string__Map__string_RecursiveUnion": reflect.TypeOf(types.Union__string__Map__string_RecursiveUnion{}),
 
 	"Union__string__Nested": reflect.TypeOf(types.Union__string__Nested{}),
 

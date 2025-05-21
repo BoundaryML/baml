@@ -1,7 +1,8 @@
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue};
+use indexmap::IndexMap;
 use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     prelude::{PyAnyMethods, PyTypeMethods},
@@ -51,8 +52,8 @@ impl From<Errors> for PyErr {
 
 enum MappedPyType {
     Enum(String, String),
-    Class(String, HashMap<String, PyObject>),
-    Map(HashMap<String, PyObject>),
+    Class(String, IndexMap<String, PyObject>),
+    Map(HashMap<String, PyObject>), // TODO: Does this need to maintain order?
     List(Vec<PyObject>),
     String(String),
     Int(i64),
@@ -210,7 +211,17 @@ pub fn parse_py_type(
 ) -> PyResult<Option<BamlValue>> {
     Python::with_gil(|py| {
         let enum_type = py.import("enum").and_then(|m| m.getattr("Enum"))?;
-        let base_model = py.import("pydantic").and_then(|m| m.getattr("BaseModel"))?;
+        let pydantic =  py.import("pydantic")?;
+        let base_model = pydantic.getattr("BaseModel")?;
+        let is_pydantic_2 = { 
+            let pydantic_version = pydantic.getattr("version")?;
+            let pydantic_version = pydantic_version.getattr("VERSION")?;
+            // call the __str__ method on the object
+            let pydantic_version = pydantic_version.call_method("__str__", (), None)?;
+            let pydantic_version = pydantic_version.extract::<String>()?;
+            pydantic_version.split(".").next().unwrap_or("0") >= "2"
+        };
+
 
         let mut get_type = |py: Python<'_>,
                             any: PyObject,
@@ -246,11 +257,14 @@ pub fn parse_py_type(
                         }
                     })
                     .unwrap_or("<UnnamedBaseModel>".to_string());
-                let mut fields = HashMap::new();
-                // Get regular fields
-                if let Ok(model_fields) = t
-                    .getattr("model_fields")?
-                    .extract::<HashMap<String, PyObject>>()
+                let mut fields = IndexMap::new();
+                // Get regular fields. Maintain order, no HashMap.
+                if let Ok(model_fields) = if is_pydantic_2 {
+                    t.getattr("model_fields")?.extract::<BTreeMap<String, PyObject>>()
+                } else {
+                    let res = any.call_method0(py, "dict")?;
+                    res.extract::<BTreeMap<String, PyObject>>(py)
+                }
                 {
                     for (key, _) in model_fields {
                         if let Ok(value) = any.getattr(py, key.as_str()) {

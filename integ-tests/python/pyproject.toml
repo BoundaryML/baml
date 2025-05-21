@@ -28,10 +28,7 @@ dev = ["types-assertpy"]
 
 [tool.uv]
 package = true
-dev-dependencies = [
-    "openai[datalib]>=1.64.0",
-    "ruff>=0.9.10",
-]
+dev-dependencies = ["ruff>=0.9.10"]
 
 [tool.setuptools.packages.find]
 include = ["app*", "baml_client*"]

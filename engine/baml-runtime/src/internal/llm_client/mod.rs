@@ -72,6 +72,8 @@ pub fn parsed_value_to_response(
     Ok(ResponseBamlValue(response_value))
 }
 
+// Whether we should download a url into a base64 (resolving it if necessary), as well as
+// whether we should add the mime type, etc.
 #[derive(Clone, Copy, PartialEq)]
 pub enum ResolveMediaUrls {
     // there are 5 input formats:
@@ -94,7 +96,9 @@ pub enum ResolveMediaUrls {
     // vertex: supports URLs w/ mime, b64 w/ mime
     Always,
     IfMatchesGoogleFileUri,
+    // EnsureMime: always add the mime type to the request (which means if it's a url, we may need to resolve it to find the mime type)
     EnsureMime,
+    // Never: don't resolve media urls
     Never,
 }
 
@@ -103,7 +107,10 @@ pub struct ModelFeatures {
     pub completion: bool,
     pub chat: bool,
     pub max_one_system_prompt: bool,
-    pub resolve_media_urls: ResolveMediaUrls,
+    /// Controls how audio URLs are resolved for this model/provider
+    pub resolve_audio_urls: ResolveMediaUrls,
+    /// Controls how image URLs are resolved for this model/provider
+    pub resolve_image_urls: ResolveMediaUrls,
     pub allowed_metadata: AllowedRoleMetadata,
 }
 

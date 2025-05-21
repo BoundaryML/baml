@@ -685,6 +685,61 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
+        aud: Baml::Audio,prompt: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+      ).returns(String)
+    }
+    def AudioInputOpenai(
+        *varargs,
+        aud:,prompt:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("AudioInputOpenai may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
+      end
+
+      raw = @runtime.call_function(
+        "AudioInputOpenai",
+        {
+          aud: aud,prompt: prompt,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        collector,
+      )
+      (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
         input: T::Array[Integer],
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns(Baml::Types::LinkedList)
@@ -3712,6 +3767,61 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+      ).returns(String)
+    }
+    def LLMEcho(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("LLMEcho may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
+      end
+
+      raw = @runtime.call_function(
+        "LLMEcho",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        collector,
+      )
+      (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns(T.any(Integer, T::Boolean, String))
     }
     def LiteralUnionsTest(
@@ -5073,6 +5183,61 @@ module Baml
         "RecursiveClassWithAliasIndirection",
         {
           cls: cls,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        collector,
+      )
+      (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.anything,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+      ).returns(T.anything)
+    }
+    def RecursiveUnionTest(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("RecursiveUnionTest may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
+      end
+
+      raw = @runtime.call_function(
+        "RecursiveUnionTest",
+        {
+          input: input,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
@@ -8994,6 +9159,61 @@ module Baml
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns(String)
     }
+    def TestOpenAIWithFinishReasonError(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("TestOpenAIWithFinishReasonError may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
+      end
+
+      raw = @runtime.call_function(
+        "TestOpenAIWithFinishReasonError",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        collector,
+      )
+      (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+      ).returns(String)
+    }
     def TestOpenAIWithMaxTokens(
         *varargs,
         input:,
@@ -9760,6 +9980,61 @@ module Baml
     sig {
       params(
         varargs: T.untyped,
+        input: Baml::Types::MaintainFieldOrder,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+      ).returns(Baml::Types::MaintainFieldOrder)
+    }
+    def UseMaintainFieldOrder(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("UseMaintainFieldOrder may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      # Merge options from initialization with those passed to the method
+      # Passed options take precedence over initialization options
+      effective_options = {}
+
+      if @baml_options
+        effective_options = @baml_options.dup
+      end
+
+      # Override with any options passed to this specific call
+      baml_options.each do |key, value|
+        effective_options[key] = value
+      end
+
+      # Use the merged options for the rest of the method
+      baml_options = effective_options
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
+      end
+
+      raw = @runtime.call_function(
+        "UseMaintainFieldOrder",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        collector,
+      )
+      (raw.parsed_using_types(Baml::Types, Baml::PartialTypes, false))
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
         a: Baml::Types::MalformedConstraints2,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns(Integer)
@@ -10368,6 +10643,51 @@ module Baml
         "AudioInput",
         {
           aud: aud,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        collector,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        aud: Baml::Audio,prompt: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+      ).returns(Baml::BamlStream[String])
+    }
+    def AudioInputOpenai(
+        *varargs,
+        aud:,prompt:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("AudioInputOpenai may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      # Merge options from initialization with those passed to the method
+      baml_options = (@baml_options || {}).merge(baml_options)
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
+      end
+
+      raw = @runtime.stream_function(
+        "AudioInputOpenai",
+        {
+          aud: aud,prompt: prompt,
         },
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
@@ -12860,6 +13180,51 @@ module Baml
         varargs: T.untyped,
         input: String,
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+      ).returns(Baml::BamlStream[String])
+    }
+    def LLMEcho(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("LLMEcho may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      # Merge options from initialization with those passed to the method
+      baml_options = (@baml_options || {}).merge(baml_options)
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
+      end
+
+      raw = @runtime.stream_function(
+        "LLMEcho",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        collector,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns(Baml::BamlStream[T.any(Integer, T::Boolean, String)])
     }
     def LiteralUnionsTest(
@@ -13975,6 +14340,51 @@ module Baml
         collector,
       )
       Baml::BamlStream[T.nilable(Baml::PartialTypes::NodeWithAliasIndirection), Baml::Types::NodeWithAliasIndirection].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: T.anything,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+      ).returns(Baml::BamlStream[T.anything])
+    }
+    def RecursiveUnionTest(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("RecursiveUnionTest may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      # Merge options from initialization with those passed to the method
+      baml_options = (@baml_options || {}).merge(baml_options)
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
+      end
+
+      raw = @runtime.stream_function(
+        "RecursiveUnionTest",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        collector,
+      )
+      Baml::BamlStream[T.anything, T.anything].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )
@@ -17182,6 +17592,51 @@ module Baml
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
       ).returns(Baml::BamlStream[String])
     }
+    def TestOpenAIWithFinishReasonError(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("TestOpenAIWithFinishReasonError may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      # Merge options from initialization with those passed to the method
+      baml_options = (@baml_options || {}).merge(baml_options)
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
+      end
+
+      raw = @runtime.stream_function(
+        "TestOpenAIWithFinishReasonError",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        collector,
+      )
+      Baml::BamlStream[T.nilable(String), String].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+      ).returns(Baml::BamlStream[String])
+    }
     def TestOpenAIWithMaxTokens(
         *varargs,
         input:,
@@ -17800,6 +18255,51 @@ module Baml
         collector,
       )
       Baml::BamlStream[T.nilable(Integer), Integer].new(
+        ffi_stream: raw,
+        ctx_manager: @ctx_manager
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: Baml::Types::MaintainFieldOrder,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]))]
+      ).returns(Baml::BamlStream[Baml::Types::MaintainFieldOrder])
+    }
+    def UseMaintainFieldOrder(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        
+        raise ArgumentError.new("UseMaintainFieldOrder may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :collector]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :collector): #{baml_options.keys - [:client_registry, :tb, :collector]}")
+      end
+
+      # Merge options from initialization with those passed to the method
+      baml_options = (@baml_options || {}).merge(baml_options)
+
+      collector = if baml_options[:collector]
+        baml_options[:collector].is_a?(Array) ? baml_options[:collector] : [baml_options[:collector]]
+      else
+        []
+      end
+
+      raw = @runtime.stream_function(
+        "UseMaintainFieldOrder",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        collector,
+      )
+      Baml::BamlStream[T.nilable(Baml::PartialTypes::MaintainFieldOrder), Baml::Types::MaintainFieldOrder].new(
         ffi_stream: raw,
         ctx_manager: @ctx_manager
       )

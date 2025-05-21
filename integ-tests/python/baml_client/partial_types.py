@@ -15,9 +15,11 @@
 # fmt: off
 import baml_py
 from enum import Enum
+
 from pydantic import BaseModel, ConfigDict
-from typing_extensions import TypeAlias
-from typing import Dict, Generic, List, Optional, TypeVar, Union, Literal
+
+from typing_extensions import TypeAlias, Literal
+from typing import Dict, Generic, List, Optional, TypeVar, Union
 
 from . import types
 from .types import Checked, Check
@@ -259,6 +261,11 @@ class LiteralClassOne(BaseModel):
 class LiteralClassTwo(BaseModel):
     prop: Optional[Literal["two"]] = None
 
+class MaintainFieldOrder(BaseModel):
+    a: Optional[str] = None
+    b: Optional[str] = None
+    c: Optional[str] = None
+
 class MalformedConstraints(BaseModel):
     foo: Checked[Optional[int],Literal["foo_check"]]
 
@@ -494,3 +501,5 @@ RecAliasTwo: TypeAlias = "RecAliasThree"
 RecursiveListAlias: TypeAlias = List["RecursiveListAlias"]
 
 RecursiveMapAlias: TypeAlias = Dict[str, "RecursiveMapAlias"]
+
+RecursiveUnion: TypeAlias = Union[str, Dict[str, "RecursiveUnion"]]

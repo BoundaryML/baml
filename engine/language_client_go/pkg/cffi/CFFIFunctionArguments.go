@@ -61,14 +61,30 @@ func (rcv *CFFIFunctionArguments) KwargsLength() int {
 	return 0
 }
 
+func (rcv *CFFIFunctionArguments) ClientRegistry(obj *CFFIClientRegistry) *CFFIClientRegistry {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(6))
+	if o != 0 {
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(CFFIClientRegistry)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
+	}
+	return nil
+}
+
 func CFFIFunctionArgumentsStart(builder *flatbuffers.Builder) {
-	builder.StartObject(1)
+	builder.StartObject(2)
 }
 func CFFIFunctionArgumentsAddKwargs(builder *flatbuffers.Builder, kwargs flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(kwargs), 0)
 }
 func CFFIFunctionArgumentsStartKwargsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
+}
+func CFFIFunctionArgumentsAddClientRegistry(builder *flatbuffers.Builder, clientRegistry flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(1, flatbuffers.UOffsetT(clientRegistry), 0)
 }
 func CFFIFunctionArgumentsEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
 	return builder.EndObject()

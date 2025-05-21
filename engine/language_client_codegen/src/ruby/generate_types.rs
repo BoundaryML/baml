@@ -70,7 +70,7 @@ impl<'ir> From<EnumWalker<'ir>> for RubyEnum<'ir> {
     fn from(e: EnumWalker<'ir>) -> RubyEnum<'ir> {
         RubyEnum {
             name: e.name(),
-            dynamic: e.item.attributes.dynamic(),
+            dynamic: e.item.attributes.get("dynamic_type").is_some(),
             values: e
                 .item
                 .elem
@@ -92,7 +92,7 @@ impl<'ir> From<ClassWalker<'ir>> for RubyStruct<'ir> {
     fn from(c: ClassWalker<'ir>) -> RubyStruct<'ir> {
         RubyStruct {
             name: Cow::Borrowed(c.name()),
-            dynamic: c.item.attributes.dynamic(),
+            dynamic: c.item.attributes.get("dynamic_type").is_some(),
             fields: c
                 .item
                 .elem
@@ -136,7 +136,7 @@ impl<'ir> From<ClassWalker<'ir>> for PartialRubyStruct<'ir> {
                 .static_fields
                 .iter()
                 .map(|f| {
-                    let not_null: bool = f.attributes.streaming_behavior().needed;
+                    let not_null: bool = f.attributes.get("stream.not_null").is_some();
                     let (_, metadata) = c.ir.distribute_metadata(&f.elem.r#type.elem);
                     let done = metadata.1.done;
                     let field_type = f.elem.r#type.elem.clone();
@@ -253,9 +253,7 @@ impl ToTypeReferenceInTypeDefinition<'_> for FieldType {
                 }
             }
             FieldType::Optional(inner) => inner.to_partial_type_ref(ir, false),
-            FieldType::Arrow(_) => {
-                todo!("Arrow types should not be used in generated type definitions")
-            }
+            FieldType::Arrow(_) => todo!("Arrow types should not be used in generated type definitions"),
             FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(checks) => {
                     let base_type_ref = base.to_partial_type_ref(ir, false);

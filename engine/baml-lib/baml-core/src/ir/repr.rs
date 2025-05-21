@@ -386,6 +386,17 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                 let body = convert_function_body(block.clone(), db)?;
                 Ok(body)
             }
+            ast::Expression::If(cond, then, else_, span) => {
+                let cond = cond.repr(db)?;
+                let then = then.repr(db)?;
+                let else_ = else_.as_ref().map(|e| e.repr(db)).transpose()?;
+                Ok(Expr::If(
+                    Arc::new(cond),
+                    Arc::new(then),
+                    else_.map(|e| Arc::new(e)),
+                    (span.clone(), None),
+                ))
+            }
         }
     }
 }
@@ -1522,7 +1533,7 @@ pub struct Function {
     pub default_config: String,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct FunctionConfig {
     pub name: String,
     pub prompt_template: String,
@@ -1549,7 +1560,12 @@ impl ExprFunction {
             inputs: self.inputs.clone(),
             output: self.output.clone(),
             tests: self.tests.clone(),
-            configs: vec![],
+            configs: vec![FunctionConfig {
+                name: "default_config".to_string(),
+                prompt_template: "".to_string(),
+                prompt_span: Span::fake(),
+                client: ClientSpec::Named("nonsense".to_string()),
+            }],
             default_config: "default_config".to_string(),
         }
     }
@@ -1700,6 +1716,31 @@ pub fn annotate_variable(
                 .map(|item| annotate_variable(target.clone(), r#type.clone(), item.clone()))
                 .collect();
             Expr::List(new_items, meta.clone())
+        }
+        Expr::If(cond, then, else_, meta) => {
+            let new_cond = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(cond.clone()),
+            );
+            let new_then = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(then.clone()),
+            );
+            let new_else = else_.as_ref().map(|e| {
+                annotate_variable(
+                    target.clone(),
+                    r#type.clone(),
+                    Arc::unwrap_or_clone(e.clone()),
+                )
+            });
+            Expr::If(
+                Arc::new(new_cond),
+                Arc::new(new_then),
+                new_else.map(|e| Arc::new(e)),
+                meta.clone(),
+            )
         }
     }
 }

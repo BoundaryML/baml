@@ -10,21 +10,21 @@ async function gc() {
 describe('Collector Tests', () => {
   beforeEach(() => {
     // Ensure collector is empty before each test
-    expect(Collector.__functionCallCount()).toBe(0);
+    expect(Collector.__functionSpanCount()).toBe(0);
   });
 
   afterEach(async () => {
     // Ensure garbage collection and verify all spans are cleaned up
     await gc();
-    expect(Collector.__functionCallCount()).toBe(0);
+    expect(Collector.__functionSpanCount()).toBe(0);
   });
 
 
 
   it('should collect logs for non-streaming calls', async () => {
-    console.log("### function_call_count", Collector.__functionCallCount());
+    console.log("### function_span_count", Collector.__functionSpanCount());
     // Should be garbage collected
-    expect(Collector.__functionCallCount()).toBe(0);
+    expect(Collector.__functionSpanCount()).toBe(0);
 
     const collector = new Collector("my-collector");
     const functionLogs = collector.logs;
@@ -109,7 +109,7 @@ describe('Collector Tests', () => {
     await gc();
     console.log("----- gc.collect() -----");
     // Still not collected because it's in use
-    expect(Collector.__functionCallCount()).toBeGreaterThan(0);
+    expect(Collector.__functionSpanCount()).toBeGreaterThan(0);
   });
 
 
@@ -180,7 +180,7 @@ describe('Collector Tests', () => {
     await gc();
     console.log("----- gc.collect() -----");
     // Still not collected because it's in use
-    expect(Collector.__functionCallCount()).toBeGreaterThan(0);
+    expect(Collector.__functionSpanCount()).toBeGreaterThan(0);
   });
 
   it('should track cumulative usage across multiple calls', async () => {

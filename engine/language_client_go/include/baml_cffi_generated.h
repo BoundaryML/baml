@@ -11,7 +11,10 @@
 #include <stdint.h>
 #include <stdlib.h>
 
-typedef void (*CallbackFn)(uint32_t call_id, bool is_done, const int8_t *content, uintptr_t length);
+typedef void (*CallbackFn)(uint32_t call_id,
+                           int32_t is_done,
+                           const int8_t *content,
+                           uintptr_t length);
 
 const char *version(void);
 

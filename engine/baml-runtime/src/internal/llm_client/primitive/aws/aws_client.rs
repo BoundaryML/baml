@@ -21,7 +21,10 @@ use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_types::Blob;
 use aws_smithy_types::Document;
-use baml_types::tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, TraceEvent};
+use baml_types::tracing::events::{
+    ContentId, FunctionId, HTTPBody, HTTPRequest, HTTPResponse, HttpRequestId, TraceData,
+    TraceEvent, TraceLevel,
+};
 use baml_types::{ApiKeyWithProvenance, BamlMap, BamlMediaContent};
 use baml_types::{BamlMedia, BamlMediaType};
 use futures::stream;
@@ -255,7 +258,8 @@ impl AwsClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_media_urls: ResolveMediaUrls::Always,
+                resolve_audio_urls: ResolveMediaUrls::Always,
+                resolve_image_urls: ResolveMediaUrls::Always,
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
             retry_policy: client.retry_policy.as_ref().map(|s| s.to_string()),
@@ -278,7 +282,8 @@ impl AwsClient {
                 chat: true,
                 completion: false,
                 max_one_system_prompt: true,
-                resolve_media_urls: ResolveMediaUrls::Always,
+                resolve_audio_urls: ResolveMediaUrls::Always,
+                resolve_image_urls: ResolveMediaUrls::Always,
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
             retry_policy: client
@@ -482,16 +487,19 @@ impl AwsClient {
                 .build()
         });
 
-        let additional_fields_doc = {
-            let json_map: serde_json::Map<String, serde_json::Value> = self
-                .properties
-                .additional_model_request_fields
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect();
-            let json_value = serde_json::Value::Object(json_map);
-            serde_json_to_aws_document(json_value)
-        };
+        let additional_fields_doc = self
+            .properties
+            .additional_model_request_fields
+            .as_ref()
+            .map(|map| {
+                // Convert IndexMap<String, serde_json::Value> to serde_json::Value::Object
+                let json_map: serde_json::Map<String, serde_json::Value> =
+                    map.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
+                let json_value = serde_json::Value::Object(json_map);
+                // Convert serde_json::Value to aws_smithy_types::Document
+                serde_json_to_aws_document(json_value)
+            })
+            .unwrap_or_else(|| Document::Object(HashMap::new())); // Default to empty object
 
         bedrock::operation::converse::ConverseInput::builder()
             .set_inference_config(inference_config)

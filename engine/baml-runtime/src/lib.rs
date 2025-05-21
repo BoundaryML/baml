@@ -29,9 +29,6 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use anyhow::Result;
-use baml_ids::FunctionCallId;
-use baml_ids::HttpRequestId;
-use baml_types::tracing::events::TraceEvent;
 use eval_expr::ExprEvalResult;
 use futures::channel::mpsc;
 use internal_baml_core::ast::Span;
@@ -115,20 +112,18 @@ use crate::test_constraints::{evaluate_test_constraints, TestConstraintsResult};
 #[cfg(not(target_arch = "wasm32"))]
 static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
 
-pub async fn cleanup() -> anyhow::Result<()> {
-    tracingv2::publisher::shutdown_publisher().await
-}
+static INIT: std::sync::Once = std::sync::Once::new();
 
-#[cfg(not(target_arch = "wasm32"))]
-pub fn cleanup_sync() -> anyhow::Result<()> {
-    if let Some(rt) = TOKIO_SINGLETON.get() {
-        rt.as_ref()
-            .map(|rt| rt.block_on(cleanup()))
-            .unwrap_or(Err(anyhow::anyhow!("Tokio runtime not initialized")))
-    } else {
-        Err(anyhow::anyhow!("Tokio runtime not initialized"))
-    }
-}
+// fn setup_crypto_provider() {
+//     #[cfg(not(target_arch = "wasm32"))]
+//     {
+//         use rustls::crypto::CryptoProvider;
+//         INIT.call_once(|| {
+//             let provider = rustls::crypto::ring::default_provider();
+//             CryptoProvider::install_default(provider).expect("failed to install CryptoProvider");
+//         });
+//     }
+// }
 
 #[derive(Clone)]
 pub struct BamlRuntime {
@@ -219,6 +214,7 @@ impl BamlRuntime {
         path: &std::path::Path,
         env_vars: HashMap<T, T>,
     ) -> Result<Self> {
+        // setup_crypto_provider();
         let path = Self::parse_baml_src_path(path)?;
 
         let copy = env_vars
@@ -235,6 +231,7 @@ impl BamlRuntime {
         files: &HashMap<T, T>,
         env_vars: HashMap<U, U>,
     ) -> Result<Self> {
+        // setup_crypto_provider();
         let copy = env_vars
             .iter()
             .map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string()))
@@ -360,12 +357,14 @@ impl BamlRuntime {
         let expr_fn = self.inner.ir().find_expr_fn(function_name);
         let is_expr_fn = expr_fn.is_ok();
 
-        if let Some(collector) = collector.clone() {
-            collector.track_function(call.curr_call_id());
+        if let Some(span) = span.clone() {
+            if let Some(collector) = collector.clone() {
+                collector.track_function(FunctionId(span.clone().span_id.to_string()));
+            }
         }
 
         let run_to_response = || async {
-            let rctx_no_tb = ctx.create_ctx(None, None, call.new_call_id_stack.clone())?;
+            let rctx_no_tb = ctx.create_ctx(None, None, span.clone().map(|s| s.span_id))?;
             let (params, constraints) =
                 self.get_test_params_and_constraints(function_name, test_name, &rctx_no_tb, true)?;
 
@@ -398,12 +397,12 @@ impl BamlRuntime {
                 None
             } else {
                 self.inner
-                    .get_test_type_builder(&function_name, test_name)
+                    .get_test_type_builder(&function_name, test_name, ctx)
                     .unwrap()
             };
 
             let rctx =
-                ctx.create_ctx(type_builder.as_ref(), None, call.new_call_id_stack.clone())?;
+                ctx.create_ctx(type_builder.as_ref(), None, span.clone().map(|s| s.span_id))?;
 
             let (function_name, params) = match expr_eval_result {
                 ExprEvalResult::Value { value, field_type } => {
@@ -440,7 +439,7 @@ impl BamlRuntime {
                                 )
                             })))),
                         ),
-                        function_call: call.curr_call_id(),
+                        function_span: None,
                         constraints_result: TestConstraintsResult::empty(),
                     });
                 }
@@ -568,7 +567,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: Option<Vec<Arc<Collector>>>,
-    ) -> (Result<FunctionResult>, FunctionCallId) {
+    ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         let res = Box::pin(self.call_function_with_expr_events(
             function_name,
             params,
@@ -976,7 +975,7 @@ impl BamlRuntime {
                         no_version_check,
                         generator.default_client_mode(),
                         generator.on_generate.clone(),
-                        Some(generator.output_type),
+                        generator.output_type,
                         generator.client_package_name.clone(),
                         generator.module_format,
                     )?,
@@ -1188,12 +1187,14 @@ async fn expr_eval_result(
     match maybe_expr_f {
         Ok(expr_fn) => {
             log::trace!("Calling function: {}", function_name);
-            let call = tracer.start_call(&function_name, mgr, params);
+            let span = tracer.start_span(&function_name, mgr, params);
 
-            if let Some(collector) = collector {
-                collector.track_function(call.curr_call_id());
+            if let Some(span) = span.clone() {
+                if let Some(collector) = collector {
+                    collector.track_function(FunctionId(span.clone().span_id.to_string()));
+                }
             }
-            let ctx = mgr.create_ctx(tb, cb, call.new_call_id_stack.clone())?;
+            let ctx = mgr.create_ctx(tb, cb, span.clone().map(|s| s.span_id))?;
             let env = EvalEnv {
                 context: initial_context(ir),
                 runtime,

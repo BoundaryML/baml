@@ -64,7 +64,7 @@ export declare class Collector {
   id(functionLogId: string): FunctionLog | null
   get usage(): Usage
   toString(): string
-  static __functionCallCount(): number
+  static __functionSpanCount(): number
   static __printStorage(): void
 }
 

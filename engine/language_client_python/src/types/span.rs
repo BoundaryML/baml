@@ -10,7 +10,7 @@ use super::runtime_ctx_manager::RuntimeContextManager;
 use crate::runtime::BamlRuntime;
 
 crate::lang_wrapper!(BamlSpan,
-  Option<baml_runtime::tracing::TracingCall>,
+  Option<Option<baml_runtime::tracing::TracingSpan>>,
   no_from,
   rt: std::sync::Arc<baml_runtime::BamlRuntime>
 );
@@ -31,13 +31,13 @@ impl BamlSpan {
             return Err(BamlInvalidArgumentError::new_err("Failed to parse args"));
         };
 
-        let call = runtime
+        let span = runtime
             .inner
-            .start_call(function_name, args_map, &ctx.inner);
+            .start_span(function_name, args_map, &ctx.inner);
 
-        log::trace!("Starting call: {:#?} for {:?}\n", call, function_name);
+        log::trace!("Starting span: {:#?} for {:?}\n", span, function_name);
         Ok(Self {
-            inner: Some(call),
+            inner: Some(span),
             rt: runtime.inner.clone(),
         })
     }
@@ -48,18 +48,18 @@ impl BamlSpan {
         py: Python<'_>,
         result: PyObject,
         ctx: &RuntimeContextManager,
-    ) -> PyResult<String> {
-        log::trace!("Finishing call: {:?}", self.inner);
+    ) -> PyResult<Option<String>> {
+        log::trace!("Finishing span: {:?}", self.inner);
         let result = parse_py_type(result.into_bound(py).into_py_any(py)?, true)?;
 
-        let call = self
+        let span = self
             .inner
             .take()
-            .ok_or_else(|| BamlError::new_err("Call already finished"))?;
+            .ok_or_else(|| BamlError::new_err("Span already finished"))?;
 
         self.rt
-            .finish_call(call, result, &ctx.inner)
+            .finish_span(span, result, &ctx.inner)
             .map_err(BamlError::from_anyhow)
-            .map(|u| u.to_string())
+            .map(|u| u.map(|id| id.to_string()))
     }
 }

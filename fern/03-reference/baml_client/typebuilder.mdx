@@ -217,6 +217,7 @@ TypeBuilder provides methods for building different kinds of types:
 | `map(key: FieldType, value: FieldType)` | `FieldType` | Creates a map type | `tb.map(tb.string(), tb.int())` |
 | `add_class(name: string)` | `ClassBuilder` | Creates a new class | `tb.add_class("User")` |
 | `add_enum(name: string)` | `EnumBuilder` | Creates a new enum | `tb.add_enum("Category")` |
+| `MyClass` | `FieldType` | Reference an existing BAML class | `tb.MyClass.type()` |
 
 
 In addition to the methods above, all types marked with `@@dynamic` will also appear in the TypeBuilder.

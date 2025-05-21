@@ -35,3 +35,5 @@ pub type TestCase = repr::Node<repr::TestCase>;
 pub(super) type Walker<'db, I> = repr::Walker<'db, I>;
 
 pub(super) type Prompt = repr::Prompt;
+
+pub use walker::ExprFnAsFunctionWalker;

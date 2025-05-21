@@ -1,4 +1,5 @@
 use anyhow::Result;
+use baml_runtime::client_registry::{ClientProperty, ClientProvider, ClientRegistry};
 use baml_types::{BamlMedia, BamlValue, BamlValueWithMeta, HasFieldType, ToUnionName};
 
 #[allow(non_snake_case)]
@@ -6,6 +7,7 @@ use baml_types::{BamlMedia, BamlValue, BamlValueWithMeta, HasFieldType, ToUnionN
 mod cffi_generated;
 
 use cffi_generated::cffi::*;
+use serde::de::Expected;
 
 use crate::BamlFunctionArguments;
 
@@ -224,10 +226,58 @@ impl From<CFFIFunctionArguments<'_>> for BamlFunctionArguments {
             .into_iter()
             .map(|v| v.into())
             .collect();
-        BamlFunctionArguments { kwargs }
+        let client_registry = value.client_registry().map(|r| r.into());
+
+        BamlFunctionArguments {
+            kwargs,
+            client_registry,
+        }
     }
 }
 
+impl From<CFFIClientRegistry<'_>> for ClientRegistry {
+    fn from(value: CFFIClientRegistry) -> Self {
+        let mut client_registry = ClientRegistry::new();
+        value
+            .primary()
+            .map(|s| client_registry.set_primary(s.to_string()));
+
+        value
+            .clients()
+            .expect("Failed to have CFFIClientRegistry clients")
+            .into_iter()
+            .map(|v| v.into())
+            .for_each(|client| {
+                client_registry.add_client(client);
+            });
+
+        client_registry
+    }
+}
+
+impl From<CFFIClientProperty<'_>> for ClientProperty {
+    fn from(value: CFFIClientProperty) -> Self {
+        let name = value
+            .name()
+            .expect("Failed to have CFFIClientProperty name")
+            .to_string();
+        let provider = value
+            .provider()
+            .expect("Failed to have CFFIClientProperty provider")
+            .parse::<ClientProvider>()
+            .expect("Failed to parse CFFIClientProperty provider");
+
+        let retry_policy = value.retry_policy().map(|r| r.to_string());
+        let options = value
+            .options()
+            .expect("Failed to have CFFIClientProperty options")
+            .into_iter()
+            .map(|v| v.into())
+            .collect();
+
+        ClientProperty::new(name, provider, retry_policy, options)
+    }
+}
 impl From<CFFIValueChecked<'_>> for BamlValue {
     fn from(_value: CFFIValueChecked) -> Self {
         unimplemented!("CFFIValueChecked is not supported");
@@ -489,14 +539,17 @@ where
             .iter()
             .position(|t| real_type == *t)
             .expect("Failed to find target_type in options");
+        let variant_name = options[value_type_index].to_union_name();
         let options = builder.create_vector_from_iter(options_vec.into_iter());
-        // TODO: get the name from the target_type
-        let name = builder.create_string(&target_type.to_union_name());
+
+        let name_offset = builder.create_string(&target_type.to_union_name());
+        let variant_name_offset = builder.create_string(&variant_name);
 
         let value_union_variant = CFFIValueUnionVariant::create(
             &mut builder,
             &CFFIValueUnionVariantArgs {
-                name: Some(name),
+                name: Some(name_offset),
+                variant_name: Some(variant_name_offset),
                 field_types: Some(options),
                 value_type_index: value_type_index as i32,
                 value: Some(value_holder),
