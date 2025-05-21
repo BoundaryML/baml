@@ -133,6 +133,21 @@ fn subst<'a>(
                 meta.clone(),
             ))
         }
+        Expr::ForLoop {
+            item,
+            iterable,
+            body,
+            meta,
+        } => {
+            let new_iterable = subst(iterable, var_name, val, env)?;
+            let new_body = subst(body, var_name, val, env)?;
+            Ok(Expr::ForLoop {
+                item: item.clone(),
+                iterable: Arc::new(new_iterable),
+                body: Arc::new(new_body),
+                meta: meta.clone(),
+            })
+        }
     };
     let res = res?;
     Ok(res)
@@ -145,6 +160,7 @@ async fn beta_reduce<'a>(
     expr: &Expr<ExprMetadata>,
     eval_final_llm_fn: bool,
 ) -> anyhow::Result<Expr<ExprMetadata>> {
+    eprintln!("BETA_REDUCE\n{}\n", expr.dump_str());
     match expr {
         Expr::Atom(_) => Ok(expr.clone()),
         Expr::Let(name, value, body, meta) => {
@@ -311,6 +327,35 @@ async fn beta_reduce<'a>(
                 meta.clone(),
             ))
         }
+        Expr::ForLoop {
+            item,
+            iterable,
+            body,
+            meta,
+        } => match iterable.as_ref() {
+            Expr::List(iterable_items, meta) => {
+                let new_index = VarIndex {
+                    de_bruijn: 0,
+                    tuple: 0,
+                };
+                let closed_body = body.close(&new_index, item);
+                let unevaluated_results = iterable_items
+                    .iter()
+                    .map(|iterable_item| subst(&closed_body, &new_index, iterable_item, env))
+                    .collect::<anyhow::Result<Vec<_>>>()?;
+                Ok(Expr::List(unevaluated_results, meta.clone()))
+            }
+            _ => {
+                let new_iterable = Box::pin(beta_reduce(env, iterable, eval_final_llm_fn)).await?;
+                let new_body = Box::pin(beta_reduce(env, body, eval_final_llm_fn)).await?;
+                Ok(Expr::ForLoop {
+                    item: item.clone(),
+                    iterable: Arc::new(new_iterable),
+                    body: Arc::new(new_body),
+                    meta: meta.clone(),
+                })
+            }
+        },
         _ => panic!("Tried to beta reduce a {}", expr.dump_str()), // Err(anyhow::anyhow!("Not an application: {:?}", expr)),
     }
 }
@@ -463,6 +508,33 @@ pub async fn eval_to_value_or_llm_call<'a>(
             Expr::ArgsTuple(_, _) => {
                 return Err(anyhow::anyhow!("Bare args tuple found"));
             }
+            l @ Expr::ForLoop { .. } => {
+                let res = Box::pin(beta_reduce(env, &l, false)).await?;
+                current_expr = res;
+                // match iterable.as_ref() {
+                //     Expr::List(items, _) => {
+                //         let mut results: Vec<BamlValueWithMeta<()>> = Vec::new();
+                //         for item in items {
+                //             let result = Box::pin(eval_to_value(env, item))
+                //                 .await?
+                //                 .ok_or(anyhow::anyhow!("Expected to evaluate to value"))?;
+                //             results.push(result);
+                //         }
+                //         // let field_type = results[0].meta();
+                //         return Ok(ExprEvalResult::Value {
+                //             value: BamlValueWithMeta::List(results, ()),
+                //             field_type: FieldType::List(Box::new(FieldType::Primitive(
+                //                 TypeValue::String,
+                //             ))), // TOOD: This is wrong!
+                //         });
+                //     }
+                //     _ => {
+                //         return Err(anyhow::anyhow!(
+                //         "Iterable was not a list. This should have been caught during typechecking"
+                //     ))
+                //     }
+                // }
+            }
         }
     }
     Err(anyhow::anyhow!("Max steps reached. {:?}", current_expr))
@@ -562,6 +634,16 @@ pub async fn eval_to_value<'a>(
                     _ => todo!("Type error"),
                 }
             }
+            // Expr::ForLoop{ item, iterable, body, meta } => {
+            //     match iterable.as_ref() {
+            //         Expr::List(items, _ ) => {
+            //             let mut results: Vec<BamlValueWithMeta<()>> = Vec::new();
+            //             for i in items {
+            //                 let result = Box::pin(eval_to_value(i))
+            //             }
+            //         }
+            //     }
+            // }
             other => {
                 // let new_expr = step(env, &other).await?;
                 let new_expr = Box::pin(beta_reduce(env, &other, true)).await?;
@@ -716,14 +798,32 @@ function Quiz(msg: string) -> bool {
   "#
 }
   
-  function Go() -> string {
-    if Quiz("The sky is green") { Echo("Hello") } else { Echo("World") }
+function Go() -> string {
+  if Quiz("The sky is green") { Echo("Hello") } else { Echo("World") }
+}
+
+test Go {
+  functions [Go]
+  args {}
+}
+
+function PoemAbout(topic: string) -> string {
+  client GPT4o
+  prompt #"Write a 10-word poem about {{ topic }}"#
+}
+
+function Poems() -> string [] {
+  for (t in ["cats", "birds", "love", "rain"]) {
+    PoemAbout(t)
   }
-  
-  test Go {
-    functions [Go]
-    args {}
-  }
+}
+
+test Poems {
+  functions [Poems]
+  args {}
+}
+
+
         "##,
         );
         // dbg!(&rt.inner.ir.find_function("OuterPyramid").unwrap().item);
@@ -736,7 +836,8 @@ function Quiz(msg: string) -> bool {
         dbg!(&f.item);
         let (res, _) = rt
             // .run_test("Second", "TestSecond", &ctx, Some(on_event))
-            .run_test("Go", "Go", &ctx, Some(on_event), None)
+            // .run_test("Go", "Go", &ctx, Some(on_event), None)
+            .run_test("Poems", "Poems", &ctx, Some(on_event), None)
             // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
             // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
             // .run_test("LlmParseInt", "TestParse", &ctx, Some(on_event))
