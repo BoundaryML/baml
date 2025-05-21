@@ -4,6 +4,7 @@ use baml_types::TypeValue;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::ir::builtin::builtin_ir;
 use crate::ir::IRHelper;
 use crate::ir::IntermediateRepr;
 use crate::validate::validation_pipeline::context::Context;
@@ -16,12 +17,15 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::ir::IRHelperExtended;
 
+// TODO: Move this out of the validation pipeline into a separate IR->IR pass.
+// That will allow us to remove the internal `from_parser_database` call.
 pub fn typecheck_exprs(ctx: &mut Context<'_>) -> Result<()> {
     let null_configuration = Configuration::new();
 
-    let Ok(ir) = IntermediateRepr::from_parser_database(ctx.db, null_configuration) else {
+    let Ok(mut ir) = IntermediateRepr::from_parser_database(ctx.db, null_configuration) else {
         return Ok(());
     };
+    ir.extend(builtin_ir());
 
     let mut typing_context: HashMap<String, FieldType> = ir
         .expr_fns
@@ -80,6 +84,7 @@ pub fn typecheck_in_context(
     typing_context: &HashMap<String, FieldType>,
     expr: &Expr<ExprMetadata>,
 ) -> Result<()> {
+    eprintln!("TYPECHECKING: {:?}", expr.dump_str());
     match expr {
         Expr::Atom(atom) => {
             // Atoms always typecheck.
@@ -182,7 +187,13 @@ pub fn typecheck_in_context(
             }
             Ok(())
         }
-        Expr::Let(let_expr, _, _, _) => Ok(()),
+        Expr::Let(name, value, body, _meta) => {
+            typecheck_in_context(ir, diagnostics, typing_context, value)?;
+            let mut new_typing_context = typing_context.clone();
+            new_typing_context.insert(name.to_string(), value.meta().1.clone().unwrap());
+            typecheck_in_context(ir, diagnostics, &new_typing_context, body)?;
+            Ok(())
+        }
         Expr::ArgsTuple(args, _) => Ok(()),
         Expr::List(items, meta) => {
             for item in items.iter() {
@@ -234,24 +245,69 @@ pub fn typecheck_in_context(
             meta,
         } => {
             if let Ok(class_walker) = ir.find_class(name) {
+                // Typecheck each field in the constructor.
                 for (field_name, field_value) in fields.iter() {
                     let maybe_field_type = field_value.meta().1.clone();
                     if let Some(field_type) = maybe_field_type {
                         if let Some(field_walker) = class_walker.find_field(field_name) {
+                            // panic!("SOME FIELD TYPE FOUND: {:?}", field_walker.r#type());
                             if !compatible_as_subtype(
                                 ir,
                                 &Some(field_walker.r#type().clone()),
-                                &Some(field_type),
+                                &Some(field_type.clone()),
                             ) {
+                                // panic!("INCOMPATIBLE");
                                 diagnostics.push_error(DatamodelError::new_validation_error(
-                                    "Type mismatch in class constructor",
-                                    meta.0.clone(),
+                                    &format!(
+                                        "{}.{} expected type {}, but found {}",
+                                        name,
+                                        field_name,
+                                        field_walker.r#type(),
+                                        field_type
+                                    ),
+                                    field_value.meta().0.clone(),
                                 ));
                             }
+                        } else {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Class {} has no field {}", name, field_name),
+                                field_value.meta().0.clone(),
+                            ));
                         }
                     }
                 }
+
+                // Check that all fields are present.
+                if spread.is_none() {
+                    let missing_fields = class_walker
+                        .walk_fields()
+                        .filter_map(|f| {
+                            if !fields.contains_key(f.name()) {
+                                Some(f.name().to_string())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    if !missing_fields.is_empty() {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!(
+                                "Class {} is missing fields: {}",
+                                name,
+                                missing_fields.join(", ")
+                            ),
+                            meta.0.clone(),
+                        ));
+                    }
+                }
+            } else {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    &format!("Unknown class: {}", name),
+                    meta.0.clone(),
+                ));
             }
+
+            // Typecheck the spread.
             let spread_type = spread.as_ref().and_then(|s| s.meta().1.clone());
             if !compatible_as_subtype(ir, &meta.1, &spread_type) {
                 diagnostics.push_error(DatamodelError::new_validation_error(
@@ -259,6 +315,7 @@ pub fn typecheck_in_context(
                     meta.0.clone(),
                 ));
             }
+
             Ok(())
         }
         Expr::If(cond, then, else_, meta) => {

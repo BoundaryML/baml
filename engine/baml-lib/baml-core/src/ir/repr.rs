@@ -31,7 +31,7 @@ use serde::Serialize;
 use crate::validate::validation_pipeline::validations::expr_typecheck::infer_types_in_context;
 use crate::Configuration;
 
-use super::builtin::{builtin_classes, builtin_generic_fn, is_builtin_identifier};
+use super::builtin::{builtin_classes, builtin_generic_fn, builtin_ir, is_builtin_identifier};
 
 /// This class represents the intermediate representation of the BAML AST.
 /// It is a representation of the BAML AST that is easier to work with than the
@@ -39,26 +39,26 @@ use super::builtin::{builtin_classes, builtin_generic_fn, is_builtin_identifier}
 /// code in any target language.
 #[derive(Debug)]
 pub struct IntermediateRepr {
-    enums: Vec<Node<Enum>>,
-    classes: Vec<Node<Class>>,
-    type_aliases: Vec<Node<TypeAlias>>,
+    pub enums: Vec<Node<Enum>>,
+    pub classes: Vec<Node<Class>>,
+    pub type_aliases: Vec<Node<TypeAlias>>,
     pub functions: Vec<Node<Function>>,
     pub expr_fns: Vec<Node<ExprFunction>>,
     pub toplevel_assignments: Vec<Node<TopLevelAssignment>>,
-    clients: Vec<Node<Client>>,
-    retry_policies: Vec<Node<RetryPolicy>>,
-    template_strings: Vec<Node<TemplateString>>,
+    pub clients: Vec<Node<Client>>,
+    pub retry_policies: Vec<Node<RetryPolicy>>,
+    pub template_strings: Vec<Node<TemplateString>>,
 
     /// Strongly connected components of the dependency graph (finite cycles).
-    finite_recursive_cycles: Vec<IndexSet<String>>,
+    pub finite_recursive_cycles: Vec<IndexSet<String>>,
 
     /// Type alias cycles introduced by lists and maps.
     ///
     /// These are the only allowed cycles, because lists and maps introduce a
     /// level of indirection that makes the cycle finite.
-    structural_recursive_alias_cycles: Vec<IndexMap<String, FieldType>>,
+    pub structural_recursive_alias_cycles: Vec<IndexMap<String, FieldType>>,
 
-    configuration: Configuration,
+    pub configuration: Configuration,
 }
 
 #[derive(Debug)]
@@ -176,7 +176,6 @@ impl WithRepr<ExprFunction> for ExprFnWalker<'_> {
 
 impl WithRepr<Function> for ExprFnWalker<'_> {
     fn repr(&self, db: &ParserDatabase) -> Result<Function> {
-        // TODO: Drop weird default (replace by better validation).
         let body = convert_function_body(self.expr_fn().body.to_owned(), db)?;
         let args = self
             .expr_fn()
@@ -468,19 +467,20 @@ impl IntermediateRepr {
             });
         }
 
-        // self.walk_functions().filter_map(
-        //     |f| f.client_name()
-        // ).map(|c| c.required_env_vars())
-
-        // // for any functions, check for shorthand env vars
-        // self.functions
-        //     .iter()
-        //     .filter_map(|f| f.elem.configs())
-        //     .into_iter()
-        //     .flatten()
-        //     .flat_map(|(expr)| expr.client.required_env_vars())
-        //     .collect()
         env_vars
+    }
+
+    /// Extend the IR with another IR.
+    pub fn extend(&mut self, other: IntermediateRepr) {
+        self.enums.extend(other.enums);
+        self.classes.extend(other.classes);
+        self.type_aliases.extend(other.type_aliases);
+        self.functions.extend(other.functions);
+        self.expr_fns.extend(other.expr_fns);
+        self.toplevel_assignments.extend(other.toplevel_assignments);
+        self.clients.extend(other.clients);
+        self.retry_policies.extend(other.retry_policies);
+        self.template_strings.extend(other.template_strings);
     }
 
     /// Returns a list of all the recursive cycles in the IR.
@@ -500,10 +500,7 @@ impl IntermediateRepr {
     }
 
     pub fn walk_classes(&self) -> impl Iterator<Item = Walker<'_, &Node<Class>>> {
-        self.classes
-            .iter()
-            .filter(|c| !is_builtin_identifier(&c.elem.name))
-            .map(|e| Walker { ir: self, item: e })
+        self.classes.iter().map(|e| Walker { ir: self, item: e })
     }
 
     pub fn walk_type_aliases(&self) -> impl ExactSizeIterator<Item = Walker<'_, &Node<TypeAlias>>> {
@@ -668,6 +665,10 @@ impl IntermediateRepr {
             let inferred_expr = infer_types_in_context(&mut typing_context, Arc::new(expr));
             expr_fn.elem.expr = Arc::unwrap_or_clone(inferred_expr);
         }
+
+        // Strip out builtin classes.
+        repr.classes
+            .retain(|c| !is_builtin_identifier(&c.elem.name));
 
         Ok(repr)
     }
@@ -1372,6 +1373,7 @@ pub struct Class {
     pub static_fields: Vec<Node<Field>>,
 
     /// Parameters to the class definition.
+    /// Note that this is a future feature, not something we currently use.
     pub inputs: Vec<(String, FieldType)>,
 
     /// Docstring.

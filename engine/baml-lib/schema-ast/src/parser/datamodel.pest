@@ -247,7 +247,9 @@ fn_args = { expression? ~ ("," ~ expression)* }
 fn_app = { identifier ~ "(" ~ fn_args ~ ")" }
 
 // If expression.
-if_expression = { "if" ~ expression ~ "{" ~ expression ~ "}" ~ ( "else" ~ "{" ~ expression ~ "}" )? }
+if_expression = { "if" ~ expression ~ NEWLINE? ~
+   "{"~ NEWLINE? ~ expression ~ NEWLINE? ~ "}" ~
+   ( "else" ~ "{"~ NEWLINE? ~ expression ~ NEWLINE? ~ "}" )? }
 
 // Anonymous function.
 lambda = { named_argument_list ~ "=>" ~ expression }

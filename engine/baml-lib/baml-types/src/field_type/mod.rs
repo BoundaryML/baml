@@ -5,6 +5,29 @@ use itertools::Itertools;
 
 mod builder;
 
+/// FieldType represents the type of either a class field or a function arg.
+/// TODO: Rename to `BamlType` or `Type`.
+#[derive(serde::Serialize, Debug, Clone, PartialEq, Eq, Hash)]
+pub enum FieldType {
+    Primitive(TypeValue),
+    Enum(String),
+    Literal(LiteralValue),
+    Class(String),
+    List(Box<FieldType>),
+    Map(Box<FieldType>, Box<FieldType>),
+    Union(Vec<FieldType>),
+    Tuple(Vec<FieldType>),
+    Optional(Box<FieldType>),
+    RecursiveTypeAlias(String),
+    Arrow(Box<Arrow>),
+    Generic(String),
+    WithMetadata {
+        base: Box<FieldType>,
+        constraints: Vec<Constraint>,
+        streaming_behavior: StreamingBehavior,
+    },
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, serde::Serialize, Eq, Hash)]
 pub enum TypeValue {
     String,
@@ -73,28 +96,6 @@ impl std::fmt::Display for LiteralValue {
             LiteralValue::Bool(bool) => write!(f, "{bool}"),
         }
     }
-}
-
-/// FieldType represents the type of either a class field or a function arg.
-#[derive(serde::Serialize, Debug, Clone, PartialEq, Eq, Hash)]
-pub enum FieldType {
-    Primitive(TypeValue),
-    Enum(String),
-    Literal(LiteralValue),
-    Class(String),
-    List(Box<FieldType>),
-    Map(Box<FieldType>, Box<FieldType>),
-    Union(Vec<FieldType>),
-    Tuple(Vec<FieldType>),
-    Optional(Box<FieldType>),
-    RecursiveTypeAlias(String),
-    Arrow(Box<Arrow>),
-    Generic(String),
-    WithMetadata {
-        base: Box<FieldType>,
-        constraints: Vec<Constraint>,
-        streaming_behavior: StreamingBehavior,
-    },
 }
 
 pub trait HasFieldType {
