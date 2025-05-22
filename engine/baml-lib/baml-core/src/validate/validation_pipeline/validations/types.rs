@@ -243,16 +243,24 @@ fn validate_type_constraints(ctx: &mut Context<'_>, field_type: &FieldType) {
 
                 if name.to_string() == "check" {
                     ctx.push_error(DatamodelError::new_validation_error(
-                        "Check constraints must have a name.",
+                        r#"
+Check constraints must have a valid identifier. e.g.:
+@check( valid_name_length, {{ this|length > 0 }} )
+                        "#,
                         span.clone(),
                     ))
                 }
             }
             _ => {
                 ctx.push_error(DatamodelError::new_validation_error(
-                        "A constraint must have one Jinja argument such as {{ expr }}, and optionally one String label",
-                        span.clone()
-                    ));
+                    r#"
+A check or assert has an optional identifier and a Jinja argument. e.g.:
+@check( valid_name_length, {{ this|length > 0 }} )
+@assert( {{ this|length > 0 }} )
+@assert( valid_name_length, {{ this|length > 0 }} )
+                        "#,
+                    span.clone(),
+                ));
             }
         }
     }
