@@ -16,9 +16,6 @@ use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 pub const DEFAULT_ANTHROPIC_VERSION: &str = "2023-06-01";
 pub const DEFAULT_MAX_TOKENS: u32 = 4096;
 
-pub const DEFAULT_ANTHROPIC_VERSION: &str = "2023-06-01";
-pub const DEFAULT_MAX_TOKENS: u32 = 4096;
-
 #[derive(Debug, Clone, BamlHash)]
 pub struct UnresolvedAnthropic<Meta> {
     base_url: UnresolvedUrl,

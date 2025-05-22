@@ -21,12 +21,9 @@ use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_types::Blob;
 use aws_smithy_types::Document;
-use baml_types::tracing::events::{
-    ContentId, FunctionId, HTTPBody, HTTPRequest, HTTPResponse, HttpRequestId, TraceData,
-    TraceEvent, TraceLevel,
-};
-use baml_types::{ApiKeyWithProvenance, BamlMap, BamlMediaContent};
-use baml_types::{BamlMedia, BamlMediaType};
+use baml_ids::HttpRequestId;
+use baml_types::tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, TraceData, TraceEvent};
+use baml_types::{ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
 use futures::stream;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
@@ -487,19 +484,16 @@ impl AwsClient {
                 .build()
         });
 
-        let additional_fields_doc = self
-            .properties
-            .additional_model_request_fields
-            .as_ref()
-            .map(|map| {
-                // Convert IndexMap<String, serde_json::Value> to serde_json::Value::Object
-                let json_map: serde_json::Map<String, serde_json::Value> =
-                    map.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-                let json_value = serde_json::Value::Object(json_map);
-                // Convert serde_json::Value to aws_smithy_types::Document
-                serde_json_to_aws_document(json_value)
-            })
-            .unwrap_or_else(|| Document::Object(HashMap::new())); // Default to empty object
+        let additional_fields_doc = {
+            let json_map: serde_json::Map<String, serde_json::Value> = self
+                .properties
+                .additional_model_request_fields
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            let json_value = serde_json::Value::Object(json_map);
+            serde_json_to_aws_document(json_value)
+        };
 
         bedrock::operation::converse::ConverseInput::builder()
             .set_inference_config(inference_config)

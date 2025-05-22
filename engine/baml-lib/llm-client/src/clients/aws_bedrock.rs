@@ -6,18 +6,16 @@ use crate::{
 };
 use anyhow::Result;
 use indexmap::IndexMap;
-use indexmap::IndexMap;
 use secrecy::SecretString;
 
 use baml_derive::BamlHash;
-use baml_types::{ApiKeyWithProvenance, EvaluationContext, GetEnvVar, StringOr, UnresolvedValue, UnresolvedValue};
-use serde_json::Value;
+use baml_types::{ApiKeyWithProvenance, EvaluationContext, GetEnvVar, StringOr, UnresolvedValue};
 use serde_json::Value;
 
 use super::helpers::{Error, PropertyHandler};
 
 #[derive(Debug, Clone, BamlHash)]
-pub struct UnresolvedAwsBedrock<Meta><Meta> {
+pub struct UnresolvedAwsBedrock<Meta> {
     model: Option<StringOr>,
     region: Option<StringOr>,
     access_key_id: Option<StringOr>,
@@ -85,7 +83,7 @@ pub struct ResolvedAwsBedrock {
     pub allowed_role_metadata: AllowedRoleMetadata,
     pub supported_request_modes: SupportedRequestModes,
     pub finish_reason_filter: FinishReasonFilter,
-    pub additional_model_request_fields: Option<IndexMap<String, Value>>,
+    pub additional_model_request_fields: IndexMap<String, Value>,
 }
 
 impl std::fmt::Debug for ResolvedAwsBedrock {

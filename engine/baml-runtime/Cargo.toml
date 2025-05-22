@@ -20,6 +20,10 @@ unused_variables = "allow"
 
 [dependencies]
 anyhow.workspace = true
+baml-ids.workspace = true
+baml-log.workspace = true
+baml-types.workspace = true
+baml-rpc.workspace = true
 base64.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
@@ -42,8 +46,6 @@ indoc.workspace = true
 json_comments = "0.2.2"
 jsonish.workspace = true
 internal-baml-codegen.workspace = true
-baml-types.workspace = true
-baml-log.workspace = true
 internal-llm-client.workspace = true
 internal-baml-core.workspace = true
 internal-baml-jinja.workspace = true
@@ -72,8 +74,6 @@ web-time.workspace = true
 static_assertions.workspace = true
 mime_guess = "=2.0.5"
 mime = "0.3.17"
-baml-ids.workspace = true
-baml-rpc.workspace = true
 
 # For tracing
 envy = "0.4.2"

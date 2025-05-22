@@ -819,7 +819,7 @@ fn is_some_true(maybe_value: Option<&UnresolvedValue<()>>) -> bool {
 }
 
 impl NodeAttributes {
-    fn get(&self, key: &str) -> Option<&UnresolvedValue<()>> {
+    pub fn get(&self, key: &str) -> Option<&UnresolvedValue<()>> {
         self.meta.get(key)
     }
 

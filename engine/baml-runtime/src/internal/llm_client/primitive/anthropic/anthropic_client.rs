@@ -11,9 +11,7 @@ use secrecy::{ExposeSecret, SecretString};
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
-use baml_types::{
-    tracing::events::HttpRequestId, ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent,
-};
+use baml_types::{ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
