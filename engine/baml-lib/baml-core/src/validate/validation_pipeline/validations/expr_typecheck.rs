@@ -17,7 +17,7 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::ir::IRHelperExtended;
 
-/// Chcek the types of all expressions in the IR.
+/// Check the types of all expressions in the IR.
 /// It relies on the types previously inferred and added to the expression metadata.
 /// TODO: move this to a compiler pass, so that it transforms IR to IR.
 /// TODO: Implement it directly in terms of the bidirectional typing algorithm.
@@ -289,7 +289,7 @@ pub fn typecheck_in_context(
             };
             if !iterable_type_ok {
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                    "For loop must iterato over a list",
+                    "For loop must iterate over a list",
                     iterable.meta().0.clone(),
                 ));
             }
@@ -305,24 +305,6 @@ pub fn typecheck_in_context(
     }
     Ok(())
 }
-
-// fn is_subtype(ir: &IntermediateRepr, a: &ExprType, b: &ExprType) -> bool {
-//     match (a, b) {
-//         (ExprType::Atom(a), ExprType::Atom(b)) => ir.is_subtype(a, b),
-//         (ExprType::Arrow(a), ExprType::Arrow(b)) => {
-//             let a_arrow = a.as_ref();
-//             let b_arrow = b.as_ref();
-//             let return_type_ok = is_subtype(ir, &a_arrow.body_type, &b_arrow.body_type);
-//             let arg_types_ok = a_arrow
-//                 .param_types
-//                 .iter()
-//                 .zip(b_arrow.param_types.iter())
-//                 .all(|(a, b)| is_subtype(ir, b, a));
-//             return_type_ok && arg_types_ok
-//         }
-//         _ => false,
-//     }
-// }
 
 fn compatible_as_subtype(
     ir: &IntermediateRepr,
@@ -531,6 +513,12 @@ pub fn infer_types_in_context(
             }
             let new_iterable = infer_types_in_context(typing_context, iterable.clone());
             let new_body = infer_types_in_context(typing_context, body.clone());
+            let mut new_meta = meta.clone();
+            new_meta.1 = new_body
+                .meta()
+                .1
+                .as_ref()
+                .map(|body_type| FieldType::List(Box::new(body_type.clone())));
             Arc::new(Expr::ForLoop {
                 item: item.clone(),
                 iterable: iterable.clone(),

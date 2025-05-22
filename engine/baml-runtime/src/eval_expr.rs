@@ -511,29 +511,6 @@ pub async fn eval_to_value_or_llm_call<'a>(
             l @ Expr::ForLoop { .. } => {
                 let res = Box::pin(beta_reduce(env, &l, false)).await?;
                 current_expr = res;
-                // match iterable.as_ref() {
-                //     Expr::List(items, _) => {
-                //         let mut results: Vec<BamlValueWithMeta<()>> = Vec::new();
-                //         for item in items {
-                //             let result = Box::pin(eval_to_value(env, item))
-                //                 .await?
-                //                 .ok_or(anyhow::anyhow!("Expected to evaluate to value"))?;
-                //             results.push(result);
-                //         }
-                //         // let field_type = results[0].meta();
-                //         return Ok(ExprEvalResult::Value {
-                //             value: BamlValueWithMeta::List(results, ()),
-                //             field_type: FieldType::List(Box::new(FieldType::Primitive(
-                //                 TypeValue::String,
-                //             ))), // TOOD: This is wrong!
-                //         });
-                //     }
-                //     _ => {
-                //         return Err(anyhow::anyhow!(
-                //         "Iterable was not a list. This should have been caught during typechecking"
-                //     ))
-                //     }
-                // }
             }
         }
     }
@@ -807,14 +784,22 @@ test Go {
   args {}
 }
 
+class Poem {
+  title string
+  body string
+}
+
 function PoemAbout(topic: string) -> string {
   client GPT4o
   prompt #"Write a 10-word poem about {{ topic }}"#
 }
 
-function Poems() -> string [] {
+function Poems() -> Poem[] {
   for (t in ["cats", "birds", "love", "rain"]) {
-    PoemAbout(t)
+    Poem {
+      title: t,
+      body: PoemAbout(t)
+    }
   }
 }
 
