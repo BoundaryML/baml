@@ -44,6 +44,7 @@ dependencies = ["build-go-cli"]
 
 [tasks.integ-tests-build]
 script = "cd ../../integ-tests/go && go build"
+# dependencies = ["build-go-cli"]
 dependencies = ["integ-tests-generate"]
 
 [tasks.integ-tests-run]

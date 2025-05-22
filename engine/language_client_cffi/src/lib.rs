@@ -123,7 +123,7 @@ fn safe_trigger_callback(id: u32, is_done: bool, result: Result<FunctionResult>)
         Ok(result) => match result.parsed() {
             Some(Ok(content)) => {
                 let mut builder = flatbuffers::FlatBufferBuilder::new();
-                let content = ctypes::serialize_baml_value_with_meta(&content.0, &mut builder, is_done);
+                let content = ctypes::serialize_baml_value_with_meta(&content.0, &mut builder, !is_done);
                 let is_done_int = if is_done { 1 } else { 0 };
                 callback_fn(
                     id,

@@ -29,8 +29,12 @@ type AnotherObject struct {
 }
 
 func (c *AnotherObject) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "AnotherObject" {
-		panic(fmt.Sprintf("expected AnotherObject, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "AnotherObject" {
+		panic(fmt.Sprintf("expected AnotherObject, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -78,8 +82,12 @@ type BigNumbers struct {
 }
 
 func (c *BigNumbers) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "BigNumbers" {
-		panic(fmt.Sprintf("expected BigNumbers, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "BigNumbers" {
+		panic(fmt.Sprintf("expected BigNumbers, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -124,8 +132,12 @@ type BinaryNode struct {
 }
 
 func (c *BinaryNode) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "BinaryNode" {
-		panic(fmt.Sprintf("expected BinaryNode, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "BinaryNode" {
+		panic(fmt.Sprintf("expected BinaryNode, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -140,20 +152,24 @@ func (c *BinaryNode) Decode(holder cffi.CFFIValueClass) {
 
 			case "left":
 				c.Left = func() *BinaryNode {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *BinaryNode {
+						return baml.Decode(__holder).(*BinaryNode)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*BinaryNode)
+					return nil
 				}()
 
 			case "right":
 				c.Right = func() *BinaryNode {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *BinaryNode {
+						return baml.Decode(__holder).(*BinaryNode)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*BinaryNode)
+					return nil
 				}()
 
 			}
@@ -183,8 +199,12 @@ type Blah struct {
 }
 
 func (c *Blah) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Blah" {
-		panic(fmt.Sprintf("expected Blah, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Blah" {
+		panic(fmt.Sprintf("expected Blah, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -196,11 +216,13 @@ func (c *Blah) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop4":
 				c.Prop4 = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			}
@@ -228,8 +250,12 @@ type BlockConstraint struct {
 }
 
 func (c *BlockConstraint) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "BlockConstraint" {
-		panic(fmt.Sprintf("expected BlockConstraint, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "BlockConstraint" {
+		panic(fmt.Sprintf("expected BlockConstraint, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -272,8 +298,12 @@ type BlockConstraintForParam struct {
 }
 
 func (c *BlockConstraintForParam) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "BlockConstraintForParam" {
-		panic(fmt.Sprintf("expected BlockConstraintForParam, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "BlockConstraintForParam" {
+		panic(fmt.Sprintf("expected BlockConstraintForParam, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -320,8 +350,12 @@ type BookOrder struct {
 }
 
 func (c *BookOrder) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "BookOrder" {
-		panic(fmt.Sprintf("expected BookOrder, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "BookOrder" {
+		panic(fmt.Sprintf("expected BookOrder, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -372,8 +406,12 @@ type ClassForNullLiteral struct {
 }
 
 func (c *ClassForNullLiteral) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "ClassForNullLiteral" {
-		panic(fmt.Sprintf("expected ClassForNullLiteral, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClassForNullLiteral" {
+		panic(fmt.Sprintf("expected ClassForNullLiteral, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -411,8 +449,12 @@ type ClassOptionalOutput struct {
 }
 
 func (c *ClassOptionalOutput) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "ClassOptionalOutput" {
-		panic(fmt.Sprintf("expected ClassOptionalOutput, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClassOptionalOutput" {
+		panic(fmt.Sprintf("expected ClassOptionalOutput, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -457,8 +499,12 @@ type ClassOptionalOutput2 struct {
 }
 
 func (c *ClassOptionalOutput2) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "ClassOptionalOutput2" {
-		panic(fmt.Sprintf("expected ClassOptionalOutput2, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClassOptionalOutput2" {
+		panic(fmt.Sprintf("expected ClassOptionalOutput2, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -470,29 +516,35 @@ func (c *ClassOptionalOutput2) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop1":
 				c.Prop1 = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "prop2":
 				c.Prop2 = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "prop3":
 				c.Prop3 = func() *Blah {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *Blah {
+						return baml.Decode(__holder).(*Blah)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*Blah)
+					return nil
 				}()
 
 			}
@@ -522,8 +574,12 @@ type ClassToRecAlias struct {
 }
 
 func (c *ClassToRecAlias) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "ClassToRecAlias" {
-		panic(fmt.Sprintf("expected ClassToRecAlias, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClassToRecAlias" {
+		panic(fmt.Sprintf("expected ClassToRecAlias, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -561,8 +617,12 @@ type ClassWithBlockDone struct {
 }
 
 func (c *ClassWithBlockDone) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "ClassWithBlockDone" {
-		panic(fmt.Sprintf("expected ClassWithBlockDone, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClassWithBlockDone" {
+		panic(fmt.Sprintf("expected ClassWithBlockDone, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -607,8 +667,12 @@ type ClassWithImage struct {
 }
 
 func (c *ClassWithImage) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "ClassWithImage" {
-		panic(fmt.Sprintf("expected ClassWithImage, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClassWithImage" {
+		panic(fmt.Sprintf("expected ClassWithImage, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -656,8 +720,12 @@ type ClassWithoutDone struct {
 }
 
 func (c *ClassWithoutDone) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "ClassWithoutDone" {
-		panic(fmt.Sprintf("expected ClassWithoutDone, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClassWithoutDone" {
+		panic(fmt.Sprintf("expected ClassWithoutDone, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -710,8 +778,12 @@ type ClientDetails1559 struct {
 }
 
 func (c *ClientDetails1559) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "ClientDetails1559" {
-		panic(fmt.Sprintf("expected ClientDetails1559, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClientDetails1559" {
+		panic(fmt.Sprintf("expected ClientDetails1559, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -723,65 +795,79 @@ func (c *ClientDetails1559) Decode(holder cffi.CFFIValueClass) {
 
 			case "client_name":
 				c.Client_name = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "client_address":
 				c.Client_address = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "client_postal_code":
 				c.Client_postal_code = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "client_city":
 				c.Client_city = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "client_country":
 				c.Client_country = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "client_phone":
 				c.Client_phone = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "client_email":
 				c.Client_email = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			}
@@ -825,8 +911,12 @@ type ComplexMemoryObject struct {
 }
 
 func (c *ComplexMemoryObject) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "ComplexMemoryObject" {
-		panic(fmt.Sprintf("expected ComplexMemoryObject, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ComplexMemoryObject" {
+		panic(fmt.Sprintf("expected ComplexMemoryObject, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -883,8 +973,12 @@ type CompoundBigNumbers struct {
 }
 
 func (c *CompoundBigNumbers) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "CompoundBigNumbers" {
-		panic(fmt.Sprintf("expected CompoundBigNumbers, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "CompoundBigNumbers" {
+		panic(fmt.Sprintf("expected CompoundBigNumbers, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -934,8 +1028,12 @@ type ContactInfo struct {
 }
 
 func (c *ContactInfo) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "ContactInfo" {
-		panic(fmt.Sprintf("expected ContactInfo, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ContactInfo" {
+		panic(fmt.Sprintf("expected ContactInfo, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -950,11 +1048,13 @@ func (c *ContactInfo) Decode(holder cffi.CFFIValueClass) {
 
 			case "secondary":
 				c.Secondary = func() *Union__PhoneNumber__EmailAddress {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *Union__PhoneNumber__EmailAddress {
+						return baml.Decode(__holder).(*Union__PhoneNumber__EmailAddress)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*Union__PhoneNumber__EmailAddress)
+					return nil
 				}()
 
 			}
@@ -986,8 +1086,12 @@ type CustomStory struct {
 }
 
 func (c *CustomStory) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "CustomStory" {
-		panic(fmt.Sprintf("expected CustomStory, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "CustomStory" {
+		panic(fmt.Sprintf("expected CustomStory, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1039,8 +1143,12 @@ type CustomTaskResult struct {
 }
 
 func (c *CustomTaskResult) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "CustomTaskResult" {
-		panic(fmt.Sprintf("expected CustomTaskResult, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "CustomTaskResult" {
+		panic(fmt.Sprintf("expected CustomTaskResult, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1052,29 +1160,35 @@ func (c *CustomTaskResult) Decode(holder cffi.CFFIValueClass) {
 
 			case "bookOrder":
 				c.BookOrder = func() *BookOrder {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *BookOrder {
+						return baml.Decode(__holder).(*BookOrder)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*BookOrder)
+					return nil
 				}()
 
 			case "flightConfirmation":
 				c.FlightConfirmation = func() *FlightConfirmation {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *FlightConfirmation {
+						return baml.Decode(__holder).(*FlightConfirmation)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*FlightConfirmation)
+					return nil
 				}()
 
 			case "groceryReceipt":
 				c.GroceryReceipt = func() *GroceryReceipt {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *GroceryReceipt {
+						return baml.Decode(__holder).(*GroceryReceipt)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*GroceryReceipt)
+					return nil
 				}()
 
 			}
@@ -1106,8 +1220,12 @@ type Document1559 struct {
 }
 
 func (c *Document1559) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Document1559" {
-		panic(fmt.Sprintf("expected Document1559, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Document1559" {
+		panic(fmt.Sprintf("expected Document1559, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1154,8 +1272,12 @@ type DummyOutput struct {
 }
 
 func (c *DummyOutput) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "DummyOutput" {
-		panic(fmt.Sprintf("expected DummyOutput, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "DummyOutput" {
+		panic(fmt.Sprintf("expected DummyOutput, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1207,8 +1329,12 @@ type DynInputOutput struct {
 }
 
 func (c *DynInputOutput) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "DynInputOutput" {
-		panic(fmt.Sprintf("expected DynInputOutput, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "DynInputOutput" {
+		panic(fmt.Sprintf("expected DynInputOutput, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1253,8 +1379,12 @@ type DynamicClassOne struct {
 }
 
 func (c *DynamicClassOne) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "DynamicClassOne" {
-		panic(fmt.Sprintf("expected DynamicClassOne, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "DynamicClassOne" {
+		panic(fmt.Sprintf("expected DynamicClassOne, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.DynamicFieldsLength() {
@@ -1289,8 +1419,12 @@ type DynamicClassTwo struct {
 }
 
 func (c *DynamicClassTwo) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "DynamicClassTwo" {
-		panic(fmt.Sprintf("expected DynamicClassTwo, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "DynamicClassTwo" {
+		panic(fmt.Sprintf("expected DynamicClassTwo, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1345,8 +1479,12 @@ type DynamicOutput struct {
 }
 
 func (c *DynamicOutput) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "DynamicOutput" {
-		panic(fmt.Sprintf("expected DynamicOutput, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "DynamicOutput" {
+		panic(fmt.Sprintf("expected DynamicOutput, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.DynamicFieldsLength() {
@@ -1375,8 +1513,12 @@ type DynamicSchema struct {
 }
 
 func (c *DynamicSchema) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "DynamicSchema" {
-		panic(fmt.Sprintf("expected DynamicSchema, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "DynamicSchema" {
+		panic(fmt.Sprintf("expected DynamicSchema, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.DynamicFieldsLength() {
@@ -1405,8 +1547,12 @@ type Earthling struct {
 }
 
 func (c *Earthling) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Earthling" {
-		panic(fmt.Sprintf("expected Earthling, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Earthling" {
+		panic(fmt.Sprintf("expected Earthling, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1450,8 +1596,12 @@ type Education struct {
 }
 
 func (c *Education) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Education" {
-		panic(fmt.Sprintf("expected Education, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Education" {
+		panic(fmt.Sprintf("expected Education, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1477,11 +1627,13 @@ func (c *Education) Decode(holder cffi.CFFIValueClass) {
 
 			case "graduation_date":
 				c.Graduation_date = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			}
@@ -1519,8 +1671,12 @@ type Email struct {
 }
 
 func (c *Email) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Email" {
-		panic(fmt.Sprintf("expected Email, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Email" {
+		panic(fmt.Sprintf("expected Email, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1566,8 +1722,12 @@ type EmailAddress struct {
 }
 
 func (c *EmailAddress) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "EmailAddress" {
-		panic(fmt.Sprintf("expected EmailAddress, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "EmailAddress" {
+		panic(fmt.Sprintf("expected EmailAddress, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1609,8 +1769,12 @@ type Event struct {
 }
 
 func (c *Event) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Event" {
-		panic(fmt.Sprintf("expected Event, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Event" {
+		panic(fmt.Sprintf("expected Event, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1661,8 +1825,12 @@ type FakeImage struct {
 }
 
 func (c *FakeImage) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "FakeImage" {
-		panic(fmt.Sprintf("expected FakeImage, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "FakeImage" {
+		panic(fmt.Sprintf("expected FakeImage, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1706,8 +1874,12 @@ type FlightConfirmation struct {
 }
 
 func (c *FlightConfirmation) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "FlightConfirmation" {
-		panic(fmt.Sprintf("expected FlightConfirmation, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "FlightConfirmation" {
+		panic(fmt.Sprintf("expected FlightConfirmation, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1767,8 +1939,12 @@ type FooAny struct {
 }
 
 func (c *FooAny) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "FooAny" {
-		panic(fmt.Sprintf("expected FooAny, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "FooAny" {
+		panic(fmt.Sprintf("expected FooAny, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1814,8 +1990,12 @@ type Forest struct {
 }
 
 func (c *Forest) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Forest" {
-		panic(fmt.Sprintf("expected Forest, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Forest" {
+		panic(fmt.Sprintf("expected Forest, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1855,8 +2035,12 @@ type FormatterTest0 struct {
 }
 
 func (c *FormatterTest0) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "FormatterTest0" {
-		panic(fmt.Sprintf("expected FormatterTest0, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "FormatterTest0" {
+		panic(fmt.Sprintf("expected FormatterTest0, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1899,8 +2083,12 @@ type FormatterTest1 struct {
 }
 
 func (c *FormatterTest1) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "FormatterTest1" {
-		panic(fmt.Sprintf("expected FormatterTest1, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "FormatterTest1" {
+		panic(fmt.Sprintf("expected FormatterTest1, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1943,8 +2131,12 @@ type FormatterTest2 struct {
 }
 
 func (c *FormatterTest2) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "FormatterTest2" {
-		panic(fmt.Sprintf("expected FormatterTest2, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "FormatterTest2" {
+		panic(fmt.Sprintf("expected FormatterTest2, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -1987,8 +2179,12 @@ type FormatterTest3 struct {
 }
 
 func (c *FormatterTest3) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "FormatterTest3" {
-		panic(fmt.Sprintf("expected FormatterTest3, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "FormatterTest3" {
+		panic(fmt.Sprintf("expected FormatterTest3, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2035,8 +2231,12 @@ type GroceryReceipt struct {
 }
 
 func (c *GroceryReceipt) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "GroceryReceipt" {
-		panic(fmt.Sprintf("expected GroceryReceipt, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "GroceryReceipt" {
+		panic(fmt.Sprintf("expected GroceryReceipt, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2093,8 +2293,12 @@ type Haiku struct {
 }
 
 func (c *Haiku) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Haiku" {
-		panic(fmt.Sprintf("expected Haiku, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Haiku" {
+		panic(fmt.Sprintf("expected Haiku, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2144,8 +2348,12 @@ type InnerClass struct {
 }
 
 func (c *InnerClass) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "InnerClass" {
-		panic(fmt.Sprintf("expected InnerClass, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "InnerClass" {
+		panic(fmt.Sprintf("expected InnerClass, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2193,8 +2401,12 @@ type InnerClass2 struct {
 }
 
 func (c *InnerClass2) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "InnerClass2" {
-		panic(fmt.Sprintf("expected InnerClass2, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "InnerClass2" {
+		panic(fmt.Sprintf("expected InnerClass2, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2237,8 +2449,12 @@ type InputClass struct {
 }
 
 func (c *InputClass) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "InputClass" {
-		panic(fmt.Sprintf("expected InputClass, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "InputClass" {
+		panic(fmt.Sprintf("expected InputClass, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2281,8 +2497,12 @@ type InputClassNested struct {
 }
 
 func (c *InputClassNested) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "InputClassNested" {
-		panic(fmt.Sprintf("expected InputClassNested, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "InputClassNested" {
+		panic(fmt.Sprintf("expected InputClassNested, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2325,8 +2545,12 @@ type LinkedList struct {
 }
 
 func (c *LinkedList) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "LinkedList" {
-		panic(fmt.Sprintf("expected LinkedList, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "LinkedList" {
+		panic(fmt.Sprintf("expected LinkedList, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2338,11 +2562,13 @@ func (c *LinkedList) Decode(holder cffi.CFFIValueClass) {
 
 			case "head":
 				c.Head = func() *Node {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *Node {
+						return baml.Decode(__holder).(*Node)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*Node)
+					return nil
 				}()
 
 			case "len":
@@ -2375,8 +2601,12 @@ type LinkedListAliasNode struct {
 }
 
 func (c *LinkedListAliasNode) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "LinkedListAliasNode" {
-		panic(fmt.Sprintf("expected LinkedListAliasNode, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "LinkedListAliasNode" {
+		panic(fmt.Sprintf("expected LinkedListAliasNode, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2391,11 +2621,13 @@ func (c *LinkedListAliasNode) Decode(holder cffi.CFFIValueClass) {
 
 			case "next":
 				c.Next = func() *LinkedListAliasNode {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *LinkedListAliasNode {
+						return baml.Decode(__holder).(*LinkedListAliasNode)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*LinkedListAliasNode)
+					return nil
 				}()
 
 			}
@@ -2423,8 +2655,12 @@ type LiteralClassHello struct {
 }
 
 func (c *LiteralClassHello) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "LiteralClassHello" {
-		panic(fmt.Sprintf("expected LiteralClassHello, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "LiteralClassHello" {
+		panic(fmt.Sprintf("expected LiteralClassHello, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2460,8 +2696,12 @@ type LiteralClassOne struct {
 }
 
 func (c *LiteralClassOne) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "LiteralClassOne" {
-		panic(fmt.Sprintf("expected LiteralClassOne, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "LiteralClassOne" {
+		panic(fmt.Sprintf("expected LiteralClassOne, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2497,8 +2737,12 @@ type LiteralClassTwo struct {
 }
 
 func (c *LiteralClassTwo) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "LiteralClassTwo" {
-		panic(fmt.Sprintf("expected LiteralClassTwo, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "LiteralClassTwo" {
+		panic(fmt.Sprintf("expected LiteralClassTwo, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2538,8 +2782,12 @@ type MaintainFieldOrder struct {
 }
 
 func (c *MaintainFieldOrder) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "MaintainFieldOrder" {
-		panic(fmt.Sprintf("expected MaintainFieldOrder, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "MaintainFieldOrder" {
+		panic(fmt.Sprintf("expected MaintainFieldOrder, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2585,8 +2833,12 @@ type MalformedConstraints struct {
 }
 
 func (c *MalformedConstraints) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "MalformedConstraints" {
-		panic(fmt.Sprintf("expected MalformedConstraints, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "MalformedConstraints" {
+		panic(fmt.Sprintf("expected MalformedConstraints, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2622,8 +2874,12 @@ type MalformedConstraints2 struct {
 }
 
 func (c *MalformedConstraints2) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "MalformedConstraints2" {
-		panic(fmt.Sprintf("expected MalformedConstraints2, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "MalformedConstraints2" {
+		panic(fmt.Sprintf("expected MalformedConstraints2, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2663,8 +2919,12 @@ type Martian struct {
 }
 
 func (c *Martian) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Martian" {
-		panic(fmt.Sprintf("expected Martian, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Martian" {
+		panic(fmt.Sprintf("expected Martian, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2704,8 +2964,12 @@ type MemoryObject struct {
 }
 
 func (c *MemoryObject) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "MemoryObject" {
-		panic(fmt.Sprintf("expected MemoryObject, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "MemoryObject" {
+		panic(fmt.Sprintf("expected MemoryObject, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2751,8 +3015,12 @@ type MergeAttrs struct {
 }
 
 func (c *MergeAttrs) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "MergeAttrs" {
-		panic(fmt.Sprintf("expected MergeAttrs, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "MergeAttrs" {
+		panic(fmt.Sprintf("expected MergeAttrs, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2792,8 +3060,12 @@ type NamedArgsSingleClass struct {
 }
 
 func (c *NamedArgsSingleClass) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "NamedArgsSingleClass" {
-		panic(fmt.Sprintf("expected NamedArgsSingleClass, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "NamedArgsSingleClass" {
+		panic(fmt.Sprintf("expected NamedArgsSingleClass, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2843,8 +3115,12 @@ type Nested struct {
 }
 
 func (c *Nested) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Nested" {
-		panic(fmt.Sprintf("expected Nested, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Nested" {
+		panic(fmt.Sprintf("expected Nested, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2856,20 +3132,24 @@ func (c *Nested) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop3":
 				c.Prop3 = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "prop4":
 				c.Prop4 = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "prop20":
@@ -2904,8 +3184,12 @@ type Nested2 struct {
 }
 
 func (c *Nested2) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Nested2" {
-		panic(fmt.Sprintf("expected Nested2, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Nested2" {
+		panic(fmt.Sprintf("expected Nested2, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2917,20 +3201,24 @@ func (c *Nested2) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop11":
 				c.Prop11 = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "prop12":
 				c.Prop12 = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			}
@@ -2958,8 +3246,12 @@ type NestedBlockConstraint struct {
 }
 
 func (c *NestedBlockConstraint) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "NestedBlockConstraint" {
-		panic(fmt.Sprintf("expected NestedBlockConstraint, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "NestedBlockConstraint" {
+		panic(fmt.Sprintf("expected NestedBlockConstraint, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -2995,8 +3287,12 @@ type NestedBlockConstraintForParam struct {
 }
 
 func (c *NestedBlockConstraintForParam) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "NestedBlockConstraintForParam" {
-		panic(fmt.Sprintf("expected NestedBlockConstraintForParam, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "NestedBlockConstraintForParam" {
+		panic(fmt.Sprintf("expected NestedBlockConstraintForParam, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3034,8 +3330,12 @@ type Node struct {
 }
 
 func (c *Node) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Node" {
-		panic(fmt.Sprintf("expected Node, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Node" {
+		panic(fmt.Sprintf("expected Node, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3050,11 +3350,13 @@ func (c *Node) Decode(holder cffi.CFFIValueClass) {
 
 			case "next":
 				c.Next = func() *Node {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *Node {
+						return baml.Decode(__holder).(*Node)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*Node)
+					return nil
 				}()
 
 			}
@@ -3084,8 +3386,12 @@ type NodeWithAliasIndirection struct {
 }
 
 func (c *NodeWithAliasIndirection) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "NodeWithAliasIndirection" {
-		panic(fmt.Sprintf("expected NodeWithAliasIndirection, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "NodeWithAliasIndirection" {
+		panic(fmt.Sprintf("expected NodeWithAliasIndirection, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3100,11 +3406,13 @@ func (c *NodeWithAliasIndirection) Decode(holder cffi.CFFIValueClass) {
 
 			case "next":
 				c.Next = func() *NodeWithAliasIndirection {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *NodeWithAliasIndirection {
+						return baml.Decode(__holder).(*NodeWithAliasIndirection)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*NodeWithAliasIndirection)
+					return nil
 				}()
 
 			}
@@ -3136,8 +3444,12 @@ type Note1599 struct {
 }
 
 func (c *Note1599) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Note1599" {
-		panic(fmt.Sprintf("expected Note1599, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Note1599" {
+		panic(fmt.Sprintf("expected Note1599, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3152,20 +3464,24 @@ func (c *Note1599) Decode(holder cffi.CFFIValueClass) {
 
 			case "note_description":
 				c.Note_description = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "note_amount":
 				c.Note_amount = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			}
@@ -3197,8 +3513,12 @@ type OptionalListAndMap struct {
 }
 
 func (c *OptionalListAndMap) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "OptionalListAndMap" {
-		panic(fmt.Sprintf("expected OptionalListAndMap, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "OptionalListAndMap" {
+		panic(fmt.Sprintf("expected OptionalListAndMap, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3210,20 +3530,24 @@ func (c *OptionalListAndMap) Decode(holder cffi.CFFIValueClass) {
 
 			case "p":
 				c.P = func() *[]string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *[]string {
+						return baml.Decode(__holder).(*[]string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*[]string)
+					return nil
 				}()
 
 			case "q":
 				c.Q = func() *map[string]string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *map[string]string {
+						return baml.Decode(__holder).(*map[string]string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*map[string]string)
+					return nil
 				}()
 
 			}
@@ -3253,8 +3577,12 @@ type OptionalTest_Prop1 struct {
 }
 
 func (c *OptionalTest_Prop1) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "OptionalTest_Prop1" {
-		panic(fmt.Sprintf("expected OptionalTest_Prop1, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "OptionalTest_Prop1" {
+		panic(fmt.Sprintf("expected OptionalTest_Prop1, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3299,8 +3627,12 @@ type OptionalTest_ReturnType struct {
 }
 
 func (c *OptionalTest_ReturnType) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "OptionalTest_ReturnType" {
-		panic(fmt.Sprintf("expected OptionalTest_ReturnType, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "OptionalTest_ReturnType" {
+		panic(fmt.Sprintf("expected OptionalTest_ReturnType, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3312,30 +3644,36 @@ func (c *OptionalTest_ReturnType) Decode(holder cffi.CFFIValueClass) {
 
 			case "omega_1":
 				c.Omega_1 = func() *OptionalTest_Prop1 {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *OptionalTest_Prop1 {
+						return baml.Decode(__holder).(*OptionalTest_Prop1)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*OptionalTest_Prop1)
+					return nil
 				}()
 
 			case "omega_2":
 				c.Omega_2 = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "omega_3":
 				c.Omega_3 = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) *OptionalTest_CategoryType {
 					return func() *OptionalTest_CategoryType {
-						val := baml.Decode(__holder)
-						if val == nil {
-							return nil
+						val := baml.DecodeOptional(__holder, func(__holder *cffi.CFFIValueHolder) *OptionalTest_CategoryType {
+							return baml.Decode(__holder).(*OptionalTest_CategoryType)
+						})
+						if val != nil {
+							return *val
 						}
-						return val.(*OptionalTest_CategoryType)
+						return nil
 					}()
 				})
 
@@ -3370,8 +3708,12 @@ type OrderInfo struct {
 }
 
 func (c *OrderInfo) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "OrderInfo" {
-		panic(fmt.Sprintf("expected OrderInfo, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "OrderInfo" {
+		panic(fmt.Sprintf("expected OrderInfo, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3386,20 +3728,24 @@ func (c *OrderInfo) Decode(holder cffi.CFFIValueClass) {
 
 			case "tracking_number":
 				c.Tracking_number = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "estimated_arrival_date":
 				c.Estimated_arrival_date = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			}
@@ -3429,8 +3775,12 @@ type OriginalA struct {
 }
 
 func (c *OriginalA) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "OriginalA" {
-		panic(fmt.Sprintf("expected OriginalA, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "OriginalA" {
+		panic(fmt.Sprintf("expected OriginalA, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3468,8 +3818,12 @@ type OriginalB struct {
 }
 
 func (c *OriginalB) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "OriginalB" {
-		panic(fmt.Sprintf("expected OriginalB, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "OriginalB" {
+		panic(fmt.Sprintf("expected OriginalB, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3518,8 +3872,12 @@ type Person struct {
 }
 
 func (c *Person) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Person" {
-		panic(fmt.Sprintf("expected Person, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Person" {
+		panic(fmt.Sprintf("expected Person, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3531,20 +3889,24 @@ func (c *Person) Decode(holder cffi.CFFIValueClass) {
 
 			case "name":
 				c.Name = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "hair_color":
 				c.Hair_color = func() *Color {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *Color {
+						return baml.Decode(__holder).(*Color)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*Color)
+					return nil
 				}()
 
 			}
@@ -3581,8 +3943,12 @@ type PhoneNumber struct {
 }
 
 func (c *PhoneNumber) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "PhoneNumber" {
-		panic(fmt.Sprintf("expected PhoneNumber, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "PhoneNumber" {
+		panic(fmt.Sprintf("expected PhoneNumber, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3614,14 +3980,18 @@ func (c PhoneNumber) BamlTypeName() string {
 }
 
 type Quantity struct {
-	Amount Union__int__float `json:"amount"`
+	Amount float64 `json:"amount"`
 
 	Unit *string `json:"unit"`
 }
 
 func (c *Quantity) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Quantity" {
-		panic(fmt.Sprintf("expected Quantity, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Quantity" {
+		panic(fmt.Sprintf("expected Quantity, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3632,15 +4002,17 @@ func (c *Quantity) Decode(holder cffi.CFFIValueClass) {
 			switch key {
 
 			case "amount":
-				c.Amount = *baml.Decode(valueHolder).(*Union__int__float)
+				c.Amount = *baml.Decode(valueHolder).(*float64)
 
 			case "unit":
 				c.Unit = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			}
@@ -3670,8 +4042,12 @@ type RaysData struct {
 }
 
 func (c *RaysData) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "RaysData" {
-		panic(fmt.Sprintf("expected RaysData, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "RaysData" {
+		panic(fmt.Sprintf("expected RaysData, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3716,8 +4092,12 @@ type ReceiptInfo struct {
 }
 
 func (c *ReceiptInfo) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "ReceiptInfo" {
-		panic(fmt.Sprintf("expected ReceiptInfo, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ReceiptInfo" {
+		panic(fmt.Sprintf("expected ReceiptInfo, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3734,11 +4114,13 @@ func (c *ReceiptInfo) Decode(holder cffi.CFFIValueClass) {
 
 			case "total_cost":
 				c.Total_cost = func() *float64 {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *float64 {
+						return baml.Decode(__holder).(*float64)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*float64)
+					return nil
 				}()
 
 			case "venue":
@@ -3777,8 +4159,12 @@ type ReceiptItem struct {
 }
 
 func (c *ReceiptItem) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "ReceiptItem" {
-		panic(fmt.Sprintf("expected ReceiptItem, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ReceiptItem" {
+		panic(fmt.Sprintf("expected ReceiptItem, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3793,11 +4179,13 @@ func (c *ReceiptItem) Decode(holder cffi.CFFIValueClass) {
 
 			case "description":
 				c.Description = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "quantity":
@@ -3831,14 +4219,18 @@ func (c ReceiptItem) BamlTypeName() string {
 }
 
 type Recipe struct {
-	Ingredients map[string]Quantity `json:"ingredients"`
+	Recipe_type Union__string_breakfast__string_dinner__string_other `json:"recipe_type"`
 
-	Recipe_type Union__string_breakfast__string_dinner `json:"recipe_type"`
+	Ingredients []string `json:"ingredients"`
 }
 
 func (c *Recipe) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Recipe" {
-		panic(fmt.Sprintf("expected Recipe, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Recipe" {
+		panic(fmt.Sprintf("expected Recipe, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3848,11 +4240,13 @@ func (c *Recipe) Decode(holder cffi.CFFIValueClass) {
 			valueHolder := field.Value(nil)
 			switch key {
 
-			case "ingredients":
-				c.Ingredients = baml.Decode(valueHolder).(map[string]Quantity)
-
 			case "recipe_type":
-				c.Recipe_type = *baml.Decode(valueHolder).(*Union__string_breakfast__string_dinner)
+				c.Recipe_type = *baml.Decode(valueHolder).(*Union__string_breakfast__string_dinner__string_other)
+
+			case "ingredients":
+				c.Ingredients = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) string {
+					return *baml.Decode(__holder).(*string)
+				})
 
 			}
 		}
@@ -3863,9 +4257,9 @@ func (c *Recipe) Decode(holder cffi.CFFIValueClass) {
 func (c Recipe) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
 	fields := map[string]any{}
 
-	fields["ingredients"] = c.Ingredients
-
 	fields["recipe_type"] = c.Recipe_type
+
+	fields["ingredients"] = c.Ingredients
 
 	return baml.EncodeClass(builder, "Recipe", fields, nil)
 }
@@ -3879,8 +4273,12 @@ type RecursiveAliasDependency struct {
 }
 
 func (c *RecursiveAliasDependency) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "RecursiveAliasDependency" {
-		panic(fmt.Sprintf("expected RecursiveAliasDependency, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "RecursiveAliasDependency" {
+		panic(fmt.Sprintf("expected RecursiveAliasDependency, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -3926,8 +4324,12 @@ type Resume struct {
 }
 
 func (c *Resume) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Resume" {
-		panic(fmt.Sprintf("expected Resume, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Resume" {
+		panic(fmt.Sprintf("expected Resume, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4006,8 +4408,12 @@ type Schema struct {
 }
 
 func (c *Schema) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Schema" {
-		panic(fmt.Sprintf("expected Schema, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Schema" {
+		panic(fmt.Sprintf("expected Schema, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4019,11 +4425,13 @@ func (c *Schema) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop1":
 				c.Prop1 = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "prop2":
@@ -4032,11 +4440,13 @@ func (c *Schema) Decode(holder cffi.CFFIValueClass) {
 			case "prop5":
 				c.Prop5 = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 					return func() *string {
-						val := baml.Decode(__holder)
-						if val == nil {
-							return nil
+						val := baml.DecodeOptional(__holder, func(__holder *cffi.CFFIValueHolder) *string {
+							return baml.Decode(__holder).(*string)
+						})
+						if val != nil {
+							return *val
 						}
-						return val.(*string)
+						return nil
 					}()
 				})
 
@@ -4046,21 +4456,25 @@ func (c *Schema) Decode(holder cffi.CFFIValueClass) {
 			case "nested_attrs":
 				c.Nested_attrs = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) *Union__string__Nested {
 					return func() *Union__string__Nested {
-						val := baml.Decode(__holder)
-						if val == nil {
-							return nil
+						val := baml.DecodeOptional(__holder, func(__holder *cffi.CFFIValueHolder) *Union__string__Nested {
+							return baml.Decode(__holder).(*Union__string__Nested)
+						})
+						if val != nil {
+							return *val
 						}
-						return val.(*Union__string__Nested)
+						return nil
 					}()
 				})
 
 			case "parens":
 				c.Parens = func() *string {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*string)
+					return nil
 				}()
 
 			case "other_group":
@@ -4111,8 +4525,12 @@ type SearchParams struct {
 }
 
 func (c *SearchParams) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "SearchParams" {
-		panic(fmt.Sprintf("expected SearchParams, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "SearchParams" {
+		panic(fmt.Sprintf("expected SearchParams, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4124,11 +4542,13 @@ func (c *SearchParams) Decode(holder cffi.CFFIValueClass) {
 
 			case "dateRange":
 				c.DateRange = func() *int64 {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*int64)
+					return nil
 				}()
 
 			case "location":
@@ -4138,20 +4558,24 @@ func (c *SearchParams) Decode(holder cffi.CFFIValueClass) {
 
 			case "jobTitle":
 				c.JobTitle = func() *WithReasoning {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *WithReasoning {
+						return baml.Decode(__holder).(*WithReasoning)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*WithReasoning)
+					return nil
 				}()
 
 			case "company":
 				c.Company = func() *WithReasoning {
-					val := baml.Decode(valueHolder)
-					if val == nil {
-						return nil
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *WithReasoning {
+						return baml.Decode(__holder).(*WithReasoning)
+					})
+					if val != nil {
+						return *val
 					}
-					return val.(*WithReasoning)
+					return nil
 				}()
 
 			case "description":
@@ -4211,8 +4635,12 @@ type SemanticContainer struct {
 }
 
 func (c *SemanticContainer) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "SemanticContainer" {
-		panic(fmt.Sprintf("expected SemanticContainer, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "SemanticContainer" {
+		panic(fmt.Sprintf("expected SemanticContainer, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4285,8 +4713,12 @@ type SimpleTag struct {
 }
 
 func (c *SimpleTag) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "SimpleTag" {
-		panic(fmt.Sprintf("expected SimpleTag, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "SimpleTag" {
+		panic(fmt.Sprintf("expected SimpleTag, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4324,8 +4756,12 @@ type SmallThing struct {
 }
 
 func (c *SmallThing) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "SmallThing" {
-		panic(fmt.Sprintf("expected SmallThing, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "SmallThing" {
+		panic(fmt.Sprintf("expected SmallThing, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4368,8 +4804,12 @@ type SomeClassNestedDynamic struct {
 }
 
 func (c *SomeClassNestedDynamic) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "SomeClassNestedDynamic" {
-		panic(fmt.Sprintf("expected SomeClassNestedDynamic, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "SomeClassNestedDynamic" {
+		panic(fmt.Sprintf("expected SomeClassNestedDynamic, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4414,8 +4854,12 @@ type StringToClassEntry struct {
 }
 
 func (c *StringToClassEntry) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "StringToClassEntry" {
-		panic(fmt.Sprintf("expected StringToClassEntry, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "StringToClassEntry" {
+		panic(fmt.Sprintf("expected StringToClassEntry, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4459,8 +4903,12 @@ type TestClassAlias struct {
 }
 
 func (c *TestClassAlias) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "TestClassAlias" {
-		panic(fmt.Sprintf("expected TestClassAlias, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "TestClassAlias" {
+		panic(fmt.Sprintf("expected TestClassAlias, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4518,8 +4966,12 @@ type TestClassNested struct {
 }
 
 func (c *TestClassNested) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "TestClassNested" {
-		panic(fmt.Sprintf("expected TestClassNested, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "TestClassNested" {
+		panic(fmt.Sprintf("expected TestClassNested, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4562,8 +5014,12 @@ type TestClassWithEnum struct {
 }
 
 func (c *TestClassWithEnum) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "TestClassWithEnum" {
-		panic(fmt.Sprintf("expected TestClassWithEnum, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "TestClassWithEnum" {
+		panic(fmt.Sprintf("expected TestClassWithEnum, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4606,8 +5062,12 @@ type TestMemoryOutput struct {
 }
 
 func (c *TestMemoryOutput) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "TestMemoryOutput" {
-		panic(fmt.Sprintf("expected TestMemoryOutput, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "TestMemoryOutput" {
+		panic(fmt.Sprintf("expected TestMemoryOutput, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4654,8 +5114,12 @@ type TestOutputClass struct {
 }
 
 func (c *TestOutputClass) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "TestOutputClass" {
-		panic(fmt.Sprintf("expected TestOutputClass, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "TestOutputClass" {
+		panic(fmt.Sprintf("expected TestOutputClass, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4698,8 +5162,12 @@ type Tree struct {
 }
 
 func (c *Tree) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "Tree" {
-		panic(fmt.Sprintf("expected Tree, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Tree" {
+		panic(fmt.Sprintf("expected Tree, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4744,8 +5212,12 @@ type TwoStoriesOneTitle struct {
 }
 
 func (c *TwoStoriesOneTitle) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "TwoStoriesOneTitle" {
-		panic(fmt.Sprintf("expected TwoStoriesOneTitle, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "TwoStoriesOneTitle" {
+		panic(fmt.Sprintf("expected TwoStoriesOneTitle, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4795,8 +5267,12 @@ type TwoStoriesOneTitleCheck struct {
 }
 
 func (c *TwoStoriesOneTitleCheck) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "TwoStoriesOneTitleCheck" {
-		panic(fmt.Sprintf("expected TwoStoriesOneTitleCheck, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "TwoStoriesOneTitleCheck" {
+		panic(fmt.Sprintf("expected TwoStoriesOneTitleCheck, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4846,8 +5322,12 @@ type UnionTest_ReturnType struct {
 }
 
 func (c *UnionTest_ReturnType) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "UnionTest_ReturnType" {
-		panic(fmt.Sprintf("expected UnionTest_ReturnType, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "UnionTest_ReturnType" {
+		panic(fmt.Sprintf("expected UnionTest_ReturnType, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4898,8 +5378,12 @@ type UniverseQuestion struct {
 }
 
 func (c *UniverseQuestion) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "UniverseQuestion" {
-		panic(fmt.Sprintf("expected UniverseQuestion, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "UniverseQuestion" {
+		panic(fmt.Sprintf("expected UniverseQuestion, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4940,8 +5424,12 @@ type UniverseQuestionInput struct {
 }
 
 func (c *UniverseQuestionInput) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "UniverseQuestionInput" {
-		panic(fmt.Sprintf("expected UniverseQuestionInput, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "UniverseQuestionInput" {
+		panic(fmt.Sprintf("expected UniverseQuestionInput, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {
@@ -4979,8 +5467,12 @@ type WithReasoning struct {
 }
 
 func (c *WithReasoning) Decode(holder cffi.CFFIValueClass) {
-	if string(holder.Name()) != "WithReasoning" {
-		panic(fmt.Sprintf("expected WithReasoning, got %s", string(holder.Name())))
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "types" {
+		panic(fmt.Sprintf("expected types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "WithReasoning" {
+		panic(fmt.Sprintf("expected WithReasoning, got %s", string(typeName.Name())))
 	}
 
 	for i := range holder.FieldsLength() {

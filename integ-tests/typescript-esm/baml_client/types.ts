@@ -634,7 +634,7 @@ export interface PhoneNumber {
 }
 
 export interface Quantity {
-  amount: number | number
+  amount: number
   unit?: string | null
   
 }
@@ -661,8 +661,8 @@ export interface ReceiptItem {
 }
 
 export interface Recipe {
-  ingredients: Record<string, Quantity>
-  recipe_type: "breakfast" | "dinner"
+  recipe_type: "breakfast" | "dinner" | "other"
+  ingredients: string[]
   
 }
 

@@ -6663,9 +6663,7 @@ components:
       type: object
       properties:
         amount:
-          oneOf:
-          - type: integer
-          - type: number
+          type: number
         unit:
           type: string
       required:
@@ -6721,11 +6719,12 @@ components:
       type: object
       properties:
         ingredients:
-          type: object
-          additionalProperties:
-            $ref: '#/components/schemas/Quantity'
+          type: array
+          items:
+            type: string
         recipe_type:
           oneOf:
+          - type: string
           - type: string
           - type: string
       required:

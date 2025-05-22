@@ -503,7 +503,7 @@ class PhoneNumber(BaseModel):
 class Quantity(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    amount: Optional[Union[int, float]] = None
+    amount: float
     unit: Optional[str] = None
 
 class RaysData(BaseModel):
@@ -530,8 +530,8 @@ class ReceiptItem(BaseModel):
 class Recipe(BaseModel):
     class Config:
         arbitrary_types_allowed = True
-    ingredients: Dict[str, Optional["Quantity"]]
-    recipe_type: Optional[Union[Literal["breakfast"], Literal["dinner"]]] = None
+    recipe_type: Optional[Union[Literal["breakfast"], Literal["dinner"], Literal["other"]]] = None
+    ingredients: List[str]
 
 class RecursiveAliasDependency(BaseModel):
     class Config:

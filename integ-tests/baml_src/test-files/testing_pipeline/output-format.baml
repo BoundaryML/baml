@@ -1,6 +1,6 @@
 class Recipe {
-  ingredients map<string, Quantity>
-  recipe_type "breakfast" | "dinner"
+  recipe_type "breakfast" | "dinner" | "other"
+  ingredients string[]
 }
 
 class Quantity {

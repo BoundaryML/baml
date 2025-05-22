@@ -2,20 +2,20 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 
 	b "example.com/integ-tests/baml_client"
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
 func main() {
 	ctx := context.Background()
 
-	registry := baml.NewClientRegistry()
-	registry.AddLlmClient("a", "openai", map[string]any{"a": "b"})
-	registry.SetPrimaryClient("a")
+	// registry := baml.NewClientRegistry()
+	// registry.AddLlmClient("a", "openai", map[string]any{"a": "b"})
+	// registry.SetPrimaryClient("a")
 
-	v2, err := b.AaaSamOutputFormat(ctx, "oranges", b.WithClientRegistry(registry))
+	v2, err := b.AaaSamOutputFormat(ctx, "oranges")
 	if err != nil {
 		panic(err)
 	}
@@ -34,6 +34,19 @@ func main() {
 
 	stream := b.Stream.AaaSamOutputFormat(ctx, "pineapple")
 	for chunk := range stream {
-		fmt.Println(chunk)
+		if chunk.IsFinal {
+			jsonstr, err := json.Marshal(*chunk.Final())
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println("---FINAL---")
+			fmt.Println(string(jsonstr))
+		} else {
+			jsonstr, err := json.Marshal(chunk.Stream())
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println(string(jsonstr))
+		}
 	}
 }

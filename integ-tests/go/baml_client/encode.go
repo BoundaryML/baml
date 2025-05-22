@@ -15,6 +15,7 @@ import (
 	"fmt"
 	"reflect"
 
+	"example.com/integ-tests/baml_client/stream_types"
 	"example.com/integ-tests/baml_client/types"
 )
 
@@ -284,8 +285,6 @@ var typeMap = map[string]reflect.Type{
 
 	"Union__int_1__bool_true__string_string_output": reflect.TypeOf(types.Union__int_1__bool_true__string_string_output{}),
 
-	"Union__int__float": reflect.TypeOf(types.Union__int__float{}),
-
 	"Union__int__string": reflect.TypeOf(types.Union__int__string{}),
 
 	"Union__int__string__bool__float": reflect.TypeOf(types.Union__int__string__bool__float{}),
@@ -308,11 +307,212 @@ var typeMap = map[string]reflect.Type{
 
 	"Union__string_barisa__string_ox_burger": reflect.TypeOf(types.Union__string_barisa__string_ox_burger{}),
 
-	"Union__string_breakfast__string_dinner": reflect.TypeOf(types.Union__string_breakfast__string_dinner{}),
+	"Union__string_breakfast__string_dinner__string_other": reflect.TypeOf(types.Union__string_breakfast__string_dinner__string_other{}),
 
 	"Union__string_curiosity__string_personal_finance": reflect.TypeOf(types.Union__string_curiosity__string_personal_finance{}),
 
 	"Union__string_one__string_two__string_three__string_four": reflect.TypeOf(types.Union__string_one__string_two__string_three__string_four{}),
+}
+
+var streamTypeMap = map[string]reflect.Type{
+
+	"AnotherObject": reflect.TypeOf(stream_types.AnotherObject{}),
+
+	"BigNumbers": reflect.TypeOf(stream_types.BigNumbers{}),
+
+	"BinaryNode": reflect.TypeOf(stream_types.BinaryNode{}),
+
+	"Blah": reflect.TypeOf(stream_types.Blah{}),
+
+	"BlockConstraint": reflect.TypeOf(stream_types.BlockConstraint{}),
+
+	"BlockConstraintForParam": reflect.TypeOf(stream_types.BlockConstraintForParam{}),
+
+	"BookOrder": reflect.TypeOf(stream_types.BookOrder{}),
+
+	"ClassForNullLiteral": reflect.TypeOf(stream_types.ClassForNullLiteral{}),
+
+	"ClassOptionalOutput": reflect.TypeOf(stream_types.ClassOptionalOutput{}),
+
+	"ClassOptionalOutput2": reflect.TypeOf(stream_types.ClassOptionalOutput2{}),
+
+	"ClassToRecAlias": reflect.TypeOf(stream_types.ClassToRecAlias{}),
+
+	"ClassWithBlockDone": reflect.TypeOf(stream_types.ClassWithBlockDone{}),
+
+	"ClassWithImage": reflect.TypeOf(stream_types.ClassWithImage{}),
+
+	"ClassWithoutDone": reflect.TypeOf(stream_types.ClassWithoutDone{}),
+
+	"ClientDetails1559": reflect.TypeOf(stream_types.ClientDetails1559{}),
+
+	"ComplexMemoryObject": reflect.TypeOf(stream_types.ComplexMemoryObject{}),
+
+	"CompoundBigNumbers": reflect.TypeOf(stream_types.CompoundBigNumbers{}),
+
+	"ContactInfo": reflect.TypeOf(stream_types.ContactInfo{}),
+
+	"CustomStory": reflect.TypeOf(stream_types.CustomStory{}),
+
+	"CustomTaskResult": reflect.TypeOf(stream_types.CustomTaskResult{}),
+
+	"Document1559": reflect.TypeOf(stream_types.Document1559{}),
+
+	"DummyOutput": reflect.TypeOf(stream_types.DummyOutput{}),
+
+	"DynInputOutput": reflect.TypeOf(stream_types.DynInputOutput{}),
+
+	"DynamicClassOne": reflect.TypeOf(stream_types.DynamicClassOne{}),
+
+	"DynamicClassTwo": reflect.TypeOf(stream_types.DynamicClassTwo{}),
+
+	"DynamicOutput": reflect.TypeOf(stream_types.DynamicOutput{}),
+
+	"DynamicSchema": reflect.TypeOf(stream_types.DynamicSchema{}),
+
+	"Earthling": reflect.TypeOf(stream_types.Earthling{}),
+
+	"Education": reflect.TypeOf(stream_types.Education{}),
+
+	"Email": reflect.TypeOf(stream_types.Email{}),
+
+	"EmailAddress": reflect.TypeOf(stream_types.EmailAddress{}),
+
+	"Event": reflect.TypeOf(stream_types.Event{}),
+
+	"FakeImage": reflect.TypeOf(stream_types.FakeImage{}),
+
+	"FlightConfirmation": reflect.TypeOf(stream_types.FlightConfirmation{}),
+
+	"FooAny": reflect.TypeOf(stream_types.FooAny{}),
+
+	"Forest": reflect.TypeOf(stream_types.Forest{}),
+
+	"FormatterTest0": reflect.TypeOf(stream_types.FormatterTest0{}),
+
+	"FormatterTest1": reflect.TypeOf(stream_types.FormatterTest1{}),
+
+	"FormatterTest2": reflect.TypeOf(stream_types.FormatterTest2{}),
+
+	"FormatterTest3": reflect.TypeOf(stream_types.FormatterTest3{}),
+
+	"GroceryReceipt": reflect.TypeOf(stream_types.GroceryReceipt{}),
+
+	"Haiku": reflect.TypeOf(stream_types.Haiku{}),
+
+	"InnerClass": reflect.TypeOf(stream_types.InnerClass{}),
+
+	"InnerClass2": reflect.TypeOf(stream_types.InnerClass2{}),
+
+	"InputClass": reflect.TypeOf(stream_types.InputClass{}),
+
+	"InputClassNested": reflect.TypeOf(stream_types.InputClassNested{}),
+
+	"LinkedList": reflect.TypeOf(stream_types.LinkedList{}),
+
+	"LinkedListAliasNode": reflect.TypeOf(stream_types.LinkedListAliasNode{}),
+
+	"LiteralClassHello": reflect.TypeOf(stream_types.LiteralClassHello{}),
+
+	"LiteralClassOne": reflect.TypeOf(stream_types.LiteralClassOne{}),
+
+	"LiteralClassTwo": reflect.TypeOf(stream_types.LiteralClassTwo{}),
+
+	"MaintainFieldOrder": reflect.TypeOf(stream_types.MaintainFieldOrder{}),
+
+	"MalformedConstraints": reflect.TypeOf(stream_types.MalformedConstraints{}),
+
+	"MalformedConstraints2": reflect.TypeOf(stream_types.MalformedConstraints2{}),
+
+	"Martian": reflect.TypeOf(stream_types.Martian{}),
+
+	"MemoryObject": reflect.TypeOf(stream_types.MemoryObject{}),
+
+	"MergeAttrs": reflect.TypeOf(stream_types.MergeAttrs{}),
+
+	"NamedArgsSingleClass": reflect.TypeOf(stream_types.NamedArgsSingleClass{}),
+
+	"Nested": reflect.TypeOf(stream_types.Nested{}),
+
+	"Nested2": reflect.TypeOf(stream_types.Nested2{}),
+
+	"NestedBlockConstraint": reflect.TypeOf(stream_types.NestedBlockConstraint{}),
+
+	"NestedBlockConstraintForParam": reflect.TypeOf(stream_types.NestedBlockConstraintForParam{}),
+
+	"Node": reflect.TypeOf(stream_types.Node{}),
+
+	"NodeWithAliasIndirection": reflect.TypeOf(stream_types.NodeWithAliasIndirection{}),
+
+	"Note1599": reflect.TypeOf(stream_types.Note1599{}),
+
+	"OptionalListAndMap": reflect.TypeOf(stream_types.OptionalListAndMap{}),
+
+	"OptionalTest_Prop1": reflect.TypeOf(stream_types.OptionalTest_Prop1{}),
+
+	"OptionalTest_ReturnType": reflect.TypeOf(stream_types.OptionalTest_ReturnType{}),
+
+	"OrderInfo": reflect.TypeOf(stream_types.OrderInfo{}),
+
+	"OriginalA": reflect.TypeOf(stream_types.OriginalA{}),
+
+	"OriginalB": reflect.TypeOf(stream_types.OriginalB{}),
+
+	"Person": reflect.TypeOf(stream_types.Person{}),
+
+	"PhoneNumber": reflect.TypeOf(stream_types.PhoneNumber{}),
+
+	"Quantity": reflect.TypeOf(stream_types.Quantity{}),
+
+	"RaysData": reflect.TypeOf(stream_types.RaysData{}),
+
+	"ReceiptInfo": reflect.TypeOf(stream_types.ReceiptInfo{}),
+
+	"ReceiptItem": reflect.TypeOf(stream_types.ReceiptItem{}),
+
+	"Recipe": reflect.TypeOf(stream_types.Recipe{}),
+
+	"RecursiveAliasDependency": reflect.TypeOf(stream_types.RecursiveAliasDependency{}),
+
+	"Resume": reflect.TypeOf(stream_types.Resume{}),
+
+	"Schema": reflect.TypeOf(stream_types.Schema{}),
+
+	"SearchParams": reflect.TypeOf(stream_types.SearchParams{}),
+
+	"SemanticContainer": reflect.TypeOf(stream_types.SemanticContainer{}),
+
+	"SimpleTag": reflect.TypeOf(stream_types.SimpleTag{}),
+
+	"SmallThing": reflect.TypeOf(stream_types.SmallThing{}),
+
+	"SomeClassNestedDynamic": reflect.TypeOf(stream_types.SomeClassNestedDynamic{}),
+
+	"StringToClassEntry": reflect.TypeOf(stream_types.StringToClassEntry{}),
+
+	"TestClassAlias": reflect.TypeOf(stream_types.TestClassAlias{}),
+
+	"TestClassNested": reflect.TypeOf(stream_types.TestClassNested{}),
+
+	"TestClassWithEnum": reflect.TypeOf(stream_types.TestClassWithEnum{}),
+
+	"TestMemoryOutput": reflect.TypeOf(stream_types.TestMemoryOutput{}),
+
+	"TestOutputClass": reflect.TypeOf(stream_types.TestOutputClass{}),
+
+	"Tree": reflect.TypeOf(stream_types.Tree{}),
+
+	"TwoStoriesOneTitle": reflect.TypeOf(stream_types.TwoStoriesOneTitle{}),
+
+	"TwoStoriesOneTitleCheck": reflect.TypeOf(stream_types.TwoStoriesOneTitleCheck{}),
+
+	"UnionTest_ReturnType": reflect.TypeOf(stream_types.UnionTest_ReturnType{}),
+
+	"UniverseQuestion": reflect.TypeOf(stream_types.UniverseQuestion{}),
+
+	"UniverseQuestionInput": reflect.TypeOf(stream_types.UniverseQuestionInput{}),
+
+	"WithReasoning": reflect.TypeOf(stream_types.WithReasoning{}),
 }
 
 func Encode(object any) ([]byte, error) {

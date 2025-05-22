@@ -15,6 +15,8 @@ import (
 	"fmt"
 
 	"example.com/integ-tests/baml_client/types"
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
+	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
 )
 
 type StreamStateType string
@@ -80,22 +82,225 @@ type AnotherObject struct {
 	Thingy3 *string `json:"thingy3"`
 }
 
+func (c *AnotherObject) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "AnotherObject" {
+		panic(fmt.Sprintf("expected AnotherObject, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "id":
+				c.Id = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "thingy2":
+				c.Thingy2 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "thingy3":
+				c.Thingy3 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c AnotherObject) BamlTypeName() string {
+	return "AnotherObject"
+}
+
 type BigNumbers struct {
 	A *int64 `json:"a"`
 
 	B *float64 `json:"b"`
 }
 
+func (c *BigNumbers) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "BigNumbers" {
+		panic(fmt.Sprintf("expected BigNumbers, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "a":
+				c.A = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "b":
+				c.B = func() *float64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *float64 {
+						return baml.Decode(__holder).(*float64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c BigNumbers) BamlTypeName() string {
+	return "BigNumbers"
+}
+
 type BinaryNode struct {
 	Data *int64 `json:"data"`
 
-	Left *BinaryNode `json:"left"`
+	Left *types.BinaryNode `json:"left"`
 
-	Right *BinaryNode `json:"right"`
+	Right *types.BinaryNode `json:"right"`
+}
+
+func (c *BinaryNode) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "BinaryNode" {
+		panic(fmt.Sprintf("expected BinaryNode, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "data":
+				c.Data = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "left":
+				c.Left = func() *types.BinaryNode {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.BinaryNode {
+						return baml.Decode(__holder).(*types.BinaryNode)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "right":
+				c.Right = func() *types.BinaryNode {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.BinaryNode {
+						return baml.Decode(__holder).(*types.BinaryNode)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c BinaryNode) BamlTypeName() string {
+	return "BinaryNode"
 }
 
 type Blah struct {
 	Prop4 *string `json:"prop4"`
+}
+
+func (c *Blah) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Blah" {
+		panic(fmt.Sprintf("expected Blah, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "prop4":
+				c.Prop4 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Blah) BamlTypeName() string {
+	return "Blah"
 }
 
 type BlockConstraint struct {
@@ -104,10 +309,106 @@ type BlockConstraint struct {
 	Bar *string `json:"bar"`
 }
 
+func (c *BlockConstraint) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "BlockConstraint" {
+		panic(fmt.Sprintf("expected BlockConstraint, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "foo":
+				c.Foo = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "bar":
+				c.Bar = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c BlockConstraint) BamlTypeName() string {
+	return "BlockConstraint"
+}
+
 type BlockConstraintForParam struct {
 	Bcfp *int64 `json:"bcfp"`
 
 	Bcfp2 *string `json:"bcfp2"`
+}
+
+func (c *BlockConstraintForParam) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "BlockConstraintForParam" {
+		panic(fmt.Sprintf("expected BlockConstraintForParam, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "bcfp":
+				c.Bcfp = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "bcfp2":
+				c.Bcfp2 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c BlockConstraintForParam) BamlTypeName() string {
+	return "BlockConstraintForParam"
 }
 
 type BookOrder struct {
@@ -120,8 +421,115 @@ type BookOrder struct {
 	Price *float64 `json:"price"`
 }
 
+func (c *BookOrder) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "BookOrder" {
+		panic(fmt.Sprintf("expected BookOrder, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "orderId":
+				c.OrderId = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "title":
+				c.Title = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "quantity":
+				c.Quantity = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "price":
+				c.Price = func() *float64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *float64 {
+						return baml.Decode(__holder).(*float64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c BookOrder) BamlTypeName() string {
+	return "BookOrder"
+}
+
 type ClassForNullLiteral struct {
 	A *string `json:"a"`
+}
+
+func (c *ClassForNullLiteral) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClassForNullLiteral" {
+		panic(fmt.Sprintf("expected ClassForNullLiteral, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "a":
+				c.A = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c ClassForNullLiteral) BamlTypeName() string {
+	return "ClassForNullLiteral"
 }
 
 type ClassOptionalOutput struct {
@@ -130,16 +538,160 @@ type ClassOptionalOutput struct {
 	Prop2 *string `json:"prop2"`
 }
 
+func (c *ClassOptionalOutput) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClassOptionalOutput" {
+		panic(fmt.Sprintf("expected ClassOptionalOutput, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "prop1":
+				c.Prop1 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop2":
+				c.Prop2 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c ClassOptionalOutput) BamlTypeName() string {
+	return "ClassOptionalOutput"
+}
+
 type ClassOptionalOutput2 struct {
 	Prop1 *string `json:"prop1"`
 
 	Prop2 *string `json:"prop2"`
 
-	Prop3 *Blah `json:"prop3"`
+	Prop3 *types.Blah `json:"prop3"`
+}
+
+func (c *ClassOptionalOutput2) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClassOptionalOutput2" {
+		panic(fmt.Sprintf("expected ClassOptionalOutput2, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "prop1":
+				c.Prop1 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop2":
+				c.Prop2 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop3":
+				c.Prop3 = func() *types.Blah {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Blah {
+						return baml.Decode(__holder).(*types.Blah)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c ClassOptionalOutput2) BamlTypeName() string {
+	return "ClassOptionalOutput2"
 }
 
 type ClassToRecAlias struct {
-	List *LinkedListAliasNode `json:"list"`
+	List *types.LinkedListAliasNode `json:"list"`
+}
+
+func (c *ClassToRecAlias) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClassToRecAlias" {
+		panic(fmt.Sprintf("expected ClassToRecAlias, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "list":
+				c.List = func() *types.LinkedListAliasNode {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.LinkedListAliasNode {
+						return baml.Decode(__holder).(*types.LinkedListAliasNode)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c ClassToRecAlias) BamlTypeName() string {
+	return "ClassToRecAlias"
 }
 
 type ClassWithBlockDone struct {
@@ -148,18 +700,173 @@ type ClassWithBlockDone struct {
 	S_20_words *string `json:"s_20_words"`
 }
 
+func (c *ClassWithBlockDone) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClassWithBlockDone" {
+		panic(fmt.Sprintf("expected ClassWithBlockDone, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "i_16_digits":
+				c.I_16_digits = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "s_20_words":
+				c.S_20_words = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c ClassWithBlockDone) BamlTypeName() string {
+	return "ClassWithBlockDone"
+}
+
 type ClassWithImage struct {
 	MyImage *any `json:"myImage"`
 
 	Param2 *string `json:"param2"`
 
-	Fake_image *FakeImage `json:"fake_image"`
+	Fake_image *types.FakeImage `json:"fake_image"`
+}
+
+func (c *ClassWithImage) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClassWithImage" {
+		panic(fmt.Sprintf("expected ClassWithImage, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "myImage":
+				c.MyImage = func() *any {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *any {
+						return baml.Decode(__holder).(*any)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "param2":
+				c.Param2 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "fake_image":
+				c.Fake_image = func() *types.FakeImage {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.FakeImage {
+						return baml.Decode(__holder).(*types.FakeImage)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c ClassWithImage) BamlTypeName() string {
+	return "ClassWithImage"
 }
 
 type ClassWithoutDone struct {
 	I_16_digits *int64 `json:"i_16_digits"`
 
 	S_20_words StreamState[*string] `json:"s_20_words"`
+}
+
+func (c *ClassWithoutDone) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClassWithoutDone" {
+		panic(fmt.Sprintf("expected ClassWithoutDone, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "i_16_digits":
+				c.I_16_digits = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "s_20_words":
+				c.S_20_words = func() StreamState[*string] {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) StreamState[*string] {
+						return baml.Decode(__holder).(StreamState[*string])
+					})
+					if val != nil {
+						return *val
+					}
+					return StreamState[*string]{}
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c ClassWithoutDone) BamlTypeName() string {
+	return "ClassWithoutDone"
 }
 
 type ClientDetails1559 struct {
@@ -178,6 +885,109 @@ type ClientDetails1559 struct {
 	Client_email *string `json:"client_email"`
 }
 
+func (c *ClientDetails1559) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ClientDetails1559" {
+		panic(fmt.Sprintf("expected ClientDetails1559, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "client_name":
+				c.Client_name = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "client_address":
+				c.Client_address = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "client_postal_code":
+				c.Client_postal_code = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "client_city":
+				c.Client_city = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "client_country":
+				c.Client_country = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "client_phone":
+				c.Client_phone = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "client_email":
+				c.Client_email = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c ClientDetails1559) BamlTypeName() string {
+	return "ClientDetails1559"
+}
+
 type ComplexMemoryObject struct {
 	Id *string `json:"id"`
 
@@ -188,18 +998,195 @@ type ComplexMemoryObject struct {
 	Metadata []types.Union__string__int__float `json:"metadata"`
 }
 
+func (c *ComplexMemoryObject) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ComplexMemoryObject" {
+		panic(fmt.Sprintf("expected ComplexMemoryObject, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "id":
+				c.Id = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "name":
+				c.Name = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "description":
+				c.Description = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "metadata":
+				c.Metadata = func() []types.Union__string__int__float {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []types.Union__string__int__float {
+						return baml.Decode(__holder).([]types.Union__string__int__float)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c ComplexMemoryObject) BamlTypeName() string {
+	return "ComplexMemoryObject"
+}
+
 type CompoundBigNumbers struct {
-	Big *BigNumbers `json:"big"`
+	Big *types.BigNumbers `json:"big"`
 
-	Big_nums []BigNumbers `json:"big_nums"`
+	Big_nums []types.BigNumbers `json:"big_nums"`
 
-	Another *BigNumbers `json:"another"`
+	Another *types.BigNumbers `json:"another"`
+}
+
+func (c *CompoundBigNumbers) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "CompoundBigNumbers" {
+		panic(fmt.Sprintf("expected CompoundBigNumbers, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "big":
+				c.Big = func() *types.BigNumbers {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.BigNumbers {
+						return baml.Decode(__holder).(*types.BigNumbers)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "big_nums":
+				c.Big_nums = func() []types.BigNumbers {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []types.BigNumbers {
+						return baml.Decode(__holder).([]types.BigNumbers)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "another":
+				c.Another = func() *types.BigNumbers {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.BigNumbers {
+						return baml.Decode(__holder).(*types.BigNumbers)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c CompoundBigNumbers) BamlTypeName() string {
+	return "CompoundBigNumbers"
 }
 
 type ContactInfo struct {
 	Primary *types.Union__PhoneNumber__EmailAddress `json:"primary"`
 
 	Secondary *types.Union__PhoneNumber__EmailAddress `json:"secondary"`
+}
+
+func (c *ContactInfo) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ContactInfo" {
+		panic(fmt.Sprintf("expected ContactInfo, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "primary":
+				c.Primary = func() *types.Union__PhoneNumber__EmailAddress {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Union__PhoneNumber__EmailAddress {
+						return baml.Decode(__holder).(*types.Union__PhoneNumber__EmailAddress)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "secondary":
+				c.Secondary = func() *types.Union__PhoneNumber__EmailAddress {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Union__PhoneNumber__EmailAddress {
+						return baml.Decode(__holder).(*types.Union__PhoneNumber__EmailAddress)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c ContactInfo) BamlTypeName() string {
+	return "ContactInfo"
 }
 
 type CustomStory struct {
@@ -210,18 +1197,184 @@ type CustomStory struct {
 	Content *string `json:"content"`
 }
 
+func (c *CustomStory) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "CustomStory" {
+		panic(fmt.Sprintf("expected CustomStory, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "title":
+				c.Title = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "characters":
+				c.Characters = func() []string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []string {
+						return baml.Decode(__holder).([]string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "content":
+				c.Content = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c CustomStory) BamlTypeName() string {
+	return "CustomStory"
+}
+
 type CustomTaskResult struct {
-	BookOrder *BookOrder `json:"bookOrder"`
+	BookOrder *types.BookOrder `json:"bookOrder"`
 
-	FlightConfirmation *FlightConfirmation `json:"flightConfirmation"`
+	FlightConfirmation *types.FlightConfirmation `json:"flightConfirmation"`
 
-	GroceryReceipt *GroceryReceipt `json:"groceryReceipt"`
+	GroceryReceipt *types.GroceryReceipt `json:"groceryReceipt"`
+}
+
+func (c *CustomTaskResult) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "CustomTaskResult" {
+		panic(fmt.Sprintf("expected CustomTaskResult, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "bookOrder":
+				c.BookOrder = func() *types.BookOrder {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.BookOrder {
+						return baml.Decode(__holder).(*types.BookOrder)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "flightConfirmation":
+				c.FlightConfirmation = func() *types.FlightConfirmation {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.FlightConfirmation {
+						return baml.Decode(__holder).(*types.FlightConfirmation)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "groceryReceipt":
+				c.GroceryReceipt = func() *types.GroceryReceipt {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.GroceryReceipt {
+						return baml.Decode(__holder).(*types.GroceryReceipt)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c CustomTaskResult) BamlTypeName() string {
+	return "CustomTaskResult"
 }
 
 type Document1559 struct {
-	Client_details *ClientDetails1559 `json:"client_details"`
+	Client_details *types.ClientDetails1559 `json:"client_details"`
 
-	Notes []Note1599 `json:"notes"`
+	Notes []types.Note1599 `json:"notes"`
+}
+
+func (c *Document1559) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Document1559" {
+		panic(fmt.Sprintf("expected Document1559, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "client_details":
+				c.Client_details = func() *types.ClientDetails1559 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.ClientDetails1559 {
+						return baml.Decode(__holder).(*types.ClientDetails1559)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "notes":
+				c.Notes = func() []types.Note1599 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []types.Note1599 {
+						return baml.Decode(__holder).([]types.Note1599)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Document1559) BamlTypeName() string {
+	return "Document1559"
 }
 
 type DummyOutput struct {
@@ -232,36 +1385,316 @@ type DummyOutput struct {
 	DynamicProperties map[string]any `json:"__baml_dynamic_properties__"`
 }
 
+func (c *DummyOutput) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "DummyOutput" {
+		panic(fmt.Sprintf("expected DummyOutput, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "nonce":
+				c.Nonce = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "nonce2":
+				c.Nonce2 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+	for i := range holder.DynamicFieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.DynamicFields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			c.DynamicProperties[key] = baml.Decode(valueHolder)
+		}
+	}
+
+}
+
+func (c DummyOutput) BamlTypeName() string {
+	return "DummyOutput"
+}
+
 type DynInputOutput struct {
 	TestKey *string `json:"testKey"`
 
 	DynamicProperties map[string]any `json:"__baml_dynamic_properties__"`
 }
 
+func (c *DynInputOutput) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "DynInputOutput" {
+		panic(fmt.Sprintf("expected DynInputOutput, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "testKey":
+				c.TestKey = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+	for i := range holder.DynamicFieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.DynamicFields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			c.DynamicProperties[key] = baml.Decode(valueHolder)
+		}
+	}
+
+}
+
+func (c DynInputOutput) BamlTypeName() string {
+	return "DynInputOutput"
+}
+
 type DynamicClassOne struct {
 	DynamicProperties map[string]any `json:"__baml_dynamic_properties__"`
+}
+
+func (c *DynamicClassOne) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "DynamicClassOne" {
+		panic(fmt.Sprintf("expected DynamicClassOne, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.DynamicFieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.DynamicFields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			c.DynamicProperties[key] = baml.Decode(valueHolder)
+		}
+	}
+
+}
+
+func (c DynamicClassOne) BamlTypeName() string {
+	return "DynamicClassOne"
 }
 
 type DynamicClassTwo struct {
 	Hi *string `json:"hi"`
 
-	Some_class *SomeClassNestedDynamic `json:"some_class"`
+	Some_class *types.SomeClassNestedDynamic `json:"some_class"`
 
 	Status *types.DynEnumOne `json:"status"`
 
 	DynamicProperties map[string]any `json:"__baml_dynamic_properties__"`
 }
 
+func (c *DynamicClassTwo) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "DynamicClassTwo" {
+		panic(fmt.Sprintf("expected DynamicClassTwo, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "hi":
+				c.Hi = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "some_class":
+				c.Some_class = func() *types.SomeClassNestedDynamic {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.SomeClassNestedDynamic {
+						return baml.Decode(__holder).(*types.SomeClassNestedDynamic)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "status":
+				c.Status = func() *types.DynEnumOne {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.DynEnumOne {
+						return baml.Decode(__holder).(*types.DynEnumOne)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+	for i := range holder.DynamicFieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.DynamicFields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			c.DynamicProperties[key] = baml.Decode(valueHolder)
+		}
+	}
+
+}
+
+func (c DynamicClassTwo) BamlTypeName() string {
+	return "DynamicClassTwo"
+}
+
 type DynamicOutput struct {
 	DynamicProperties map[string]any `json:"__baml_dynamic_properties__"`
+}
+
+func (c *DynamicOutput) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "DynamicOutput" {
+		panic(fmt.Sprintf("expected DynamicOutput, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.DynamicFieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.DynamicFields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			c.DynamicProperties[key] = baml.Decode(valueHolder)
+		}
+	}
+
+}
+
+func (c DynamicOutput) BamlTypeName() string {
+	return "DynamicOutput"
 }
 
 type DynamicSchema struct {
 	DynamicProperties map[string]any `json:"__baml_dynamic_properties__"`
 }
 
+func (c *DynamicSchema) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "DynamicSchema" {
+		panic(fmt.Sprintf("expected DynamicSchema, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.DynamicFieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.DynamicFields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			c.DynamicProperties[key] = baml.Decode(valueHolder)
+		}
+	}
+
+}
+
+func (c DynamicSchema) BamlTypeName() string {
+	return "DynamicSchema"
+}
+
 type Earthling struct {
 	Age types.Checked[*int64] `json:"age"`
+}
+
+func (c *Earthling) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Earthling" {
+		panic(fmt.Sprintf("expected Earthling, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "age":
+				c.Age = func() types.Checked[*int64] {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Checked[*int64] {
+						return baml.Decode(__holder).(types.Checked[*int64])
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Earthling) BamlTypeName() string {
+	return "Earthling"
 }
 
 type Education struct {
@@ -276,6 +1709,87 @@ type Education struct {
 	Graduation_date *string `json:"graduation_date"`
 }
 
+func (c *Education) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Education" {
+		panic(fmt.Sprintf("expected Education, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "institution":
+				c.Institution = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "location":
+				c.Location = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "degree":
+				c.Degree = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "major":
+				c.Major = func() []string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []string {
+						return baml.Decode(__holder).([]string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "graduation_date":
+				c.Graduation_date = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Education) BamlTypeName() string {
+	return "Education"
+}
+
 type Email struct {
 	Subject *string `json:"subject"`
 
@@ -284,8 +1798,104 @@ type Email struct {
 	From_address *string `json:"from_address"`
 }
 
+func (c *Email) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Email" {
+		panic(fmt.Sprintf("expected Email, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "subject":
+				c.Subject = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "body":
+				c.Body = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "from_address":
+				c.From_address = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Email) BamlTypeName() string {
+	return "Email"
+}
+
 type EmailAddress struct {
 	Value *string `json:"value"`
+}
+
+func (c *EmailAddress) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "EmailAddress" {
+		panic(fmt.Sprintf("expected EmailAddress, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "value":
+				c.Value = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c EmailAddress) BamlTypeName() string {
+	return "EmailAddress"
 }
 
 type Event struct {
@@ -298,8 +1908,115 @@ type Event struct {
 	Description *string `json:"description"`
 }
 
+func (c *Event) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Event" {
+		panic(fmt.Sprintf("expected Event, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "title":
+				c.Title = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "date":
+				c.Date = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "location":
+				c.Location = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "description":
+				c.Description = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Event) BamlTypeName() string {
+	return "Event"
+}
+
 type FakeImage struct {
 	Url *string `json:"url"`
+}
+
+func (c *FakeImage) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "FakeImage" {
+		panic(fmt.Sprintf("expected FakeImage, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "url":
+				c.Url = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c FakeImage) BamlTypeName() string {
+	return "FakeImage"
 }
 
 type FlightConfirmation struct {
@@ -314,6 +2031,87 @@ type FlightConfirmation struct {
 	SeatNumber *string `json:"seatNumber"`
 }
 
+func (c *FlightConfirmation) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "FlightConfirmation" {
+		panic(fmt.Sprintf("expected FlightConfirmation, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "confirmationNumber":
+				c.ConfirmationNumber = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "flightNumber":
+				c.FlightNumber = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "departureTime":
+				c.DepartureTime = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "arrivalTime":
+				c.ArrivalTime = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "seatNumber":
+				c.SeatNumber = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c FlightConfirmation) BamlTypeName() string {
+	return "FlightConfirmation"
+}
+
 type FooAny struct {
 	Planetary_age *types.Union__Martian__Earthling `json:"planetary_age"`
 
@@ -322,8 +2120,104 @@ type FooAny struct {
 	Species types.Checked[*string] `json:"species"`
 }
 
+func (c *FooAny) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "FooAny" {
+		panic(fmt.Sprintf("expected FooAny, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "planetary_age":
+				c.Planetary_age = func() *types.Union__Martian__Earthling {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Union__Martian__Earthling {
+						return baml.Decode(__holder).(*types.Union__Martian__Earthling)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "certainty":
+				c.Certainty = func() types.Checked[*int64] {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Checked[*int64] {
+						return baml.Decode(__holder).(types.Checked[*int64])
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "species":
+				c.Species = func() types.Checked[*string] {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Checked[*string] {
+						return baml.Decode(__holder).(types.Checked[*string])
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c FooAny) BamlTypeName() string {
+	return "FooAny"
+}
+
 type Forest struct {
-	Trees []Tree `json:"trees"`
+	Trees []types.Tree `json:"trees"`
+}
+
+func (c *Forest) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Forest" {
+		panic(fmt.Sprintf("expected Forest, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "trees":
+				c.Trees = func() []types.Tree {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []types.Tree {
+						return baml.Decode(__holder).([]types.Tree)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Forest) BamlTypeName() string {
+	return "Forest"
 }
 
 type FormatterTest0 struct {
@@ -332,10 +2226,106 @@ type FormatterTest0 struct {
 	Ipsum *string `json:"ipsum"`
 }
 
+func (c *FormatterTest0) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "FormatterTest0" {
+		panic(fmt.Sprintf("expected FormatterTest0, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "lorem":
+				c.Lorem = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "ipsum":
+				c.Ipsum = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c FormatterTest0) BamlTypeName() string {
+	return "FormatterTest0"
+}
+
 type FormatterTest1 struct {
 	Lorem *string `json:"lorem"`
 
 	Ipsum *string `json:"ipsum"`
+}
+
+func (c *FormatterTest1) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "FormatterTest1" {
+		panic(fmt.Sprintf("expected FormatterTest1, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "lorem":
+				c.Lorem = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "ipsum":
+				c.Ipsum = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c FormatterTest1) BamlTypeName() string {
+	return "FormatterTest1"
 }
 
 type FormatterTest2 struct {
@@ -344,10 +2334,106 @@ type FormatterTest2 struct {
 	Ipsum *string `json:"ipsum"`
 }
 
+func (c *FormatterTest2) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "FormatterTest2" {
+		panic(fmt.Sprintf("expected FormatterTest2, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "lorem":
+				c.Lorem = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "ipsum":
+				c.Ipsum = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c FormatterTest2) BamlTypeName() string {
+	return "FormatterTest2"
+}
+
 type FormatterTest3 struct {
 	Lorem *string `json:"lorem"`
 
 	Ipsum *string `json:"ipsum"`
+}
+
+func (c *FormatterTest3) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "FormatterTest3" {
+		panic(fmt.Sprintf("expected FormatterTest3, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "lorem":
+				c.Lorem = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "ipsum":
+				c.Ipsum = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c FormatterTest3) BamlTypeName() string {
+	return "FormatterTest3"
 }
 
 type GroceryReceipt struct {
@@ -360,6 +2446,76 @@ type GroceryReceipt struct {
 	TotalAmount *float64 `json:"totalAmount"`
 }
 
+func (c *GroceryReceipt) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "GroceryReceipt" {
+		panic(fmt.Sprintf("expected GroceryReceipt, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "receiptId":
+				c.ReceiptId = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "storeName":
+				c.StoreName = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "items":
+				c.Items = func() []types.Union__string__int__float {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []types.Union__string__int__float {
+						return baml.Decode(__holder).([]types.Union__string__int__float)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "totalAmount":
+				c.TotalAmount = func() *float64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *float64 {
+						return baml.Decode(__holder).(*float64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c GroceryReceipt) BamlTypeName() string {
+	return "GroceryReceipt"
+}
+
 type Haiku struct {
 	Line1 *string `json:"line1"`
 
@@ -368,12 +2524,130 @@ type Haiku struct {
 	Line3 *string `json:"line3"`
 }
 
+func (c *Haiku) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Haiku" {
+		panic(fmt.Sprintf("expected Haiku, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "line1":
+				c.Line1 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "line2":
+				c.Line2 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "line3":
+				c.Line3 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Haiku) BamlTypeName() string {
+	return "Haiku"
+}
+
 type InnerClass struct {
 	Prop1 *string `json:"prop1"`
 
 	Prop2 *string `json:"prop2"`
 
-	Inner *InnerClass2 `json:"inner"`
+	Inner *types.InnerClass2 `json:"inner"`
+}
+
+func (c *InnerClass) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "InnerClass" {
+		panic(fmt.Sprintf("expected InnerClass, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "prop1":
+				c.Prop1 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop2":
+				c.Prop2 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "inner":
+				c.Inner = func() *types.InnerClass2 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.InnerClass2 {
+						return baml.Decode(__holder).(*types.InnerClass2)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c InnerClass) BamlTypeName() string {
+	return "InnerClass"
 }
 
 type InnerClass2 struct {
@@ -382,40 +2656,391 @@ type InnerClass2 struct {
 	Prop3 *float64 `json:"prop3"`
 }
 
+func (c *InnerClass2) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "InnerClass2" {
+		panic(fmt.Sprintf("expected InnerClass2, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "prop2":
+				c.Prop2 = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop3":
+				c.Prop3 = func() *float64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *float64 {
+						return baml.Decode(__holder).(*float64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c InnerClass2) BamlTypeName() string {
+	return "InnerClass2"
+}
+
 type InputClass struct {
 	Key *string `json:"key"`
 
 	Key2 *string `json:"key2"`
 }
 
+func (c *InputClass) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "InputClass" {
+		panic(fmt.Sprintf("expected InputClass, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "key":
+				c.Key = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "key2":
+				c.Key2 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c InputClass) BamlTypeName() string {
+	return "InputClass"
+}
+
 type InputClassNested struct {
 	Key *string `json:"key"`
 
-	Nested *InputClass `json:"nested"`
+	Nested *types.InputClass `json:"nested"`
+}
+
+func (c *InputClassNested) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "InputClassNested" {
+		panic(fmt.Sprintf("expected InputClassNested, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "key":
+				c.Key = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "nested":
+				c.Nested = func() *types.InputClass {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.InputClass {
+						return baml.Decode(__holder).(*types.InputClass)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c InputClassNested) BamlTypeName() string {
+	return "InputClassNested"
 }
 
 type LinkedList struct {
-	Head *Node `json:"head"`
+	Head *types.Node `json:"head"`
 
 	Len *int64 `json:"len"`
+}
+
+func (c *LinkedList) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "LinkedList" {
+		panic(fmt.Sprintf("expected LinkedList, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "head":
+				c.Head = func() *types.Node {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Node {
+						return baml.Decode(__holder).(*types.Node)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "len":
+				c.Len = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c LinkedList) BamlTypeName() string {
+	return "LinkedList"
 }
 
 type LinkedListAliasNode struct {
 	Value *int64 `json:"value"`
 
-	Next *LinkedListAliasNode `json:"next"`
+	Next *types.LinkedListAliasNode `json:"next"`
+}
+
+func (c *LinkedListAliasNode) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "LinkedListAliasNode" {
+		panic(fmt.Sprintf("expected LinkedListAliasNode, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "value":
+				c.Value = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "next":
+				c.Next = func() *types.LinkedListAliasNode {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.LinkedListAliasNode {
+						return baml.Decode(__holder).(*types.LinkedListAliasNode)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c LinkedListAliasNode) BamlTypeName() string {
+	return "LinkedListAliasNode"
 }
 
 type LiteralClassHello struct {
 	Prop *string `json:"prop"`
 }
 
+func (c *LiteralClassHello) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "LiteralClassHello" {
+		panic(fmt.Sprintf("expected LiteralClassHello, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "prop":
+				c.Prop = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c LiteralClassHello) BamlTypeName() string {
+	return "LiteralClassHello"
+}
+
 type LiteralClassOne struct {
 	Prop *string `json:"prop"`
 }
 
+func (c *LiteralClassOne) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "LiteralClassOne" {
+		panic(fmt.Sprintf("expected LiteralClassOne, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "prop":
+				c.Prop = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c LiteralClassOne) BamlTypeName() string {
+	return "LiteralClassOne"
+}
+
 type LiteralClassTwo struct {
 	Prop *string `json:"prop"`
+}
+
+func (c *LiteralClassTwo) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "LiteralClassTwo" {
+		panic(fmt.Sprintf("expected LiteralClassTwo, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "prop":
+				c.Prop = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c LiteralClassTwo) BamlTypeName() string {
+	return "LiteralClassTwo"
 }
 
 type MaintainFieldOrder struct {
@@ -426,12 +3051,145 @@ type MaintainFieldOrder struct {
 	C *string `json:"c"`
 }
 
+func (c *MaintainFieldOrder) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "MaintainFieldOrder" {
+		panic(fmt.Sprintf("expected MaintainFieldOrder, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "a":
+				c.A = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "b":
+				c.B = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "c":
+				c.C = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c MaintainFieldOrder) BamlTypeName() string {
+	return "MaintainFieldOrder"
+}
+
 type MalformedConstraints struct {
 	Foo types.Checked[*int64] `json:"foo"`
 }
 
+func (c *MalformedConstraints) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "MalformedConstraints" {
+		panic(fmt.Sprintf("expected MalformedConstraints, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "foo":
+				c.Foo = func() types.Checked[*int64] {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Checked[*int64] {
+						return baml.Decode(__holder).(types.Checked[*int64])
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c MalformedConstraints) BamlTypeName() string {
+	return "MalformedConstraints"
+}
+
 type MalformedConstraints2 struct {
 	Foo *int64 `json:"foo"`
+}
+
+func (c *MalformedConstraints2) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "MalformedConstraints2" {
+		panic(fmt.Sprintf("expected MalformedConstraints2, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "foo":
+				c.Foo = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c MalformedConstraints2) BamlTypeName() string {
+	return "MalformedConstraints2"
 }
 
 // A Martian organism with an age.
@@ -442,6 +3200,43 @@ type Martian struct {
 	Age types.Checked[*int64] `json:"age"`
 }
 
+func (c *Martian) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Martian" {
+		panic(fmt.Sprintf("expected Martian, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "age":
+				c.Age = func() types.Checked[*int64] {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Checked[*int64] {
+						return baml.Decode(__holder).(types.Checked[*int64])
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Martian) BamlTypeName() string {
+	return "Martian"
+}
+
 type MemoryObject struct {
 	Id *string `json:"id"`
 
@@ -450,8 +3245,104 @@ type MemoryObject struct {
 	Description *string `json:"description"`
 }
 
+func (c *MemoryObject) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "MemoryObject" {
+		panic(fmt.Sprintf("expected MemoryObject, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "id":
+				c.Id = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "name":
+				c.Name = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "description":
+				c.Description = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c MemoryObject) BamlTypeName() string {
+	return "MemoryObject"
+}
+
 type MergeAttrs struct {
 	Amount types.Checked[*int64] `json:"amount"`
+}
+
+func (c *MergeAttrs) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "MergeAttrs" {
+		panic(fmt.Sprintf("expected MergeAttrs, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "amount":
+				c.Amount = func() types.Checked[*int64] {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Checked[*int64] {
+						return baml.Decode(__holder).(types.Checked[*int64])
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c MergeAttrs) BamlTypeName() string {
+	return "MergeAttrs"
 }
 
 type NamedArgsSingleClass struct {
@@ -462,12 +3353,130 @@ type NamedArgsSingleClass struct {
 	Key_three *int64 `json:"key_three"`
 }
 
+func (c *NamedArgsSingleClass) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "NamedArgsSingleClass" {
+		panic(fmt.Sprintf("expected NamedArgsSingleClass, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "key":
+				c.Key = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "key_two":
+				c.Key_two = func() *bool {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *bool {
+						return baml.Decode(__holder).(*bool)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "key_three":
+				c.Key_three = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c NamedArgsSingleClass) BamlTypeName() string {
+	return "NamedArgsSingleClass"
+}
+
 type Nested struct {
 	Prop3 *string `json:"prop3"`
 
 	Prop4 *string `json:"prop4"`
 
-	Prop20 *Nested2 `json:"prop20"`
+	Prop20 *types.Nested2 `json:"prop20"`
+}
+
+func (c *Nested) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Nested" {
+		panic(fmt.Sprintf("expected Nested, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "prop3":
+				c.Prop3 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop4":
+				c.Prop4 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop20":
+				c.Prop20 = func() *types.Nested2 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Nested2 {
+						return baml.Decode(__holder).(*types.Nested2)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Nested) BamlTypeName() string {
+	return "Nested"
 }
 
 type Nested2 struct {
@@ -476,24 +3485,242 @@ type Nested2 struct {
 	Prop12 *string `json:"prop12"`
 }
 
+func (c *Nested2) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Nested2" {
+		panic(fmt.Sprintf("expected Nested2, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "prop11":
+				c.Prop11 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop12":
+				c.Prop12 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Nested2) BamlTypeName() string {
+	return "Nested2"
+}
+
 type NestedBlockConstraint struct {
-	Nbc types.Checked[*BlockConstraint] `json:"nbc"`
+	Nbc types.Checked[*types.BlockConstraint] `json:"nbc"`
+}
+
+func (c *NestedBlockConstraint) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "NestedBlockConstraint" {
+		panic(fmt.Sprintf("expected NestedBlockConstraint, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "nbc":
+				c.Nbc = func() types.Checked[*types.BlockConstraint] {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Checked[*types.BlockConstraint] {
+						return baml.Decode(__holder).(types.Checked[*types.BlockConstraint])
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c NestedBlockConstraint) BamlTypeName() string {
+	return "NestedBlockConstraint"
 }
 
 type NestedBlockConstraintForParam struct {
-	Nbcfp *BlockConstraintForParam `json:"nbcfp"`
+	Nbcfp *types.BlockConstraintForParam `json:"nbcfp"`
+}
+
+func (c *NestedBlockConstraintForParam) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "NestedBlockConstraintForParam" {
+		panic(fmt.Sprintf("expected NestedBlockConstraintForParam, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "nbcfp":
+				c.Nbcfp = func() *types.BlockConstraintForParam {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.BlockConstraintForParam {
+						return baml.Decode(__holder).(*types.BlockConstraintForParam)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c NestedBlockConstraintForParam) BamlTypeName() string {
+	return "NestedBlockConstraintForParam"
 }
 
 type Node struct {
 	Data *int64 `json:"data"`
 
-	Next *Node `json:"next"`
+	Next *types.Node `json:"next"`
+}
+
+func (c *Node) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Node" {
+		panic(fmt.Sprintf("expected Node, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "data":
+				c.Data = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "next":
+				c.Next = func() *types.Node {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Node {
+						return baml.Decode(__holder).(*types.Node)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Node) BamlTypeName() string {
+	return "Node"
 }
 
 type NodeWithAliasIndirection struct {
 	Value *int64 `json:"value"`
 
-	Next *NodeWithAliasIndirection `json:"next"`
+	Next *types.NodeWithAliasIndirection `json:"next"`
+}
+
+func (c *NodeWithAliasIndirection) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "NodeWithAliasIndirection" {
+		panic(fmt.Sprintf("expected NodeWithAliasIndirection, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "value":
+				c.Value = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "next":
+				c.Next = func() *types.NodeWithAliasIndirection {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.NodeWithAliasIndirection {
+						return baml.Decode(__holder).(*types.NodeWithAliasIndirection)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c NodeWithAliasIndirection) BamlTypeName() string {
+	return "NodeWithAliasIndirection"
 }
 
 type Note1599 struct {
@@ -504,10 +3731,117 @@ type Note1599 struct {
 	Note_amount *string `json:"note_amount"`
 }
 
+func (c *Note1599) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Note1599" {
+		panic(fmt.Sprintf("expected Note1599, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "note_title":
+				c.Note_title = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "note_description":
+				c.Note_description = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "note_amount":
+				c.Note_amount = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Note1599) BamlTypeName() string {
+	return "Note1599"
+}
+
 type OptionalListAndMap struct {
 	P *[]string `json:"p"`
 
-	Q *map[string]*string `json:"q"`
+	Q *map[*string]*string `json:"q"`
+}
+
+func (c *OptionalListAndMap) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "OptionalListAndMap" {
+		panic(fmt.Sprintf("expected OptionalListAndMap, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "p":
+				c.P = func() *[]string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *[]string {
+						return baml.Decode(__holder).(*[]string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "q":
+				c.Q = func() *map[*string]*string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *map[*string]*string {
+						return baml.Decode(__holder).(*map[*string]*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c OptionalListAndMap) BamlTypeName() string {
+	return "OptionalListAndMap"
 }
 
 type OptionalTest_Prop1 struct {
@@ -516,12 +3850,119 @@ type OptionalTest_Prop1 struct {
 	Omega_b *int64 `json:"omega_b"`
 }
 
+func (c *OptionalTest_Prop1) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "OptionalTest_Prop1" {
+		panic(fmt.Sprintf("expected OptionalTest_Prop1, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "omega_a":
+				c.Omega_a = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "omega_b":
+				c.Omega_b = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c OptionalTest_Prop1) BamlTypeName() string {
+	return "OptionalTest_Prop1"
+}
+
 type OptionalTest_ReturnType struct {
-	Omega_1 *OptionalTest_Prop1 `json:"omega_1"`
+	Omega_1 *types.OptionalTest_Prop1 `json:"omega_1"`
 
 	Omega_2 *string `json:"omega_2"`
 
 	Omega_3 []*types.OptionalTest_CategoryType `json:"omega_3"`
+}
+
+func (c *OptionalTest_ReturnType) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "OptionalTest_ReturnType" {
+		panic(fmt.Sprintf("expected OptionalTest_ReturnType, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "omega_1":
+				c.Omega_1 = func() *types.OptionalTest_Prop1 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.OptionalTest_Prop1 {
+						return baml.Decode(__holder).(*types.OptionalTest_Prop1)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "omega_2":
+				c.Omega_2 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "omega_3":
+				c.Omega_3 = func() []*types.OptionalTest_CategoryType {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []*types.OptionalTest_CategoryType {
+						return baml.Decode(__holder).([]*types.OptionalTest_CategoryType)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c OptionalTest_ReturnType) BamlTypeName() string {
+	return "OptionalTest_ReturnType"
 }
 
 type OrderInfo struct {
@@ -532,14 +3973,156 @@ type OrderInfo struct {
 	Estimated_arrival_date *string `json:"estimated_arrival_date"`
 }
 
+func (c *OrderInfo) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "OrderInfo" {
+		panic(fmt.Sprintf("expected OrderInfo, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "order_status":
+				c.Order_status = func() *types.OrderStatus {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.OrderStatus {
+						return baml.Decode(__holder).(*types.OrderStatus)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "tracking_number":
+				c.Tracking_number = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "estimated_arrival_date":
+				c.Estimated_arrival_date = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c OrderInfo) BamlTypeName() string {
+	return "OrderInfo"
+}
+
 type OriginalA struct {
 	Value *int64 `json:"value"`
+}
+
+func (c *OriginalA) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "OriginalA" {
+		panic(fmt.Sprintf("expected OriginalA, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "value":
+				c.Value = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c OriginalA) BamlTypeName() string {
+	return "OriginalA"
 }
 
 type OriginalB struct {
 	Value *int64 `json:"value"`
 
 	DynamicProperties map[string]any `json:"__baml_dynamic_properties__"`
+}
+
+func (c *OriginalB) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "OriginalB" {
+		panic(fmt.Sprintf("expected OriginalB, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "value":
+				c.Value = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+	for i := range holder.DynamicFieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.DynamicFields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			c.DynamicProperties[key] = baml.Decode(valueHolder)
+		}
+	}
+
+}
+
+func (c OriginalB) BamlTypeName() string {
+	return "OriginalB"
 }
 
 type Person struct {
@@ -550,14 +4133,148 @@ type Person struct {
 	DynamicProperties map[string]any `json:"__baml_dynamic_properties__"`
 }
 
+func (c *Person) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Person" {
+		panic(fmt.Sprintf("expected Person, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "name":
+				c.Name = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "hair_color":
+				c.Hair_color = func() *types.Color {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Color {
+						return baml.Decode(__holder).(*types.Color)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+	for i := range holder.DynamicFieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.DynamicFields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			c.DynamicProperties[key] = baml.Decode(valueHolder)
+		}
+	}
+
+}
+
+func (c Person) BamlTypeName() string {
+	return "Person"
+}
+
 type PhoneNumber struct {
 	Value *string `json:"value"`
 }
 
+func (c *PhoneNumber) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "PhoneNumber" {
+		panic(fmt.Sprintf("expected PhoneNumber, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "value":
+				c.Value = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c PhoneNumber) BamlTypeName() string {
+	return "PhoneNumber"
+}
+
 type Quantity struct {
-	Amount *types.Union__int__float `json:"amount"`
+	Amount float64 `json:"amount"`
 
 	Unit *string `json:"unit"`
+}
+
+func (c *Quantity) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Quantity" {
+		panic(fmt.Sprintf("expected Quantity, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "amount":
+				c.Amount = *baml.Decode(valueHolder).(*float64)
+
+			case "unit":
+				c.Unit = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Quantity) BamlTypeName() string {
+	return "Quantity"
 }
 
 type RaysData struct {
@@ -566,12 +4283,119 @@ type RaysData struct {
 	Value *types.Union__Resume__Event `json:"value"`
 }
 
+func (c *RaysData) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "RaysData" {
+		panic(fmt.Sprintf("expected RaysData, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "dataType":
+				c.DataType = func() *types.DataType {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.DataType {
+						return baml.Decode(__holder).(*types.DataType)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "value":
+				c.Value = func() *types.Union__Resume__Event {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Union__Resume__Event {
+						return baml.Decode(__holder).(*types.Union__Resume__Event)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c RaysData) BamlTypeName() string {
+	return "RaysData"
+}
+
 type ReceiptInfo struct {
-	Items []ReceiptItem `json:"items"`
+	Items []types.ReceiptItem `json:"items"`
 
 	Total_cost *float64 `json:"total_cost"`
 
 	Venue *types.Union__string_barisa__string_ox_burger `json:"venue"`
+}
+
+func (c *ReceiptInfo) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ReceiptInfo" {
+		panic(fmt.Sprintf("expected ReceiptInfo, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "items":
+				c.Items = func() []types.ReceiptItem {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []types.ReceiptItem {
+						return baml.Decode(__holder).([]types.ReceiptItem)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "total_cost":
+				c.Total_cost = func() *float64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *float64 {
+						return baml.Decode(__holder).(*float64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "venue":
+				c.Venue = func() *types.Union__string_barisa__string_ox_burger {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Union__string_barisa__string_ox_burger {
+						return baml.Decode(__holder).(*types.Union__string_barisa__string_ox_burger)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c ReceiptInfo) BamlTypeName() string {
+	return "ReceiptInfo"
 }
 
 type ReceiptItem struct {
@@ -584,14 +4408,169 @@ type ReceiptItem struct {
 	Price *float64 `json:"price"`
 }
 
-type Recipe struct {
-	Ingredients map[string]*Quantity `json:"ingredients"`
+func (c *ReceiptItem) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "ReceiptItem" {
+		panic(fmt.Sprintf("expected ReceiptItem, got %s", string(typeName.Name())))
+	}
 
-	Recipe_type *types.Union__string_breakfast__string_dinner `json:"recipe_type"`
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "name":
+				c.Name = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "description":
+				c.Description = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "quantity":
+				c.Quantity = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "price":
+				c.Price = func() *float64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *float64 {
+						return baml.Decode(__holder).(*float64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c ReceiptItem) BamlTypeName() string {
+	return "ReceiptItem"
+}
+
+type Recipe struct {
+	Recipe_type *types.Union__string_breakfast__string_dinner__string_other `json:"recipe_type"`
+
+	Ingredients []string `json:"ingredients"`
+}
+
+func (c *Recipe) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Recipe" {
+		panic(fmt.Sprintf("expected Recipe, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "recipe_type":
+				c.Recipe_type = func() *types.Union__string_breakfast__string_dinner__string_other {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Union__string_breakfast__string_dinner__string_other {
+						return baml.Decode(__holder).(*types.Union__string_breakfast__string_dinner__string_other)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "ingredients":
+				c.Ingredients = func() []string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []string {
+						return baml.Decode(__holder).([]string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Recipe) BamlTypeName() string {
+	return "Recipe"
 }
 
 type RecursiveAliasDependency struct {
 	Value *types.JsonValue `json:"value"`
+}
+
+func (c *RecursiveAliasDependency) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "RecursiveAliasDependency" {
+		panic(fmt.Sprintf("expected RecursiveAliasDependency, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "value":
+				c.Value = func() *types.JsonValue {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.JsonValue {
+						return baml.Decode(__holder).(*types.JsonValue)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c RecursiveAliasDependency) BamlTypeName() string {
+	return "RecursiveAliasDependency"
 }
 
 type Resume struct {
@@ -603,9 +4582,101 @@ type Resume struct {
 
 	Experience []string `json:"experience"`
 
-	Education []Education `json:"education"`
+	Education []types.Education `json:"education"`
 
 	Skills []string `json:"skills"`
+}
+
+func (c *Resume) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Resume" {
+		panic(fmt.Sprintf("expected Resume, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "name":
+				c.Name = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "email":
+				c.Email = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "phone":
+				c.Phone = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "experience":
+				c.Experience = func() []string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []string {
+						return baml.Decode(__holder).([]string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "education":
+				c.Education = func() []types.Education {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []types.Education {
+						return baml.Decode(__holder).([]types.Education)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "skills":
+				c.Skills = func() []string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []string {
+						return baml.Decode(__holder).([]string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Resume) BamlTypeName() string {
+	return "Resume"
 }
 
 type Schema struct {
@@ -624,18 +4695,213 @@ type Schema struct {
 	Other_group *types.Union__string__int `json:"other_group"`
 }
 
+func (c *Schema) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Schema" {
+		panic(fmt.Sprintf("expected Schema, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "prop1":
+				c.Prop1 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop2":
+				c.Prop2 = func() *types.Union__Nested__string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Union__Nested__string {
+						return baml.Decode(__holder).(*types.Union__Nested__string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop5":
+				c.Prop5 = func() []*string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []*string {
+						return baml.Decode(__holder).([]*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop6":
+				c.Prop6 = func() *types.Union__string__List__Nested {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Union__string__List__Nested {
+						return baml.Decode(__holder).(*types.Union__string__List__Nested)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "nested_attrs":
+				c.Nested_attrs = func() []*types.Union__string__Nested {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []*types.Union__string__Nested {
+						return baml.Decode(__holder).([]*types.Union__string__Nested)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "parens":
+				c.Parens = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "other_group":
+				c.Other_group = func() *types.Union__string__int {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Union__string__int {
+						return baml.Decode(__holder).(*types.Union__string__int)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Schema) BamlTypeName() string {
+	return "Schema"
+}
+
 type SearchParams struct {
 	DateRange *int64 `json:"dateRange"`
 
 	Location []string `json:"location"`
 
-	JobTitle *WithReasoning `json:"jobTitle"`
+	JobTitle *types.WithReasoning `json:"jobTitle"`
 
-	Company *WithReasoning `json:"company"`
+	Company *types.WithReasoning `json:"company"`
 
-	Description []WithReasoning `json:"description"`
+	Description []types.WithReasoning `json:"description"`
 
 	Tags []types.Union__Tag__string `json:"tags"`
+}
+
+func (c *SearchParams) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "SearchParams" {
+		panic(fmt.Sprintf("expected SearchParams, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "dateRange":
+				c.DateRange = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "location":
+				c.Location = func() []string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []string {
+						return baml.Decode(__holder).([]string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "jobTitle":
+				c.JobTitle = func() *types.WithReasoning {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.WithReasoning {
+						return baml.Decode(__holder).(*types.WithReasoning)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "company":
+				c.Company = func() *types.WithReasoning {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.WithReasoning {
+						return baml.Decode(__holder).(*types.WithReasoning)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "description":
+				c.Description = func() []types.WithReasoning {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []types.WithReasoning {
+						return baml.Decode(__holder).([]types.WithReasoning)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "tags":
+				c.Tags = func() []types.Union__Tag__string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []types.Union__Tag__string {
+						return baml.Decode(__holder).([]types.Union__Tag__string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c SearchParams) BamlTypeName() string {
+	return "SearchParams"
 }
 
 type SemanticContainer struct {
@@ -643,21 +4909,156 @@ type SemanticContainer struct {
 
 	String_with_twenty_words *string `json:"string_with_twenty_words"`
 
-	Class_1 *ClassWithoutDone `json:"class_1"`
+	Class_1 *types.ClassWithoutDone `json:"class_1"`
 
 	Class_2 *types.ClassWithBlockDone `json:"class_2"`
 
 	Class_done_needed types.ClassWithBlockDone `json:"class_done_needed"`
 
-	Class_needed ClassWithoutDone `json:"class_needed"`
+	Class_needed types.ClassWithoutDone `json:"class_needed"`
 
-	Three_small_things []SmallThing `json:"three_small_things"`
+	Three_small_things []types.SmallThing `json:"three_small_things"`
 
 	Final_string *string `json:"final_string"`
 }
 
+func (c *SemanticContainer) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "SemanticContainer" {
+		panic(fmt.Sprintf("expected SemanticContainer, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "sixteen_digit_number":
+				c.Sixteen_digit_number = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "string_with_twenty_words":
+				c.String_with_twenty_words = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "class_1":
+				c.Class_1 = func() *types.ClassWithoutDone {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.ClassWithoutDone {
+						return baml.Decode(__holder).(*types.ClassWithoutDone)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "class_2":
+				c.Class_2 = func() *types.ClassWithBlockDone {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.ClassWithBlockDone {
+						return baml.Decode(__holder).(*types.ClassWithBlockDone)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "class_done_needed":
+				c.Class_done_needed = *baml.Decode(valueHolder).(*types.ClassWithBlockDone)
+
+			case "class_needed":
+				c.Class_needed = *baml.Decode(valueHolder).(*types.ClassWithoutDone)
+
+			case "three_small_things":
+				c.Three_small_things = func() []types.SmallThing {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []types.SmallThing {
+						return baml.Decode(__holder).([]types.SmallThing)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "final_string":
+				c.Final_string = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c SemanticContainer) BamlTypeName() string {
+	return "SemanticContainer"
+}
+
 type SimpleTag struct {
 	Field *string `json:"field"`
+}
+
+func (c *SimpleTag) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "SimpleTag" {
+		panic(fmt.Sprintf("expected SimpleTag, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "field":
+				c.Field = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c SimpleTag) BamlTypeName() string {
+	return "SimpleTag"
 }
 
 type SmallThing struct {
@@ -666,14 +5067,137 @@ type SmallThing struct {
 	I_8_digits *int64 `json:"i_8_digits"`
 }
 
+func (c *SmallThing) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "SmallThing" {
+		panic(fmt.Sprintf("expected SmallThing, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "i_16_digits":
+				c.I_16_digits = *baml.Decode(valueHolder).(*int64)
+
+			case "i_8_digits":
+				c.I_8_digits = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c SmallThing) BamlTypeName() string {
+	return "SmallThing"
+}
+
 type SomeClassNestedDynamic struct {
 	Hi *string `json:"hi"`
 
 	DynamicProperties map[string]any `json:"__baml_dynamic_properties__"`
 }
 
+func (c *SomeClassNestedDynamic) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "SomeClassNestedDynamic" {
+		panic(fmt.Sprintf("expected SomeClassNestedDynamic, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "hi":
+				c.Hi = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+	for i := range holder.DynamicFieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.DynamicFields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			c.DynamicProperties[key] = baml.Decode(valueHolder)
+		}
+	}
+
+}
+
+func (c SomeClassNestedDynamic) BamlTypeName() string {
+	return "SomeClassNestedDynamic"
+}
+
 type StringToClassEntry struct {
 	Word *string `json:"word"`
+}
+
+func (c *StringToClassEntry) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "StringToClassEntry" {
+		panic(fmt.Sprintf("expected StringToClassEntry, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "word":
+				c.Word = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c StringToClassEntry) BamlTypeName() string {
+	return "StringToClassEntry"
 }
 
 type TestClassAlias struct {
@@ -688,10 +5212,139 @@ type TestClassAlias struct {
 	Key5 *string `json:"key5"`
 }
 
+func (c *TestClassAlias) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "TestClassAlias" {
+		panic(fmt.Sprintf("expected TestClassAlias, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "key":
+				c.Key = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "key2":
+				c.Key2 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "key3":
+				c.Key3 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "key4":
+				c.Key4 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "key5":
+				c.Key5 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c TestClassAlias) BamlTypeName() string {
+	return "TestClassAlias"
+}
+
 type TestClassNested struct {
 	Prop1 *string `json:"prop1"`
 
-	Prop2 *InnerClass `json:"prop2"`
+	Prop2 *types.InnerClass `json:"prop2"`
+}
+
+func (c *TestClassNested) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "TestClassNested" {
+		panic(fmt.Sprintf("expected TestClassNested, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "prop1":
+				c.Prop1 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop2":
+				c.Prop2 = func() *types.InnerClass {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.InnerClass {
+						return baml.Decode(__holder).(*types.InnerClass)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c TestClassNested) BamlTypeName() string {
+	return "TestClassNested"
 }
 
 type TestClassWithEnum struct {
@@ -700,10 +5353,106 @@ type TestClassWithEnum struct {
 	Prop2 *types.EnumInClass `json:"prop2"`
 }
 
+func (c *TestClassWithEnum) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "TestClassWithEnum" {
+		panic(fmt.Sprintf("expected TestClassWithEnum, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "prop1":
+				c.Prop1 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop2":
+				c.Prop2 = func() *types.EnumInClass {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.EnumInClass {
+						return baml.Decode(__holder).(*types.EnumInClass)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c TestClassWithEnum) BamlTypeName() string {
+	return "TestClassWithEnum"
+}
+
 type TestMemoryOutput struct {
 	Items []types.Union__MemoryObject__ComplexMemoryObject__AnotherObject `json:"items"`
 
 	More_items []types.Union__MemoryObject__ComplexMemoryObject__AnotherObject `json:"more_items"`
+}
+
+func (c *TestMemoryOutput) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "TestMemoryOutput" {
+		panic(fmt.Sprintf("expected TestMemoryOutput, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "items":
+				c.Items = func() []types.Union__MemoryObject__ComplexMemoryObject__AnotherObject {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []types.Union__MemoryObject__ComplexMemoryObject__AnotherObject {
+						return baml.Decode(__holder).([]types.Union__MemoryObject__ComplexMemoryObject__AnotherObject)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "more_items":
+				c.More_items = func() []types.Union__MemoryObject__ComplexMemoryObject__AnotherObject {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []types.Union__MemoryObject__ComplexMemoryObject__AnotherObject {
+						return baml.Decode(__holder).([]types.Union__MemoryObject__ComplexMemoryObject__AnotherObject)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c TestMemoryOutput) BamlTypeName() string {
+	return "TestMemoryOutput"
 }
 
 type TestOutputClass struct {
@@ -712,10 +5461,106 @@ type TestOutputClass struct {
 	Prop2 *int64 `json:"prop2"`
 }
 
+func (c *TestOutputClass) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "TestOutputClass" {
+		panic(fmt.Sprintf("expected TestOutputClass, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "prop1":
+				c.Prop1 = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop2":
+				c.Prop2 = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c TestOutputClass) BamlTypeName() string {
+	return "TestOutputClass"
+}
+
 type Tree struct {
 	Data *int64 `json:"data"`
 
-	Children *Forest `json:"children"`
+	Children *types.Forest `json:"children"`
+}
+
+func (c *Tree) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "Tree" {
+		panic(fmt.Sprintf("expected Tree, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "data":
+				c.Data = func() *int64 {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
+						return baml.Decode(__holder).(*int64)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "children":
+				c.Children = func() *types.Forest {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Forest {
+						return baml.Decode(__holder).(*types.Forest)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c Tree) BamlTypeName() string {
+	return "Tree"
 }
 
 type TwoStoriesOneTitle struct {
@@ -726,12 +5571,130 @@ type TwoStoriesOneTitle struct {
 	Story_b *string `json:"story_b"`
 }
 
+func (c *TwoStoriesOneTitle) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "TwoStoriesOneTitle" {
+		panic(fmt.Sprintf("expected TwoStoriesOneTitle, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "title":
+				c.Title = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "story_a":
+				c.Story_a = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "story_b":
+				c.Story_b = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c TwoStoriesOneTitle) BamlTypeName() string {
+	return "TwoStoriesOneTitle"
+}
+
 type TwoStoriesOneTitleCheck struct {
 	Title *string `json:"title"`
 
 	Story_a types.Checked[*string] `json:"story_a"`
 
 	Story_b types.Checked[*string] `json:"story_b"`
+}
+
+func (c *TwoStoriesOneTitleCheck) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "TwoStoriesOneTitleCheck" {
+		panic(fmt.Sprintf("expected TwoStoriesOneTitleCheck, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "title":
+				c.Title = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "story_a":
+				c.Story_a = func() types.Checked[*string] {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Checked[*string] {
+						return baml.Decode(__holder).(types.Checked[*string])
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "story_b":
+				c.Story_b = func() types.Checked[*string] {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Checked[*string] {
+						return baml.Decode(__holder).(types.Checked[*string])
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c TwoStoriesOneTitleCheck) BamlTypeName() string {
+	return "TwoStoriesOneTitleCheck"
 }
 
 type UnionTest_ReturnType struct {
@@ -742,6 +5705,65 @@ type UnionTest_ReturnType struct {
 	Prop3 *types.Union__List__bool__List__int `json:"prop3"`
 }
 
+func (c *UnionTest_ReturnType) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "UnionTest_ReturnType" {
+		panic(fmt.Sprintf("expected UnionTest_ReturnType, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "prop1":
+				c.Prop1 = func() *types.Union__string__bool {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Union__string__bool {
+						return baml.Decode(__holder).(*types.Union__string__bool)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop2":
+				c.Prop2 = func() []types.Union__float__bool {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) []types.Union__float__bool {
+						return baml.Decode(__holder).([]types.Union__float__bool)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "prop3":
+				c.Prop3 = func() *types.Union__List__bool__List__int {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Union__List__bool__List__int {
+						return baml.Decode(__holder).(*types.Union__List__bool__List__int)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c UnionTest_ReturnType) BamlTypeName() string {
+	return "UnionTest_ReturnType"
+}
+
 // my docs
 type UniverseQuestion struct {
 	Question *string `json:"question"`
@@ -749,12 +5771,145 @@ type UniverseQuestion struct {
 	Answer *string `json:"answer"`
 }
 
+func (c *UniverseQuestion) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "UniverseQuestion" {
+		panic(fmt.Sprintf("expected UniverseQuestion, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "question":
+				c.Question = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "answer":
+				c.Answer = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c UniverseQuestion) BamlTypeName() string {
+	return "UniverseQuestion"
+}
+
 type UniverseQuestionInput struct {
 	Question *string `json:"question"`
+}
+
+func (c *UniverseQuestionInput) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "UniverseQuestionInput" {
+		panic(fmt.Sprintf("expected UniverseQuestionInput, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "question":
+				c.Question = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c UniverseQuestionInput) BamlTypeName() string {
+	return "UniverseQuestionInput"
 }
 
 type WithReasoning struct {
 	Value *string `json:"value"`
 
 	Reasoning *string `json:"reasoning"`
+}
+
+func (c *WithReasoning) Decode(holder cffi.CFFIValueClass) {
+	typeName := holder.Name(nil)
+	if string(typeName.Namespace()) != "stream_types" {
+		panic(fmt.Sprintf("expected stream_types, got %s", string(typeName.Namespace())))
+	}
+	if string(typeName.Name()) != "WithReasoning" {
+		panic(fmt.Sprintf("expected WithReasoning, got %s", string(typeName.Name())))
+	}
+
+	for i := range holder.FieldsLength() {
+		var field cffi.CFFIMapEntry
+		if holder.Fields(&field, i) {
+			key := string(field.Key())
+			valueHolder := field.Value(nil)
+			switch key {
+
+			case "value":
+				c.Value = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			case "reasoning":
+				c.Reasoning = func() *string {
+					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
+						return baml.Decode(__holder).(*string)
+					})
+					if val != nil {
+						return *val
+					}
+					return nil
+				}()
+
+			}
+		}
+	}
+
+}
+
+func (c WithReasoning) BamlTypeName() string {
+	return "WithReasoning"
 }

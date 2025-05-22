@@ -1911,139 +1911,6 @@ func Union__int_1__bool_true__string_string_outputNewWithString_string_output(v 
 	}
 }
 
-type Union__int__float struct {
-	variant string
-
-	variant_int *int64
-
-	variant_float *float64
-}
-
-func (u *Union__int__float) Decode(holder *cffi.CFFIValueUnionVariant) {
-	valueHolder := holder.Value(nil)
-	switch string(holder.VariantName()) {
-
-	case "int":
-		u.variant = "int"
-		value := *baml.Decode(valueHolder).(*int64)
-		u.variant_int = &value
-
-	case "float":
-		u.variant = "float"
-		value := *baml.Decode(valueHolder).(*float64)
-		u.variant_float = &value
-
-	}
-}
-
-func (u Union__int__float) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	switch u.variant {
-
-	case "int":
-		return baml.EncodeUnion(builder, "Union__int__float", u.variant, u.variant_int)
-
-	case "float":
-		return baml.EncodeUnion(builder, "Union__int__float", u.variant, u.variant_float)
-
-	case "":
-		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
-	}
-
-	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
-}
-
-func (u Union__int__float) BamlTypeName() string {
-	return "Union__int__float"
-}
-
-func (u Union__int__float) MarshalJSON() ([]byte, error) {
-	switch u.variant {
-
-	case "int":
-		return json.Marshal(u.variant_int)
-
-	case "float":
-		return json.Marshal(u.variant_float)
-
-	}
-
-	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
-}
-
-func (u *Union__int__float) UnmarshalJSON(data []byte) error {
-	var err error
-
-	err = json.Unmarshal(data, &u.variant_int)
-	if err == nil {
-		u.variant = "int"
-		return nil
-	} else {
-		u.variant_int = nil
-	}
-
-	err = json.Unmarshal(data, &u.variant_float)
-	if err == nil {
-		u.variant = "float"
-		return nil
-	} else {
-		u.variant_float = nil
-	}
-
-	return fmt.Errorf("invalid union variant: %s", string(data))
-}
-
-func (u *Union__int__float) SetInt(v int64) {
-	u.variant = "int"
-	u.variant_int = &v
-
-	u.variant_float = nil
-
-}
-
-func (u *Union__int__float) IsInt() bool {
-	return u.variant == "int"
-}
-
-func (u *Union__int__float) Int() *int64 {
-	if !u.IsInt() {
-		return nil
-	}
-	return u.variant_int
-}
-
-func Union__int__floatNewWithInt(v *int64) *Union__int__float {
-	return &Union__int__float{
-		variant:     "int",
-		variant_int: v,
-	}
-}
-
-func (u *Union__int__float) SetFloat(v float64) {
-	u.variant = "float"
-	u.variant_float = &v
-
-	u.variant_int = nil
-
-}
-
-func (u *Union__int__float) IsFloat() bool {
-	return u.variant == "float"
-}
-
-func (u *Union__int__float) Float() *float64 {
-	if !u.IsFloat() {
-		return nil
-	}
-	return u.variant_float
-}
-
-func Union__int__floatNewWithFloat(v *float64) *Union__int__float {
-	return &Union__int__float{
-		variant:       "float",
-		variant_float: v,
-	}
-}
-
 type Union__int__string struct {
 	variant string
 
@@ -4146,15 +4013,17 @@ func Union__string_barisa__string_ox_burgerNewWithString_ox_burger(v *string) *U
 	}
 }
 
-type Union__string_breakfast__string_dinner struct {
+type Union__string_breakfast__string_dinner__string_other struct {
 	variant string
 
 	variant_string_breakfast *string
 
 	variant_string_dinner *string
+
+	variant_string_other *string
 }
 
-func (u *Union__string_breakfast__string_dinner) Decode(holder *cffi.CFFIValueUnionVariant) {
+func (u *Union__string_breakfast__string_dinner__string_other) Decode(holder *cffi.CFFIValueUnionVariant) {
 	valueHolder := holder.Value(nil)
 	switch string(holder.VariantName()) {
 
@@ -4168,17 +4037,25 @@ func (u *Union__string_breakfast__string_dinner) Decode(holder *cffi.CFFIValueUn
 		value := *baml.Decode(valueHolder).(*string)
 		u.variant_string_dinner = &value
 
+	case "string_other":
+		u.variant = "string_other"
+		value := *baml.Decode(valueHolder).(*string)
+		u.variant_string_other = &value
+
 	}
 }
 
-func (u Union__string_breakfast__string_dinner) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+func (u Union__string_breakfast__string_dinner__string_other) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
 	switch u.variant {
 
 	case "string_breakfast":
-		return baml.EncodeUnion(builder, "Union__string_breakfast__string_dinner", u.variant, u.variant_string_breakfast)
+		return baml.EncodeUnion(builder, "Union__string_breakfast__string_dinner__string_other", u.variant, u.variant_string_breakfast)
 
 	case "string_dinner":
-		return baml.EncodeUnion(builder, "Union__string_breakfast__string_dinner", u.variant, u.variant_string_dinner)
+		return baml.EncodeUnion(builder, "Union__string_breakfast__string_dinner__string_other", u.variant, u.variant_string_dinner)
+
+	case "string_other":
+		return baml.EncodeUnion(builder, "Union__string_breakfast__string_dinner__string_other", u.variant, u.variant_string_other)
 
 	case "":
 		return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
@@ -4187,11 +4064,11 @@ func (u Union__string_breakfast__string_dinner) Encode(builder *flatbuffers.Buil
 	return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
-func (u Union__string_breakfast__string_dinner) BamlTypeName() string {
-	return "Union__string_breakfast__string_dinner"
+func (u Union__string_breakfast__string_dinner__string_other) BamlTypeName() string {
+	return "Union__string_breakfast__string_dinner__string_other"
 }
 
-func (u Union__string_breakfast__string_dinner) MarshalJSON() ([]byte, error) {
+func (u Union__string_breakfast__string_dinner__string_other) MarshalJSON() ([]byte, error) {
 	switch u.variant {
 
 	case "string_breakfast":
@@ -4200,12 +4077,15 @@ func (u Union__string_breakfast__string_dinner) MarshalJSON() ([]byte, error) {
 	case "string_dinner":
 		return json.Marshal(u.variant_string_dinner)
 
+	case "string_other":
+		return json.Marshal(u.variant_string_other)
+
 	}
 
 	return nil, fmt.Errorf("invalid union variant: %s", u.variant)
 }
 
-func (u *Union__string_breakfast__string_dinner) UnmarshalJSON(data []byte) error {
+func (u *Union__string_breakfast__string_dinner__string_other) UnmarshalJSON(data []byte) error {
 	var err error
 
 	err = json.Unmarshal(data, &u.variant_string_breakfast)
@@ -4224,58 +4104,98 @@ func (u *Union__string_breakfast__string_dinner) UnmarshalJSON(data []byte) erro
 		u.variant_string_dinner = nil
 	}
 
+	err = json.Unmarshal(data, &u.variant_string_other)
+	if err == nil {
+		u.variant = "string_other"
+		return nil
+	} else {
+		u.variant_string_other = nil
+	}
+
 	return fmt.Errorf("invalid union variant: %s", string(data))
 }
 
-func (u *Union__string_breakfast__string_dinner) SetString_breakfast(v string) {
+func (u *Union__string_breakfast__string_dinner__string_other) SetString_breakfast(v string) {
 	u.variant = "string_breakfast"
 	u.variant_string_breakfast = &v
 
 	u.variant_string_dinner = nil
 
+	u.variant_string_other = nil
+
 }
 
-func (u *Union__string_breakfast__string_dinner) IsString_breakfast() bool {
+func (u *Union__string_breakfast__string_dinner__string_other) IsString_breakfast() bool {
 	return u.variant == "string_breakfast"
 }
 
-func (u *Union__string_breakfast__string_dinner) String_breakfast() *string {
+func (u *Union__string_breakfast__string_dinner__string_other) String_breakfast() *string {
 	if !u.IsString_breakfast() {
 		return nil
 	}
 	return u.variant_string_breakfast
 }
 
-func Union__string_breakfast__string_dinnerNewWithString_breakfast(v *string) *Union__string_breakfast__string_dinner {
-	return &Union__string_breakfast__string_dinner{
+func Union__string_breakfast__string_dinner__string_otherNewWithString_breakfast(v *string) *Union__string_breakfast__string_dinner__string_other {
+	return &Union__string_breakfast__string_dinner__string_other{
 		variant:                  "string_breakfast",
 		variant_string_breakfast: v,
 	}
 }
 
-func (u *Union__string_breakfast__string_dinner) SetString_dinner(v string) {
+func (u *Union__string_breakfast__string_dinner__string_other) SetString_dinner(v string) {
 	u.variant = "string_dinner"
 	u.variant_string_dinner = &v
 
 	u.variant_string_breakfast = nil
 
+	u.variant_string_other = nil
+
 }
 
-func (u *Union__string_breakfast__string_dinner) IsString_dinner() bool {
+func (u *Union__string_breakfast__string_dinner__string_other) IsString_dinner() bool {
 	return u.variant == "string_dinner"
 }
 
-func (u *Union__string_breakfast__string_dinner) String_dinner() *string {
+func (u *Union__string_breakfast__string_dinner__string_other) String_dinner() *string {
 	if !u.IsString_dinner() {
 		return nil
 	}
 	return u.variant_string_dinner
 }
 
-func Union__string_breakfast__string_dinnerNewWithString_dinner(v *string) *Union__string_breakfast__string_dinner {
-	return &Union__string_breakfast__string_dinner{
+func Union__string_breakfast__string_dinner__string_otherNewWithString_dinner(v *string) *Union__string_breakfast__string_dinner__string_other {
+	return &Union__string_breakfast__string_dinner__string_other{
 		variant:               "string_dinner",
 		variant_string_dinner: v,
+	}
+}
+
+func (u *Union__string_breakfast__string_dinner__string_other) SetString_other(v string) {
+	u.variant = "string_other"
+	u.variant_string_other = &v
+
+	u.variant_string_breakfast = nil
+
+	u.variant_string_dinner = nil
+
+}
+
+func (u *Union__string_breakfast__string_dinner__string_other) IsString_other() bool {
+	return u.variant == "string_other"
+}
+
+func (u *Union__string_breakfast__string_dinner__string_other) String_other() *string {
+	if !u.IsString_other() {
+		return nil
+	}
+	return u.variant_string_other
+}
+
+func Union__string_breakfast__string_dinner__string_otherNewWithString_other(v *string) *Union__string_breakfast__string_dinner__string_other {
+	return &Union__string_breakfast__string_dinner__string_other{
+		variant:              "string_other",
+		variant_string_other: v,
 	}
 }
 

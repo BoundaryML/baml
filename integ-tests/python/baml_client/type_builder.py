@@ -3827,7 +3827,7 @@ class RecipeAst:
     def __init__(self, tb: _TypeBuilder):
         _tb = tb._tb # type: ignore (we know how to use this private attribute)
         self._bldr = _tb.class_("Recipe")
-        self._properties: typing.Set[str] = set([ "ingredients",  "recipe_type", ])
+        self._properties: typing.Set[str] = set([ "recipe_type",  "ingredients", ])
         self._props = RecipeProperties(self._bldr, self._properties)
 
     def type(self) -> FieldType:
@@ -3856,12 +3856,12 @@ class RecipeProperties:
     
 
     @property
-    def ingredients(self) -> ClassPropertyViewer:
-        return ClassPropertyViewer(self.__bldr.property("ingredients"))
-
-    @property
     def recipe_type(self) -> ClassPropertyViewer:
         return ClassPropertyViewer(self.__bldr.property("recipe_type"))
+
+    @property
+    def ingredients(self) -> ClassPropertyViewer:
+        return ClassPropertyViewer(self.__bldr.property("ingredients"))
 
     
 

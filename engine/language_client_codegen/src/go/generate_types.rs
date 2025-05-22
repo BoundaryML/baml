@@ -38,16 +38,26 @@ pub(crate) fn cast_value(container_variable_name: &str, field_type: &GoType) -> 
 
 fn render_value_coercion(container_variable_name: &str, field_type: &GoType) -> String {
     if field_type.is_pointer {
-        return format!(
-            "func () {} {{
-    val := baml.Decode({})
-    if val == nil {{
-        return nil
+        let type_name = &field_type.name;
+        format!("func() {type_name} {{
+    val := baml.DecodeOptional({container_variable_name}, func(__holder *cffi.CFFIValueHolder) {type_name} {{
+        return baml.Decode(__holder).({type_name})
+    }})
+    if val != nil {{
+        return *val
     }}
-    return val.({})
-}}()",
-            field_type.name, container_variable_name, field_type.name,
-        );
+    return {}
+}}()", if field_type.wrap_state { format!("{}{{}}", type_name) } else { "nil".to_string() })
+//         return format!(
+//             "func () {} {{
+//     val := baml.Decode({})
+//     if val == nil {{
+//         return nil
+//     }}
+//     return val.({})
+// }}()",
+//             field_type.name, container_variable_name, field_type.name,
+//         );
     } else if field_type.is_slice {
         let inner_type = field_type.underlying_type.as_ref().unwrap();
         return format!(
@@ -233,6 +243,7 @@ pub struct GoType {
     pub is_enum: bool,
     pub is_union: bool,
     pub underlying_type: Option<Box<GoType>>,
+    pub wrap_state: bool,
 }
 
 struct GoTypeAlias<'ir> {
@@ -546,6 +557,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 }
                 _ => None,
             },
+            wrap_state: false,
         }
     }
 
@@ -561,7 +573,8 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         // let needed = needed || simplified.streaming_behavior().map_or(false, |f| f.done);
         GoType {
             name: simplified.to_partial_type_ref_impl_2(ir, wrapped, needed, if module_prefix { "types" } else { "" }),
-            is_pointer: self.is_optional(),
+            is_pointer: self.is_optional() || !needed,
+            // is_pointer: if wrapped { self.is_optional() } else if needed { self.is_optional() } else { true },
             is_map: matches!(simplified, FieldType::Map(_, _)),
             is_union: matches!(simplified, FieldType::Union(_)),
             is_slice: matches!(simplified, FieldType::List(_)),
@@ -573,6 +586,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 FieldType::List(value) => Some(Box::new(value.to_type_ref_2(ir, module_prefix))),
                 _ => None,
             },
+            wrap_state: self.streaming_behavior().map_or(wrapped, |f| f.state),
         }
     }
 

@@ -176,7 +176,7 @@ export default class TypeBuilder {
     
     ReceiptItem: ClassViewer<'ReceiptItem', "name" | "description" | "quantity" | "price">;
     
-    Recipe: ClassViewer<'Recipe', "ingredients" | "recipe_type">;
+    Recipe: ClassViewer<'Recipe', "recipe_type" | "ingredients">;
     
     RecursiveAliasDependency: ClassViewer<'RecursiveAliasDependency', "value">;
     
@@ -578,7 +578,7 @@ export default class TypeBuilder {
         ]);
         
         this.Recipe = this.tb.classViewer("Recipe", [
-          "ingredients","recipe_type",
+          "recipe_type","ingredients",
         ]);
         
         this.RecursiveAliasDependency = this.tb.classViewer("RecursiveAliasDependency", [

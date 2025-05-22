@@ -9,7 +9,6 @@ use baml_types::{
 mod cffi_generated;
 
 use cffi_generated::cffi::*;
-use serde::de::Expected;
 
 use crate::BamlFunctionArguments;
 
