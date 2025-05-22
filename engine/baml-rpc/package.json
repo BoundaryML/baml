@@ -7,8 +7,8 @@
     "./*": "./bindings/*.ts"
   },
   "scripts": {
-		"build": "tsc",
-		"typecheck": "tsc --noEmit --emitDeclarationOnly false",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
     "clean": "git clean -fdf dist .turbo node_modules"
   },
   "devDependencies": {
