@@ -1,17 +1,13 @@
 use std::borrow::Cow;
 
-use baml_rpc::ast::types::type_reference::NarrowingType;
+use baml_rpc::runtime_api;
+use baml_rpc::NarrowingType;
 use baml_types::{BamlValueWithMeta, HasFieldType};
 
 use super::{IntoRpcEvent, TypeLookup};
 
-impl<'a, T: HasFieldType> IntoRpcEvent<'a, baml_rpc::runtime_api::Value<'a>>
-    for BamlValueWithMeta<T>
-{
-    fn into_rpc_event(
-        &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
-    ) -> baml_rpc::runtime_api::Value<'a> {
+impl<'a, T: HasFieldType> IntoRpcEvent<'a, runtime_api::BamlValue<'a>> for BamlValueWithMeta<T> {
+    fn into_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> runtime_api::BamlValue<'a> {
         let type_ref = self.field_type().into_rpc_event(lookup);
         let value = match self {
             BamlValueWithMeta::String(s, _) => {
@@ -51,24 +47,17 @@ impl<'a, T: HasFieldType> IntoRpcEvent<'a, baml_rpc::runtime_api::Value<'a>>
             BamlValueWithMeta::Null(_) => baml_rpc::runtime_api::ValueContent::Null,
         };
 
-        baml_rpc::runtime_api::Value {
+        baml_rpc::runtime_api::BamlValue {
             r#type: type_ref,
             value,
         }
     }
 }
 
-impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::ast::types::type_reference::TypeReference>
-    for baml_types::FieldType
-{
-    fn into_rpc_event(
-        &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
-    ) -> baml_rpc::ast::types::type_reference::TypeReference {
+impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::FieldType {
+    fn into_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> baml_rpc::TypeReference {
         let simplified = self.simplify();
-        use baml_rpc::ast::types::type_reference::{
-            LiteralTypeDefinition, MediaTypeDefinition, TypeMetadata, TypeReference,
-        };
+        use baml_rpc::{LiteralTypeDefinition, MediaTypeDefinition, TypeMetadata, TypeReference};
         match simplified {
             baml_types::FieldType::Primitive(type_value) => match type_value {
                 baml_types::TypeValue::String => TypeReference::string(),
@@ -159,14 +148,9 @@ impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::ast::types::type_reference::TypeReferenc
     }
 }
 
-impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::ast::types::type_reference::Expression>
-    for baml_types::JinjaExpression
-{
-    fn into_rpc_event(
-        &'a self,
-        lookup: &(impl TypeLookup + ?Sized),
-    ) -> baml_rpc::ast::types::type_reference::Expression {
-        baml_rpc::ast::types::type_reference::Expression::Jinja(self.0.to_string())
+impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::Expression> for baml_types::JinjaExpression {
+    fn into_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> baml_rpc::Expression {
+        baml_rpc::Expression::Jinja(self.0.to_string())
     }
 }
 

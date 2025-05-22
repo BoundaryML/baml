@@ -8,10 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     ast_node_id::AstNodeId,
-    types::{
-        type_definition::{NamedType, TypeDefinition},
-        type_reference::TypeReference,
-    },
+    type_definition::{NamedType, TypeDefinition},
+    type_reference::TypeReference,
 };
 
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]

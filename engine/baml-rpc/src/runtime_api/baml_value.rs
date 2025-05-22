@@ -2,11 +2,11 @@ use std::borrow::Cow;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ast::types::type_reference::TypeReference;
+use crate::ast::type_reference::TypeReference;
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub struct Value<'a> {
+pub struct BamlValue<'a> {
     pub r#type: TypeReference,
     pub value: ValueContent<'a>,
 }
@@ -19,10 +19,14 @@ pub enum ValueContent<'a> {
     Float(f64),
     Int(i64),
     Boolean(bool),
-    List(Vec<Value<'a>>),
-    Map(Vec<(String, Value<'a>)>),
-    Class { fields: Vec<(String, Value<'a>)> },
-    Enum { value: String },
+    List(Vec<BamlValue<'a>>),
+    Map(Vec<(String, BamlValue<'a>)>),
+    Class {
+        fields: Vec<(String, BamlValue<'a>)>,
+    },
+    Enum {
+        value: String,
+    },
     Media(Media<'a>),
 }
 

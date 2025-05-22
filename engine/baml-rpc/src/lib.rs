@@ -25,11 +25,14 @@ pub use ui::ui_function_calls::{
     ListFunctionCalls, ListFunctionCallsRequest, ListFunctionCallsResponse,
 };
 
+pub use runtime_api::baml_function_call_error::*;
 pub use runtime_api::baml_src_upload::*;
+pub use runtime_api::baml_value::*;
+pub use runtime_api::trace_event::*;
 pub use runtime_api::trace_event_upload::*;
-pub use runtime_api::values::*;
 
 pub use ast::ast_node_id::*;
 pub use ast::evaluation_context::*;
 pub use ast::tops::*;
-pub use ast::types::*;
+pub use ast::type_definition::*;
+pub use ast::type_reference::*;

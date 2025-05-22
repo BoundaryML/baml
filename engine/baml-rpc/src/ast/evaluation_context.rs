@@ -6,7 +6,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use super::types::type_definition::TypeDefinition;
+use super::type_definition::TypeDefinition;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 pub struct TypeBuilderValue {

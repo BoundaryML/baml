@@ -8,7 +8,8 @@ use serde::{Deserialize, Serialize};
 
 use baml_ids::{FunctionCallId, FunctionEventId};
 
-use super::Media;
+use super::baml_function_call_error::BamlFunctionCallError;
+use super::baml_value::{BamlValue, Media};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TraceEventBatch<'a> {
@@ -47,7 +48,7 @@ pub struct TraceEvent<'a> {
 pub enum TraceData<'a> {
     FunctionStart {
         function_display_name: String,
-        args: Vec<(String, super::Value<'a>)>,
+        args: Vec<(String, BamlValue<'a>)>,
         tags: TraceTags,
         /// Only sent for BAML defined functions
         baml_function_content: Option<BamlFunctionStart>,
@@ -67,8 +68,8 @@ pub struct BamlFunctionStart {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum FunctionEnd<'a> {
-    Success { result: super::Value<'a> },
-    Error { error: super::BamlError<'a> },
+    Success { result: BamlValue<'a> },
+    Error { error: BamlFunctionCallError<'a> },
 }
 
 pub type TraceTags = std::collections::HashMap<String, serde_json::Value>;

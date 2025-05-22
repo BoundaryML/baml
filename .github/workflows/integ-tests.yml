@@ -8,7 +8,8 @@ on:
     branches: [ sam/integ-tests-ci ]
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  # suffix is important to prevent a concurrency deadlock with the calling workflow
+  group: ${{ github.workflow }}-${{ github.ref }}-integ-tests
   cancel-in-progress: true
 
 permissions:

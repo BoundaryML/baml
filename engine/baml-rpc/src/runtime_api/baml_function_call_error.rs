@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
-pub enum BamlError<'a> {
+pub enum BamlFunctionCallError<'a> {
     /// For any exceptions that are not handled by the BAML runtime
     ExternalException {
         message: Cow<'a, str>,

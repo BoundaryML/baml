@@ -5,10 +5,7 @@ use std::{
     hash::{Hash, Hasher},
 };
 
-use baml_rpc::{
-    type_definition::{NamedType, TypeDefinition},
-    type_reference::TypeReference,
-};
+use baml_rpc::{NamedType, TypeDefinition, TypeReference};
 
 use super::{repr::Node, FieldType, IntermediateRepr, Walker};
 

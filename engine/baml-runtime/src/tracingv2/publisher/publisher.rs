@@ -1,13 +1,13 @@
 use anyhow::{Context, Result};
 use baml_rpc::ast::tops::{FunctionSignature, SourceCode, AST};
-use baml_rpc::ast::types::type_definition::TypeDefinition;
-use baml_rpc::ast::types::type_reference::TypeReference;
-use baml_rpc::type_definition::{NamedType, TypeDefinitionSource};
 use baml_rpc::CreateBamlSrcUploadRequest;
+use baml_rpc::TypeDefinition;
+use baml_rpc::TypeReference;
 use baml_rpc::{
     ApiEndpoint, CreateBamlSrcUpload, CreateTraceEventUploadUrl, CreateTraceEventUploadUrlRequest,
     CreateTraceEventUploadUrlResponse, S3UploadMetadata, TraceEventBatch,
 };
+use baml_rpc::{NamedType, TypeDefinitionSource};
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use tracing::field;
@@ -148,10 +148,7 @@ pub enum ApiError {
 }
 
 impl TypeLookup for RuntimeAST {
-    fn type_lookup(
-        &self,
-        name: &str,
-    ) -> Option<Arc<baml_rpc::ast::types::type_definition::TypeId>> {
+    fn type_lookup(&self, name: &str) -> Option<Arc<baml_rpc::BamlTypeId>> {
         self.ast.type_lookup(name)
     }
 

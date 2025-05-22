@@ -10,7 +10,7 @@ use super::type_reference::TypeReference;
 use crate::ast::ast_node_id::AstNodeId;
 
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
-pub struct TypeId(pub AstNodeId);
+pub struct BamlTypeId(pub AstNodeId);
 
 /// FieldType represents the type of either a class field or a function arg.
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Hash)]
@@ -18,27 +18,27 @@ pub struct TypeId(pub AstNodeId);
 pub enum TypeDefinition {
     // User-defined types
     Enum {
-        name: TypeId,
+        name: BamlTypeId,
         // Order matters!
         values: Vec<String>,
         source: TypeDefinitionSource,
         dependencies: Vec<AstNodeId>,
     },
     Class {
-        name: TypeId,
+        name: BamlTypeId,
         // Order matters!
         fields: Vec<NamedType>,
         source: TypeDefinitionSource,
         dependencies: Vec<AstNodeId>,
     },
     Alias {
-        name: TypeId,
+        name: BamlTypeId,
         rhs: TypeReference,
     },
 }
 
 impl TypeDefinition {
-    pub fn id(&self) -> &TypeId {
+    pub fn id(&self) -> &BamlTypeId {
         match self {
             TypeDefinition::Enum { name, .. } => name,
             TypeDefinition::Class { name, .. } => name,

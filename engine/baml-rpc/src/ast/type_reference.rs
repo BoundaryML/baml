@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use super::type_definition::TypeId;
+use super::type_definition::BamlTypeId;
 
 pub type TypeReference = TypeReferenceWithMetadata<TypeMetadata>;
 
@@ -64,15 +64,15 @@ pub enum TypeReferenceWithMetadata<Metadata> {
 
     // User-defined types
     Class {
-        name: Arc<TypeId>,
+        name: Arc<BamlTypeId>,
         metadata: Metadata,
     },
     Enum {
-        name: Arc<TypeId>,
+        name: Arc<BamlTypeId>,
         metadata: Metadata,
     },
     RecursiveTypeAlias {
-        name: Arc<TypeId>,
+        name: Arc<BamlTypeId>,
         metadata: Metadata,
     },
 }
@@ -139,21 +139,21 @@ impl<Metadata: Default> TypeReferenceWithMetadata<Metadata> {
         }
     }
 
-    pub fn class(name: Arc<TypeId>) -> Self {
+    pub fn class(name: Arc<BamlTypeId>) -> Self {
         Self::Class {
             name,
             metadata: Metadata::default(),
         }
     }
 
-    pub fn enum_type(name: Arc<TypeId>) -> Self {
+    pub fn enum_type(name: Arc<BamlTypeId>) -> Self {
         Self::Enum {
             name,
             metadata: Metadata::default(),
         }
     }
 
-    pub fn recursive_type_alias(name: Arc<TypeId>) -> Self {
+    pub fn recursive_type_alias(name: Arc<BamlTypeId>) -> Self {
         Self::RecursiveTypeAlias {
             name,
             metadata: Metadata::default(),

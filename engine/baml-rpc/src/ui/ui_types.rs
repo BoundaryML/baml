@@ -2,20 +2,20 @@ use baml_ids::FunctionCallId;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use crate::{base::EpochMsTimestamp, type_definition::TypeId as BaseTypeId, BamlFunctionId};
+use crate::{base::EpochMsTimestamp, BamlFunctionId, BamlTypeId};
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct TypeId(#[ts(type = "`${string}##${string}##${string}##${string}`")] BaseTypeId);
+pub struct TypeId(#[ts(type = "`${string}##${string}##${string}##${string}`")] BamlTypeId);
 
-impl From<BaseTypeId> for TypeId {
-    fn from(value: BaseTypeId) -> Self {
+impl From<BamlTypeId> for TypeId {
+    fn from(value: BamlTypeId) -> Self {
         TypeId(value)
     }
 }
 
-impl From<&BaseTypeId> for TypeId {
-    fn from(value: &BaseTypeId) -> Self {
+impl From<&BamlTypeId> for TypeId {
+    fn from(value: &BamlTypeId) -> Self {
         TypeId(value.clone())
     }
 }

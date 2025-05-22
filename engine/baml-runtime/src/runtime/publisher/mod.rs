@@ -1,6 +1,7 @@
 use super::InternalBamlRuntime;
 use crate::{internal::ir_features::WithInternal, tracingv2::publisher::TypeLookup};
-use baml_rpc::ast::{ast_node_id::AstNodeId, tops::BamlFunctionId, types::type_definition::TypeId};
+use baml_rpc::ast::{ast_node_id::AstNodeId, tops::BamlFunctionId};
+use baml_rpc::BamlTypeId;
 use baml_types::FieldType;
 use cowstr::CowStr;
 use internal_baml_core::ir::ir_hasher;
@@ -8,7 +9,7 @@ use serde::Serialize;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 /// Type alias for a value with its dependencies
-pub type WithDependency<T> = (Arc<T>, Arc<Vec<Arc<TypeId>>>);
+pub type WithDependency<T> = (Arc<T>, Arc<Vec<Arc<BamlTypeId>>>);
 
 use super::super::tracingv2::publisher::rpc_converters::IntoRpcEvent;
 
@@ -24,7 +25,7 @@ pub struct AstSignatureWrapper {
     /// Path to source code
     pub source_code: HashMap<PathBuf, CowStr>,
     pub functions: HashMap<String, FunctionSignatureWithDependencies>,
-    pub types: HashMap<String, WithDependency<TypeId>>,
+    pub types: HashMap<String, WithDependency<BamlTypeId>>,
     pub env_vars: HashMap<String, String>,
 }
 
@@ -35,7 +36,7 @@ impl AstSignatureWrapper {
 }
 
 impl TypeLookup for AstSignatureWrapper {
-    fn type_lookup(&self, name: &str) -> Option<Arc<TypeId>> {
+    fn type_lookup(&self, name: &str) -> Option<Arc<BamlTypeId>> {
         self.types.get(name).map(|(id, _)| id.clone())
     }
 
@@ -47,8 +48,8 @@ impl TypeLookup for AstSignatureWrapper {
 /// Helper to resolve dependencies by name, skipping missing ones
 fn resolve_dependencies<'a>(
     dep_names: impl IntoIterator<Item = &'a str>,
-    ir_types: &'a HashMap<String, (Arc<TypeId>, Arc<Vec<Arc<TypeId>>>)>,
-) -> Arc<Vec<Arc<TypeId>>> {
+    ir_types: &'a HashMap<String, (Arc<BamlTypeId>, Arc<Vec<Arc<BamlTypeId>>>)>,
+) -> Arc<Vec<Arc<BamlTypeId>>> {
     Arc::new(
         dep_names
             .into_iter()
@@ -78,9 +79,10 @@ impl TryFrom<(Arc<InternalBamlRuntime>, HashMap<String, String>)> for AstSignatu
         }
 
         // Build types map (classes, enums, type_aliases)
-        let mut ir_types: HashMap<String, (Arc<TypeId>, Arc<Vec<Arc<TypeId>>>)> = HashMap::new();
+        let mut ir_types: HashMap<String, (Arc<BamlTypeId>, Arc<Vec<Arc<BamlTypeId>>>)> =
+            HashMap::new();
         for (name, signature) in ir_signature.classes.into_iter() {
-            let id = Arc::new(TypeId(AstNodeId::new_class(
+            let id = Arc::new(BamlTypeId(AstNodeId::new_class(
                 name.clone(),
                 signature.interface_hash(),
                 signature.implementation_hash(),
@@ -88,7 +90,7 @@ impl TryFrom<(Arc<InternalBamlRuntime>, HashMap<String, String>)> for AstSignatu
             ir_types.insert(name, (id, Arc::new(vec![]))); // deps filled later
         }
         for (name, signature) in ir_signature.enums.into_iter() {
-            let id = Arc::new(TypeId(AstNodeId::new_enum(
+            let id = Arc::new(BamlTypeId(AstNodeId::new_enum(
                 name.clone(),
                 signature.interface_hash(),
                 signature.implementation_hash(),
@@ -96,7 +98,7 @@ impl TryFrom<(Arc<InternalBamlRuntime>, HashMap<String, String>)> for AstSignatu
             ir_types.insert(name, (id, Arc::new(vec![]))); // deps filled later
         }
         for (name, signature) in ir_signature.type_aliases.into_iter() {
-            let id = Arc::new(TypeId(AstNodeId::new_type_alias(
+            let id = Arc::new(BamlTypeId(AstNodeId::new_type_alias(
                 name.clone(),
                 signature.interface_hash(),
                 signature.implementation_hash(),
@@ -105,9 +107,9 @@ impl TryFrom<(Arc<InternalBamlRuntime>, HashMap<String, String>)> for AstSignatu
         }
         // Now fill in dependencies for each type using the type_deps map
         let ir_types_keys: Vec<String> = ir_types.keys().cloned().collect();
-        let mut deps_map: HashMap<String, Arc<Vec<Arc<TypeId>>>> = HashMap::new();
+        let mut deps_map: HashMap<String, Arc<Vec<Arc<BamlTypeId>>>> = HashMap::new();
         for name in &ir_types_keys {
-            let deps: Vec<Arc<TypeId>> = type_deps
+            let deps: Vec<Arc<BamlTypeId>> = type_deps
                 .get(name)
                 .into_iter()
                 .flat_map(|deps| deps.iter())
@@ -153,7 +155,7 @@ impl TryFrom<(Arc<InternalBamlRuntime>, HashMap<String, String>)> for AstSignatu
             .collect();
 
         // Build types map for wrapper
-        let types: HashMap<String, WithDependency<TypeId>> = ir_types
+        let types: HashMap<String, WithDependency<BamlTypeId>> = ir_types
             .into_iter()
             .map(|(name, (id, deps))| (name, (id, deps)))
             .collect();

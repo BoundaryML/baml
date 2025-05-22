@@ -2,7 +2,8 @@ use anyhow::Result;
 use std::sync::Arc;
 
 use baml_ids::FunctionCallId;
-use baml_rpc::ast::{tops::BamlFunctionId, types::type_definition::TypeId};
+use baml_rpc::ast::tops::BamlFunctionId;
+use baml_rpc::BamlTypeId;
 use baml_types::HasFieldType;
 
 use crate::tracingv2::storage::interface::TraceEventWithMeta;
@@ -12,7 +13,7 @@ mod trace_data;
 pub mod types;
 
 pub trait TypeLookup {
-    fn type_lookup(&self, name: &str) -> Option<Arc<TypeId>>;
+    fn type_lookup(&self, name: &str) -> Option<Arc<BamlTypeId>>;
     fn function_lookup(&self, name: &str) -> Option<Arc<BamlFunctionId>>;
 }
 
