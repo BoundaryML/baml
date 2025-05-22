@@ -49,7 +49,6 @@ pub trait RuntimeInterface {
         ctx: RuntimeContext,
         #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
         collectors: Vec<Arc<Collector>>,
-        env_vars: HashMap<String, String>,
     ) -> Result<FunctionResultStream>;
 }
 
@@ -58,11 +57,12 @@ pub trait RuntimeInterface {
 //
 
 pub trait ExperimentalTracingInterface {
-    fn start_span(
+    async fn start_span(
         &self,
         function_name: &str,
         params: &BamlMap<String, BamlValue>,
         ctx: &RuntimeContextManager,
+        env_vars: &HashMap<String, String>,
     ) -> Option<TracingSpan>;
 
     #[cfg(target_arch = "wasm32")]
@@ -72,14 +72,16 @@ pub trait ExperimentalTracingInterface {
         span: Option<TracingSpan>,
         result: &Result<FunctionResult>,
         ctx: &RuntimeContextManager,
+        env_vars: &HashMap<String, String>,
     ) -> Result<Option<uuid::Uuid>>;
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn finish_function_span(
+    async fn finish_function_span(
         &self,
         span: Option<TracingSpan>,
         result: &Result<FunctionResult>,
         ctx: &RuntimeContextManager,
+        env_vars: &HashMap<String, String>,
     ) -> Result<Option<uuid::Uuid>>;
 
     #[cfg(target_arch = "wasm32")]
@@ -89,21 +91,23 @@ pub trait ExperimentalTracingInterface {
         span: Option<TracingSpan>,
         result: Option<BamlValue>,
         ctx: &RuntimeContextManager,
+        env_vars: &HashMap<String, String>,
     ) -> Result<Option<uuid::Uuid>>;
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn finish_span(
+    async fn finish_span(
         &self,
         span: Option<TracingSpan>,
         result: Option<BamlValue>,
         ctx: &RuntimeContextManager,
+        env_vars: &HashMap<String, String>,
     ) -> Result<Option<uuid::Uuid>>;
 
-    fn flush(&self) -> Result<()>;
-    fn drain_stats(&self) -> crate::InnerTraceStats;
+    async fn flush(&self) -> Result<()>;
+    async fn drain_stats(&self) -> crate::InnerTraceStats;
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn set_log_event_callback(&self, callback: Option<LogEventCallbackSync>) -> Result<()>;
+    async fn set_log_event_callback(&self, callback: Option<LogEventCallbackSync>) -> Result<()>;
 }
 
 pub trait InternalClientLookup<'a> {

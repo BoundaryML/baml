@@ -19,6 +19,7 @@ impl BamlSpan {
         function_name: String,
         args: serde_json::Value,
         ctx: &RuntimeContextManager,
+        env_vars: &HashMap<String, String>,
     ) -> napi::Result<Self> {
         let args: BamlValue = serde_json::from_value(args)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
@@ -28,7 +29,7 @@ impl BamlSpan {
 
         let span = runtime
             .inner
-            .start_span(&function_name, args_map, &ctx.inner);
+            .start_span(&function_name, args_map, &ctx.inner, env_vars);
         log::trace!("Starting span: {:#?} for {:?}\n", span, function_name);
         Ok(Self {
             inner: span.into(),
@@ -42,6 +43,7 @@ impl BamlSpan {
         &mut self,
         result: serde_json::Value,
         ctx: &RuntimeContextManager,
+        env_vars: &HashMap<String, String>,
     ) -> napi::Result<serde_json::Value> {
         log::trace!("Finishing span: {:?}", self.inner);
         let result: BamlValue = serde_json::from_value(result)
@@ -53,7 +55,7 @@ impl BamlSpan {
             .ok_or_else(|| napi::Error::new(napi::Status::GenericFailure, "Already used span"))?;
 
         self.rt
-            .finish_span(span, Some(result), &ctx.inner)
+            .finish_span(span, Some(result), &ctx.inner, env_vars)
             .map(|u| u.map(|id| id.to_string()))
             .map(|u| serde_json::json!(u))
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))

@@ -20,7 +20,6 @@ pub type BamlContext = (uuid::Uuid, String, HashMap<String, BamlValue>);
 pub struct RuntimeContextManager {
     baml_src_reader: Arc<BamlSrcReader>,
     context: Arc<Mutex<Vec<BamlContext>>>,
-    env_vars: HashMap<String, String>,
     global_tags: Arc<Mutex<HashMap<String, BamlValue>>>,
 }
 
@@ -38,7 +37,6 @@ impl RuntimeContextManager {
         Self {
             baml_src_reader: self.baml_src_reader.clone(),
             context: Arc::new(Mutex::new(self.context.lock().unwrap().clone())),
-            env_vars: self.env_vars.clone(),
             global_tags: Arc::new(Mutex::new(self.global_tags.lock().unwrap().clone())),
         }
     }
@@ -52,14 +50,12 @@ impl RuntimeContextManager {
             .ok_or_else(|| anyhow::anyhow!("No span id found. This indicates a bug in BAML. Please report this with a stack trace (RUST_BACKTRACE=1)"))
     }
 
-    pub fn new_from_env_vars(
-        env_vars: HashMap<String, String>,
+    pub fn new(
         baml_src_reader: BamlSrcReader,
     ) -> Self {
         Self {
             baml_src_reader: Arc::new(baml_src_reader),
             context: Default::default(),
-            env_vars,
             global_tags: Default::default(),
         }
     }
@@ -126,8 +122,8 @@ impl RuntimeContextManager {
         // 1. Tracer creates a new span id using the current context that's passe dinto call_function()
         // 2. Tracer passes the span_id back in here for a new context
         // 3. profit
-        span_id: Option<uuid::Uuid>,
         env_vars: HashMap<String, String>,
+        span_id: Option<uuid::Uuid>,
     ) -> Result<RuntimeContext> {
         let mut tags = self.global_tags.lock().unwrap().clone();
         let ctx_tags = {
@@ -180,7 +176,7 @@ impl RuntimeContextManager {
 
         RuntimeContext::new(
             self.baml_src_reader.clone(),
-            self.env_vars.clone(),
+            Default::default(),
             ctx.last().map(|(.., x)| x).cloned().unwrap_or_default(),
             Default::default(),
             Default::default(),

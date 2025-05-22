@@ -243,6 +243,7 @@ fn load_env_from_common_locations() -> Result<Option<(HashMap<String, String>, P
     Ok(None)
 }
 
+// TODO: Is this even being used?
 /// Loads and applies environment variables to the current process
 pub fn dotenv(path: Option<PathBuf>) -> Result<Option<PathBuf>> {
     let (env_vars, path) = match path {

@@ -59,6 +59,23 @@ pub struct ServeArgs {
 #[derive(Deserialize, Clone, Debug)]
 pub struct BamlOptions {
     pub client_registry: Option<ClientRegistry>,
+    pub env: HashMap<String, Option<String>>,
+}
+
+impl BamlOptions {
+    fn env(&self) -> HashMap<String, String> {
+        if self.env.is_empty() {
+            return std::env::vars().collect();
+        }
+        let mut env = std::env::vars().collect::<HashMap<String, String>>();
+        for (k, v) in &self.env {
+            match v {
+                Some(v) => env.insert(k.clone(), v.clone()),
+                None => env.remove(k),
+            };
+        }
+        env
+    }
 }
 
 impl ServeArgs {
@@ -312,13 +329,25 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             Err(e) => return e.into_response(),
         };
 
-        let ctx_mgr = RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None);
-        let client_registry = b_options.and_then(|options| options.client_registry);
+        let ctx_mgr = {
+            let env_vars = std::env::vars().collect();
+            RuntimeContextManager {
+                baml_src_reader: Arc::new(None),
+                context: Default::default(),
+                global_tags: Default::default(),
+            }
+        };
+        let client_registry = b_options.clone().and_then(|options| options.client_registry);
 
         let locked = self.b.read().await;
-        // TODO: Come back to this if the entire thing works
+        let env_vars: HashMap<String, String> = b_options
+            .as_ref()
+            .map_or_else(
+                || std::env::vars().collect(),
+                |options| options.env(),
+            );
         let (result, _trace_id) = locked
-            .call_function(b_fn, &args, &ctx_mgr, None, client_registry.as_ref(), None, std::env::vars().collect())
+            .call_function(b_fn, &args, &ctx_mgr, None, client_registry.as_ref(), None, env_vars)
             .await;
 
         match result {
@@ -397,13 +426,26 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             Err(e) => return e.into_response(),
         };
 
-        let client_registry = b_options.and_then(|options| options.client_registry);
+        let client_registry = b_options.clone().and_then(|options| options.client_registry);
 
         tokio::spawn(async move {
             let ctx_mgr =
-                RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None);
+                {
+                    let env_vars = std::env::vars().collect();
+                    RuntimeContextManager {
+                        baml_src_reader: Arc::new(None),
+                        context: Default::default(),
+                        global_tags: Default::default(),
+                    }
+                };
 
-            // TODO: check if env_vars need to be passed here
+            let env_vars: HashMap<String, String> = b_options
+                .as_ref()
+                .map_or_else(
+                    || std::env::vars().collect(),
+                    |options| options.env(),
+                );
+
             let result_stream = self.b.read().await.stream_function(
                 b_fn,
                 &args,
@@ -411,7 +453,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 None,
                 client_registry.as_ref(),
                 Some(vec![]),
-                HashMap::new(),
+                env_vars,
             );
 
             match result_stream {

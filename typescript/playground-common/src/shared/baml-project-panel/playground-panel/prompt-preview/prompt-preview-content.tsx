@@ -1,5 +1,5 @@
 import { atom, useAtomValue, useSetAtom } from 'jotai'
-import { ctxAtom, diagnosticsAtom, runtimeAtom } from '../../atoms'
+import { ctxAtom, diagnosticsAtom, runtimeAtom, envVarsAtom } from '../../atoms'
 import { areTestsRunningAtom, functionTestSnippetAtom, selectionAtom } from '../atoms'
 import type { WasmPrompt, WasmError } from '@gloo-ai/baml-schema-wasm-web'
 import { Loader } from './components'
@@ -14,6 +14,7 @@ export const renderedPromptAtom = atom<WasmPrompt | undefined>(undefined)
 
 export const PromptPreviewContent = () => {
   const { rt } = useAtomValue(runtimeAtom)
+  const envVars = useAtomValue(envVarsAtom)
   const ctx = useAtomValue(ctxAtom)
   const { selectedFn, selectedTc } = useAtomValue(selectionAtom)
   const diagnostics = useAtomValue(diagnosticsAtom)
@@ -23,7 +24,7 @@ export const PromptPreviewContent = () => {
     if (rt === undefined || ctx === undefined || selectedFn === undefined || selectedTc === undefined) {
       return
     }
-    const newPreview = await selectedFn.render_prompt_for_test(rt, selectedTc.name, ctx, findMediaFile)
+    const newPreview = await selectedFn.render_prompt_for_test(rt, selectedTc.name, ctx, findMediaFile, envVars)
     setLastKnownPreview(newPreview)
     setPromptData(newPreview)
     return newPreview

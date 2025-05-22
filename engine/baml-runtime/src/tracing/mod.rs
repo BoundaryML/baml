@@ -601,6 +601,21 @@ impl BamlTracer {
             Ok(None)
         }
     }
+
+    /// Returns true if the tracer's config matches the config from the given env vars.
+    pub fn config_matches_env_vars(&self, env_vars: &std::collections::HashMap<String, String>) -> bool {
+        // Try to create a new APIWrapper from the env vars
+        if let Ok(new_api_wrapper) = crate::tracing::api_wrapper::APIWrapper::from_env_vars(env_vars.iter().map(|(k, v)| (k, v))) {
+            // Compare the config in the current APIWrapper to the new one
+            self.options.config == new_api_wrapper.config
+        } else {
+            false
+        }
+    }
+
+    pub fn tracing_project_id(&self) -> Option<String> {
+        self.options.project_id().map(|s| s.to_string())
+    }
 }
 
 fn log_json_event(is_ok: bool, log_event: BamlEventJson) -> Result<()> {
