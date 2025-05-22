@@ -93,7 +93,6 @@ pub fn typecheck_in_context(
     typing_context: &HashMap<String, FieldType>,
     expr: &Expr<ExprMetadata>,
 ) -> Result<()> {
-    eprintln!("expr: {:?}", expr);
     match expr {
         Expr::Atom(atom) => {
             // Atoms always typecheck.
@@ -323,7 +322,6 @@ pub fn infer_types_in_context(
     typing_context: &mut HashMap<String, FieldType>,
     expr: Arc<Expr<ExprMetadata>>,
 ) -> Arc<Expr<ExprMetadata>> {
-    eprintln!("infer_types_in_context: {}", expr.dump_str());
     match expr.as_ref() {
         Expr::FreeVar(ref var_name, (span, maybe_type)) => {
             // Assign variables from the context.
@@ -345,11 +343,9 @@ pub fn infer_types_in_context(
             expr.clone()
         }
         Expr::Let(ref var_name, expr, ref body, _) => {
-            eprintln!("handling let: {:?}", expr);
             let new_expr = infer_types_in_context(typing_context, expr.clone());
             let new_body = infer_types_in_context(typing_context, body.clone());
             if let Some(ref expr_ty) = new_expr.meta().1 {
-                eprintln!("inserting into typing context: {:?}", expr_ty);
                 typing_context.insert(var_name.to_string(), expr_ty.clone());
             }
             let new_meta = (expr.meta().0.clone(), new_body.meta().1.clone());
