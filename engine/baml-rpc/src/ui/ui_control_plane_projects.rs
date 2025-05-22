@@ -58,13 +58,14 @@ impl ApiEndpoint for CreateProject {
     const PATH: &'static str = "/v1/create-project";
 }
 
-// TODO: fill in partial fields
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct UpdateProjectRequest {
     #[ts(type = "string")]
     pub project_id: ProjectId,
+    #[ts(optional)]
     pub project_slug: Option<String>,
+    #[ts(optional)]
     pub environments: Option<Vec<String>>,
 }
 

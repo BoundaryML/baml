@@ -8,8 +8,11 @@ pub struct Organization {
     pub org_id: String,
     pub org_slug: String,
     pub org_display_name: String,
+    #[ts(optional)]
     pub stripe_customer_id: Option<String>,
+    #[ts(optional)]
     pub stripe_subscription_id: Option<String>,
+    #[ts(optional)]
     pub stripe_subscription_status: Option<String>,
 }
 
@@ -40,10 +43,15 @@ impl ApiEndpoint for CreateOrganization {
 #[ts(export)]
 pub struct UpdateOrganizationRequest {
     pub org_id: String,
+    #[ts(optional)]
     pub org_slug: Option<String>,
+    #[ts(optional)]
     pub org_display_name: Option<String>,
+    #[ts(optional)]
     pub stripe_customer_id: Option<String>,
+    #[ts(optional)]
     pub stripe_subscription_id: Option<String>,
+    #[ts(optional)]
     pub stripe_subscription_status: Option<String>,
 }
 

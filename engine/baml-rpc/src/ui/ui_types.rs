@@ -48,6 +48,7 @@ pub struct FunctionCall {
     #[ts(type = "string")]
     pub function_call_id: FunctionCallId,
     pub source: String,
+    #[ts(optional)]
     pub function_id: Option<FunctionId>,
     #[serde(rename = "start_epoch_ms")]
     #[ts(type = "number | null")]
@@ -61,7 +62,7 @@ pub struct FunctionCall {
     #[ts(type = "any")]
     pub output: serde_json::Value,
     pub status: String,
-    #[ts(type = "any")]
+    #[ts(type = "any", optional)]
     pub error: Option<serde_json::Value>,
 }
 
@@ -86,7 +87,9 @@ pub struct FunctionDefinition {
 pub struct TypeDefinition {
     pub r#type: String,
     pub type_id: TypeId,
+    #[ts(optional)]
     pub fields: Option<Vec<NameTypeField>>,
+    #[ts(optional)]
     pub values: Option<Vec<String>>,
 }
 
