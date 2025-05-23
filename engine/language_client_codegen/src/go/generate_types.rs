@@ -37,7 +37,17 @@ pub(crate) fn cast_value(container_variable_name: &str, field_type: &GoType) -> 
 }
 
 fn render_value_coercion(container_variable_name: &str, field_type: &GoType) -> String {
-    if field_type.is_pointer {
+    if field_type.is_pointer && !field_type.is_slice && !field_type.is_map {
+        if field_type.is_union {
+            let type_name = &field_type.name;
+            return format!("func () {type_name} {{ 
+    _retVal := baml.Decode({container_variable_name})
+    if _retVal == nil {{
+        return nil
+    }}
+    return _retVal.({type_name})
+}}()");
+        } else {
         let type_name = &field_type.name;
         format!("func() {type_name} {{
     val := baml.DecodeOptional({container_variable_name}, func(__holder *cffi.CFFIValueHolder) {type_name} {{
@@ -48,16 +58,7 @@ fn render_value_coercion(container_variable_name: &str, field_type: &GoType) -> 
     }}
     return {}
 }}()", if field_type.wrap_state { format!("{}{{}}", type_name) } else { "nil".to_string() })
-//         return format!(
-//             "func () {} {{
-//     val := baml.Decode({})
-//     if val == nil {{
-//         return nil
-//     }}
-//     return val.({})
-// }}()",
-//             field_type.name, container_variable_name, field_type.name,
-//         );
+        }
     } else if field_type.is_slice {
         let inner_type = field_type.underlying_type.as_ref().unwrap();
         return format!(
@@ -668,33 +669,38 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 &format!("{}.", default_module)
             }
         };
+
+        let checks = field_type_attributes(self);
+
+        let use_partial_type = !(wrapped || needed || checks.is_some());
+
         let base_rep = match base_type {
             FieldType::Class(name) => {
-                if wrapped || needed {
-                    format!("{module_prefix}{name}")
-                } else {
+                if use_partial_type {
                     format!("*{module_prefix}{name}")
+                } else {
+                    format!("{module_prefix}{name}")
                 }
             }
             FieldType::Enum(name) => {
-                if needed || wrapped {
-                    format!("types.{name}")
-                } else {
+                if use_partial_type {
                     format!("*types.{name}")
+                } else {
+                    format!("types.{name}")
                 }
             }
             FieldType::RecursiveTypeAlias(name) => {
-                if wrapped {
-                    format!("{module_prefix}{name}")
-                } else {
+                if use_partial_type {
                     format!("*{module_prefix}{name}")
+                } else {
+                    format!("{module_prefix}{name}")
                 }
             }
             FieldType::Literal(value) => {
-                if needed || wrapped {
-                    to_go_literal(&value)
-                } else {
+                if use_partial_type {
                     format!("*{}", to_go_literal(&value))
+                } else {
+                    to_go_literal(&value)
                 }
             } // TODO: Handle `needed` here.
 
@@ -706,21 +712,21 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             }
             FieldType::Map(key, value) => format!(
                 "map[{}]{}",
-                key.to_partial_type_ref_2(ir, false, false, default_module),
+                key.to_partial_type_ref_2(ir, false, true, default_module),
                 value.to_partial_type_ref_2(ir, false, false, default_module)
             ),
             FieldType::Primitive(r#type) => {
-                if needed || wrapped {
-                    r#type.to_go()
-                } else {
+                if use_partial_type {
                     format!("*{}", r#type.to_go())
+                } else {
+                    r#type.to_go()
                 }
             }
             FieldType::Union(inner) => {
-                if needed || wrapped {
-                    format!("{module_prefix}{}", self.to_union_name())
-                } else {
+                if use_partial_type {
                     format!("*{module_prefix}{}", self.to_union_name())
+                } else {
+                    format!("{module_prefix}{}", self.to_union_name())
                 }
             }
             FieldType::Tuple(inner) => {
@@ -729,7 +735,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             FieldType::Optional(inner) => {
                 format!(
                     "*{}",
-                    inner.to_partial_type_ref_2(ir, true, false, default_module)
+                    inner.to_partial_type_ref_2(ir, false, true, default_module)
                 )
             }
             FieldType::WithMetadata { .. } => {
@@ -737,6 +743,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             }
             FieldType::Arrow(_) => panic!("Generation is not supported with expr fns"),
         };
+
         let base_type_ref = if is_partial_type {
             base_rep
         } else {
@@ -746,9 +753,13 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 base_rep
             }
         };
-        let rep_with_checks = match field_type_attributes(self) {
+        let rep_with_checks = match checks {
             Some(_) => {
-                format!("types.Checked[{base_type_ref}]")
+                if wrapped || needed  {
+                    format!("types.Checked[{base_type_ref}]")
+                } else {
+                    format!("*types.Checked[{base_type_ref}]")
+                }
             }
             None => base_type_ref,
         };

@@ -5469,7 +5469,7 @@ func InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, i2 map[typ
 	return casted, nil
 }
 
-func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, i2 map[types.MapKey]string) <-chan StreamValue[map[types.MapKey]string, map[*types.MapKey]*string] {
+func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, i2 map[types.MapKey]string) <-chan StreamValue[map[types.MapKey]string, map[types.MapKey]*string] {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"i1": i1, "i2": i2},
 	}
@@ -5477,7 +5477,7 @@ func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, 
 	if err != nil {
 		panic(err)
 	}
-	channel := make(chan StreamValue[map[types.MapKey]string, map[*types.MapKey]*string])
+	channel := make(chan StreamValue[map[types.MapKey]string, map[types.MapKey]*string])
 	raw, err := bamlRuntime.CallFunctionStream(ctx, "InOutEnumMapKey", encoded)
 	if err != nil {
 		close(channel)
@@ -5500,13 +5500,13 @@ func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, 
 				}
 				if result.HasData {
 					data := (*result.Data).(map[types.MapKey]string)
-					channel <- StreamValue[map[types.MapKey]string, map[*types.MapKey]*string]{
+					channel <- StreamValue[map[types.MapKey]string, map[types.MapKey]*string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (*result.StreamData).(map[*types.MapKey]*string)
-					channel <- StreamValue[map[types.MapKey]string, map[*types.MapKey]*string]{
+					data := (*result.StreamData).(map[types.MapKey]*string)
+					channel <- StreamValue[map[types.MapKey]string, map[types.MapKey]*string]{
 						IsFinal:   false,
 						as_final:  nil,
 						as_stream: &data,
@@ -5554,7 +5554,7 @@ func InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union__stri
 	return casted, nil
 }
 
-func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union__string_one__string_two__string_three__string_four]string, i2 map[types.Union__string_one__string_two__string_three__string_four]string) <-chan StreamValue[map[types.Union__string_one__string_two__string_three__string_four]string, map[*types.Union__string_one__string_two__string_three__string_four]*string] {
+func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union__string_one__string_two__string_three__string_four]string, i2 map[types.Union__string_one__string_two__string_three__string_four]string) <-chan StreamValue[map[types.Union__string_one__string_two__string_three__string_four]string, map[types.Union__string_one__string_two__string_three__string_four]*string] {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"i1": i1, "i2": i2},
 	}
@@ -5562,7 +5562,7 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 	if err != nil {
 		panic(err)
 	}
-	channel := make(chan StreamValue[map[types.Union__string_one__string_two__string_three__string_four]string, map[*types.Union__string_one__string_two__string_three__string_four]*string])
+	channel := make(chan StreamValue[map[types.Union__string_one__string_two__string_three__string_four]string, map[types.Union__string_one__string_two__string_three__string_four]*string])
 	raw, err := bamlRuntime.CallFunctionStream(ctx, "InOutLiteralStringUnionMapKey", encoded)
 	if err != nil {
 		close(channel)
@@ -5585,13 +5585,13 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 				}
 				if result.HasData {
 					data := (*result.Data).(map[types.Union__string_one__string_two__string_three__string_four]string)
-					channel <- StreamValue[map[types.Union__string_one__string_two__string_three__string_four]string, map[*types.Union__string_one__string_two__string_three__string_four]*string]{
+					channel <- StreamValue[map[types.Union__string_one__string_two__string_three__string_four]string, map[types.Union__string_one__string_two__string_three__string_four]*string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (*result.StreamData).(map[*types.Union__string_one__string_two__string_three__string_four]*string)
-					channel <- StreamValue[map[types.Union__string_one__string_two__string_three__string_four]string, map[*types.Union__string_one__string_two__string_three__string_four]*string]{
+					data := (*result.StreamData).(map[types.Union__string_one__string_two__string_three__string_four]*string)
+					channel <- StreamValue[map[types.Union__string_one__string_two__string_three__string_four]string, map[types.Union__string_one__string_two__string_three__string_four]*string]{
 						IsFinal:   false,
 						as_final:  nil,
 						as_stream: &data,
@@ -5639,7 +5639,7 @@ func InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]string, op
 	return casted, nil
 }
 
-func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]string) <-chan StreamValue[map[string]string, map[*string]*string] {
+func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]string) <-chan StreamValue[map[string]string, map[string]*string] {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"m": m},
 	}
@@ -5647,7 +5647,7 @@ func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]
 	if err != nil {
 		panic(err)
 	}
-	channel := make(chan StreamValue[map[string]string, map[*string]*string])
+	channel := make(chan StreamValue[map[string]string, map[string]*string])
 	raw, err := bamlRuntime.CallFunctionStream(ctx, "InOutSingleLiteralStringMapKey", encoded)
 	if err != nil {
 		close(channel)
@@ -5670,13 +5670,13 @@ func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]
 				}
 				if result.HasData {
 					data := (*result.Data).(map[string]string)
-					channel <- StreamValue[map[string]string, map[*string]*string]{
+					channel <- StreamValue[map[string]string, map[string]*string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (*result.StreamData).(map[*string]*string)
-					channel <- StreamValue[map[string]string, map[*string]*string]{
+					data := (*result.StreamData).(map[string]*string)
+					channel <- StreamValue[map[string]string, map[string]*string]{
 						IsFinal:   false,
 						as_final:  nil,
 						as_stream: &data,
@@ -6404,7 +6404,7 @@ func MapAlias(ctx context.Context, m map[string][]string, opts ...CallOptionFunc
 	return casted, nil
 }
 
-func (*stream) MapAlias(ctx context.Context, m map[string][]string) <-chan StreamValue[map[string][]string, map[*string][]string] {
+func (*stream) MapAlias(ctx context.Context, m map[string][]string) <-chan StreamValue[map[string][]string, map[string][]string] {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"m": m},
 	}
@@ -6412,7 +6412,7 @@ func (*stream) MapAlias(ctx context.Context, m map[string][]string) <-chan Strea
 	if err != nil {
 		panic(err)
 	}
-	channel := make(chan StreamValue[map[string][]string, map[*string][]string])
+	channel := make(chan StreamValue[map[string][]string, map[string][]string])
 	raw, err := bamlRuntime.CallFunctionStream(ctx, "MapAlias", encoded)
 	if err != nil {
 		close(channel)
@@ -6435,13 +6435,13 @@ func (*stream) MapAlias(ctx context.Context, m map[string][]string) <-chan Strea
 				}
 				if result.HasData {
 					data := (*result.Data).(map[string][]string)
-					channel <- StreamValue[map[string][]string, map[*string][]string]{
+					channel <- StreamValue[map[string][]string, map[string][]string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (*result.StreamData).(map[*string][]string)
-					channel <- StreamValue[map[string][]string, map[*string][]string]{
+					data := (*result.StreamData).(map[string][]string)
+					channel <- StreamValue[map[string][]string, map[string][]string]{
 						IsFinal:   false,
 						as_final:  nil,
 						as_stream: &data,
@@ -11674,7 +11674,7 @@ func TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap map[string
 	return casted, nil
 }
 
-func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap map[string]types.StringToClassEntry) <-chan StreamValue[map[string]types.StringToClassEntry, map[*string]*stream_types.StringToClassEntry] {
+func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap map[string]types.StringToClassEntry) <-chan StreamValue[map[string]types.StringToClassEntry, map[string]*stream_types.StringToClassEntry] {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myMap": myMap},
 	}
@@ -11682,7 +11682,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap 
 	if err != nil {
 		panic(err)
 	}
-	channel := make(chan StreamValue[map[string]types.StringToClassEntry, map[*string]*stream_types.StringToClassEntry])
+	channel := make(chan StreamValue[map[string]types.StringToClassEntry, map[string]*stream_types.StringToClassEntry])
 	raw, err := bamlRuntime.CallFunctionStream(ctx, "TestFnNamedArgsSingleMapStringToClass", encoded)
 	if err != nil {
 		close(channel)
@@ -11705,13 +11705,13 @@ func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap 
 				}
 				if result.HasData {
 					data := (*result.Data).(map[string]types.StringToClassEntry)
-					channel <- StreamValue[map[string]types.StringToClassEntry, map[*string]*stream_types.StringToClassEntry]{
+					channel <- StreamValue[map[string]types.StringToClassEntry, map[string]*stream_types.StringToClassEntry]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (*result.StreamData).(map[*string]*stream_types.StringToClassEntry)
-					channel <- StreamValue[map[string]types.StringToClassEntry, map[*string]*stream_types.StringToClassEntry]{
+					data := (*result.StreamData).(map[string]*stream_types.StringToClassEntry)
+					channel <- StreamValue[map[string]types.StringToClassEntry, map[string]*stream_types.StringToClassEntry]{
 						IsFinal:   false,
 						as_final:  nil,
 						as_stream: &data,
@@ -11759,7 +11759,7 @@ func TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap map[string]m
 	return casted, nil
 }
 
-func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap map[string]map[string]string) <-chan StreamValue[map[string]map[string]string, map[*string]map[*string]*string] {
+func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap map[string]map[string]string) <-chan StreamValue[map[string]map[string]string, map[string]map[string]*string] {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myMap": myMap},
 	}
@@ -11767,7 +11767,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap ma
 	if err != nil {
 		panic(err)
 	}
-	channel := make(chan StreamValue[map[string]map[string]string, map[*string]map[*string]*string])
+	channel := make(chan StreamValue[map[string]map[string]string, map[string]map[string]*string])
 	raw, err := bamlRuntime.CallFunctionStream(ctx, "TestFnNamedArgsSingleMapStringToMap", encoded)
 	if err != nil {
 		close(channel)
@@ -11790,13 +11790,13 @@ func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap ma
 				}
 				if result.HasData {
 					data := (*result.Data).(map[string]map[string]string)
-					channel <- StreamValue[map[string]map[string]string, map[*string]map[*string]*string]{
+					channel <- StreamValue[map[string]map[string]string, map[string]map[string]*string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (*result.StreamData).(map[*string]map[*string]*string)
-					channel <- StreamValue[map[string]map[string]string, map[*string]map[*string]*string]{
+					data := (*result.StreamData).(map[string]map[string]*string)
+					channel <- StreamValue[map[string]map[string]string, map[string]map[string]*string]{
 						IsFinal:   false,
 						as_final:  nil,
 						as_stream: &data,
@@ -11844,7 +11844,7 @@ func TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[strin
 	return casted, nil
 }
 
-func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[string]string) <-chan StreamValue[map[string]string, map[*string]*string] {
+func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[string]string) <-chan StreamValue[map[string]string, map[string]*string] {
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myMap": myMap},
 	}
@@ -11852,7 +11852,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap
 	if err != nil {
 		panic(err)
 	}
-	channel := make(chan StreamValue[map[string]string, map[*string]*string])
+	channel := make(chan StreamValue[map[string]string, map[string]*string])
 	raw, err := bamlRuntime.CallFunctionStream(ctx, "TestFnNamedArgsSingleMapStringToString", encoded)
 	if err != nil {
 		close(channel)
@@ -11875,13 +11875,13 @@ func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap
 				}
 				if result.HasData {
 					data := (*result.Data).(map[string]string)
-					channel <- StreamValue[map[string]string, map[*string]*string]{
+					channel <- StreamValue[map[string]string, map[string]*string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (*result.StreamData).(map[*string]*string)
-					channel <- StreamValue[map[string]string, map[*string]*string]{
+					data := (*result.StreamData).(map[string]*string)
+					channel <- StreamValue[map[string]string, map[string]*string]{
 						IsFinal:   false,
 						as_final:  nil,
 						as_stream: &data,
