@@ -67,7 +67,7 @@ pub trait ExperimentalTracingInterface {
 
     #[cfg(target_arch = "wasm32")]
     #[allow(async_fn_in_trait)]
-    fn finish_function_span(
+    async fn finish_function_span(
         &self,
         span: Option<TracingSpan>,
         result: &Result<FunctionResult>,
@@ -86,7 +86,7 @@ pub trait ExperimentalTracingInterface {
 
     #[cfg(target_arch = "wasm32")]
     #[allow(async_fn_in_trait)]
-    fn finish_span(
+    async fn finish_span(
         &self,
         span: Option<TracingSpan>,
         result: Option<BamlValue>,

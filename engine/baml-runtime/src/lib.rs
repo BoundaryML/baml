@@ -544,7 +544,7 @@ impl BamlRuntime {
             match self
                 .tracer_wrapper
                 .get_or_create_tracer(&env_vars)
-                .finish_span(span, ctx, None)
+                .finish_span(span, ctx, None).await
             {
                 Ok(id) => target_id = id,
                 Err(e) => log::debug!("Error during logging: {}", e),
@@ -778,7 +778,7 @@ impl BamlRuntime {
             match self
                 .tracer_wrapper
                 .get_or_create_tracer(&env_vars)
-                .finish_baml_span(span, ctx, &response)
+                .finish_baml_span(span, ctx, &response).await
             {
                 Ok(id) => target_id = id,
                 Err(e) => log::debug!("Error during logging: {}", e),
@@ -1113,7 +1113,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn finish_function_span(
+    async fn finish_function_span(
         &self,
         span: Option<TracingSpan>,
         result: &Result<FunctionResult>,
@@ -1123,7 +1123,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
         if let Some(span) = span {
             self.tracer_wrapper
                 .get_or_create_tracer(env_vars)
-                .finish_baml_span(span, ctx, result)
+                .finish_baml_span(span, ctx, result).await
         } else {
             Ok(None)
         }
@@ -1158,7 +1158,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
         if let Some(span) = span {
             self.tracer_wrapper
                 .get_or_create_tracer(env_vars)
-                .finish_span(span, ctx, result)
+                .finish_span(span, ctx, result).await
         } else {
             Ok(None)
         }

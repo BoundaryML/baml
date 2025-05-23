@@ -1628,7 +1628,7 @@ impl WasmRuntime {
                         WasmTestResponse {
                             test_response,
                             span,
-                            tracing_project_id: rt.tracer_wrapper.get_or_create_tracer(&env_vars).await.tracing_project_id(),
+                            tracing_project_id: rt.tracer_wrapper.get_or_create_tracer(&env_vars).tracing_project_id(),
                             // tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
                             func_test_pair: WasmFunctionTestPair {
                                 function_name: function_name.clone(),
@@ -1927,7 +1927,7 @@ impl WasmFunction {
         Ok(WasmTestResponse {
             test_response,
             span,
-            tracing_project_id: rt.tracer_wrapper.get_or_create_tracer(&env_vars).await.tracing_project_id(),
+            tracing_project_id: rt.tracer_wrapper.get_or_create_tracer(&env_vars).tracing_project_id(),
             func_test_pair: WasmFunctionTestPair {
                 function_name,
                 test_name,
@@ -1985,7 +1985,7 @@ impl WasmFunction {
         Ok(WasmTestResponse {
             test_response,
             span,
-            tracing_project_id: rt.tracer_wrapper.get_or_create_tracer(&env_vars).await.tracing_project_id(),
+            tracing_project_id: rt.tracer_wrapper.get_or_create_tracer(&env_vars).tracing_project_id(),
             func_test_pair: WasmFunctionTestPair {
                 function_name,
                 test_name,
