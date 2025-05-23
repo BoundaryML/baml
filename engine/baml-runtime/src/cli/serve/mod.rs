@@ -59,6 +59,7 @@ pub struct ServeArgs {
 #[derive(Deserialize, Clone, Debug)]
 pub struct BamlOptions {
     pub client_registry: Option<ClientRegistry>,
+    #[serde(default)]
     pub env: HashMap<String, Option<String>>,
 }
 
