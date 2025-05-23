@@ -221,14 +221,14 @@ fn call_function_from_c_inner(
 /// Extern "C" function that returns immediately, scheduling the async call.
 /// Once the asynchronous function completes, the provided callback is invoked.
 #[no_mangle]
-pub async extern "C" fn call_function_stream_from_c(
+pub extern "C" fn call_function_stream_from_c(
     runtime: *const libc::c_void,
     function_name: *const c_char,
     encoded_args: *const libc::c_char,
     length: usize,
     id: u32,
 ) -> *const libc::c_void {
-    match call_function_stream_from_c_inner(runtime, function_name, encoded_args, length, id).await {
+    match call_function_stream_from_c_inner(runtime, function_name, encoded_args, length, id) {
         Ok(_) => null(),
         Err(e) => {
             Box::into_raw(Box::new(CString::new(e.to_string()).unwrap())) as *const libc::c_void
@@ -236,7 +236,7 @@ pub async extern "C" fn call_function_stream_from_c(
     }
 }
 
-async fn call_function_stream_from_c_inner(
+fn call_function_stream_from_c_inner(
     runtime: *const libc::c_void,
     function_name: *const c_char,
     encoded_args: *const libc::c_char,
@@ -267,8 +267,7 @@ async fn call_function_stream_from_c_inner(
         None,
         None,
         None,
-        env_vars,
-    ).await {
+        env_vars){
         Ok(stream) => stream,
         Err(e) => {
             return Err(anyhow::anyhow!("Failed to stream function: {}", e));
