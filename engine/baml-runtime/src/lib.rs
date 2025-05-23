@@ -362,6 +362,7 @@ impl BamlRuntime {
     where
         F: Fn(FunctionResult),
     {
+        baml_log::set_from_env(&env_vars).unwrap();
         let span = self
             .tracer_wrapper
             .get_or_create_tracer(&env_vars)
@@ -630,6 +631,7 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
         expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
+        baml_log::set_from_env(&env_vars).unwrap();
         log::trace!("Calling function: {}", function_name);
         let span = self
             .tracer_wrapper
@@ -798,6 +800,7 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
         expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
     ) -> Result<FunctionResultStream> {
+        baml_log::set_from_env(&env_vars).unwrap();
         self.inner.stream_function_impl(
             function_name,
             params,
@@ -841,6 +844,7 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
         stream: bool,
     ) -> Result<HTTPRequest> {
+        baml_log::set_from_env(&env_vars).unwrap();
         let ctx = context_manager.create_ctx(tb, cb, env_vars, None)?;
 
         let provider = self.llm_provider_from_function(&function_name, &ctx)?;
@@ -921,6 +925,7 @@ impl BamlRuntime {
         cb: Option<&ClientRegistry>,
         env_vars: HashMap<String, String>,
     ) -> Result<ResponseBamlValue> {
+        baml_log::set_from_env(&env_vars).unwrap();
         let ctx = ctx.create_ctx(tb, cb, env_vars, None)?;
 
         let renderer = PromptRenderer::from_function(
