@@ -1,5 +1,6 @@
 // use moniker::{Binder, BoundTerm, Scope, Var};
 use std::collections::HashSet;
+use std::collections::VecDeque;
 use std::sync::Arc;
 
 use crate::{field_type::FieldType, BamlMap, BamlValueWithMeta};
@@ -30,6 +31,12 @@ pub enum Expr<T> {
     If(Arc<Expr<T>>, Arc<Expr<T>>, Option<Arc<Expr<T>>>, T),
     Let(Name, Arc<Expr<T>>, Arc<Expr<T>>, T), // let name = expr in body
     ArgsTuple(Vec<Expr<T>>, T),
+    ForLoop {
+        item: Name, // An identifier. TODO: Generalize to left-hand-side. i.e. name or other pattern.
+        iterable: Arc<Expr<T>>,
+        body: Arc<Expr<T>>,
+        meta: T,
+    },
 }
 
 pub type Name = String;
@@ -78,6 +85,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::ArgsTuple(_, meta) => meta,
             Expr::Let(_, _, _, meta) => meta,
             Expr::If(_, _, _, meta) => meta,
+            Expr::ForLoop { meta, .. } => meta,
         }
     }
 
@@ -95,6 +103,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::Let(_, _, _, meta) => meta,
             Expr::ArgsTuple(_, meta) => meta,
             Expr::If(_, _, _, meta) => meta,
+            Expr::ForLoop { meta, .. } => meta,
         }
     }
 
@@ -112,6 +121,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::ArgsTuple(_, meta) => meta,
             Expr::Let(_, _, _, meta) => meta,
             Expr::If(_, _, _, meta) => meta,
+            Expr::ForLoop { meta, .. } => meta,
         }
     }
 }
@@ -187,6 +197,19 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                     cond.dump_str(),
                     then.dump_str(),
                     else_.as_ref().map(|e| e.dump_str()).unwrap_or_default()
+                )
+            }
+            Expr::ForLoop {
+                item,
+                iterable,
+                body,
+                ..
+            } => {
+                format!(
+                    "For {} in {} {{ {} }}",
+                    item,
+                    iterable.dump_str(),
+                    body.dump_str()
                 )
             }
         }
@@ -288,6 +311,21 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                 cond1.temporary_same_state(cond2) && then1.temporary_same_state(then2) && else_same
             }
             (Expr::If(_, _, _, _), _) => false,
+            (
+                Expr::ForLoop {
+                    item: i1,
+                    iterable: iter1,
+                    body: body1,
+                    ..
+                },
+                Expr::ForLoop {
+                    item: i2,
+                    iterable: iter2,
+                    body: body2,
+                    ..
+                },
+            ) => i1 == i2 && iter1.temporary_same_state(iter2) && body1.temporary_same_state(body2),
+            (Expr::ForLoop { .. }, _) => false,
         }
     }
 }
@@ -385,6 +423,17 @@ impl Expr<ExprMetadata> {
                 free_vars
             }
             Expr::ArgsTuple(args, _) => args.iter().flat_map(|a| a.free_vars()).collect(),
+            Expr::ForLoop {
+                item,
+                iterable,
+                body,
+                ..
+            } => {
+                let mut free_vars = iterable.free_vars();
+                free_vars.extend(body.free_vars());
+                free_vars.insert(item.clone());
+                free_vars
+            }
         }
     }
 
@@ -473,6 +522,17 @@ impl<T: Clone> Expr<T> {
                 args.iter().map(|e| e.open(target, new_name)).collect(),
                 m.clone(),
             ),
+            Expr::ForLoop {
+                item,
+                iterable,
+                body,
+                meta,
+            } => Expr::ForLoop {
+                item: item.clone(),
+                iterable: Arc::new(iterable.open(target, new_name)),
+                body: Arc::new(body.open(target, new_name)),
+                meta: meta.clone(),
+            },
         }
     }
 
@@ -543,6 +603,105 @@ impl<T: Clone> Expr<T> {
                 args.iter().map(|e| e.close(new_index, target)).collect(),
                 m.clone(),
             ),
+            Expr::ForLoop {
+                item,
+                iterable,
+                body,
+                meta,
+            } => Expr::ForLoop {
+                item: item.clone(),
+                iterable: Arc::new(iterable.close(new_index, target)),
+                body: Arc::new(body.close(new_index, target)),
+                meta: meta.clone(),
+            },
         }
     }
 }
+
+/// An iterator over the sub-expressions of an expression.
+impl <'a, T: 'a> IntoIterator for &'a Expr<T> {
+    type Item = &'a Expr<T>;
+    type IntoIter = ExprIterator<'a, T>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        ExprIterator::new(self)
+    }
+}
+
+/// An iterator over the sub-expressions of an expression.
+pub struct ExprIterator<'a, T> {
+    pub stack: VecDeque<&'a Expr<T>>,
+}
+
+impl <'a, T> ExprIterator<'a, T> {
+    fn new(root: &'a Expr<T>) -> Self {
+        let mut stack = VecDeque::new();
+        stack.push_back(root);
+        Self { stack}
+    }
+}
+
+impl<'a, T: 'a> Iterator for ExprIterator<'a, T> {
+    type Item = &'a Expr<T>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(expr) = self.stack.pop_back() {
+            // For exprs with sub-exprs, push the sub-exprs onto the stack.
+            match expr {
+                Expr::Atom(_) => {}
+                Expr::List(items, _) => {
+                    for item in items.iter() {
+                        self.stack.push_back(item);
+                    }
+                }
+                Expr::Map(entries, _) => {
+                    for (_, value) in entries.iter() {
+                        self.stack.push_back(value);
+                    }
+                }
+                Expr::ClassConstructor { fields, spread, .. } => {
+                    for (_, value) in fields.iter() {
+                        self.stack.push_back(value);
+                    }
+                    if let Some(spread) = spread {
+                        self.stack.push_back(spread);
+                    }
+                }
+                Expr::LLMFunction(_, _, _) => {}
+                Expr::FreeVar(_, _) => {}
+                Expr::BoundVar(_, _) => {}
+                Expr::Lambda(_, body, _) => {
+                    self.stack.push_back(body);
+                }
+                Expr::App(f, x, _) => {
+                    self.stack.push_back(f);
+                    self.stack.push_back(x);
+                }
+                Expr::If(cond, then, else_, _) => {
+                    self.stack.push_back(cond);
+                    self.stack.push_back(then);
+                    if let Some(else_) = else_ {
+                        self.stack.push_back(else_);
+                    }
+                }
+                Expr::Let(_, expr, body, _) => {
+                    self.stack.push_back(expr);
+                    self.stack.push_back(body);
+                }
+                Expr::ArgsTuple(args, _) => {
+                    for arg in args.iter() {
+                        self.stack.push_back(arg);
+                    }
+                }
+                Expr::ForLoop { iterable, body, .. } => {
+                    self.stack.push_back(iterable);
+                    self.stack.push_back(body);
+                }
+            }
+            Some(&expr)
+        } else {
+            None
+        }
+    }
+}
+

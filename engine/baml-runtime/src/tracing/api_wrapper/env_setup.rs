@@ -57,11 +57,31 @@ impl Config {
             .from_iter(env_vars.map(|(k, v)| (k.as_ref().to_string(), v.as_ref().to_string())));
 
         match config {
-            Ok(config) => Ok(config),
+            Ok(config) => Ok(config.normalize()),
             Err(err) => Err(anyhow::anyhow!(
                 "Failed to parse config from environment variables: {}",
                 err
             )),
         }
+    }
+
+    pub fn normalize(mut self) -> Self {
+        if self.base_url.is_empty() {
+            self.base_url = default_base_url();
+        }
+        if self.sessions_id.is_empty() {
+            self.sessions_id = default_sessions_id();
+        }
+        if self.stage.is_empty() {
+            self.stage = default_stage();
+        }
+        if self.host_name.is_empty() {
+            self.host_name = default_host_name();
+        }
+        if self.log_redaction_placeholder.is_empty() {
+            self.log_redaction_placeholder = default_redaction_placeholder();
+        }
+        // max_log_chunk_chars is usize, so no need to check for empty string
+        self
     }
 }
