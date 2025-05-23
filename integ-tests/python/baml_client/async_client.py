@@ -5475,7 +5475,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "AaaSamOutputFormat",
         {
@@ -5510,7 +5510,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "AliasThatPointsToRecursiveType",
         {
@@ -5545,7 +5545,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "AliasWithMultipleAttrs",
         {
@@ -5580,7 +5580,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "AliasedInputClass",
         {
@@ -5615,7 +5615,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "AliasedInputClass2",
         {
@@ -5650,7 +5650,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "AliasedInputClassNested",
         {
@@ -5685,7 +5685,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "AliasedInputEnum",
         {
@@ -5720,7 +5720,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "AliasedInputList",
         {
@@ -5755,7 +5755,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "AllowedOptionals",
         {
@@ -5790,7 +5790,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "AssertFn",
         {
@@ -5825,7 +5825,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "AudioInput",
         {
@@ -5860,7 +5860,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "AudioInputOpenai",
         {
@@ -5896,7 +5896,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "BuildLinkedList",
         {
@@ -5931,7 +5931,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "BuildTree",
         {
@@ -5966,7 +5966,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ClassThatPointsToRecursiveClassThroughAlias",
         {
@@ -6001,7 +6001,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ClassifyDynEnumTwo",
         {
@@ -6036,7 +6036,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ClassifyMessage",
         {
@@ -6071,7 +6071,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ClassifyMessage2",
         {
@@ -6106,7 +6106,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ClassifyMessage3",
         {
@@ -6141,7 +6141,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "Completion",
         {
@@ -6178,7 +6178,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "CustomTask",
         {
@@ -6213,7 +6213,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "DescribeImage",
         {
@@ -6248,7 +6248,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "DescribeImage2",
         {
@@ -6284,7 +6284,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "DescribeImage3",
         {
@@ -6320,7 +6320,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "DescribeImage4",
         {
@@ -6356,7 +6356,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "DescribeMedia1599",
         {
@@ -6393,7 +6393,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "DifferentiateUnions",
         {
@@ -6427,7 +6427,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "DummyOutputFunction",
         {
@@ -6462,7 +6462,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "DynamicFunc",
         {
@@ -6497,7 +6497,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "DynamicInputOutput",
         {
@@ -6532,7 +6532,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "DynamicListInputOutput",
         {
@@ -6567,7 +6567,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ExpectFailure",
         {
@@ -6601,7 +6601,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ExtractContactInfo",
         {
@@ -6636,7 +6636,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ExtractEntities",
         {
@@ -6671,7 +6671,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ExtractHobby",
         {
@@ -6706,7 +6706,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ExtractNames",
         {
@@ -6741,7 +6741,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ExtractPeople",
         {
@@ -6776,7 +6776,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ExtractReceiptInfo",
         {
@@ -6812,7 +6812,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ExtractResume",
         {
@@ -6848,7 +6848,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ExtractResume2",
         {
@@ -6883,7 +6883,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnClassOptionalOutput",
         {
@@ -6918,7 +6918,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnClassOptionalOutput2",
         {
@@ -6953,7 +6953,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnEnumListOutput",
         {
@@ -6988,7 +6988,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnEnumOutput",
         {
@@ -7023,7 +7023,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnLiteralClassInputOutput",
         {
@@ -7058,7 +7058,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnLiteralUnionClassInputOutput",
         {
@@ -7093,7 +7093,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnNamedArgsSingleStringOptional",
         {
@@ -7128,7 +7128,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnOutputBool",
         {
@@ -7163,7 +7163,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnOutputClass",
         {
@@ -7198,7 +7198,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnOutputClassList",
         {
@@ -7233,7 +7233,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnOutputClassNested",
         {
@@ -7268,7 +7268,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnOutputClassWithEnum",
         {
@@ -7303,7 +7303,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnOutputInt",
         {
@@ -7338,7 +7338,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnOutputLiteralBool",
         {
@@ -7373,7 +7373,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnOutputLiteralInt",
         {
@@ -7408,7 +7408,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnOutputLiteralString",
         {
@@ -7443,7 +7443,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnOutputStringList",
         {
@@ -7478,7 +7478,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnTestAliasedEnumOutput",
         {
@@ -7513,7 +7513,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnTestClassAlias",
         {
@@ -7548,7 +7548,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "FnTestNamedArgsSingleEnum",
         {
@@ -7583,7 +7583,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "GetDataType",
         {
@@ -7618,7 +7618,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "GetOrderInfo",
         {
@@ -7653,7 +7653,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "GetQuery",
         {
@@ -7688,7 +7688,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "InOutEnumMapKey",
         {
@@ -7724,7 +7724,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "InOutLiteralStringUnionMapKey",
         {
@@ -7760,7 +7760,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "InOutSingleLiteralStringMapKey",
         {
@@ -7795,7 +7795,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "JsonTypeAliasCycle",
         {
@@ -7830,7 +7830,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "LLMEcho",
         {
@@ -7865,7 +7865,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "LiteralUnionsTest",
         {
@@ -7900,7 +7900,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "MakeBlockConstraint",
         {
@@ -7934,7 +7934,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "MakeClassWithBlockDone",
         {
@@ -7968,7 +7968,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "MakeClassWithExternalDone",
         {
@@ -8002,7 +8002,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "MakeNestedBlockConstraint",
         {
@@ -8036,7 +8036,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "MakeSemanticContainer",
         {
@@ -8070,7 +8070,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "MapAlias",
         {
@@ -8105,7 +8105,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "MergeAliasAttributes",
         {
@@ -8140,7 +8140,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "MyFunc",
         {
@@ -8175,7 +8175,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "NestedAlias",
         {
@@ -8210,7 +8210,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "NullLiteralClassHello",
         {
@@ -8245,7 +8245,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "OpenAIWithAnthropicResponseHello",
         {
@@ -8280,7 +8280,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "OptionalTest_Function",
         {
@@ -8315,7 +8315,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "PredictAge",
         {
@@ -8350,7 +8350,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "PredictAgeBare",
         {
@@ -8385,7 +8385,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "PrimitiveAlias",
         {
@@ -8420,7 +8420,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "PromptTestClaude",
         {
@@ -8455,7 +8455,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "PromptTestClaudeChat",
         {
@@ -8490,7 +8490,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "PromptTestClaudeChatNoSystem",
         {
@@ -8525,7 +8525,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "PromptTestOpenAI",
         {
@@ -8560,7 +8560,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "PromptTestOpenAIChat",
         {
@@ -8595,7 +8595,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "PromptTestOpenAIChatNoSystem",
         {
@@ -8630,7 +8630,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "PromptTestStreaming",
         {
@@ -8665,7 +8665,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "RecursiveAliasCycle",
         {
@@ -8700,7 +8700,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "RecursiveClassWithAliasIndirection",
         {
@@ -8735,7 +8735,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "RecursiveUnionTest",
         {
@@ -8770,7 +8770,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ReturnAliasWithMergedAttributes",
         {
@@ -8805,7 +8805,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ReturnFailingAssert",
         {
@@ -8840,7 +8840,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ReturnJsonEntry",
         {
@@ -8875,7 +8875,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "ReturnMalformedConstraints",
         {
@@ -8910,7 +8910,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "SchemaDescriptions",
         {
@@ -8945,7 +8945,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "SimpleRecursiveListAlias",
         {
@@ -8980,7 +8980,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "SimpleRecursiveMapAlias",
         {
@@ -9015,7 +9015,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "StreamBigNumbers",
         {
@@ -9050,7 +9050,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "StreamFailingAssertion",
         {
@@ -9086,7 +9086,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "StreamFailingCheck",
         {
@@ -9122,7 +9122,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "StreamOneBigNumber",
         {
@@ -9157,7 +9157,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "StreamUnionIntegers",
         {
@@ -9192,7 +9192,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "StreamingCompoundNumbers",
         {
@@ -9228,7 +9228,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "StructureDocument1559",
         {
@@ -9263,7 +9263,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TakeRecAliasDep",
         {
@@ -9298,7 +9298,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TellStory",
         {
@@ -9333,7 +9333,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAnthropic",
         {
@@ -9368,7 +9368,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAnthropicShorthand",
         {
@@ -9403,7 +9403,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAws",
         {
@@ -9438,7 +9438,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAwsClaude37",
         {
@@ -9473,7 +9473,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAwsInferenceProfile",
         {
@@ -9508,7 +9508,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAwsInvalidAccessKey",
         {
@@ -9543,7 +9543,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAwsInvalidProfile",
         {
@@ -9578,7 +9578,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAwsInvalidRegion",
         {
@@ -9613,7 +9613,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAwsInvalidSessionToken",
         {
@@ -9648,7 +9648,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAzure",
         {
@@ -9683,7 +9683,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAzureFailure",
         {
@@ -9718,7 +9718,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAzureO1NoMaxTokens",
         {
@@ -9753,7 +9753,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAzureO1WithMaxCompletionTokens",
         {
@@ -9788,7 +9788,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAzureO1WithMaxTokens",
         {
@@ -9823,7 +9823,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAzureO3NoMaxTokens",
         {
@@ -9858,7 +9858,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAzureO3WithMaxCompletionTokens",
         {
@@ -9893,7 +9893,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestAzureWithMaxTokens",
         {
@@ -9928,7 +9928,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestCaching",
         {
@@ -9964,7 +9964,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestFallbackClient",
         {
@@ -9998,7 +9998,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestFallbackStrategy",
         {
@@ -10033,7 +10033,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestFallbackToShorthand",
         {
@@ -10068,7 +10068,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestFnNamedArgsSingleBool",
         {
@@ -10103,7 +10103,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestFnNamedArgsSingleClass",
         {
@@ -10138,7 +10138,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestFnNamedArgsSingleEnumList",
         {
@@ -10173,7 +10173,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestFnNamedArgsSingleFloat",
         {
@@ -10208,7 +10208,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestFnNamedArgsSingleInt",
         {
@@ -10243,7 +10243,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestFnNamedArgsSingleMapStringToClass",
         {
@@ -10278,7 +10278,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestFnNamedArgsSingleMapStringToMap",
         {
@@ -10313,7 +10313,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestFnNamedArgsSingleMapStringToString",
         {
@@ -10348,7 +10348,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestFnNamedArgsSingleString",
         {
@@ -10383,7 +10383,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestFnNamedArgsSingleStringArray",
         {
@@ -10418,7 +10418,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestFnNamedArgsSingleStringList",
         {
@@ -10453,7 +10453,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestGemini",
         {
@@ -10488,7 +10488,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestGeminiOpenAiGeneric",
         {
@@ -10522,7 +10522,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestGeminiSystem",
         {
@@ -10557,7 +10557,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestGeminiSystemAsChat",
         {
@@ -10592,7 +10592,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestGroq",
         {
@@ -10627,7 +10627,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestImageInput",
         {
@@ -10662,7 +10662,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestImageInputAnthropic",
         {
@@ -10697,7 +10697,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestImageListInput",
         {
@@ -10732,7 +10732,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestMemory",
         {
@@ -10767,7 +10767,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestMulticlassNamedArgs",
         {
@@ -10803,7 +10803,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestNamedArgsLiteralBool",
         {
@@ -10838,7 +10838,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestNamedArgsLiteralInt",
         {
@@ -10873,7 +10873,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestNamedArgsLiteralString",
         {
@@ -10908,7 +10908,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestOllama",
         {
@@ -10943,7 +10943,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestOllamaHaiku",
         {
@@ -10978,7 +10978,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestOpenAI",
         {
@@ -11013,7 +11013,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestOpenAIDummyClient",
         {
@@ -11048,7 +11048,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestOpenAIGPT4oMini",
         {
@@ -11083,7 +11083,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestOpenAILegacyProvider",
         {
@@ -11118,7 +11118,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestOpenAIO1NoMaxTokens",
         {
@@ -11153,7 +11153,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestOpenAIO1WithMaxCompletionTokens",
         {
@@ -11188,7 +11188,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestOpenAIO1WithMaxTokens",
         {
@@ -11223,7 +11223,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestOpenAIShorthand",
         {
@@ -11258,7 +11258,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestOpenAIWithFinishReasonError",
         {
@@ -11293,7 +11293,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestOpenAIWithMaxTokens",
         {
@@ -11328,7 +11328,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestOpenAIWithNullMaxTokens",
         {
@@ -11363,7 +11363,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestOpenRouterMistralSmall3_1_24b",
         {
@@ -11398,7 +11398,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestRetryConstant",
         {
@@ -11432,7 +11432,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestRetryExponential",
         {
@@ -11466,7 +11466,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestRoundRobinStrategy",
         {
@@ -11501,7 +11501,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestSingleFallbackClient",
         {
@@ -11535,7 +11535,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestThinking",
         {
@@ -11570,7 +11570,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestUniverseQuestion",
         {
@@ -11605,7 +11605,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestVertex",
         {
@@ -11640,7 +11640,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestVertexClaude",
         {
@@ -11675,7 +11675,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestVertexWithSystemInstructions",
         {
@@ -11709,7 +11709,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "UnionTest_Function",
         {
@@ -11744,7 +11744,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "UseBlockConstraint",
         {
@@ -11779,7 +11779,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "UseMaintainFieldOrder",
         {
@@ -11814,7 +11814,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "UseMalformedConstraints",
         {
@@ -11849,7 +11849,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "UseNestedBlockConstraint",
         {
@@ -11884,7 +11884,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "EchoWorkflow",
         {

@@ -159,7 +159,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = options.get("env", {})
+      env = env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "{{fn.name}}",
         {

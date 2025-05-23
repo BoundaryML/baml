@@ -60,12 +60,10 @@ impl RuntimeContextManager {
             .ok_or_else(|| anyhow::anyhow!("No span id found. This indicates a bug in BAML. Please report this with a stack trace (RUST_BACKTRACE=1)"))
     }
 
-    pub fn new(
-        baml_src_reader: BamlSrcReader,
-    ) -> Self {
+    pub fn new(baml_src_reader: BamlSrcReader) -> Self {
         Self {
             baml_src_reader: Arc::new(baml_src_reader),
-            context: Default::default(),
+            context: Default::default(), 
             global_tags: Default::default(),
         }
     }

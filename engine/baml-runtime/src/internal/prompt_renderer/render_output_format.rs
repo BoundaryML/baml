@@ -467,7 +467,9 @@ mod tests {
         let env_vars = HashMap::new();
         let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars.clone()).unwrap();
         let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
-        let ctx: RuntimeContext = ctx_manager.create_ctx(None, None, None, env_vars).unwrap();
+        let ctx: RuntimeContext = ctx_manager
+            .create_ctx(None, None, env_vars.clone(), None)
+            .unwrap();
 
         let field_type = FieldType::Enum("Foo".to_string());
         let render_output =
@@ -524,7 +526,9 @@ class Resume {
         let env_vars = HashMap::new();
         let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars.clone()).unwrap();
         let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
-        let ctx: RuntimeContext = ctx_manager.create_ctx(None, None, None, env_vars).unwrap();
+        let ctx: RuntimeContext = ctx_manager
+            .create_ctx(None, None, env_vars.clone(), None)
+            .unwrap();
 
         let field_type = FieldType::class("Resume");
         let render_output =
@@ -620,7 +624,9 @@ class Resume {
         let env_vars = HashMap::new();
         let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars.clone()).unwrap();
         let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
-        let ctx: RuntimeContext = ctx_manager.create_ctx(None, None, None, env_vars).unwrap();
+        let ctx: RuntimeContext = ctx_manager
+            .create_ctx(None, None, env_vars.clone(), None)
+            .unwrap();
 
         let field_type = FieldType::class("Resume");
         let render_output =
