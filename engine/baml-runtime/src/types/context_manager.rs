@@ -32,6 +32,16 @@ impl fmt::Debug for RuntimeContextManager {
     }
 }
 
+impl Default for RuntimeContextManager {
+    fn default() -> Self {
+        Self {
+            baml_src_reader: Arc::new(None),
+            context: Default::default(),
+            global_tags: Default::default(),
+        }
+    }
+}
+
 impl RuntimeContextManager {
     pub fn deep_clone(&self) -> Self {
         Self {

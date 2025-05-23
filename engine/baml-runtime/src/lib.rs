@@ -24,7 +24,7 @@ mod types;
 
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{Arc};
+use std::sync::{Arc, Mutex};
 
 use anyhow::Context;
 use anyhow::Result;
@@ -34,7 +34,6 @@ use internal_baml_core::ast::Span;
 use internal_baml_core::ir::repr::initial_context;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::ResponseValueMeta;
-use tokio::sync::Mutex;
 
 use crate::internal::llm_client::LLMCompleteResponse;
 use baml_types::expr::{Expr, ExprMetadata};
@@ -126,7 +125,7 @@ static INIT: std::sync::Once = std::sync::Once::new();
 //     }
 // }
 pub struct BamlTracerWrapper {
-    tracer: Mutex<Option<Arc<BamlTracer>>>,
+    tracer: Mutex<Arc<BamlTracer>>,
 }
 
 impl BamlTracerWrapper {
@@ -134,28 +133,28 @@ impl BamlTracerWrapper {
     pub fn new(env_vars: &HashMap<String, String>) -> Result<Self> {
         let tracer = Arc::new(BamlTracer::new(None, env_vars.clone().into_iter())?);
         Ok(Self {
-            tracer: Mutex::new(Some(tracer)),
+            tracer: Mutex::new(tracer),
         })
     }
 
     /// Get the tracer for the given env vars, creating a new one if the config changed.
-    pub async fn get_or_create_tracer(&self, env_vars: &HashMap<String, String>) -> Arc<BamlTracer> {
-        let mut guard = self.tracer.lock().await;
-        if let Some(existing) = &*guard {
-            if existing.config_matches_env_vars(env_vars) {
-                return existing.clone();
-            }
+    pub fn get_or_create_tracer(&self, env_vars: &HashMap<String, String>) -> Arc<BamlTracer> {
+        let mut guard = self.tracer.lock().unwrap();
+        if guard.config_matches_env_vars(env_vars) {
+            return guard.clone();
         }
-        // Config changed or no tracer yet, create a new one
-        let new_tracer = Arc::new(BamlTracer::new(None, env_vars.clone().into_iter()).expect("Failed to create BamlTracer"));
-        *guard = Some(new_tracer.clone());
+        // Config changed, create a new one
+        let new_tracer = Arc::new(
+            BamlTracer::new(None, env_vars.clone().into_iter())
+                .expect("Failed to create BamlTracer"),
+        );
+        *guard = new_tracer.clone();
         new_tracer
     }
 
-    /// Get the current tracer (if any) without changing env vars.
-    pub async fn get_tracer(&self) -> Arc<BamlTracer> {
-        let guard = self.tracer.lock().await;
-        guard.clone().unwrap()
+    /// Get the current tracer without changing env vars.
+    pub fn get_tracer(&self) -> Arc<BamlTracer> {
+        self.tracer.lock().unwrap().clone()
     }
 }
 
@@ -248,7 +247,7 @@ impl BamlRuntime {
 
         Ok(BamlRuntime {
             inner,
-            tracer_wrapper: Arc::new(   BamlTracerWrapper::new(&copy)?),
+            tracer_wrapper: Arc::new(BamlTracerWrapper::new(&copy)?),
             #[cfg(not(target_arch = "wasm32"))]
             async_runtime: Self::get_tokio_singleton()?,
         })
@@ -366,7 +365,6 @@ impl BamlRuntime {
         let span = self
             .tracer_wrapper
             .get_or_create_tracer(&env_vars)
-            .await
             .start_span(test_name, ctx, &Default::default());
 
         let expr_fn = self.inner.ir().find_expr_fn(function_name);
@@ -396,7 +394,7 @@ impl BamlRuntime {
                 ctx,
                 expr_tx.clone(),
                 collector.clone(),
-                self.tracer_wrapper.get_or_create_tracer(&env_vars).await,
+                self.tracer_wrapper.get_or_create_tracer(&env_vars),
                 None,
                 None,
                 env_vars.clone(),
@@ -475,7 +473,7 @@ impl BamlRuntime {
             let mut stream = self.inner.stream_function_impl(
                 function_name.into(),
                 &params,
-                self.tracer_wrapper.get_or_create_tracer(&env_vars).await,
+                self.tracer_wrapper.get_or_create_tracer(&env_vars),
                 rctx,
                 #[cfg(not(target_arch = "wasm32"))]
                 self.async_runtime.clone(),
@@ -534,12 +532,20 @@ impl BamlRuntime {
         let mut target_id = None;
         if let Some(span) = span {
             #[cfg(not(target_arch = "wasm32"))]
-            match self.tracer_wrapper.get_or_create_tracer(&env_vars).await.finish_span(span, ctx, None) {
+            match self
+                .tracer_wrapper
+                .get_or_create_tracer(&env_vars)
+                .finish_span(span, ctx, None)
+            {
                 Ok(id) => target_id = id,
                 Err(e) => log::debug!("Error during logging: {}", e),
             }
             #[cfg(target_arch = "wasm32")]
-            match self.tracer_wrapper.get_or_create_tracer(&env_vars).await.finish_span(span, ctx, None).await {
+            match self
+                .tracer_wrapper
+                .get_or_create_tracer(&env_vars)
+                .finish_span(span, ctx, None)
+            {
                 Ok(id) => target_id = id,
                 Err(e) => log::debug!("Error during logging: {}", e),
             }
@@ -625,7 +631,10 @@ impl BamlRuntime {
         expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
     ) -> (Result<FunctionResult>, Option<uuid::Uuid>) {
         log::trace!("Calling function: {}", function_name);
-        let span = self.tracer_wrapper.get_or_create_tracer(&env_vars).await.start_span(&function_name, ctx, params);
+        let span = self
+            .tracer_wrapper
+            .get_or_create_tracer(&env_vars)
+            .start_span(&function_name, ctx, params);
 
         if let Some(span) = span.clone() {
             if let Some(collectors) = collectors {
@@ -637,127 +646,140 @@ impl BamlRuntime {
 
         let fake_syntax_span = Span::fake();
 
-        let response = match ctx.create_ctx(tb, cb, env_vars.clone(), span.clone().map(|s| s.span_id)) {
-            Ok(rctx) => {
-                let is_expr_fn = self
-                    .inner
-                    .ir()
-                    .expr_fns
-                    .iter()
-                    .find(|f| f.elem.name == function_name)
-                    .is_some();
-                if !is_expr_fn {
-                    self.inner
-                        .call_function_impl(function_name, params, rctx)
-                        .await
-                } else {
-                    // TODO: This code path is ugly. Calling a function heavily assumes that the
-                    // function is an LLM function. Find a way to make function-calling API more
-                    // hospitable to Expression Fns, or create new APIs for calling Expr Fns.
-                    let expr_fn = &self
+        let response =
+            match ctx.create_ctx(tb, cb, env_vars.clone(), span.clone().map(|s| s.span_id)) {
+                Ok(rctx) => {
+                    let is_expr_fn = self
                         .inner
                         .ir()
                         .expr_fns
                         .iter()
                         .find(|f| f.elem.name == function_name)
-                        .expect("We checked earlier that this function is an expr_fn")
-                        .elem;
-                    let fn_expr = expr_fn.expr.clone();
-                    let context = initial_context(&self.inner.ir());
-                    let env = EvalEnv {
-                        context,
-                        runtime: self,
-                        expr_tx: expr_tx.clone(),
-                        evaluated_cache: Arc::new(std::sync::Mutex::new(HashMap::new())),
-                    };
-                    let param_baml_values = params
-                        .iter()
-                        .map(|(k, v)| {
-                            let arg_type = infer_type(v);
-                            let baml_value_with_meta: BamlValueWithMeta<ExprMetadata> =
-                                match arg_type {
-                                    None => Ok::<_, anyhow::Error>(
-                                        BamlValueWithMeta::with_const_meta(v, (Span::fake(), None)),
-                                    ),
-                                    Some(arg_type) => {
-                                        let value_unit_meta: BamlValueWithMeta<()> =
-                                            BamlValueWithMeta::with_const_meta(v, ());
-                                        let baml_value = self
-                                            .inner
-                                            .ir()
-                                            .distribute_type_with_meta(value_unit_meta, arg_type)?;
-                                        let baml_value_with_meta =
-                                            baml_value.map_meta_owned(|(_, field_type)| {
-                                                (Span::fake(), Some(field_type))
-                                            });
+                        .is_some();
+                    if !is_expr_fn {
+                        self.inner
+                            .call_function_impl(function_name, params, rctx)
+                            .await
+                    } else {
+                        // TODO: This code path is ugly. Calling a function heavily assumes that the
+                        // function is an LLM function. Find a way to make function-calling API more
+                        // hospitable to Expression Fns, or create new APIs for calling Expr Fns.
+                        let expr_fn = &self
+                            .inner
+                            .ir()
+                            .expr_fns
+                            .iter()
+                            .find(|f| f.elem.name == function_name)
+                            .expect("We checked earlier that this function is an expr_fn")
+                            .elem;
+                        let fn_expr = expr_fn.expr.clone();
+                        let context = initial_context(&self.inner.ir());
+                        let env = EvalEnv {
+                            context,
+                            runtime: self,
+                            expr_tx: expr_tx.clone(),
+                            evaluated_cache: Arc::new(std::sync::Mutex::new(HashMap::new())),
+                        };
+                        let param_baml_values = params
+                            .iter()
+                            .map(|(k, v)| {
+                                let arg_type = infer_type(v);
+                                let baml_value_with_meta: BamlValueWithMeta<ExprMetadata> =
+                                    match arg_type {
+                                        None => Ok::<_, anyhow::Error>(
+                                            BamlValueWithMeta::with_const_meta(
+                                                v,
+                                                (Span::fake(), None),
+                                            ),
+                                        ),
+                                        Some(arg_type) => {
+                                            let value_unit_meta: BamlValueWithMeta<()> =
+                                                BamlValueWithMeta::with_const_meta(v, ());
+                                            let baml_value =
+                                                self.inner.ir().distribute_type_with_meta(
+                                                    value_unit_meta,
+                                                    arg_type,
+                                                )?;
+                                            let baml_value_with_meta =
+                                                baml_value.map_meta_owned(|(_, field_type)| {
+                                                    (Span::fake(), Some(field_type))
+                                                });
 
-                                        Ok(baml_value_with_meta)
-                                    }
-                                }?;
-                            Ok(Expr::Atom(baml_value_with_meta))
-                        })
-                        .collect::<Result<_>>()
-                        .unwrap_or(vec![]); //TODO: Is it acceptable to swallow errors here?
-
-                    let params_expr: Expr<ExprMetadata> =
-                        Expr::ArgsTuple(param_baml_values, (fake_syntax_span.clone(), None));
-                    let result_type = expr_fn.output.clone();
-                    let fn_call_expr = Expr::App(
-                        Arc::new(fn_expr),
-                        Arc::new(params_expr),
-                        (fake_syntax_span.clone(), Some(result_type.clone())),
-                    );
-                    let res = eval_expr::eval_to_value(&env, &fn_call_expr)
-                        .await
-                        .map(|v| {
-                            v.map(|v| {
-                                ResponseBamlValue(v.map_meta(|_| {
-                                    ResponseValueMeta(
-                                        vec![],
-                                        vec![],
-                                        Completion::default(),
-                                        result_type.clone(),
-                                    )
-                                }))
+                                            Ok(baml_value_with_meta)
+                                        }
+                                    }?;
+                                Ok(Expr::Atom(baml_value_with_meta))
                             })
-                        })
-                        .transpose();
+                            .collect::<Result<_>>()
+                            .unwrap_or(vec![]); //TODO: Is it acceptable to swallow errors here?
 
-                    let llm_response = LLMResponse::Success(LLMCompleteResponse {
-                        client: "openai".to_string(),
-                        model: "gpt-3.5-turbo".to_string(),
-                        prompt: RenderedPrompt::Completion("Sample raw response".to_string()),
-                        request_options: BamlMap::new(),
-                        content: "Sample raw response".to_string(),
-                        start_time: SystemTime::now(),
-                        latency: Duration::from_millis(2025),
-                        metadata: LLMCompleteResponseMetadata {
-                            baml_is_complete: true,
-                            finish_reason: Some("stop".to_string()),
-                            prompt_tokens: Some(50),
-                            output_tokens: Some(50),
-                            total_tokens: Some(100),
-                        },
-                    });
-                    Ok(FunctionResult::new(
-                        OrchestrationScope { scope: vec![] },
-                        llm_response,
-                        res,
-                    ))
+                        let params_expr: Expr<ExprMetadata> =
+                            Expr::ArgsTuple(param_baml_values, (fake_syntax_span.clone(), None));
+                        let result_type = expr_fn.output.clone();
+                        let fn_call_expr = Expr::App(
+                            Arc::new(fn_expr),
+                            Arc::new(params_expr),
+                            (fake_syntax_span.clone(), Some(result_type.clone())),
+                        );
+                        let res = eval_expr::eval_to_value(&env, &fn_call_expr)
+                            .await
+                            .map(|v| {
+                                v.map(|v| {
+                                    ResponseBamlValue(v.map_meta(|_| {
+                                        ResponseValueMeta(
+                                            vec![],
+                                            vec![],
+                                            Completion::default(),
+                                            result_type.clone(),
+                                        )
+                                    }))
+                                })
+                            })
+                            .transpose();
+
+                        let llm_response = LLMResponse::Success(LLMCompleteResponse {
+                            client: "openai".to_string(),
+                            model: "gpt-3.5-turbo".to_string(),
+                            prompt: RenderedPrompt::Completion("Sample raw response".to_string()),
+                            request_options: BamlMap::new(),
+                            content: "Sample raw response".to_string(),
+                            start_time: SystemTime::now(),
+                            latency: Duration::from_millis(2025),
+                            metadata: LLMCompleteResponseMetadata {
+                                baml_is_complete: true,
+                                finish_reason: Some("stop".to_string()),
+                                prompt_tokens: Some(50),
+                                output_tokens: Some(50),
+                                total_tokens: Some(100),
+                            },
+                        });
+                        Ok(FunctionResult::new(
+                            OrchestrationScope { scope: vec![] },
+                            llm_response,
+                            res,
+                        ))
+                    }
                 }
-            }
-            Err(e) => Err(e),
-        };
+                Err(e) => Err(e),
+            };
 
         let mut target_id = None;
         if let Some(span) = span {
             #[cfg(not(target_arch = "wasm32"))]
-            match self.tracer_wrapper.get_or_create_tracer(&env_vars).await.finish_baml_span(span, ctx, &response) {
+            match self
+                .tracer_wrapper
+                .get_or_create_tracer(&env_vars)
+                .finish_baml_span(span, ctx, &response)
+            {
                 Ok(id) => target_id = id,
                 Err(e) => log::debug!("Error during logging: {}", e),
             }
             #[cfg(target_arch = "wasm32")]
-            match self.tracer_wrapper.get_or_create_tracer(&env_vars).await.finish_baml_span(span, ctx, &response).await {
+            match self
+                .tracer_wrapper
+                .get_or_create_tracer(&env_vars)
+                .finish_baml_span(span, ctx, &response)
+            {
                 Ok(id) => target_id = id,
                 Err(e) => log::debug!("Error during logging: {}", e),
             }
@@ -765,7 +787,7 @@ impl BamlRuntime {
         (response, target_id)
     }
 
-    pub async fn stream_function_with_expr_events(
+    pub fn stream_function_with_expr_events(
         &self,
         function_name: String,
         params: &BamlMap<String, BamlValue>,
@@ -779,7 +801,7 @@ impl BamlRuntime {
         self.inner.stream_function_impl(
             function_name,
             params,
-            self.tracer_wrapper.get_or_create_tracer(&env_vars).await,
+            self.tracer_wrapper.get_or_create_tracer(&env_vars),
             ctx.create_ctx(tb, cb, env_vars, None)?,
             #[cfg(not(target_arch = "wasm32"))]
             self.async_runtime.clone(),
@@ -787,7 +809,7 @@ impl BamlRuntime {
         )
     }
 
-    pub async fn stream_function(
+    pub fn stream_function(
         &self,
         function_name: String,
         params: &BamlMap<String, BamlValue>,
@@ -806,7 +828,7 @@ impl BamlRuntime {
             collectors,
             env_vars,
             None,
-        ).await
+        )
     }
 
     pub async fn build_request(
@@ -1061,18 +1083,20 @@ impl<'a> InternalClientLookup<'a> for BamlRuntime {
 }
 
 impl ExperimentalTracingInterface for BamlRuntime {
-    async fn start_span(
+    fn start_span(
         &self,
         function_name: &str,
         params: &BamlMap<String, BamlValue>,
         ctx: &RuntimeContextManager,
         env_vars: &HashMap<String, String>,
     ) -> Option<TracingSpan> {
-        self.tracer_wrapper.get_or_create_tracer(env_vars).await.start_span(function_name, ctx, params)
+        self.tracer_wrapper
+            .get_or_create_tracer(env_vars)
+            .start_span(function_name, ctx, params)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    async fn finish_function_span(
+    fn finish_function_span(
         &self,
         span: Option<TracingSpan>,
         result: &Result<FunctionResult>,
@@ -1080,14 +1104,16 @@ impl ExperimentalTracingInterface for BamlRuntime {
         env_vars: &HashMap<String, String>,
     ) -> Result<Option<uuid::Uuid>> {
         if let Some(span) = span {
-            self.tracer_wrapper.get_or_create_tracer(env_vars).await.finish_baml_span(span, ctx, result)
+            self.tracer_wrapper
+                .get_or_create_tracer(env_vars)
+                .finish_baml_span(span, ctx, result)
         } else {
             Ok(None)
         }
     }
 
     #[cfg(target_arch = "wasm32")]
-    async fn finish_function_span(
+    fn finish_function_span(
         &self,
         span: Option<TracingSpan>,
         result: &Result<FunctionResult>,
@@ -1095,7 +1121,9 @@ impl ExperimentalTracingInterface for BamlRuntime {
         env_vars: &HashMap<String, String>,
     ) -> Result<Option<uuid::Uuid>> {
         if let Some(span) = span {
-            self.tracer_wrapper.get_or_create_tracer(env_vars).await.finish_baml_span(span, ctx, result).await
+            self.tracer_wrapper
+                .get_or_create_tracer(env_vars)
+                .finish_baml_span(span, ctx, result)
         } else {
             Ok(None)
         }
@@ -1103,7 +1131,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
 
     // For non-LLM calls -- used by FFI boundary like with @trace in python
     #[cfg(not(target_arch = "wasm32"))]
-    async fn finish_span(
+    fn finish_span(
         &self,
         span: Option<TracingSpan>,
         result: Option<BamlValue>,
@@ -1111,7 +1139,9 @@ impl ExperimentalTracingInterface for BamlRuntime {
         env_vars: &HashMap<String, String>,
     ) -> Result<Option<uuid::Uuid>> {
         if let Some(span) = span {
-            self.tracer_wrapper.get_or_create_tracer(env_vars).await.finish_span(span, ctx, result)
+            self.tracer_wrapper
+                .get_or_create_tracer(env_vars)
+                .finish_span(span, ctx, result)
         } else {
             Ok(None)
         }
@@ -1126,27 +1156,30 @@ impl ExperimentalTracingInterface for BamlRuntime {
         env_vars: &HashMap<String, String>,
     ) -> Result<Option<uuid::Uuid>> {
         if let Some(span) = span {
-            self.tracer_wrapper.get_or_create_tracer(env_vars).await.finish_span(span, ctx, result).await
+            self.tracer_wrapper
+                .get_or_create_tracer(env_vars)
+                .finish_span(span, ctx, result)
         } else {
             Ok(None)
         }
     }
 
-    async fn flush(&self) -> Result<()> {
-        self.tracer_wrapper.get_tracer().await.flush()
+    fn flush(&self) -> Result<()> {
+        self.tracer_wrapper.get_tracer().flush()
     }
 
-    async fn drain_stats(&self) -> InnerTraceStats {
-        self.tracer_wrapper.get_tracer().await.drain_stats()
+    fn drain_stats(&self) -> InnerTraceStats {
+        self.tracer_wrapper.get_tracer().drain_stats()
     }
 
     #[cfg(not(target_arch = "wasm32"))]
-    async fn set_log_event_callback(
+    fn set_log_event_callback(
         &self,
         log_event_callback: Option<LogEventCallbackSync>,
     ) -> Result<()> {
         self.tracer_wrapper
-            .get_tracer().await.set_log_event_callback(log_event_callback);
+            .get_tracer()
+            .set_log_event_callback(log_event_callback);
         Ok(())
     }
 }

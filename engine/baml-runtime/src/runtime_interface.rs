@@ -57,7 +57,7 @@ pub trait RuntimeInterface {
 //
 
 pub trait ExperimentalTracingInterface {
-    async fn start_span(
+    fn start_span(
         &self,
         function_name: &str,
         params: &BamlMap<String, BamlValue>,
@@ -67,7 +67,7 @@ pub trait ExperimentalTracingInterface {
 
     #[cfg(target_arch = "wasm32")]
     #[allow(async_fn_in_trait)]
-    async fn finish_function_span(
+    fn finish_function_span(
         &self,
         span: Option<TracingSpan>,
         result: &Result<FunctionResult>,
@@ -76,7 +76,7 @@ pub trait ExperimentalTracingInterface {
     ) -> Result<Option<uuid::Uuid>>;
 
     #[cfg(not(target_arch = "wasm32"))]
-    async fn finish_function_span(
+    fn finish_function_span(
         &self,
         span: Option<TracingSpan>,
         result: &Result<FunctionResult>,
@@ -86,7 +86,7 @@ pub trait ExperimentalTracingInterface {
 
     #[cfg(target_arch = "wasm32")]
     #[allow(async_fn_in_trait)]
-    async fn finish_span(
+    fn finish_span(
         &self,
         span: Option<TracingSpan>,
         result: Option<BamlValue>,
@@ -95,7 +95,7 @@ pub trait ExperimentalTracingInterface {
     ) -> Result<Option<uuid::Uuid>>;
 
     #[cfg(not(target_arch = "wasm32"))]
-    async fn finish_span(
+    fn finish_span(
         &self,
         span: Option<TracingSpan>,
         result: Option<BamlValue>,
@@ -103,11 +103,11 @@ pub trait ExperimentalTracingInterface {
         env_vars: &HashMap<String, String>,
     ) -> Result<Option<uuid::Uuid>>;
 
-    async fn flush(&self) -> Result<()>;
-    async fn drain_stats(&self) -> crate::InnerTraceStats;
+    fn flush(&self) -> Result<()>;
+    fn drain_stats(&self) -> crate::InnerTraceStats;
 
     #[cfg(not(target_arch = "wasm32"))]
-    async fn set_log_event_callback(&self, callback: Option<LogEventCallbackSync>) -> Result<()>;
+    fn set_log_event_callback(&self, callback: Option<LogEventCallbackSync>) -> Result<()>;
 }
 
 pub trait InternalClientLookup<'a> {

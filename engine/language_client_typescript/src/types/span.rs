@@ -1,6 +1,7 @@
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_types::BamlValue;
 use napi_derive::napi;
+use std::collections::HashMap;
 
 use super::runtime_ctx_manager::RuntimeContextManager;
 use crate::{errors::invalid_argument_error, BamlRuntime};
@@ -19,7 +20,7 @@ impl BamlSpan {
         function_name: String,
         args: serde_json::Value,
         ctx: &RuntimeContextManager,
-        env_vars: &HashMap<String, String>,
+        env_vars: serde_json::Value,
     ) -> napi::Result<Self> {
         let args: BamlValue = serde_json::from_value(args)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
@@ -27,9 +28,12 @@ impl BamlSpan {
             return Err(invalid_argument_error("Invalid span args"));
         };
 
+        let env_vars: HashMap<String, String> = serde_json::from_value(env_vars)
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
+
         let span = runtime
             .inner
-            .start_span(&function_name, args_map, &ctx.inner, env_vars);
+            .start_span(&function_name, args_map, &ctx.inner, &env_vars);
         log::trace!("Starting span: {:#?} for {:?}\n", span, function_name);
         Ok(Self {
             inner: span.into(),
@@ -43,7 +47,7 @@ impl BamlSpan {
         &mut self,
         result: serde_json::Value,
         ctx: &RuntimeContextManager,
-        env_vars: &HashMap<String, String>,
+        env_vars: serde_json::Value,
     ) -> napi::Result<serde_json::Value> {
         log::trace!("Finishing span: {:?}", self.inner);
         let result: BamlValue = serde_json::from_value(result)
@@ -54,8 +58,11 @@ impl BamlSpan {
             .take()
             .ok_or_else(|| napi::Error::new(napi::Status::GenericFailure, "Already used span"))?;
 
+        let env_vars: HashMap<String, String> = serde_json::from_value(env_vars)
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
+
         self.rt
-            .finish_span(span, Some(result), &ctx.inner, env_vars)
+            .finish_span(span, Some(result), &ctx.inner, &env_vars)
             .map(|u| u.map(|id| id.to_string()))
             .map(|u| serde_json::json!(u))
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))

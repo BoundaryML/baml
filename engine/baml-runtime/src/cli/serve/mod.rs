@@ -329,14 +329,6 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             Err(e) => return e.into_response(),
         };
 
-        let ctx_mgr = {
-            let env_vars = std::env::vars().collect();
-            RuntimeContextManager {
-                baml_src_reader: Arc::new(None),
-                context: Default::default(),
-                global_tags: Default::default(),
-            }
-        };
         let client_registry = b_options.clone().and_then(|options| options.client_registry);
 
         let locked = self.b.read().await;
@@ -347,7 +339,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 |options| options.env(),
             );
         let (result, _trace_id) = locked
-            .call_function(b_fn, &args, &ctx_mgr, None, client_registry.as_ref(), None, env_vars)
+            .call_function(b_fn, &args, &Default::default(), None, client_registry.as_ref(), None, env_vars)
             .await;
 
         match result {
@@ -429,16 +421,6 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         let client_registry = b_options.clone().and_then(|options| options.client_registry);
 
         tokio::spawn(async move {
-            let ctx_mgr =
-                {
-                    let env_vars = std::env::vars().collect();
-                    RuntimeContextManager {
-                        baml_src_reader: Arc::new(None),
-                        context: Default::default(),
-                        global_tags: Default::default(),
-                    }
-                };
-
             let env_vars: HashMap<String, String> = b_options
                 .as_ref()
                 .map_or_else(
@@ -449,7 +431,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             let result_stream = self.b.read().await.stream_function(
                 b_fn,
                 &args,
-                &ctx_mgr,
+                &Default::default(),
                 None,
                 client_registry.as_ref(),
                 Some(vec![]),
@@ -470,7 +452,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                                     }
                                 }
                             }),
-                            &ctx_mgr,
+                            &Default::default(),
                             None,
                             None,
                             HashMap::new(),

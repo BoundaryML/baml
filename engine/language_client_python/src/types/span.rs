@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_types::BamlValue;
 use pyo3::prelude::{pymethods, PyResult};
@@ -18,7 +20,7 @@ crate::lang_wrapper!(BamlSpan,
 #[pymethods]
 impl BamlSpan {
     #[staticmethod]
-    fn new(
+    async fn new(
         py: Python<'_>,
         runtime: &BamlRuntime,
         function_name: &str,
@@ -34,7 +36,8 @@ impl BamlSpan {
 
         let span = runtime
             .inner
-            .start_span(function_name, args_map, &ctx.inner, env_vars);
+            .start_span(function_name, args_map, &ctx.inner, env_vars)
+            .await;
 
         log::trace!("Starting span: {:#?} for {:?}\n", span, function_name);
         Ok(Self {
@@ -44,7 +47,7 @@ impl BamlSpan {
     }
 
     // method to finish
-    fn finish(
+    async fn finish(
         &mut self,
         py: Python<'_>,
         result: PyObject,
@@ -61,6 +64,7 @@ impl BamlSpan {
 
         self.rt
             .finish_span(span, result, &ctx.inner, env_vars)
+            .await
             .map_err(BamlError::from_anyhow)
             .map(|u| u.map(|id| id.to_string()))
     }
