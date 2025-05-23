@@ -36,8 +36,8 @@ export declare class BamlRuntime {
 }
 
 export declare class BamlSpan {
-  static new(runtime: BamlRuntime, functionName: string, args: any, ctx: RuntimeContextManager): BamlSpan
-  finish(result: any, ctx: RuntimeContextManager): any
+  static new(runtime: BamlRuntime, functionName: string, args: any, ctx: RuntimeContextManager, envVars: any): BamlSpan
+  finish(result: any, ctx: RuntimeContextManager, envVars: any): any
 }
 
 export declare class ClassBuilder {

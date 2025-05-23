@@ -20,13 +20,13 @@ crate::lang_wrapper!(BamlSpan,
 #[pymethods]
 impl BamlSpan {
     #[staticmethod]
-    async fn new(
+    fn new(
         py: Python<'_>,
         runtime: &BamlRuntime,
         function_name: &str,
         args: PyObject,
         ctx: &RuntimeContextManager,
-        env_vars: &HashMap<String, String>,
+        env_vars: HashMap<String, String>,
     ) -> PyResult<Self> {
         let args = parse_py_type(args.into_bound(py).into_py_any(py)?, true)?
             .unwrap_or(BamlValue::Map(Default::default()));
@@ -36,8 +36,7 @@ impl BamlSpan {
 
         let span = runtime
             .inner
-            .start_span(function_name, args_map, &ctx.inner, env_vars)
-            .await;
+            .start_span(function_name, args_map, &ctx.inner, &env_vars);
 
         log::trace!("Starting span: {:#?} for {:?}\n", span, function_name);
         Ok(Self {
@@ -47,12 +46,12 @@ impl BamlSpan {
     }
 
     // method to finish
-    async fn finish(
+    fn finish(
         &mut self,
         py: Python<'_>,
         result: PyObject,
         ctx: &RuntimeContextManager,
-        env_vars: &HashMap<String, String>,
+        env_vars: HashMap<String, String>,
     ) -> PyResult<Option<String>> {
         log::trace!("Finishing span: {:?}", self.inner);
         let result = parse_py_type(result.into_bound(py).into_py_any(py)?, true)?;
@@ -63,8 +62,7 @@ impl BamlSpan {
             .ok_or_else(|| BamlError::new_err("Span already finished"))?;
 
         self.rt
-            .finish_span(span, result, &ctx.inner, env_vars)
-            .await
+            .finish_span(span, result, &ctx.inner, &env_vars)
             .map_err(BamlError::from_anyhow)
             .map(|u| u.map(|id| id.to_string()))
     }
