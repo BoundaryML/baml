@@ -25,6 +25,10 @@
       "path": "integ-tests"
     },
     {
+      "name": "jetbrains",
+      "path": "jetbrains"
+    },
+    {
       "name": "release",
       "path": "release"
     },
@@ -44,7 +48,7 @@
       "editor.formatOnSave": true
     },
     "[python]": {
-      "editor.defaultFormatter": "ms-python.black-formatter"
+      "editor.defaultFormatter": "charliermarsh.ruff"
     },
     "[javascript]": {
       "editor.defaultFormatter": "biomejs.biome"
@@ -58,7 +62,8 @@
     "files.associations": {
       "*.baml.j2": "jinja",
       "*.js.j2": "jinja-js",
-      "*.ts.j2": "jinja-js"
+      "*.ts.j2": "jinja-js",
+      "justfile": "makefile"
     },
     "editor.colorDecoratorsLimit": 2000,
     "editor.formatOnSaveMode": "file",

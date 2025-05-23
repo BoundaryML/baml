@@ -130,8 +130,34 @@ tasks {
         gradleVersion = providers.gradleProperty("gradleVersion").get()
     }
 
+    // This task is inherited from a dependency, "intellij platform" maybe?
+    processResources {
+        dependsOn("copyTextmateFiles")
+        dependsOn("copyWebPanelDist")
+    }
+
+    // This task is inherited from a dependency, "intellij platform" maybe?
     publishPlugin {
         dependsOn(patchChangelog)
+    }
+
+    register<Copy>("copyTextmateFiles") {
+        group = "build"
+        from("../typescript/vscode-ext/packages") {
+            include("package.json")
+            include("language-configuration.json")
+            include("syntaxes/baml.tmLanguage.json")
+            include("syntaxes/jinja.tmLanguage.json")
+        }
+        into("src/main/resources/textmate")
+    }
+
+    register<Copy>("copyWebPanelDist") {
+        group = "build"
+        from("../typescript/vscode-ext/packages/web-panel/") {
+            include("dist")
+        }
+        into("src/main/resources/web-panel")
     }
 }
 

@@ -32,5 +32,5 @@ class BamlFileType private constructor() : LanguageFileType(BamlLanguage) {
     /**
      * Returns the icon used for showing files of the type, or `null` if no icon should be shown.
      */
-    override fun getIcon(): Icon? = null
+    override fun getIcon(): Icon? = BamlIcons.FILETYPE
 }

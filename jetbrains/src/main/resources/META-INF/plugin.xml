@@ -10,7 +10,11 @@
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.boundaryml.jetbrains_ext.BamlToolWindowFactory" id="BAML Playground"/>
+        <toolWindow
+                id="BAML Playground"
+                factoryClass="com.boundaryml.jetbrains_ext.BamlToolWindowFactory"
+                icon="/META-INF/discord-logo-red.svg"
+        />
         <postStartupActivity implementation="com.boundaryml.jetbrains_ext.BamlProjectActivity" />
         <fileType name="BAML"
                   language="baml"
