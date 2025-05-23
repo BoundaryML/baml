@@ -221,8 +221,9 @@ fn convert_function_body(
     db: &ParserDatabase,
 ) -> Result<Expr<ExprMetadata>> {
     function_body.expr.repr(db).map(|fn_body| {
-        let expr = function_body
-            .stmts
+        let mut stmts = function_body.stmts.clone();
+        stmts.reverse();
+        let expr = stmts
             .iter()
             .fold(fn_body, |acc, stmt| match stmt.body.repr(db) {
                 Ok(stmt_expr) => Expr::Let(
@@ -396,6 +397,21 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                     else_.map(|e| Arc::new(e)),
                     (span.clone(), None),
                 ))
+            }
+            ast::Expression::ForLoop {
+                identifier,
+                iterator,
+                body,
+                span,
+            } => {
+                let iterator = iterator.repr(db)?;
+                let body = convert_function_body(body.clone(), db)?;
+                Ok(Expr::ForLoop {
+                    item: identifier.to_string(),
+                    iterable: Arc::new(iterator),
+                    body: Arc::new(body),
+                    meta: (span.clone(), None),
+                })
             }
         }
     }
@@ -1719,6 +1735,29 @@ pub fn annotate_variable(
                 new_else.map(|e| Arc::new(e)),
                 meta.clone(),
             )
+        }
+        Expr::ForLoop {
+            item,
+            iterable,
+            body,
+            meta,
+        } => {
+            let new_iterable = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(iterable.clone()),
+            );
+            let new_body = annotate_variable(
+                target.clone(),
+                r#type.clone(),
+                Arc::unwrap_or_clone(body.clone()),
+            );
+            Expr::ForLoop {
+                item: item.clone(),
+                iterable: Arc::new(new_iterable),
+                body: Arc::new(new_body),
+                meta: meta.clone(),
+            }
         }
     }
 }

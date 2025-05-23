@@ -310,7 +310,7 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
                 let new_items = items
                     .into_iter()
                     .map(|i| {
-                        item_type(self, &field_type, &i)
+                        item_type(self, &field_type)
                             .ok_or(anyhow::anyhow!("Could not infer child type"))
                             .and_then(|item_type| self.distribute_type_with_meta(i, item_type))
                     })
@@ -938,10 +938,9 @@ impl IRSemanticStreamingHelper for IntermediateRepr {
 /// should declare as the `item_type` in the case of unions that
 /// admit multiple different children. (Perhaps a union of all the
 /// child-having variants?).
-pub fn item_type<'ir, 'a, T: std::fmt::Debug>(
+pub fn item_type<'ir, 'a>(
     ir: &'ir (impl IRHelperExtended + ?Sized),
     field_type: &'a FieldType,
-    baml_child_values: &BamlValueWithMeta<T>,
 ) -> Option<FieldType> {
     let res = match ir.distribute_metadata(field_type).0 {
         FieldType::Class(_) => None,
@@ -949,15 +948,15 @@ pub fn item_type<'ir, 'a, T: std::fmt::Debug>(
         FieldType::List(inner) => Some(*inner.clone()),
         FieldType::Literal(_) => None,
         FieldType::Map(k, v) => Some(*v.clone()),
-        FieldType::Optional(inner) => item_type(ir, &*inner, baml_child_values),
+        FieldType::Optional(inner) => item_type(ir, &*inner),
         FieldType::Primitive(_) => None,
         FieldType::RecursiveTypeAlias(alias_name) => ir
             .recursive_alias_definition(alias_name)
-            .and_then(|resolved_type| item_type(ir, resolved_type, baml_child_values)),
+            .and_then(|resolved_type| item_type(ir, resolved_type)),
         FieldType::Union(variants) => {
             let variant_children = variants
                 .iter()
-                .filter_map(|variant| item_type(ir, variant, baml_child_values))
+                .filter_map(|variant| item_type(ir, variant))
                 .collect::<Vec<_>>();
             match variant_children.len() {
                 0 => None,
@@ -967,7 +966,7 @@ pub fn item_type<'ir, 'a, T: std::fmt::Debug>(
         }
         FieldType::Tuple(_) => None,
         FieldType::Arrow(_) => None,
-        FieldType::WithMetadata { base, .. } => item_type(ir, base, baml_child_values),
+        FieldType::WithMetadata { base, .. } => item_type(ir, base),
     };
     res
 }
@@ -1684,37 +1683,21 @@ mod subtype_tests {
             (),
         );
         assert_eq!(
-            item_type(
-                &ir,
-                &FieldType::RecursiveTypeAlias("A".to_string()),
-                &example_a
-            ),
+            item_type(&ir, &FieldType::RecursiveTypeAlias("A".to_string()),),
             Some(FieldType::RecursiveTypeAlias("A".to_string()))
         );
         assert_eq!(
-            item_type(
-                &ir,
-                &FieldType::RecursiveTypeAlias("B".to_string()),
-                &example_b
-            ),
+            item_type(&ir, &FieldType::RecursiveTypeAlias("B".to_string()),),
             Some(FieldType::List(Box::new(FieldType::RecursiveTypeAlias(
                 "B".to_string()
             ))))
         );
         assert_eq!(
-            item_type(
-                &ir,
-                &FieldType::RecursiveTypeAlias("C".to_string()),
-                &example_c
-            ),
+            item_type(&ir, &FieldType::RecursiveTypeAlias("C".to_string()),),
             Some(FieldType::RecursiveTypeAlias("C".to_string()))
         );
         assert_eq!(
-            item_type(
-                &ir,
-                &FieldType::RecursiveTypeAlias("JsonValue".to_string()),
-                &example_json
-            ),
+            item_type(&ir, &FieldType::RecursiveTypeAlias("JsonValue".to_string()),),
             Some(FieldType::Union(vec![
                 FieldType::RecursiveTypeAlias("JsonValue".to_string()),
                 FieldType::RecursiveTypeAlias("JsonValue".to_string())
