@@ -97,13 +97,13 @@ pub(super) struct CompleteAPIConfig {
 
 impl PartialEq for CompleteAPIConfig {
     fn eq(&self, other: &Self) -> bool {
-        self.base_url == other.base_url && self.api_key == other.api_key && self.project_id == other.project_id && self.stage == other.stage && self.sessions_id == other.sessions_id && self.host_name == other.host_name && self.log_redaction_enabled == other.log_redaction_enabled && self.log_redaction_placeholder == other.log_redaction_placeholder && self.max_log_chunk_chars == other.max_log_chunk_chars
+        self.base_url == other.base_url && self.api_key == other.api_key && self.project_id == other.project_id && self.stage == other.stage && self.host_name == other.host_name
     }
 }
 
 impl PartialEq for PartialAPIConfig {
     fn eq(&self, other: &Self) -> bool {
-        self.base_url == other.base_url && self.api_key == other.api_key && self.project_id == other.project_id && self.stage == other.stage && self.sessions_id == other.sessions_id && self.host_name == other.host_name && self.log_redaction_enabled == other.log_redaction_enabled && self.log_redaction_placeholder == other.log_redaction_placeholder && self.max_log_chunk_chars == other.max_log_chunk_chars
+        self.base_url == other.base_url && self.api_key == other.api_key && self.project_id == other.project_id && self.stage == other.stage && self.host_name == other.host_name
     }
 }
 

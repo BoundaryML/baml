@@ -76,6 +76,10 @@ use std::sync::OnceLock;
 use tracingv2::storage::storage::Collector;
 use tracingv2::storage::storage::BAML_TRACER;
 use web_time::SystemTime;
+use dashmap::DashMap;
+use serde_json;
+use std::hash::{Hash, Hasher};
+use std::collections::hash_map::DefaultHasher;
 
 use crate::internal::llm_client::LLMCompleteResponseMetadata;
 #[cfg(not(target_arch = "wasm32"))]
@@ -125,36 +129,61 @@ static INIT: std::sync::Once = std::sync::Once::new();
 //     }
 // }
 pub struct BamlTracerWrapper {
-    tracer: Mutex<Arc<BamlTracer>>,
+    tracers: DashMap<String, Arc<BamlTracer>>,
 }
 
 impl BamlTracerWrapper {
+    /// Helper to filter only the relevant env_vars (BOUNDARY_*) for use as a key and config.
+    fn filter_relevant_env_vars(env_vars: &HashMap<String, String>) -> HashMap<String, String> {
+        env_vars
+            .iter()
+            .filter(|(k, _)| k.starts_with("BOUNDARY_"))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+
+    /// Helper to deterministically hash only the relevant env_vars (BOUNDARY_*) for use as a key.
+    fn env_vars_key(env_vars: &HashMap<String, String>) -> String {
+        let filtered = Self::filter_relevant_env_vars(env_vars);
+        let mut items: Vec<_> = filtered.iter().collect();
+        items.sort_by(|a, b| a.0.cmp(b.0));
+        serde_json::to_string(&items).unwrap()
+    }
+
     /// Create a new BamlTracerWrapper and insert a tracer for the given env vars.
     pub fn new(env_vars: &HashMap<String, String>) -> Result<Self> {
-        let tracer = Arc::new(BamlTracer::new(None, env_vars.clone().into_iter())?);
-        Ok(Self {
-            tracer: Mutex::new(tracer),
-        })
+        let tracers = DashMap::new();
+        let filtered = Self::filter_relevant_env_vars(env_vars);
+        let key = Self::env_vars_key(env_vars);
+        let tracer = Arc::new(BamlTracer::new(None, filtered.clone().into_iter())?);
+        tracers.insert(key, tracer);
+        Ok(Self { tracers })
     }
 
     /// Get the tracer for the given env vars, creating a new one if the config changed.
     pub fn get_or_create_tracer(&self, env_vars: &HashMap<String, String>) -> Arc<BamlTracer> {
-        let mut guard = self.tracer.lock().unwrap();
-        if guard.config_matches_env_vars(env_vars) {
-            return guard.clone();
+        let filtered = Self::filter_relevant_env_vars(env_vars);
+        let key = Self::env_vars_key(env_vars);
+        if let Some(existing) = self.tracers.get(&key) {
+            if existing.config_matches_env_vars(&filtered) {
+                let cloned = existing.clone();
+                return cloned;
+            }
         }
-        // Config changed, create a new one
+        // Config changed, clear all and insert new
+        self.tracers.clear();
         let new_tracer = Arc::new(
-            BamlTracer::new(None, env_vars.clone().into_iter())
+            BamlTracer::new(None, filtered.clone().into_iter())
                 .expect("Failed to create BamlTracer"),
         );
-        *guard = new_tracer.clone();
+        self.tracers.insert(key, new_tracer.clone());
         new_tracer
     }
 
-    /// Get the current tracer without changing env vars.
+    /// Get the current tracer (the only one in the map, if any).
     pub fn get_tracer(&self) -> Arc<BamlTracer> {
-        self.tracer.lock().unwrap().clone()
+        // Return the first tracer if any, else panic (should always have one)
+        self.tracers.iter().next().expect("No tracer found").clone()
     }
 }
 
