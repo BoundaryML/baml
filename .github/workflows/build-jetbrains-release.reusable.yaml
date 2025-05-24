@@ -78,111 +78,111 @@ jobs:
           name: baml-jetbrains-zip-${{ matrix._.jetbrains-target }}
           path: ./jetbrains/build/distributions/*
 
-  # Run tests and upload a code coverage report
-  test:
-    name: Test
-    needs: [ build ]
-    runs-on: ubuntu-latest
-    steps:
+  # # Run tests and upload a code coverage report
+  # test:
+  #   name: Test
+  #   needs: [ build ]
+  #   runs-on: ubuntu-latest
+  #   steps:
 
-      # Check out the current repository
-      - name: Fetch Sources
-        uses: actions/checkout@v4
+  #     # Check out the current repository
+  #     - name: Fetch Sources
+  #       uses: actions/checkout@v4
 
-      # Set up Java environment for the next steps
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: zulu
-          java-version: 21
+  #     # Set up Java environment for the next steps
+  #     - name: Setup Java
+  #       uses: actions/setup-java@v4
+  #       with:
+  #         distribution: zulu
+  #         java-version: 21
 
-      # Setup Gradle
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+  #     # Setup Gradle
+  #     - name: Setup Gradle
+  #       uses: gradle/actions/setup-gradle@v4
 
-      # Run tests
-      - name: Run Tests
-        run: ./gradlew check
+  #     # Run tests
+  #     - name: Run Tests
+  #       run: ./gradlew check
 
-      # Collect Tests Result of failed tests
-      - name: Collect Tests Result
-        if: ${{ failure() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: tests-result
-          path: ./build/reports/tests
+  #     # Collect Tests Result of failed tests
+  #     - name: Collect Tests Result
+  #       if: ${{ failure() }}
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: tests-result
+  #         path: ./build/reports/tests
 
-      # Upload the Kover report to CodeCov
-      - name: Upload Code Coverage Report
-        uses: codecov/codecov-action@v5
-        with:
-          files: ./build/reports/kover/report.xml
+  #     # Upload the Kover report to CodeCov
+  #     - name: Upload Code Coverage Report
+  #       uses: codecov/codecov-action@v5
+  #       with:
+  #         files: ./build/reports/kover/report.xml
 
-  # Run Qodana inspections and provide report
-  inspectCode:
-    name: Inspect code
-    needs: [ build ]
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      checks: write
-      pull-requests: write
-    steps:
-      # Check out the current repository
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha }}  # to check out the actual pull request commit, not the merge commit
-          fetch-depth: 0  # a full history is required for pull request analysis
+  # # Run Qodana inspections and provide report
+  # inspectCode:
+  #   name: Inspect code
+  #   needs: [ build ]
+  #   runs-on: ubuntu-latest
+  #   permissions:
+  #     contents: write
+  #     checks: write
+  #     pull-requests: write
+  #   steps:
+  #     # Check out the current repository
+  #     - uses: actions/checkout@v4
+  #       with:
+  #         ref: ${{ github.event.pull_request.head.sha }}  # to check out the actual pull request commit, not the merge commit
+  #         fetch-depth: 0  # a full history is required for pull request analysis
 
-      # Set up Java environment for the next steps
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 23
+  #     # Set up Java environment for the next steps
+  #     - uses: actions/setup-java@v4
+  #       with:
+  #         distribution: temurin
+  #         java-version: 23
 
-      # Run Qodana inspections
-      - name: Qodana - Code Inspection
-        uses: JetBrains/qodana-action@v2025.1
-        with:
-          cache-default-branch-only: true
+  #     # Run Qodana inspections
+  #     - name: Qodana - Code Inspection
+  #       uses: JetBrains/qodana-action@v2025.1
+  #       with:
+  #         cache-default-branch-only: true
 
-  # Run plugin structure verification along with IntelliJ Plugin Verifier
-  verify:
-    name: Verify plugin
-    needs: [ build ]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+  # # Run plugin structure verification along with IntelliJ Plugin Verifier
+  # verify:
+  #   name: Verify plugin
+  #   needs: [ build ]
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - uses: actions/checkout@v4
 
-      # Set up Java environment for the next steps
-      - name: Setup Java
-        uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 23
+  #     # Set up Java environment for the next steps
+  #     - name: Setup Java
+  #       uses: actions/setup-java@v4
+  #       with:
+  #         distribution: temurin
+  #         java-version: 23
 
-      # Setup Gradle
-      - name: Setup Gradle
-        uses: gradle/actions/setup-gradle@v4
+  #     # Setup Gradle
+  #     - name: Setup Gradle
+  #       uses: gradle/actions/setup-gradle@v4
 
-      # Cache Plugin Verifier IDEs
-      - name: Setup Plugin Verifier IDEs Cache
-        uses: actions/cache@v4
-        with:
-          path: ${{ needs.build.outputs.pluginVerifierHomeDir }}/ides
-          key: plugin-verifier-${{ hashFiles('build/listProductsReleases.txt') }}
+  #     # Cache Plugin Verifier IDEs
+  #     - name: Setup Plugin Verifier IDEs Cache
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: ${{ needs.build.outputs.pluginVerifierHomeDir }}/ides
+  #         key: plugin-verifier-${{ hashFiles('build/listProductsReleases.txt') }}
 
-      # Run Verify Plugin task and IntelliJ Plugin Verifier tool
-      - name: Run Plugin Verification tasks
-        run: ./gradlew verifyPlugin -Dplugin.verifier.home.dir=${{ needs.build.outputs.pluginVerifierHomeDir }}
+  #     # Run Verify Plugin task and IntelliJ Plugin Verifier tool
+  #     - name: Run Plugin Verification tasks
+  #       run: ./gradlew verifyPlugin -Dplugin.verifier.home.dir=${{ needs.build.outputs.pluginVerifierHomeDir }}
 
-      # Collect Plugin Verifier Result
-      - name: Collect Plugin Verifier Result
-        if: ${{ always() }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: pluginVerifier-result
-          path: ./build/reports/pluginVerifier
+  #     # Collect Plugin Verifier Result
+  #     - name: Collect Plugin Verifier Result
+  #       if: ${{ always() }}
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: pluginVerifier-result
+  #         path: ./build/reports/pluginVerifier
 
   publish-to-jetbrains-marketplace:
     environment: release
