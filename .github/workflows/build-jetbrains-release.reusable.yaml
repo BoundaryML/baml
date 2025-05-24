@@ -207,6 +207,7 @@ jobs:
         with:
           pattern: baml-jetbrains-zip-*
           path: ./jetbrains/build/distributions/ # Download to a dedicated directory
+          merge-multiple: true
 
       - name: List downloaded extension zips
         run: ls -al ./build/distributions/
