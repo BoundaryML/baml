@@ -22,7 +22,7 @@ pub(crate) struct GoTypes<'ir> {
 pub(crate) fn cast_value(container_variable_name: &str, field_type: &GoType) -> String {
     if field_type.is_slice || field_type.is_map {
         return format!("({}).({})", container_variable_name, field_type.name);
-    } else if field_type.is_pointer {
+    } else if field_type.is_pointer || field_type.is_stream_pointer {
         let inner_type = field_type.underlying_type.as_ref().unwrap();
         return format!(
             "castOptional({container_variable_name}, func (item any) *{} {{
@@ -37,27 +37,29 @@ pub(crate) fn cast_value(container_variable_name: &str, field_type: &GoType) -> 
 }
 
 fn render_value_coercion(container_variable_name: &str, field_type: &GoType) -> String {
-    if field_type.is_pointer && !field_type.is_slice && !field_type.is_map {
-        if field_type.is_union {
+    if (field_type.is_pointer || field_type.is_stream_pointer) && !field_type.is_slice && !field_type.is_map {
+        if field_type.is_stream_pointer {
             let type_name = &field_type.name;
             return format!("func () {type_name} {{ 
     _retVal := baml.Decode({container_variable_name})
-    if _retVal == nil {{
-        return nil
+    if _retVal != nil {{
+        return _retVal.({type_name})
     }}
-    return _retVal.({type_name})
-}}()");
+    return {}
+}}()", if field_type.wrap_state { format!("{}{{}}", type_name) } else { "nil".to_string() });
         } else {
         let type_name = &field_type.name;
         format!("func() {type_name} {{
     val := baml.DecodeOptional({container_variable_name}, func(__holder *cffi.CFFIValueHolder) {type_name} {{
         return baml.Decode(__holder).({type_name})
     }})
+    // dbg
+    {}
     if val != nil {{
         return *val
     }}
     return {}
-}}()", if field_type.wrap_state { format!("{}{{}}", type_name) } else { "nil".to_string() })
+}}()", format!("{:#?}", field_type).split("\n").map(|line| format!("  // {}", line)).collect::<Vec<_>>().join("\n"), if field_type.wrap_state { format!("{}{{}}", type_name) } else { "nil".to_string() })
         }
     } else if field_type.is_slice {
         let inner_type = field_type.underlying_type.as_ref().unwrap();
@@ -233,9 +235,11 @@ struct GoField<'ir> {
     docstring: Option<String>,
 }
 
+#[derive(Debug)]
 pub struct GoType {
     pub name: String,
     pub is_pointer: bool,
+    pub is_stream_pointer: bool,
     pub is_slice: bool,
     pub is_map: bool,
     pub is_primitive: bool,
@@ -460,11 +464,12 @@ impl<'ir> From<ClassWalker<'ir>> for PartialGoClass<'ir> {
                         let needed = f.attributes.get("stream.not_null").is_some();
                         let wrapped = f.attributes.get("stream.with_state").is_some();
                         let done = f.attributes.get("stream.done").is_some();
+                        println!("{}.{} {}, done: {} - cls_done: {} - is_union: {}", c.name(), f.elem.name, f.elem.r#type.elem, done, cls_done, matches!(f.elem.r#type.elem, FieldType::Union(_)));
                         let ret = f
                             .elem
                             .r#type
                             .elem
-                            .to_partial_type_ref_go_type(c.ir, wrapped, needed, !(cls_done || done));
+                            .to_partial_type_ref_go_type(c.ir, wrapped, needed, cls_done || done);
                         ret
                     },
                     docstring: f.elem.docstring.as_ref().map(render_docstring),
@@ -544,6 +549,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         GoType {
             name: simplified.to_type_ref_impl_2(ir, module_prefix),
             is_pointer: self.is_optional(),
+            is_stream_pointer: false,
             is_map: matches!(simplified, FieldType::Map(_, _)),
             is_union: matches!(simplified, FieldType::Union(_)),
             is_slice: matches!(simplified, FieldType::List(_)),
@@ -574,8 +580,8 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         // let needed = needed || simplified.streaming_behavior().map_or(false, |f| f.done);
         GoType {
             name: simplified.to_partial_type_ref_impl_2(ir, wrapped, needed, if module_prefix { "types" } else { "" }),
-            is_pointer: self.is_optional() || !needed,
-            // is_pointer: if wrapped { self.is_optional() } else if needed { self.is_optional() } else { true },
+            is_pointer: self.is_optional(),
+            is_stream_pointer: self.is_optional() || !needed,
             is_map: matches!(simplified, FieldType::Map(_, _)),
             is_union: matches!(simplified, FieldType::Union(_)),
             is_slice: matches!(simplified, FieldType::List(_)),
@@ -657,7 +663,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         let (base_type, metadata) = ir.distribute_metadata(self);
         let is_partial_type = !metadata.1.done;
         let use_module_prefix = !is_partial_type
-            || matches!(self, FieldType::Union(_) | FieldType::RecursiveTypeAlias(_));
+            || matches!(self, FieldType::Union(_)) || matches!(self, FieldType::RecursiveTypeAlias(_));
         let with_state = metadata.1.state;
         let constraints = metadata.0;
         let module_prefix = if use_module_prefix {
@@ -672,7 +678,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
 
         let checks = field_type_attributes(self);
 
-        let use_partial_type = !(wrapped || needed || checks.is_some());
+        let use_partial_type = !(metadata.1.done || wrapped || needed || checks.is_some());
 
         let base_rep = match base_type {
             FieldType::Class(name) => {

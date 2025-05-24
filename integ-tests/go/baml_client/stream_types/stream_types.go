@@ -100,33 +100,27 @@ func (c *AnotherObject) Decode(holder cffi.CFFIValueClass) {
 
 			case "id":
 				c.Id = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "thingy2":
 				c.Thingy2 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "thingy3":
 				c.Thingy3 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -165,22 +159,18 @@ func (c *BigNumbers) Decode(holder cffi.CFFIValueClass) {
 
 			case "a":
 				c.A = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
 
 			case "b":
 				c.B = func() *float64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *float64 {
-						return baml.Decode(__holder).(*float64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*float64)
 					}
 					return nil
 				}()
@@ -198,9 +188,9 @@ func (c BigNumbers) BamlTypeName() string {
 type BinaryNode struct {
 	Data *int64 `json:"data"`
 
-	Left *types.BinaryNode `json:"left"`
+	Left *BinaryNode `json:"left"`
 
-	Right *types.BinaryNode `json:"right"`
+	Right *BinaryNode `json:"right"`
 }
 
 func (c *BinaryNode) Decode(holder cffi.CFFIValueClass) {
@@ -221,33 +211,27 @@ func (c *BinaryNode) Decode(holder cffi.CFFIValueClass) {
 
 			case "data":
 				c.Data = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
 
 			case "left":
-				c.Left = func() *types.BinaryNode {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.BinaryNode {
-						return baml.Decode(__holder).(*types.BinaryNode)
-					})
-					if val != nil {
-						return *val
+				c.Left = func() *BinaryNode {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*BinaryNode)
 					}
 					return nil
 				}()
 
 			case "right":
-				c.Right = func() *types.BinaryNode {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.BinaryNode {
-						return baml.Decode(__holder).(*types.BinaryNode)
-					})
-					if val != nil {
-						return *val
+				c.Right = func() *BinaryNode {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*BinaryNode)
 					}
 					return nil
 				}()
@@ -284,11 +268,9 @@ func (c *Blah) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop4":
 				c.Prop4 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -327,22 +309,18 @@ func (c *BlockConstraint) Decode(holder cffi.CFFIValueClass) {
 
 			case "foo":
 				c.Foo = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
 
 			case "bar":
 				c.Bar = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -381,22 +359,18 @@ func (c *BlockConstraintForParam) Decode(holder cffi.CFFIValueClass) {
 
 			case "bcfp":
 				c.Bcfp = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
 
 			case "bcfp2":
 				c.Bcfp2 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -439,44 +413,36 @@ func (c *BookOrder) Decode(holder cffi.CFFIValueClass) {
 
 			case "orderId":
 				c.OrderId = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "title":
 				c.Title = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "quantity":
 				c.Quantity = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
 
 			case "price":
 				c.Price = func() *float64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *float64 {
-						return baml.Decode(__holder).(*float64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*float64)
 					}
 					return nil
 				}()
@@ -513,11 +479,9 @@ func (c *ClassForNullLiteral) Decode(holder cffi.CFFIValueClass) {
 
 			case "a":
 				c.A = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -556,22 +520,18 @@ func (c *ClassOptionalOutput) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop1":
 				c.Prop1 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "prop2":
 				c.Prop2 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -591,7 +551,7 @@ type ClassOptionalOutput2 struct {
 
 	Prop2 *string `json:"prop2"`
 
-	Prop3 *types.Blah `json:"prop3"`
+	Prop3 *Blah `json:"prop3"`
 }
 
 func (c *ClassOptionalOutput2) Decode(holder cffi.CFFIValueClass) {
@@ -612,33 +572,27 @@ func (c *ClassOptionalOutput2) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop1":
 				c.Prop1 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "prop2":
 				c.Prop2 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "prop3":
-				c.Prop3 = func() *types.Blah {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Blah {
-						return baml.Decode(__holder).(*types.Blah)
-					})
-					if val != nil {
-						return *val
+				c.Prop3 = func() *Blah {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*Blah)
 					}
 					return nil
 				}()
@@ -654,7 +608,7 @@ func (c ClassOptionalOutput2) BamlTypeName() string {
 }
 
 type ClassToRecAlias struct {
-	List *types.LinkedListAliasNode `json:"list"`
+	List *LinkedListAliasNode `json:"list"`
 }
 
 func (c *ClassToRecAlias) Decode(holder cffi.CFFIValueClass) {
@@ -674,12 +628,10 @@ func (c *ClassToRecAlias) Decode(holder cffi.CFFIValueClass) {
 			switch key {
 
 			case "list":
-				c.List = func() *types.LinkedListAliasNode {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.LinkedListAliasNode {
-						return baml.Decode(__holder).(*types.LinkedListAliasNode)
-					})
-					if val != nil {
-						return *val
+				c.List = func() *LinkedListAliasNode {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*LinkedListAliasNode)
 					}
 					return nil
 				}()
@@ -718,22 +670,18 @@ func (c *ClassWithBlockDone) Decode(holder cffi.CFFIValueClass) {
 
 			case "i_16_digits":
 				c.I_16_digits = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
 
 			case "s_20_words":
 				c.S_20_words = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -753,7 +701,7 @@ type ClassWithImage struct {
 
 	Param2 *string `json:"param2"`
 
-	Fake_image *types.FakeImage `json:"fake_image"`
+	Fake_image *FakeImage `json:"fake_image"`
 }
 
 func (c *ClassWithImage) Decode(holder cffi.CFFIValueClass) {
@@ -774,33 +722,27 @@ func (c *ClassWithImage) Decode(holder cffi.CFFIValueClass) {
 
 			case "myImage":
 				c.MyImage = func() *any {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *any {
-						return baml.Decode(__holder).(*any)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*any)
 					}
 					return nil
 				}()
 
 			case "param2":
 				c.Param2 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "fake_image":
-				c.Fake_image = func() *types.FakeImage {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.FakeImage {
-						return baml.Decode(__holder).(*types.FakeImage)
-					})
-					if val != nil {
-						return *val
+				c.Fake_image = func() *FakeImage {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*FakeImage)
 					}
 					return nil
 				}()
@@ -839,22 +781,18 @@ func (c *ClassWithoutDone) Decode(holder cffi.CFFIValueClass) {
 
 			case "i_16_digits":
 				c.I_16_digits = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
 
 			case "s_20_words":
 				c.S_20_words = func() StreamState[*string] {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) StreamState[*string] {
-						return baml.Decode(__holder).(StreamState[*string])
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(StreamState[*string])
 					}
 					return StreamState[*string]{}
 				}()
@@ -903,77 +841,63 @@ func (c *ClientDetails1559) Decode(holder cffi.CFFIValueClass) {
 
 			case "client_name":
 				c.Client_name = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "client_address":
 				c.Client_address = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "client_postal_code":
 				c.Client_postal_code = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "client_city":
 				c.Client_city = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "client_country":
 				c.Client_country = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "client_phone":
 				c.Client_phone = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "client_email":
 				c.Client_email = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -1016,40 +940,34 @@ func (c *ComplexMemoryObject) Decode(holder cffi.CFFIValueClass) {
 
 			case "id":
 				c.Id = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "name":
 				c.Name = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "description":
 				c.Description = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "metadata":
-				c.Metadata = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Union__string__int__float {
-					return *baml.Decode(__holder).(*types.Union__string__int__float)
+				c.Metadata = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) Union__string__int__float {
+					return *baml.Decode(__holder).(*Union__string__int__float)
 				})
 
 			}
@@ -1063,11 +981,11 @@ func (c ComplexMemoryObject) BamlTypeName() string {
 }
 
 type CompoundBigNumbers struct {
-	Big *types.BigNumbers `json:"big"`
+	Big *BigNumbers `json:"big"`
 
-	Big_nums []types.BigNumbers `json:"big_nums"`
+	Big_nums []BigNumbers `json:"big_nums"`
 
-	Another *types.BigNumbers `json:"another"`
+	Another *BigNumbers `json:"another"`
 }
 
 func (c *CompoundBigNumbers) Decode(holder cffi.CFFIValueClass) {
@@ -1087,28 +1005,24 @@ func (c *CompoundBigNumbers) Decode(holder cffi.CFFIValueClass) {
 			switch key {
 
 			case "big":
-				c.Big = func() *types.BigNumbers {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.BigNumbers {
-						return baml.Decode(__holder).(*types.BigNumbers)
-					})
-					if val != nil {
-						return *val
+				c.Big = func() *BigNumbers {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*BigNumbers)
 					}
 					return nil
 				}()
 
 			case "big_nums":
-				c.Big_nums = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) types.BigNumbers {
-					return *baml.Decode(__holder).(*types.BigNumbers)
+				c.Big_nums = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) BigNumbers {
+					return *baml.Decode(__holder).(*BigNumbers)
 				})
 
 			case "another":
-				c.Another = func() *types.BigNumbers {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.BigNumbers {
-						return baml.Decode(__holder).(*types.BigNumbers)
-					})
-					if val != nil {
-						return *val
+				c.Another = func() *BigNumbers {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*BigNumbers)
 					}
 					return nil
 				}()
@@ -1148,19 +1062,17 @@ func (c *ContactInfo) Decode(holder cffi.CFFIValueClass) {
 			case "primary":
 				c.Primary = func() *types.Union__PhoneNumber__EmailAddress {
 					_retVal := baml.Decode(valueHolder)
-					if _retVal == nil {
-						return nil
+					if _retVal != nil {
+						return _retVal.(*types.Union__PhoneNumber__EmailAddress)
 					}
-					return _retVal.(*types.Union__PhoneNumber__EmailAddress)
+					return nil
 				}()
 
 			case "secondary":
 				c.Secondary = func() *types.Union__PhoneNumber__EmailAddress {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Union__PhoneNumber__EmailAddress {
-						return baml.Decode(__holder).(*types.Union__PhoneNumber__EmailAddress)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.Union__PhoneNumber__EmailAddress)
 					}
 					return nil
 				}()
@@ -1201,11 +1113,9 @@ func (c *CustomStory) Decode(holder cffi.CFFIValueClass) {
 
 			case "title":
 				c.Title = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -1217,11 +1127,9 @@ func (c *CustomStory) Decode(holder cffi.CFFIValueClass) {
 
 			case "content":
 				c.Content = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -1237,11 +1145,11 @@ func (c CustomStory) BamlTypeName() string {
 }
 
 type CustomTaskResult struct {
-	BookOrder *types.BookOrder `json:"bookOrder"`
+	BookOrder *BookOrder `json:"bookOrder"`
 
-	FlightConfirmation *types.FlightConfirmation `json:"flightConfirmation"`
+	FlightConfirmation *FlightConfirmation `json:"flightConfirmation"`
 
-	GroceryReceipt *types.GroceryReceipt `json:"groceryReceipt"`
+	GroceryReceipt *GroceryReceipt `json:"groceryReceipt"`
 }
 
 func (c *CustomTaskResult) Decode(holder cffi.CFFIValueClass) {
@@ -1261,34 +1169,28 @@ func (c *CustomTaskResult) Decode(holder cffi.CFFIValueClass) {
 			switch key {
 
 			case "bookOrder":
-				c.BookOrder = func() *types.BookOrder {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.BookOrder {
-						return baml.Decode(__holder).(*types.BookOrder)
-					})
-					if val != nil {
-						return *val
+				c.BookOrder = func() *BookOrder {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*BookOrder)
 					}
 					return nil
 				}()
 
 			case "flightConfirmation":
-				c.FlightConfirmation = func() *types.FlightConfirmation {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.FlightConfirmation {
-						return baml.Decode(__holder).(*types.FlightConfirmation)
-					})
-					if val != nil {
-						return *val
+				c.FlightConfirmation = func() *FlightConfirmation {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*FlightConfirmation)
 					}
 					return nil
 				}()
 
 			case "groceryReceipt":
-				c.GroceryReceipt = func() *types.GroceryReceipt {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.GroceryReceipt {
-						return baml.Decode(__holder).(*types.GroceryReceipt)
-					})
-					if val != nil {
-						return *val
+				c.GroceryReceipt = func() *GroceryReceipt {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*GroceryReceipt)
 					}
 					return nil
 				}()
@@ -1304,9 +1206,9 @@ func (c CustomTaskResult) BamlTypeName() string {
 }
 
 type Document1559 struct {
-	Client_details *types.ClientDetails1559 `json:"client_details"`
+	Client_details *ClientDetails1559 `json:"client_details"`
 
-	Notes []types.Note1599 `json:"notes"`
+	Notes []Note1599 `json:"notes"`
 }
 
 func (c *Document1559) Decode(holder cffi.CFFIValueClass) {
@@ -1326,19 +1228,17 @@ func (c *Document1559) Decode(holder cffi.CFFIValueClass) {
 			switch key {
 
 			case "client_details":
-				c.Client_details = func() *types.ClientDetails1559 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.ClientDetails1559 {
-						return baml.Decode(__holder).(*types.ClientDetails1559)
-					})
-					if val != nil {
-						return *val
+				c.Client_details = func() *ClientDetails1559 {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*ClientDetails1559)
 					}
 					return nil
 				}()
 
 			case "notes":
-				c.Notes = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Note1599 {
-					return *baml.Decode(__holder).(*types.Note1599)
+				c.Notes = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) Note1599 {
+					return *baml.Decode(__holder).(*Note1599)
 				})
 
 			}
@@ -1377,22 +1277,18 @@ func (c *DummyOutput) Decode(holder cffi.CFFIValueClass) {
 
 			case "nonce":
 				c.Nonce = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "nonce2":
 				c.Nonce2 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -1440,11 +1336,9 @@ func (c *DynInputOutput) Decode(holder cffi.CFFIValueClass) {
 
 			case "testKey":
 				c.TestKey = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -1499,7 +1393,7 @@ func (c DynamicClassOne) BamlTypeName() string {
 type DynamicClassTwo struct {
 	Hi *string `json:"hi"`
 
-	Some_class *types.SomeClassNestedDynamic `json:"some_class"`
+	Some_class *SomeClassNestedDynamic `json:"some_class"`
 
 	Status *types.DynEnumOne `json:"status"`
 
@@ -1524,33 +1418,27 @@ func (c *DynamicClassTwo) Decode(holder cffi.CFFIValueClass) {
 
 			case "hi":
 				c.Hi = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "some_class":
-				c.Some_class = func() *types.SomeClassNestedDynamic {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.SomeClassNestedDynamic {
-						return baml.Decode(__holder).(*types.SomeClassNestedDynamic)
-					})
-					if val != nil {
-						return *val
+				c.Some_class = func() *SomeClassNestedDynamic {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*SomeClassNestedDynamic)
 					}
 					return nil
 				}()
 
 			case "status":
 				c.Status = func() *types.DynEnumOne {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.DynEnumOne {
-						return baml.Decode(__holder).(*types.DynEnumOne)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.DynEnumOne)
 					}
 					return nil
 				}()
@@ -1652,11 +1540,9 @@ func (c *Earthling) Decode(holder cffi.CFFIValueClass) {
 
 			case "age":
 				c.Age = func() *types.Checked[int64] {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Checked[int64] {
-						return baml.Decode(__holder).(*types.Checked[int64])
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.Checked[int64])
 					}
 					return nil
 				}()
@@ -1701,33 +1587,27 @@ func (c *Education) Decode(holder cffi.CFFIValueClass) {
 
 			case "institution":
 				c.Institution = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "location":
 				c.Location = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "degree":
 				c.Degree = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -1739,11 +1619,9 @@ func (c *Education) Decode(holder cffi.CFFIValueClass) {
 
 			case "graduation_date":
 				c.Graduation_date = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -1784,33 +1662,27 @@ func (c *Email) Decode(holder cffi.CFFIValueClass) {
 
 			case "subject":
 				c.Subject = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "body":
 				c.Body = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "from_address":
 				c.From_address = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -1847,11 +1719,9 @@ func (c *EmailAddress) Decode(holder cffi.CFFIValueClass) {
 
 			case "value":
 				c.Value = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -1894,44 +1764,36 @@ func (c *Event) Decode(holder cffi.CFFIValueClass) {
 
 			case "title":
 				c.Title = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "date":
 				c.Date = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "location":
 				c.Location = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "description":
 				c.Description = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -1968,11 +1830,9 @@ func (c *FakeImage) Decode(holder cffi.CFFIValueClass) {
 
 			case "url":
 				c.Url = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -2017,55 +1877,45 @@ func (c *FlightConfirmation) Decode(holder cffi.CFFIValueClass) {
 
 			case "confirmationNumber":
 				c.ConfirmationNumber = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "flightNumber":
 				c.FlightNumber = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "departureTime":
 				c.DepartureTime = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "arrivalTime":
 				c.ArrivalTime = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "seatNumber":
 				c.SeatNumber = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -2107,30 +1957,26 @@ func (c *FooAny) Decode(holder cffi.CFFIValueClass) {
 			case "planetary_age":
 				c.Planetary_age = func() *types.Union__Martian__Earthling {
 					_retVal := baml.Decode(valueHolder)
-					if _retVal == nil {
-						return nil
+					if _retVal != nil {
+						return _retVal.(*types.Union__Martian__Earthling)
 					}
-					return _retVal.(*types.Union__Martian__Earthling)
+					return nil
 				}()
 
 			case "certainty":
 				c.Certainty = func() *types.Checked[int64] {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Checked[int64] {
-						return baml.Decode(__holder).(*types.Checked[int64])
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.Checked[int64])
 					}
 					return nil
 				}()
 
 			case "species":
 				c.Species = func() *types.Checked[string] {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Checked[string] {
-						return baml.Decode(__holder).(*types.Checked[string])
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.Checked[string])
 					}
 					return nil
 				}()
@@ -2146,7 +1992,7 @@ func (c FooAny) BamlTypeName() string {
 }
 
 type Forest struct {
-	Trees []types.Tree `json:"trees"`
+	Trees []Tree `json:"trees"`
 }
 
 func (c *Forest) Decode(holder cffi.CFFIValueClass) {
@@ -2166,8 +2012,8 @@ func (c *Forest) Decode(holder cffi.CFFIValueClass) {
 			switch key {
 
 			case "trees":
-				c.Trees = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Tree {
-					return *baml.Decode(__holder).(*types.Tree)
+				c.Trees = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) Tree {
+					return *baml.Decode(__holder).(*Tree)
 				})
 
 			}
@@ -2204,22 +2050,18 @@ func (c *FormatterTest0) Decode(holder cffi.CFFIValueClass) {
 
 			case "lorem":
 				c.Lorem = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "ipsum":
 				c.Ipsum = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -2258,22 +2100,18 @@ func (c *FormatterTest1) Decode(holder cffi.CFFIValueClass) {
 
 			case "lorem":
 				c.Lorem = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "ipsum":
 				c.Ipsum = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -2312,22 +2150,18 @@ func (c *FormatterTest2) Decode(holder cffi.CFFIValueClass) {
 
 			case "lorem":
 				c.Lorem = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "ipsum":
 				c.Ipsum = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -2366,22 +2200,18 @@ func (c *FormatterTest3) Decode(holder cffi.CFFIValueClass) {
 
 			case "lorem":
 				c.Lorem = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "ipsum":
 				c.Ipsum = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -2424,38 +2254,32 @@ func (c *GroceryReceipt) Decode(holder cffi.CFFIValueClass) {
 
 			case "receiptId":
 				c.ReceiptId = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "storeName":
 				c.StoreName = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "items":
-				c.Items = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Union__string__int__float {
-					return *baml.Decode(__holder).(*types.Union__string__int__float)
+				c.Items = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) Union__string__int__float {
+					return *baml.Decode(__holder).(*Union__string__int__float)
 				})
 
 			case "totalAmount":
 				c.TotalAmount = func() *float64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *float64 {
-						return baml.Decode(__holder).(*float64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*float64)
 					}
 					return nil
 				}()
@@ -2496,33 +2320,27 @@ func (c *Haiku) Decode(holder cffi.CFFIValueClass) {
 
 			case "line1":
 				c.Line1 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "line2":
 				c.Line2 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "line3":
 				c.Line3 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -2542,7 +2360,7 @@ type InnerClass struct {
 
 	Prop2 *string `json:"prop2"`
 
-	Inner *types.InnerClass2 `json:"inner"`
+	Inner *InnerClass2 `json:"inner"`
 }
 
 func (c *InnerClass) Decode(holder cffi.CFFIValueClass) {
@@ -2563,33 +2381,27 @@ func (c *InnerClass) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop1":
 				c.Prop1 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "prop2":
 				c.Prop2 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "inner":
-				c.Inner = func() *types.InnerClass2 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.InnerClass2 {
-						return baml.Decode(__holder).(*types.InnerClass2)
-					})
-					if val != nil {
-						return *val
+				c.Inner = func() *InnerClass2 {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*InnerClass2)
 					}
 					return nil
 				}()
@@ -2628,22 +2440,18 @@ func (c *InnerClass2) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop2":
 				c.Prop2 = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
 
 			case "prop3":
 				c.Prop3 = func() *float64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *float64 {
-						return baml.Decode(__holder).(*float64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*float64)
 					}
 					return nil
 				}()
@@ -2682,22 +2490,18 @@ func (c *InputClass) Decode(holder cffi.CFFIValueClass) {
 
 			case "key":
 				c.Key = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "key2":
 				c.Key2 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -2715,7 +2519,7 @@ func (c InputClass) BamlTypeName() string {
 type InputClassNested struct {
 	Key *string `json:"key"`
 
-	Nested *types.InputClass `json:"nested"`
+	Nested *InputClass `json:"nested"`
 }
 
 func (c *InputClassNested) Decode(holder cffi.CFFIValueClass) {
@@ -2736,22 +2540,18 @@ func (c *InputClassNested) Decode(holder cffi.CFFIValueClass) {
 
 			case "key":
 				c.Key = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "nested":
-				c.Nested = func() *types.InputClass {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.InputClass {
-						return baml.Decode(__holder).(*types.InputClass)
-					})
-					if val != nil {
-						return *val
+				c.Nested = func() *InputClass {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*InputClass)
 					}
 					return nil
 				}()
@@ -2767,7 +2567,7 @@ func (c InputClassNested) BamlTypeName() string {
 }
 
 type LinkedList struct {
-	Head *types.Node `json:"head"`
+	Head *Node `json:"head"`
 
 	Len *int64 `json:"len"`
 }
@@ -2789,23 +2589,19 @@ func (c *LinkedList) Decode(holder cffi.CFFIValueClass) {
 			switch key {
 
 			case "head":
-				c.Head = func() *types.Node {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Node {
-						return baml.Decode(__holder).(*types.Node)
-					})
-					if val != nil {
-						return *val
+				c.Head = func() *Node {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*Node)
 					}
 					return nil
 				}()
 
 			case "len":
 				c.Len = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
@@ -2823,7 +2619,7 @@ func (c LinkedList) BamlTypeName() string {
 type LinkedListAliasNode struct {
 	Value *int64 `json:"value"`
 
-	Next *types.LinkedListAliasNode `json:"next"`
+	Next *LinkedListAliasNode `json:"next"`
 }
 
 func (c *LinkedListAliasNode) Decode(holder cffi.CFFIValueClass) {
@@ -2844,22 +2640,18 @@ func (c *LinkedListAliasNode) Decode(holder cffi.CFFIValueClass) {
 
 			case "value":
 				c.Value = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
 
 			case "next":
-				c.Next = func() *types.LinkedListAliasNode {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.LinkedListAliasNode {
-						return baml.Decode(__holder).(*types.LinkedListAliasNode)
-					})
-					if val != nil {
-						return *val
+				c.Next = func() *LinkedListAliasNode {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*LinkedListAliasNode)
 					}
 					return nil
 				}()
@@ -2896,11 +2688,9 @@ func (c *LiteralClassHello) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop":
 				c.Prop = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -2937,11 +2727,9 @@ func (c *LiteralClassOne) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop":
 				c.Prop = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -2978,11 +2766,9 @@ func (c *LiteralClassTwo) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop":
 				c.Prop = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -3023,33 +2809,27 @@ func (c *MaintainFieldOrder) Decode(holder cffi.CFFIValueClass) {
 
 			case "a":
 				c.A = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "b":
 				c.B = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "c":
 				c.C = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -3086,11 +2866,9 @@ func (c *MalformedConstraints) Decode(holder cffi.CFFIValueClass) {
 
 			case "foo":
 				c.Foo = func() *types.Checked[int64] {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Checked[int64] {
-						return baml.Decode(__holder).(*types.Checked[int64])
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.Checked[int64])
 					}
 					return nil
 				}()
@@ -3127,11 +2905,9 @@ func (c *MalformedConstraints2) Decode(holder cffi.CFFIValueClass) {
 
 			case "foo":
 				c.Foo = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
@@ -3172,11 +2948,9 @@ func (c *Martian) Decode(holder cffi.CFFIValueClass) {
 
 			case "age":
 				c.Age = func() *types.Checked[int64] {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Checked[int64] {
-						return baml.Decode(__holder).(*types.Checked[int64])
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.Checked[int64])
 					}
 					return nil
 				}()
@@ -3217,33 +2991,27 @@ func (c *MemoryObject) Decode(holder cffi.CFFIValueClass) {
 
 			case "id":
 				c.Id = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "name":
 				c.Name = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "description":
 				c.Description = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -3280,11 +3048,9 @@ func (c *MergeAttrs) Decode(holder cffi.CFFIValueClass) {
 
 			case "amount":
 				c.Amount = func() *types.Checked[int64] {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Checked[int64] {
-						return baml.Decode(__holder).(*types.Checked[int64])
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.Checked[int64])
 					}
 					return nil
 				}()
@@ -3325,33 +3091,27 @@ func (c *NamedArgsSingleClass) Decode(holder cffi.CFFIValueClass) {
 
 			case "key":
 				c.Key = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "key_two":
 				c.Key_two = func() *bool {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *bool {
-						return baml.Decode(__holder).(*bool)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*bool)
 					}
 					return nil
 				}()
 
 			case "key_three":
 				c.Key_three = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
@@ -3371,7 +3131,7 @@ type Nested struct {
 
 	Prop4 *string `json:"prop4"`
 
-	Prop20 *types.Nested2 `json:"prop20"`
+	Prop20 *Nested2 `json:"prop20"`
 }
 
 func (c *Nested) Decode(holder cffi.CFFIValueClass) {
@@ -3392,33 +3152,27 @@ func (c *Nested) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop3":
 				c.Prop3 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "prop4":
 				c.Prop4 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "prop20":
-				c.Prop20 = func() *types.Nested2 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Nested2 {
-						return baml.Decode(__holder).(*types.Nested2)
-					})
-					if val != nil {
-						return *val
+				c.Prop20 = func() *Nested2 {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*Nested2)
 					}
 					return nil
 				}()
@@ -3457,22 +3211,18 @@ func (c *Nested2) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop11":
 				c.Prop11 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "prop12":
 				c.Prop12 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -3488,7 +3238,7 @@ func (c Nested2) BamlTypeName() string {
 }
 
 type NestedBlockConstraint struct {
-	Nbc *types.Checked[types.BlockConstraint] `json:"nbc"`
+	Nbc *types.Checked[BlockConstraint] `json:"nbc"`
 }
 
 func (c *NestedBlockConstraint) Decode(holder cffi.CFFIValueClass) {
@@ -3508,12 +3258,10 @@ func (c *NestedBlockConstraint) Decode(holder cffi.CFFIValueClass) {
 			switch key {
 
 			case "nbc":
-				c.Nbc = func() *types.Checked[types.BlockConstraint] {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Checked[types.BlockConstraint] {
-						return baml.Decode(__holder).(*types.Checked[types.BlockConstraint])
-					})
-					if val != nil {
-						return *val
+				c.Nbc = func() *types.Checked[BlockConstraint] {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.Checked[BlockConstraint])
 					}
 					return nil
 				}()
@@ -3529,7 +3277,7 @@ func (c NestedBlockConstraint) BamlTypeName() string {
 }
 
 type NestedBlockConstraintForParam struct {
-	Nbcfp *types.BlockConstraintForParam `json:"nbcfp"`
+	Nbcfp *BlockConstraintForParam `json:"nbcfp"`
 }
 
 func (c *NestedBlockConstraintForParam) Decode(holder cffi.CFFIValueClass) {
@@ -3549,12 +3297,10 @@ func (c *NestedBlockConstraintForParam) Decode(holder cffi.CFFIValueClass) {
 			switch key {
 
 			case "nbcfp":
-				c.Nbcfp = func() *types.BlockConstraintForParam {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.BlockConstraintForParam {
-						return baml.Decode(__holder).(*types.BlockConstraintForParam)
-					})
-					if val != nil {
-						return *val
+				c.Nbcfp = func() *BlockConstraintForParam {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*BlockConstraintForParam)
 					}
 					return nil
 				}()
@@ -3572,7 +3318,7 @@ func (c NestedBlockConstraintForParam) BamlTypeName() string {
 type Node struct {
 	Data *int64 `json:"data"`
 
-	Next *types.Node `json:"next"`
+	Next *Node `json:"next"`
 }
 
 func (c *Node) Decode(holder cffi.CFFIValueClass) {
@@ -3593,22 +3339,18 @@ func (c *Node) Decode(holder cffi.CFFIValueClass) {
 
 			case "data":
 				c.Data = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
 
 			case "next":
-				c.Next = func() *types.Node {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Node {
-						return baml.Decode(__holder).(*types.Node)
-					})
-					if val != nil {
-						return *val
+				c.Next = func() *Node {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*Node)
 					}
 					return nil
 				}()
@@ -3626,7 +3368,7 @@ func (c Node) BamlTypeName() string {
 type NodeWithAliasIndirection struct {
 	Value *int64 `json:"value"`
 
-	Next *types.NodeWithAliasIndirection `json:"next"`
+	Next *NodeWithAliasIndirection `json:"next"`
 }
 
 func (c *NodeWithAliasIndirection) Decode(holder cffi.CFFIValueClass) {
@@ -3647,22 +3389,18 @@ func (c *NodeWithAliasIndirection) Decode(holder cffi.CFFIValueClass) {
 
 			case "value":
 				c.Value = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
 
 			case "next":
-				c.Next = func() *types.NodeWithAliasIndirection {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.NodeWithAliasIndirection {
-						return baml.Decode(__holder).(*types.NodeWithAliasIndirection)
-					})
-					if val != nil {
-						return *val
+				c.Next = func() *NodeWithAliasIndirection {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*NodeWithAliasIndirection)
 					}
 					return nil
 				}()
@@ -3703,33 +3441,27 @@ func (c *Note1599) Decode(holder cffi.CFFIValueClass) {
 
 			case "note_title":
 				c.Note_title = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "note_description":
 				c.Note_description = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "note_amount":
 				c.Note_amount = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -3768,22 +3500,18 @@ func (c *OptionalListAndMap) Decode(holder cffi.CFFIValueClass) {
 
 			case "p":
 				c.P = func() *[]string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *[]string {
-						return baml.Decode(__holder).(*[]string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*[]string)
 					}
 					return nil
 				}()
 
 			case "q":
 				c.Q = func() *map[string]*string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *map[string]*string {
-						return baml.Decode(__holder).(*map[string]*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*map[string]*string)
 					}
 					return nil
 				}()
@@ -3822,22 +3550,18 @@ func (c *OptionalTest_Prop1) Decode(holder cffi.CFFIValueClass) {
 
 			case "omega_a":
 				c.Omega_a = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "omega_b":
 				c.Omega_b = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
@@ -3853,7 +3577,7 @@ func (c OptionalTest_Prop1) BamlTypeName() string {
 }
 
 type OptionalTest_ReturnType struct {
-	Omega_1 *types.OptionalTest_Prop1 `json:"omega_1"`
+	Omega_1 *OptionalTest_Prop1 `json:"omega_1"`
 
 	Omega_2 *string `json:"omega_2"`
 
@@ -3877,33 +3601,59 @@ func (c *OptionalTest_ReturnType) Decode(holder cffi.CFFIValueClass) {
 			switch key {
 
 			case "omega_1":
-				c.Omega_1 = func() *types.OptionalTest_Prop1 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.OptionalTest_Prop1 {
-						return baml.Decode(__holder).(*types.OptionalTest_Prop1)
-					})
-					if val != nil {
-						return *val
+				c.Omega_1 = func() *OptionalTest_Prop1 {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*OptionalTest_Prop1)
 					}
 					return nil
 				}()
 
 			case "omega_2":
 				c.Omega_2 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "omega_3":
 				c.Omega_3 = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.OptionalTest_CategoryType {
-					return func() *types.OptionalTest_CategoryType {
-						val := baml.DecodeOptional(__holder, func(__holder *cffi.CFFIValueHolder) *types.OptionalTest_CategoryType {
-							return baml.Decode(__holder).(*types.OptionalTest_CategoryType)
+					return func() *OptionalTest_CategoryType {
+						val := baml.DecodeOptional(__holder, func(__holder *cffi.CFFIValueHolder) *OptionalTest_CategoryType {
+							return baml.Decode(__holder).(*OptionalTest_CategoryType)
 						})
+						// dbg
+						// GoType {
+						//     name: "*OptionalTest_CategoryType",
+						//     is_pointer: true,
+						//     is_stream_pointer: false,
+						//     is_slice: false,
+						//     is_map: false,
+						//     is_primitive: false,
+						//     is_class: false,
+						//     is_integer: false,
+						//     is_enum: false,
+						//     is_union: false,
+						//     underlying_type: Some(
+						//         GoType {
+						//             name: "OptionalTest_CategoryType",
+						//             is_pointer: false,
+						//             is_stream_pointer: false,
+						//             is_slice: false,
+						//             is_map: false,
+						//             is_primitive: false,
+						//             is_class: false,
+						//             is_integer: false,
+						//             is_enum: true,
+						//             is_union: false,
+						//             underlying_type: None,
+						//             wrap_state: false,
+						//         },
+						//     ),
+						//     wrap_state: false,
+						// }
 						if val != nil {
 							return *val
 						}
@@ -3947,33 +3697,27 @@ func (c *OrderInfo) Decode(holder cffi.CFFIValueClass) {
 
 			case "order_status":
 				c.Order_status = func() *types.OrderStatus {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.OrderStatus {
-						return baml.Decode(__holder).(*types.OrderStatus)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.OrderStatus)
 					}
 					return nil
 				}()
 
 			case "tracking_number":
 				c.Tracking_number = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "estimated_arrival_date":
 				c.Estimated_arrival_date = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -4010,11 +3754,9 @@ func (c *OriginalA) Decode(holder cffi.CFFIValueClass) {
 
 			case "value":
 				c.Value = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
@@ -4053,11 +3795,9 @@ func (c *OriginalB) Decode(holder cffi.CFFIValueClass) {
 
 			case "value":
 				c.Value = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
@@ -4107,22 +3847,18 @@ func (c *Person) Decode(holder cffi.CFFIValueClass) {
 
 			case "name":
 				c.Name = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "hair_color":
 				c.Hair_color = func() *types.Color {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Color {
-						return baml.Decode(__holder).(*types.Color)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.Color)
 					}
 					return nil
 				}()
@@ -4168,11 +3904,9 @@ func (c *PhoneNumber) Decode(holder cffi.CFFIValueClass) {
 
 			case "value":
 				c.Value = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -4214,11 +3948,9 @@ func (c *Quantity) Decode(holder cffi.CFFIValueClass) {
 
 			case "unit":
 				c.Unit = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -4257,11 +3989,9 @@ func (c *RaysData) Decode(holder cffi.CFFIValueClass) {
 
 			case "dataType":
 				c.DataType = func() *types.DataType {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.DataType {
-						return baml.Decode(__holder).(*types.DataType)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.DataType)
 					}
 					return nil
 				}()
@@ -4269,10 +3999,10 @@ func (c *RaysData) Decode(holder cffi.CFFIValueClass) {
 			case "value":
 				c.Value = func() *types.Union__Resume__Event {
 					_retVal := baml.Decode(valueHolder)
-					if _retVal == nil {
-						return nil
+					if _retVal != nil {
+						return _retVal.(*types.Union__Resume__Event)
 					}
-					return _retVal.(*types.Union__Resume__Event)
+					return nil
 				}()
 
 			}
@@ -4286,7 +4016,7 @@ func (c RaysData) BamlTypeName() string {
 }
 
 type ReceiptInfo struct {
-	Items []types.ReceiptItem `json:"items"`
+	Items []ReceiptItem `json:"items"`
 
 	Total_cost *float64 `json:"total_cost"`
 
@@ -4310,17 +4040,15 @@ func (c *ReceiptInfo) Decode(holder cffi.CFFIValueClass) {
 			switch key {
 
 			case "items":
-				c.Items = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) types.ReceiptItem {
-					return *baml.Decode(__holder).(*types.ReceiptItem)
+				c.Items = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) ReceiptItem {
+					return *baml.Decode(__holder).(*ReceiptItem)
 				})
 
 			case "total_cost":
 				c.Total_cost = func() *float64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *float64 {
-						return baml.Decode(__holder).(*float64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*float64)
 					}
 					return nil
 				}()
@@ -4328,10 +4056,10 @@ func (c *ReceiptInfo) Decode(holder cffi.CFFIValueClass) {
 			case "venue":
 				c.Venue = func() *types.Union__string_barisa__string_ox_burger {
 					_retVal := baml.Decode(valueHolder)
-					if _retVal == nil {
-						return nil
+					if _retVal != nil {
+						return _retVal.(*types.Union__string_barisa__string_ox_burger)
 					}
-					return _retVal.(*types.Union__string_barisa__string_ox_burger)
+					return nil
 				}()
 
 			}
@@ -4372,44 +4100,36 @@ func (c *ReceiptItem) Decode(holder cffi.CFFIValueClass) {
 
 			case "name":
 				c.Name = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "description":
 				c.Description = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "quantity":
 				c.Quantity = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
 
 			case "price":
 				c.Price = func() *float64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *float64 {
-						return baml.Decode(__holder).(*float64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*float64)
 					}
 					return nil
 				}()
@@ -4449,10 +4169,10 @@ func (c *Recipe) Decode(holder cffi.CFFIValueClass) {
 			case "recipe_type":
 				c.Recipe_type = func() *types.Union__string_breakfast__string_dinner__string_other {
 					_retVal := baml.Decode(valueHolder)
-					if _retVal == nil {
-						return nil
+					if _retVal != nil {
+						return _retVal.(*types.Union__string_breakfast__string_dinner__string_other)
 					}
-					return _retVal.(*types.Union__string_breakfast__string_dinner__string_other)
+					return nil
 				}()
 
 			case "ingredients":
@@ -4492,11 +4212,9 @@ func (c *RecursiveAliasDependency) Decode(holder cffi.CFFIValueClass) {
 
 			case "value":
 				c.Value = func() *types.JsonValue {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.JsonValue {
-						return baml.Decode(__holder).(*types.JsonValue)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.JsonValue)
 					}
 					return nil
 				}()
@@ -4520,7 +4238,7 @@ type Resume struct {
 
 	Experience []string `json:"experience"`
 
-	Education []types.Education `json:"education"`
+	Education []Education `json:"education"`
 
 	Skills []string `json:"skills"`
 }
@@ -4543,33 +4261,27 @@ func (c *Resume) Decode(holder cffi.CFFIValueClass) {
 
 			case "name":
 				c.Name = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "email":
 				c.Email = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "phone":
 				c.Phone = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -4580,8 +4292,8 @@ func (c *Resume) Decode(holder cffi.CFFIValueClass) {
 				})
 
 			case "education":
-				c.Education = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Education {
-					return *baml.Decode(__holder).(*types.Education)
+				c.Education = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) Education {
+					return *baml.Decode(__holder).(*Education)
 				})
 
 			case "skills":
@@ -4633,11 +4345,9 @@ func (c *Schema) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop1":
 				c.Prop1 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -4645,10 +4355,10 @@ func (c *Schema) Decode(holder cffi.CFFIValueClass) {
 			case "prop2":
 				c.Prop2 = func() *types.Union__Nested__string {
 					_retVal := baml.Decode(valueHolder)
-					if _retVal == nil {
-						return nil
+					if _retVal != nil {
+						return _retVal.(*types.Union__Nested__string)
 					}
-					return _retVal.(*types.Union__Nested__string)
+					return nil
 				}()
 
 			case "prop5":
@@ -4657,6 +4367,36 @@ func (c *Schema) Decode(holder cffi.CFFIValueClass) {
 						val := baml.DecodeOptional(__holder, func(__holder *cffi.CFFIValueHolder) *string {
 							return baml.Decode(__holder).(*string)
 						})
+						// dbg
+						// GoType {
+						//     name: "*string",
+						//     is_pointer: true,
+						//     is_stream_pointer: false,
+						//     is_slice: false,
+						//     is_map: false,
+						//     is_primitive: false,
+						//     is_class: false,
+						//     is_integer: false,
+						//     is_enum: false,
+						//     is_union: false,
+						//     underlying_type: Some(
+						//         GoType {
+						//             name: "string",
+						//             is_pointer: false,
+						//             is_stream_pointer: false,
+						//             is_slice: false,
+						//             is_map: false,
+						//             is_primitive: true,
+						//             is_class: false,
+						//             is_integer: false,
+						//             is_enum: false,
+						//             is_union: false,
+						//             underlying_type: None,
+						//             wrap_state: false,
+						//         },
+						//     ),
+						//     wrap_state: false,
+						// }
 						if val != nil {
 							return *val
 						}
@@ -4667,18 +4407,48 @@ func (c *Schema) Decode(holder cffi.CFFIValueClass) {
 			case "prop6":
 				c.Prop6 = func() *types.Union__string__List__Nested {
 					_retVal := baml.Decode(valueHolder)
-					if _retVal == nil {
-						return nil
+					if _retVal != nil {
+						return _retVal.(*types.Union__string__List__Nested)
 					}
-					return _retVal.(*types.Union__string__List__Nested)
+					return nil
 				}()
 
 			case "nested_attrs":
-				c.Nested_attrs = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Union__string__Nested {
-					return func() *types.Union__string__Nested {
-						val := baml.DecodeOptional(__holder, func(__holder *cffi.CFFIValueHolder) *types.Union__string__Nested {
-							return baml.Decode(__holder).(*types.Union__string__Nested)
+				c.Nested_attrs = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) *Union__string__Nested {
+					return func() *Union__string__Nested {
+						val := baml.DecodeOptional(__holder, func(__holder *cffi.CFFIValueHolder) *Union__string__Nested {
+							return baml.Decode(__holder).(*Union__string__Nested)
 						})
+						// dbg
+						// GoType {
+						//     name: "*Union__string__Nested",
+						//     is_pointer: true,
+						//     is_stream_pointer: false,
+						//     is_slice: false,
+						//     is_map: false,
+						//     is_primitive: false,
+						//     is_class: false,
+						//     is_integer: false,
+						//     is_enum: false,
+						//     is_union: false,
+						//     underlying_type: Some(
+						//         GoType {
+						//             name: "Union__string__Nested",
+						//             is_pointer: false,
+						//             is_stream_pointer: false,
+						//             is_slice: false,
+						//             is_map: false,
+						//             is_primitive: false,
+						//             is_class: false,
+						//             is_integer: false,
+						//             is_enum: false,
+						//             is_union: true,
+						//             underlying_type: None,
+						//             wrap_state: false,
+						//         },
+						//     ),
+						//     wrap_state: false,
+						// }
 						if val != nil {
 							return *val
 						}
@@ -4688,11 +4458,9 @@ func (c *Schema) Decode(holder cffi.CFFIValueClass) {
 
 			case "parens":
 				c.Parens = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -4700,10 +4468,10 @@ func (c *Schema) Decode(holder cffi.CFFIValueClass) {
 			case "other_group":
 				c.Other_group = func() *types.Union__string__int {
 					_retVal := baml.Decode(valueHolder)
-					if _retVal == nil {
-						return nil
+					if _retVal != nil {
+						return _retVal.(*types.Union__string__int)
 					}
-					return _retVal.(*types.Union__string__int)
+					return nil
 				}()
 
 			}
@@ -4721,11 +4489,11 @@ type SearchParams struct {
 
 	Location []string `json:"location"`
 
-	JobTitle *types.WithReasoning `json:"jobTitle"`
+	JobTitle *WithReasoning `json:"jobTitle"`
 
-	Company *types.WithReasoning `json:"company"`
+	Company *WithReasoning `json:"company"`
 
-	Description []types.WithReasoning `json:"description"`
+	Description []WithReasoning `json:"description"`
 
 	Tags []types.Union__Tag__string `json:"tags"`
 }
@@ -4748,11 +4516,9 @@ func (c *SearchParams) Decode(holder cffi.CFFIValueClass) {
 
 			case "dateRange":
 				c.DateRange = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
@@ -4763,35 +4529,31 @@ func (c *SearchParams) Decode(holder cffi.CFFIValueClass) {
 				})
 
 			case "jobTitle":
-				c.JobTitle = func() *types.WithReasoning {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.WithReasoning {
-						return baml.Decode(__holder).(*types.WithReasoning)
-					})
-					if val != nil {
-						return *val
+				c.JobTitle = func() *WithReasoning {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*WithReasoning)
 					}
 					return nil
 				}()
 
 			case "company":
-				c.Company = func() *types.WithReasoning {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.WithReasoning {
-						return baml.Decode(__holder).(*types.WithReasoning)
-					})
-					if val != nil {
-						return *val
+				c.Company = func() *WithReasoning {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*WithReasoning)
 					}
 					return nil
 				}()
 
 			case "description":
-				c.Description = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) types.WithReasoning {
-					return *baml.Decode(__holder).(*types.WithReasoning)
+				c.Description = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) WithReasoning {
+					return *baml.Decode(__holder).(*WithReasoning)
 				})
 
 			case "tags":
-				c.Tags = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Union__Tag__string {
-					return *baml.Decode(__holder).(*types.Union__Tag__string)
+				c.Tags = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) Union__Tag__string {
+					return *baml.Decode(__holder).(*Union__Tag__string)
 				})
 
 			}
@@ -4807,17 +4569,17 @@ func (c SearchParams) BamlTypeName() string {
 type SemanticContainer struct {
 	Sixteen_digit_number *int64 `json:"sixteen_digit_number"`
 
-	String_with_twenty_words *string `json:"string_with_twenty_words"`
+	String_with_twenty_words string `json:"string_with_twenty_words"`
 
-	Class_1 *types.ClassWithoutDone `json:"class_1"`
+	Class_1 *ClassWithoutDone `json:"class_1"`
 
-	Class_2 *types.ClassWithBlockDone `json:"class_2"`
+	Class_2 types.ClassWithBlockDone `json:"class_2"`
 
 	Class_done_needed types.ClassWithBlockDone `json:"class_done_needed"`
 
-	Class_needed types.ClassWithoutDone `json:"class_needed"`
+	Class_needed ClassWithoutDone `json:"class_needed"`
 
-	Three_small_things []types.SmallThing `json:"three_small_things"`
+	Three_small_things []SmallThing `json:"three_small_things"`
 
 	Final_string *string `json:"final_string"`
 }
@@ -4840,44 +4602,36 @@ func (c *SemanticContainer) Decode(holder cffi.CFFIValueClass) {
 
 			case "sixteen_digit_number":
 				c.Sixteen_digit_number = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
 
 			case "string_with_twenty_words":
-				c.String_with_twenty_words = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+				c.String_with_twenty_words = func() string {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(string)
 					}
 					return nil
 				}()
 
 			case "class_1":
-				c.Class_1 = func() *types.ClassWithoutDone {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.ClassWithoutDone {
-						return baml.Decode(__holder).(*types.ClassWithoutDone)
-					})
-					if val != nil {
-						return *val
+				c.Class_1 = func() *ClassWithoutDone {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*ClassWithoutDone)
 					}
 					return nil
 				}()
 
 			case "class_2":
-				c.Class_2 = func() *types.ClassWithBlockDone {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.ClassWithBlockDone {
-						return baml.Decode(__holder).(*types.ClassWithBlockDone)
-					})
-					if val != nil {
-						return *val
+				c.Class_2 = func() types.ClassWithBlockDone {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(types.ClassWithBlockDone)
 					}
 					return nil
 				}()
@@ -4886,20 +4640,18 @@ func (c *SemanticContainer) Decode(holder cffi.CFFIValueClass) {
 				c.Class_done_needed = *baml.Decode(valueHolder).(*types.ClassWithBlockDone)
 
 			case "class_needed":
-				c.Class_needed = *baml.Decode(valueHolder).(*types.ClassWithoutDone)
+				c.Class_needed = *baml.Decode(valueHolder).(*ClassWithoutDone)
 
 			case "three_small_things":
-				c.Three_small_things = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) types.SmallThing {
-					return *baml.Decode(__holder).(*types.SmallThing)
+				c.Three_small_things = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) SmallThing {
+					return *baml.Decode(__holder).(*SmallThing)
 				})
 
 			case "final_string":
 				c.Final_string = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -4936,11 +4688,9 @@ func (c *SimpleTag) Decode(holder cffi.CFFIValueClass) {
 
 			case "field":
 				c.Field = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -4982,11 +4732,9 @@ func (c *SmallThing) Decode(holder cffi.CFFIValueClass) {
 
 			case "i_8_digits":
 				c.I_8_digits = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
@@ -5025,11 +4773,9 @@ func (c *SomeClassNestedDynamic) Decode(holder cffi.CFFIValueClass) {
 
 			case "hi":
 				c.Hi = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -5075,11 +4821,9 @@ func (c *StringToClassEntry) Decode(holder cffi.CFFIValueClass) {
 
 			case "word":
 				c.Word = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -5124,55 +4868,45 @@ func (c *TestClassAlias) Decode(holder cffi.CFFIValueClass) {
 
 			case "key":
 				c.Key = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "key2":
 				c.Key2 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "key3":
 				c.Key3 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "key4":
 				c.Key4 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "key5":
 				c.Key5 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -5190,7 +4924,7 @@ func (c TestClassAlias) BamlTypeName() string {
 type TestClassNested struct {
 	Prop1 *string `json:"prop1"`
 
-	Prop2 *types.InnerClass `json:"prop2"`
+	Prop2 *InnerClass `json:"prop2"`
 }
 
 func (c *TestClassNested) Decode(holder cffi.CFFIValueClass) {
@@ -5211,22 +4945,18 @@ func (c *TestClassNested) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop1":
 				c.Prop1 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "prop2":
-				c.Prop2 = func() *types.InnerClass {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.InnerClass {
-						return baml.Decode(__holder).(*types.InnerClass)
-					})
-					if val != nil {
-						return *val
+				c.Prop2 = func() *InnerClass {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*InnerClass)
 					}
 					return nil
 				}()
@@ -5265,22 +4995,18 @@ func (c *TestClassWithEnum) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop1":
 				c.Prop1 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "prop2":
 				c.Prop2 = func() *types.EnumInClass {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.EnumInClass {
-						return baml.Decode(__holder).(*types.EnumInClass)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.EnumInClass)
 					}
 					return nil
 				}()
@@ -5318,13 +5044,13 @@ func (c *TestMemoryOutput) Decode(holder cffi.CFFIValueClass) {
 			switch key {
 
 			case "items":
-				c.Items = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Union__MemoryObject__ComplexMemoryObject__AnotherObject {
-					return *baml.Decode(__holder).(*types.Union__MemoryObject__ComplexMemoryObject__AnotherObject)
+				c.Items = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) Union__MemoryObject__ComplexMemoryObject__AnotherObject {
+					return *baml.Decode(__holder).(*Union__MemoryObject__ComplexMemoryObject__AnotherObject)
 				})
 
 			case "more_items":
-				c.More_items = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Union__MemoryObject__ComplexMemoryObject__AnotherObject {
-					return *baml.Decode(__holder).(*types.Union__MemoryObject__ComplexMemoryObject__AnotherObject)
+				c.More_items = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) Union__MemoryObject__ComplexMemoryObject__AnotherObject {
+					return *baml.Decode(__holder).(*Union__MemoryObject__ComplexMemoryObject__AnotherObject)
 				})
 
 			}
@@ -5361,22 +5087,18 @@ func (c *TestOutputClass) Decode(holder cffi.CFFIValueClass) {
 
 			case "prop1":
 				c.Prop1 = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "prop2":
 				c.Prop2 = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
@@ -5394,7 +5116,7 @@ func (c TestOutputClass) BamlTypeName() string {
 type Tree struct {
 	Data *int64 `json:"data"`
 
-	Children *types.Forest `json:"children"`
+	Children *Forest `json:"children"`
 }
 
 func (c *Tree) Decode(holder cffi.CFFIValueClass) {
@@ -5415,22 +5137,18 @@ func (c *Tree) Decode(holder cffi.CFFIValueClass) {
 
 			case "data":
 				c.Data = func() *int64 {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
-						return baml.Decode(__holder).(*int64)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*int64)
 					}
 					return nil
 				}()
 
 			case "children":
-				c.Children = func() *types.Forest {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Forest {
-						return baml.Decode(__holder).(*types.Forest)
-					})
-					if val != nil {
-						return *val
+				c.Children = func() *Forest {
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*Forest)
 					}
 					return nil
 				}()
@@ -5471,33 +5189,27 @@ func (c *TwoStoriesOneTitle) Decode(holder cffi.CFFIValueClass) {
 
 			case "title":
 				c.Title = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "story_a":
 				c.Story_a = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "story_b":
 				c.Story_b = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -5538,33 +5250,27 @@ func (c *TwoStoriesOneTitleCheck) Decode(holder cffi.CFFIValueClass) {
 
 			case "title":
 				c.Title = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "story_a":
 				c.Story_a = func() *types.Checked[string] {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Checked[string] {
-						return baml.Decode(__holder).(*types.Checked[string])
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.Checked[string])
 					}
 					return nil
 				}()
 
 			case "story_b":
 				c.Story_b = func() *types.Checked[string] {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *types.Checked[string] {
-						return baml.Decode(__holder).(*types.Checked[string])
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*types.Checked[string])
 					}
 					return nil
 				}()
@@ -5606,24 +5312,24 @@ func (c *UnionTest_ReturnType) Decode(holder cffi.CFFIValueClass) {
 			case "prop1":
 				c.Prop1 = func() *types.Union__string__bool {
 					_retVal := baml.Decode(valueHolder)
-					if _retVal == nil {
-						return nil
+					if _retVal != nil {
+						return _retVal.(*types.Union__string__bool)
 					}
-					return _retVal.(*types.Union__string__bool)
+					return nil
 				}()
 
 			case "prop2":
-				c.Prop2 = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) types.Union__float__bool {
-					return *baml.Decode(__holder).(*types.Union__float__bool)
+				c.Prop2 = baml.DecodeList(valueHolder, func(__holder *cffi.CFFIValueHolder) Union__float__bool {
+					return *baml.Decode(__holder).(*Union__float__bool)
 				})
 
 			case "prop3":
 				c.Prop3 = func() *types.Union__List__bool__List__int {
 					_retVal := baml.Decode(valueHolder)
-					if _retVal == nil {
-						return nil
+					if _retVal != nil {
+						return _retVal.(*types.Union__List__bool__List__int)
 					}
-					return _retVal.(*types.Union__List__bool__List__int)
+					return nil
 				}()
 
 			}
@@ -5661,22 +5367,18 @@ func (c *UniverseQuestion) Decode(holder cffi.CFFIValueClass) {
 
 			case "question":
 				c.Question = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "answer":
 				c.Answer = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -5713,11 +5415,9 @@ func (c *UniverseQuestionInput) Decode(holder cffi.CFFIValueClass) {
 
 			case "question":
 				c.Question = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
@@ -5756,22 +5456,18 @@ func (c *WithReasoning) Decode(holder cffi.CFFIValueClass) {
 
 			case "value":
 				c.Value = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()
 
 			case "reasoning":
 				c.Reasoning = func() *string {
-					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
-						return baml.Decode(__holder).(*string)
-					})
-					if val != nil {
-						return *val
+					_retVal := baml.Decode(valueHolder)
+					if _retVal != nil {
+						return _retVal.(*string)
 					}
 					return nil
 				}()

@@ -32,16 +32,37 @@ func main() {
 	// 	fmt.Println(chunk)
 	// }
 
-	stream := b.Stream.AaaSamOutputFormat(ctx, "pineapple")
-	for chunk := range stream {
+	// fmt.Println("---AaaSamOutputFormat---")
+	// stream := b.Stream.AaaSamOutputFormat(ctx, "pineapple")
+	// for chunk := range stream {
+	// 	if chunk.IsFinal {
+	// 		jsonstr, err := json.Marshal(*chunk.Final())
+	// 		if err != nil {
+	// 			panic(err)
+	// 		}
+	// 		fmt.Println("---FINAL---")
+	// 		fmt.Println(string(jsonstr))
+	// 	} else {
+	// 		jsonstr, err := json.Marshal(chunk.Stream())
+	// 		if err != nil {
+	// 			panic(err)
+	// 		}
+	// 		fmt.Println(string(jsonstr))
+	// 	}
+	// }
+
+	fmt.Println("---BUILD LINKED LIST---")
+	stream2 := b.Stream.BuildLinkedList(ctx, []int64{1, 2, 3})
+	for chunk := range stream2 {
 		if chunk.IsFinal {
-			jsonstr, err := json.Marshal(*chunk.Final())
+			fmt.Println("---FINAL---")
+			jsonstr, err := json.Marshal(chunk.Final())
 			if err != nil {
 				panic(err)
 			}
-			fmt.Println("---FINAL---")
 			fmt.Println(string(jsonstr))
 		} else {
+			fmt.Println("---STREAM---")
 			jsonstr, err := json.Marshal(chunk.Stream())
 			if err != nil {
 				panic(err)

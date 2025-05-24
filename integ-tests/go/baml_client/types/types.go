@@ -155,6 +155,36 @@ func (c *BinaryNode) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *BinaryNode {
 						return baml.Decode(__holder).(*BinaryNode)
 					})
+					// dbg
+					// GoType {
+					//     name: "*BinaryNode",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "BinaryNode",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: false,
+					//             is_class: true,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -166,6 +196,36 @@ func (c *BinaryNode) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *BinaryNode {
 						return baml.Decode(__holder).(*BinaryNode)
 					})
+					// dbg
+					// GoType {
+					//     name: "*BinaryNode",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "BinaryNode",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: false,
+					//             is_class: true,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -219,6 +279,36 @@ func (c *Blah) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -519,6 +609,36 @@ func (c *ClassOptionalOutput2) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -530,6 +650,36 @@ func (c *ClassOptionalOutput2) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -541,6 +691,36 @@ func (c *ClassOptionalOutput2) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *Blah {
 						return baml.Decode(__holder).(*Blah)
 					})
+					// dbg
+					// GoType {
+					//     name: "*Blah",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "Blah",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: false,
+					//             is_class: true,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -798,6 +978,36 @@ func (c *ClientDetails1559) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -809,6 +1019,36 @@ func (c *ClientDetails1559) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -820,6 +1060,36 @@ func (c *ClientDetails1559) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -831,6 +1101,36 @@ func (c *ClientDetails1559) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -842,6 +1142,36 @@ func (c *ClientDetails1559) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -853,6 +1183,36 @@ func (c *ClientDetails1559) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -864,6 +1224,36 @@ func (c *ClientDetails1559) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -1051,6 +1441,36 @@ func (c *ContactInfo) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *Union__PhoneNumber__EmailAddress {
 						return baml.Decode(__holder).(*Union__PhoneNumber__EmailAddress)
 					})
+					// dbg
+					// GoType {
+					//     name: "*Union__PhoneNumber__EmailAddress",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "Union__PhoneNumber__EmailAddress",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: false,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: true,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -1163,6 +1583,36 @@ func (c *CustomTaskResult) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *BookOrder {
 						return baml.Decode(__holder).(*BookOrder)
 					})
+					// dbg
+					// GoType {
+					//     name: "*BookOrder",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "BookOrder",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: false,
+					//             is_class: true,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -1174,6 +1624,36 @@ func (c *CustomTaskResult) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *FlightConfirmation {
 						return baml.Decode(__holder).(*FlightConfirmation)
 					})
+					// dbg
+					// GoType {
+					//     name: "*FlightConfirmation",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "FlightConfirmation",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: false,
+					//             is_class: true,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -1185,6 +1665,36 @@ func (c *CustomTaskResult) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *GroceryReceipt {
 						return baml.Decode(__holder).(*GroceryReceipt)
 					})
+					// dbg
+					// GoType {
+					//     name: "*GroceryReceipt",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "GroceryReceipt",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: false,
+					//             is_class: true,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -1630,6 +2140,36 @@ func (c *Education) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -2565,6 +3105,36 @@ func (c *LinkedList) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *Node {
 						return baml.Decode(__holder).(*Node)
 					})
+					// dbg
+					// GoType {
+					//     name: "*Node",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "Node",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: false,
+					//             is_class: true,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -2624,6 +3194,36 @@ func (c *LinkedListAliasNode) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *LinkedListAliasNode {
 						return baml.Decode(__holder).(*LinkedListAliasNode)
 					})
+					// dbg
+					// GoType {
+					//     name: "*LinkedListAliasNode",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "LinkedListAliasNode",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: false,
+					//             is_class: true,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3135,6 +3735,36 @@ func (c *Nested) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3146,6 +3776,36 @@ func (c *Nested) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3204,6 +3864,36 @@ func (c *Nested2) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3215,6 +3905,36 @@ func (c *Nested2) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3353,6 +4073,36 @@ func (c *Node) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *Node {
 						return baml.Decode(__holder).(*Node)
 					})
+					// dbg
+					// GoType {
+					//     name: "*Node",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "Node",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: false,
+					//             is_class: true,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3409,6 +4159,36 @@ func (c *NodeWithAliasIndirection) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *NodeWithAliasIndirection {
 						return baml.Decode(__holder).(*NodeWithAliasIndirection)
 					})
+					// dbg
+					// GoType {
+					//     name: "*NodeWithAliasIndirection",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "NodeWithAliasIndirection",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: false,
+					//             is_class: true,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3467,6 +4247,36 @@ func (c *Note1599) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3478,6 +4288,36 @@ func (c *Note1599) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3533,6 +4373,51 @@ func (c *OptionalListAndMap) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *[]string {
 						return baml.Decode(__holder).(*[]string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*[]string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "[]string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: true,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: Some(
+					//                 GoType {
+					//                     name: "string",
+					//                     is_pointer: false,
+					//                     is_stream_pointer: false,
+					//                     is_slice: false,
+					//                     is_map: false,
+					//                     is_primitive: true,
+					//                     is_class: false,
+					//                     is_integer: false,
+					//                     is_enum: false,
+					//                     is_union: false,
+					//                     underlying_type: None,
+					//                     wrap_state: false,
+					//                 },
+					//             ),
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3544,6 +4429,36 @@ func (c *OptionalListAndMap) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *map[string]string {
 						return baml.Decode(__holder).(*map[string]string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*map[string]string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "map[string]string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: true,
+					//             is_primitive: false,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3647,6 +4562,36 @@ func (c *OptionalTest_ReturnType) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *OptionalTest_Prop1 {
 						return baml.Decode(__holder).(*OptionalTest_Prop1)
 					})
+					// dbg
+					// GoType {
+					//     name: "*OptionalTest_Prop1",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "OptionalTest_Prop1",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: false,
+					//             is_class: true,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3658,6 +4603,36 @@ func (c *OptionalTest_ReturnType) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3670,6 +4645,36 @@ func (c *OptionalTest_ReturnType) Decode(holder cffi.CFFIValueClass) {
 						val := baml.DecodeOptional(__holder, func(__holder *cffi.CFFIValueHolder) *OptionalTest_CategoryType {
 							return baml.Decode(__holder).(*OptionalTest_CategoryType)
 						})
+						// dbg
+						// GoType {
+						//     name: "*OptionalTest_CategoryType",
+						//     is_pointer: true,
+						//     is_stream_pointer: false,
+						//     is_slice: false,
+						//     is_map: false,
+						//     is_primitive: false,
+						//     is_class: false,
+						//     is_integer: false,
+						//     is_enum: false,
+						//     is_union: false,
+						//     underlying_type: Some(
+						//         GoType {
+						//             name: "OptionalTest_CategoryType",
+						//             is_pointer: false,
+						//             is_stream_pointer: false,
+						//             is_slice: false,
+						//             is_map: false,
+						//             is_primitive: false,
+						//             is_class: false,
+						//             is_integer: false,
+						//             is_enum: true,
+						//             is_union: false,
+						//             underlying_type: None,
+						//             wrap_state: false,
+						//         },
+						//     ),
+						//     wrap_state: false,
+						// }
 						if val != nil {
 							return *val
 						}
@@ -3731,6 +4736,36 @@ func (c *OrderInfo) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3742,6 +4777,36 @@ func (c *OrderInfo) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3892,6 +4957,36 @@ func (c *Person) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -3903,6 +4998,36 @@ func (c *Person) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *Color {
 						return baml.Decode(__holder).(*Color)
 					})
+					// dbg
+					// GoType {
+					//     name: "*Color",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "Color",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: false,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: true,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -4009,6 +5134,36 @@ func (c *Quantity) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -4117,6 +5272,36 @@ func (c *ReceiptInfo) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *float64 {
 						return baml.Decode(__holder).(*float64)
 					})
+					// dbg
+					// GoType {
+					//     name: "*float64",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "float64",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -4182,6 +5367,36 @@ func (c *ReceiptItem) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -4428,6 +5643,36 @@ func (c *Schema) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -4443,6 +5688,36 @@ func (c *Schema) Decode(holder cffi.CFFIValueClass) {
 						val := baml.DecodeOptional(__holder, func(__holder *cffi.CFFIValueHolder) *string {
 							return baml.Decode(__holder).(*string)
 						})
+						// dbg
+						// GoType {
+						//     name: "*string",
+						//     is_pointer: true,
+						//     is_stream_pointer: false,
+						//     is_slice: false,
+						//     is_map: false,
+						//     is_primitive: false,
+						//     is_class: false,
+						//     is_integer: false,
+						//     is_enum: false,
+						//     is_union: false,
+						//     underlying_type: Some(
+						//         GoType {
+						//             name: "string",
+						//             is_pointer: false,
+						//             is_stream_pointer: false,
+						//             is_slice: false,
+						//             is_map: false,
+						//             is_primitive: true,
+						//             is_class: false,
+						//             is_integer: false,
+						//             is_enum: false,
+						//             is_union: false,
+						//             underlying_type: None,
+						//             wrap_state: false,
+						//         },
+						//     ),
+						//     wrap_state: false,
+						// }
 						if val != nil {
 							return *val
 						}
@@ -4459,6 +5734,36 @@ func (c *Schema) Decode(holder cffi.CFFIValueClass) {
 						val := baml.DecodeOptional(__holder, func(__holder *cffi.CFFIValueHolder) *Union__string__Nested {
 							return baml.Decode(__holder).(*Union__string__Nested)
 						})
+						// dbg
+						// GoType {
+						//     name: "*Union__string__Nested",
+						//     is_pointer: true,
+						//     is_stream_pointer: false,
+						//     is_slice: false,
+						//     is_map: false,
+						//     is_primitive: false,
+						//     is_class: false,
+						//     is_integer: false,
+						//     is_enum: false,
+						//     is_union: false,
+						//     underlying_type: Some(
+						//         GoType {
+						//             name: "Union__string__Nested",
+						//             is_pointer: false,
+						//             is_stream_pointer: false,
+						//             is_slice: false,
+						//             is_map: false,
+						//             is_primitive: false,
+						//             is_class: false,
+						//             is_integer: false,
+						//             is_enum: false,
+						//             is_union: true,
+						//             underlying_type: None,
+						//             wrap_state: false,
+						//         },
+						//     ),
+						//     wrap_state: false,
+						// }
 						if val != nil {
 							return *val
 						}
@@ -4471,6 +5776,36 @@ func (c *Schema) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *string {
 						return baml.Decode(__holder).(*string)
 					})
+					// dbg
+					// GoType {
+					//     name: "*string",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "string",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -4545,6 +5880,36 @@ func (c *SearchParams) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *int64 {
 						return baml.Decode(__holder).(*int64)
 					})
+					// dbg
+					// GoType {
+					//     name: "*int64",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: true,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "int64",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: true,
+					//             is_class: false,
+					//             is_integer: true,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -4561,6 +5926,36 @@ func (c *SearchParams) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *WithReasoning {
 						return baml.Decode(__holder).(*WithReasoning)
 					})
+					// dbg
+					// GoType {
+					//     name: "*WithReasoning",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "WithReasoning",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: false,
+					//             is_class: true,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
@@ -4572,6 +5967,36 @@ func (c *SearchParams) Decode(holder cffi.CFFIValueClass) {
 					val := baml.DecodeOptional(valueHolder, func(__holder *cffi.CFFIValueHolder) *WithReasoning {
 						return baml.Decode(__holder).(*WithReasoning)
 					})
+					// dbg
+					// GoType {
+					//     name: "*WithReasoning",
+					//     is_pointer: true,
+					//     is_stream_pointer: false,
+					//     is_slice: false,
+					//     is_map: false,
+					//     is_primitive: false,
+					//     is_class: false,
+					//     is_integer: false,
+					//     is_enum: false,
+					//     is_union: false,
+					//     underlying_type: Some(
+					//         GoType {
+					//             name: "WithReasoning",
+					//             is_pointer: false,
+					//             is_stream_pointer: false,
+					//             is_slice: false,
+					//             is_map: false,
+					//             is_primitive: false,
+					//             is_class: true,
+					//             is_integer: false,
+					//             is_enum: false,
+					//             is_union: false,
+					//             underlying_type: None,
+					//             wrap_state: false,
+					//         },
+					//     ),
+					//     wrap_state: false,
+					// }
 					if val != nil {
 						return *val
 					}
