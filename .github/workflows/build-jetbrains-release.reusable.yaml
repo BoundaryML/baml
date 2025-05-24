@@ -179,36 +179,3 @@ jobs:
   #       with:
   #         name: pluginVerifier-result
   #         path: ./build/reports/pluginVerifier
-
-  publish-to-jetbrains-marketplace:
-    needs: [build] # Also need determine-version for the condition
-    runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./
-    steps:
-      - uses: actions/checkout@v4
-
-      # Set up Java environment for the next steps
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: 23
-
-      # Setup Gradle
-      - uses: gradle/actions/setup-gradle@v4
-
-      - name: Download extension zips
-        uses: actions/download-artifact@v4
-        with:
-          name: baml-jetbrains-zip
-          path: ./jetbrains/build/distributions/
-
-      - name: List downloaded extension zips
-        run: ls -al ./jetbrains/build/distributions/
-
-      - name: Publish to JetBrains Marketplace
-        working-directory: ./jetbrains
-        run: ./gradlew publishPlugin
-        env:
-          INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN }}
