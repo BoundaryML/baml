@@ -185,7 +185,6 @@ jobs:
   #         path: ./build/reports/pluginVerifier
 
   publish-to-jetbrains-marketplace:
-    environment: release
     needs: [build] # Also need determine-version for the condition
     runs-on: ubuntu-latest
     defaults:
