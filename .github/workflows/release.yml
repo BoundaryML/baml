@@ -293,6 +293,7 @@ jobs:
           VSCE_PAT: ${{ secrets.VSCODE_PAT }}
 
   publish-to-jetbrains-marketplace:
+    environment: release
     needs: [determine-version, all-builds] # Also need determine-version for the condition
     runs-on: ubuntu-latest
     defaults:
@@ -322,7 +323,7 @@ jobs:
         working-directory: ./jetbrains
         run: ./gradlew publishPlugin
         env:
-          INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.ORG_GRADLE_PROJECT_INTELLIJPLATFORMPUBLISHINGTOKEN }}
+          INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN }}
 
 
   publish-to-github:

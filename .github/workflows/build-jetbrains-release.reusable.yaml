@@ -30,13 +30,6 @@ jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        # Define the target platforms for VSCE packaging and map them to Rust targets
-        _:
-          - jetbrains-target: linux-x64
-            rust-target: x86_64-unknown-linux-gnu
     outputs:
       version: ${{ steps.properties.outputs.version }}
       changelog: ${{ steps.properties.outputs.changelog }}
@@ -75,7 +68,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: baml-jetbrains-zip-${{ matrix._.jetbrains-target }}
+          name: baml-jetbrains-zip
           path: ./jetbrains/build/distributions/*
 
   # # Run tests and upload a code coverage report
@@ -189,7 +182,7 @@ jobs:
     runs-on: ubuntu-latest
     defaults:
       run:
-        working-directory: ./jetbrains
+        working-directory: ./
     steps:
       - uses: actions/checkout@v4
 
@@ -205,15 +198,14 @@ jobs:
       - name: Download extension zips
         uses: actions/download-artifact@v4
         with:
-          pattern: baml-jetbrains-zip-*
-          path: ./jetbrains/build/distributions/ # Download to a dedicated directory
-          merge-multiple: true
+          name: baml-jetbrains-zip
+          path: ./jetbrains/build/distributions/
 
       - name: List downloaded extension zips
-        run: ls -al ./build/distributions/
+        run: ls -al ./jetbrains/build/distributions/
 
       - name: Publish to JetBrains Marketplace
         working-directory: ./jetbrains
         run: ./gradlew publishPlugin
         env:
-          INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.ORG_GRADLE_PROJECT_INTELLIJPLATFORMPUBLISHINGTOKEN }}
+          INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN }}
