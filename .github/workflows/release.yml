@@ -322,7 +322,7 @@ jobs:
         working-directory: ./jetbrains
         run: ./gradlew publishPlugin
         env:
-          ORG_GRADLE_PROJECT_intellijPlatformPublishingToken: ${{ secrets.ORG_GRADLE_PROJECT_INTELLIJPLATFORMPUBLISHINGTOKEN }}
+          INTELLIJ_PLATFORM_PUBLISHING_TOKEN: ${{ secrets.ORG_GRADLE_PROJECT_INTELLIJPLATFORMPUBLISHINGTOKEN }}
 
 
   publish-to-github:
