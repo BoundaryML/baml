@@ -39,7 +39,6 @@ dependencies {
         create(providers.gradleProperty("platformType"), providers.gradleProperty("platformVersion"))
 
         // Plugin Dependencies. Uses `platformBundledPlugins` property from the gradle.properties file for bundled IntelliJ Platform plugins.
-        println("sam-platform-bundled-plugins ${providers.gradleProperty("platformBundledPlugins")}")
         bundledPlugins(providers.gradleProperty("platformBundledPlugins").map { it.split(',') })
 
         // Plugin Dependencies. Uses `platformPlugins` property from the gradle.properties file for plugin from JetBrains Marketplace.
@@ -94,8 +93,6 @@ intellijPlatform {
     }
 
     publishing {
-        println("evaluating publishing task")
-        println("env var ${providers.environmentVariable("PATH").get()}")
         token = providers.environmentVariable("INTELLIJ_PLATFORM_PUBLISH_TOKEN")
         // The pluginVersion is based on the SemVer (https://semver.org) and supports pre-release labels, like 2.1.7-alpha.3
         // Specify pre-release label to publish the plugin in a custom Release Channel automatically. Read more:
@@ -128,6 +125,8 @@ kover {
 }
 
 tasks {
+    println("Setting up gradle tasks (src=${"dummy-println"})")
+
     wrapper {
         gradleVersion = providers.gradleProperty("gradleVersion").get()
     }
