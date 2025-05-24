@@ -392,6 +392,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        env_vars: HashMap<String, String>,
     ) -> napi::Result<serde_json::Value> {
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
@@ -406,7 +407,7 @@ impl BamlRuntime {
                 &ctx_mng,
                 tb.as_ref(),
                 cb.as_ref(),
-                HashMap::new(),
+                env_vars,
             )
             .map_err(from_anyhow_error)?;
 

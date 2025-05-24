@@ -760,4 +760,33 @@ mod tests {
         };
         assert_eq!(client_registry, expected_client_registry);
     }
+
+    #[test]
+    fn test_parse_baml_options_with_env() {
+        // Set up a dummy env var to test removal
+        std::env::set_var("REMOVE_ME", "should_be_removed");
+        std::env::set_var("KEEP_ME", "should_be_overwritten");
+
+        let baml_options: BamlOptions = serde_json::from_str(
+            r#"
+        {
+            "env": {
+                "NEW_VAR": "new_value",
+                "KEEP_ME": "new_value",
+                "REMOVE_ME": null
+            }
+        }"#,
+        )
+        .unwrap();
+
+        // The env() method should:
+        // - Add NEW_VAR
+        // - Overwrite KEEP_ME
+        // - Remove REMOVE_ME
+        let env_map = baml_options.env();
+
+        assert_eq!(env_map.get("NEW_VAR"), Some(&"new_value".to_string()));
+        assert_eq!(env_map.get("KEEP_ME"), Some(&"new_value".to_string()));
+        assert!(!env_map.contains_key("REMOVE_ME"));
+    }
 }

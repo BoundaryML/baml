@@ -57,7 +57,7 @@ class TestEnvVarsWithSetup < Minitest::Test
     error = assert_raises(RuntimeError) do
       @b.ExtractPeople(
         text: "John and Jane went to the store",
-        baml_options: { env_vars: user_vars }
+        baml_options: { env: user_vars }
       )
     end
     assert_includes error.message, "Incorrect API key provided"
@@ -74,7 +74,7 @@ class TestEnvVarsWithSetup < Minitest::Test
     error = assert_raises(RuntimeError) do
       @b.ExtractPeople(
         text: "John and Jane went to the store",
-        baml_options: { env_vars: user_vars }
+        baml_options: { env: user_vars }
       )
     end
     assert_includes error.message, "Incorrect API key provided"
@@ -83,7 +83,7 @@ class TestEnvVarsWithSetup < Minitest::Test
     error = assert_raises(RuntimeError) do
       @b.TestRoundRobinStrategy(
         input: "test",
-        baml_options: { env_vars: user_vars }
+        baml_options: { env: user_vars }
       )
     end
     assert_includes error.message, "invalid x-api-key"
@@ -94,7 +94,7 @@ class TestEnvVarsWithSetup < Minitest::Test
     error = assert_raises(RuntimeError) do
       @b.ExtractPeople(
         text: "John and Jane went to the store",
-        baml_options: { env_vars: nil }
+        baml_options: { env: nil }
       )
     end
     assert_includes error.message, "Incorrect API key provided"
