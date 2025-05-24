@@ -213,6 +213,7 @@ jobs:
         run: ls -al ./build/distributions/
 
       - name: Publish to JetBrains Marketplace
+        working-directory: ./jetbrains
         run: ./gradlew publishPlugin
         env:
-          ORG_GRADLE_PROJECT_intellijPlatformPublishingToken: ${{ secrets.ORG_GRADLE_PROJECT_INTELLIJPLATFORMPUBLISHINGTOKEN }}
+          INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.ORG_GRADLE_PROJECT_INTELLIJPLATFORMPUBLISHINGTOKEN }}
