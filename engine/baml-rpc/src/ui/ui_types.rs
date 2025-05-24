@@ -47,6 +47,7 @@ impl FunctionId {
 pub struct FunctionCall {
     #[ts(type = "string")]
     pub function_call_id: FunctionCallId,
+    pub function_name: String,
     pub source: String,
     #[ts(optional)]
     pub function_id: Option<FunctionId>,
@@ -64,6 +65,9 @@ pub struct FunctionCall {
     pub status: String,
     #[ts(type = "any", optional)]
     pub error: Option<serde_json::Value>,
+    #[ts(optional)]
+    #[ts(type = "any | null")]
+    pub tags: Option<serde_json::Map<String, serde_json::Value>>,
 }
 
 #[derive(Debug, Deserialize, Serialize, TS)]

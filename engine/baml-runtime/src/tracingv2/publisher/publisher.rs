@@ -415,6 +415,8 @@ impl TracePublisher {
                 .collect(),
         };
 
+        baml_log::info!("trace_event_batch: {:?}", trace_event_batch);
+
         tracing::info!(
             message = "Trying to upload trace events",
             batch_size = batch.len()

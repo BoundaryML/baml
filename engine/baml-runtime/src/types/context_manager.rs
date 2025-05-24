@@ -5,12 +5,12 @@ use std::{
 
 use anyhow::{Context, Result};
 use baml_ids::FunctionCallId;
-use baml_types::BamlValue;
+use baml_types::{tracing::events::TraceEvent, BamlValue};
 use std::fmt;
 
 use crate::{
-    client_registry::ClientRegistry, tracing::BamlTracer, type_builder::TypeBuilder, CallCtx,
-    RuntimeContext,
+    client_registry::ClientRegistry, tracing::BamlTracer, tracingv2::storage::storage::BAML_TRACER,
+    type_builder::TypeBuilder, CallCtx, RuntimeContext,
 };
 
 use super::runtime_context::BamlSrcReader;
@@ -85,11 +85,28 @@ impl RuntimeContextManager {
     }
 
     pub fn upsert_tags(&self, tags: HashMap<String, BamlValue>) {
-        let mut ctx = self.context.lock().unwrap();
-        if let Some((.., last_tags, _)) = ctx.last_mut() {
-            last_tags.extend(tags);
-        } else {
-            self.global_tags.lock().unwrap().extend(tags);
+        let call_id_stack = {
+            let mut ctx = self.context.lock().unwrap();
+            if let Some((.., last_tags, _)) = ctx.last_mut() {
+                last_tags.extend(tags.clone());
+            } else {
+                self.global_tags.lock().unwrap().extend(tags.clone());
+            }
+
+            // Extract call_id_stack while we have the lock to avoid deadlock
+            ctx.iter()
+                .map(|(.., call_id)| call_id.clone())
+                .collect::<Vec<FunctionCallId>>()
+        };
+        if !call_id_stack.is_empty() {
+            let event = TraceEvent::new_set_tags(
+                call_id_stack,
+                serde_json::Map::from_iter(
+                    tags.into_iter()
+                        .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default())),
+                ),
+            );
+            BAML_TRACER.lock().unwrap().put(Arc::new(event));
         }
     }
 
@@ -103,16 +120,23 @@ impl RuntimeContextManager {
     }
 
     // Note, after entering, calling ctx.call_id() will return the call id of the old context still.
-    pub fn enter(&self, name: &str) -> (uuid::Uuid, Vec<FunctionCallId>) {
+    pub fn enter(
+        &self,
+        name: &str,
+    ) -> (uuid::Uuid, Vec<FunctionCallId>, HashMap<String, BamlValue>) {
         let last_tags = self.clone_last_tags();
         let call = uuid::Uuid::new_v4();
         let call_id = FunctionCallId::new();
         let mut ctx = self.context.lock().unwrap();
-        ctx.push((call, name.to_string(), last_tags, call_id));
+        ctx.push((call, name.to_string(), last_tags.clone(), call_id));
 
         let call_stack = ctx.iter().map(|(.., call_id)| call_id.clone()).collect();
         log::trace!("Entering with: {:#?}", ctx);
-        (call, call_stack)
+        let mut last_tags = last_tags;
+        for (k, v) in self.global_tags.lock().unwrap().iter() {
+            last_tags.entry(k.clone()).or_insert_with(|| v.clone());
+        }
+        (call, call_stack, last_tags)
     }
 
     pub fn exit(&self) -> Option<(uuid::Uuid, Vec<CallCtx>, HashMap<String, BamlValue>)> {

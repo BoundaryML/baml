@@ -245,6 +245,11 @@ fn build_function_log(
                 entry.http_responses.push(http_res.clone());
                 entry.timestamp_last_seen = Some(time_ms);
             }
+            TraceData::SetTags(tags) => {
+                for (k, v) in tags.iter() {
+                    combined_metadata.insert(k.clone(), v.clone());
+                }
+            }
         }
     }
 

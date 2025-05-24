@@ -114,6 +114,7 @@ pub enum IntermediateData<'a> {
         #[serde(skip_serializing_if = "Option::is_none")]
         raw_text_output: Option<Cow<'a, str>>,
     },
+    SetTags(TraceTags),
 }
 
 #[derive(Debug, Serialize, Deserialize)]

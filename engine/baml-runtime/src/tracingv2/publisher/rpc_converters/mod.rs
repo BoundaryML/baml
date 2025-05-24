@@ -64,6 +64,11 @@ impl<'a, T: HasFieldType> IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
                     logged_llmresponse.into_rpc_event(lookup),
                 )
             }
+            TraceData::SetTags(tags) => baml_rpc::runtime_api::TraceData::Intermediate(
+                baml_rpc::runtime_api::IntermediateData::SetTags(
+                    tags.clone().into_iter().collect(),
+                ),
+            ),
         }
     }
 }

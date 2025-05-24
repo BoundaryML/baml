@@ -4,10 +4,11 @@ use crate::on_log_event::LogEventCallbackSync;
 use crate::tracingv2::storage::storage::BAML_TRACER;
 use crate::InnerTraceStats;
 use anyhow::{Context, Result};
-use baml_types::tracing::events::{FunctionStart, TraceData, TraceEvent};
+use baml_types::tracing::events::{EvaluationContext, FunctionStart, TraceData, TraceEvent};
 use baml_types::{BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta};
 use cfg_if::cfg_if;
 use colored::{ColoredString, Colorize};
+use internal_baml_core::ir::ir_helpers::infer_type;
 use internal_baml_jinja::RenderedPrompt;
 use serde::Serialize;
 use std::collections::HashMap;
@@ -51,6 +52,7 @@ pub struct TracingCall {
     pub new_call_id_stack: Vec<baml_ids::FunctionCallId>,
     params: BamlMap<String, BamlValue>,
     start_time: web_time::SystemTime,
+    tags: HashMap<String, BamlValue>,
 }
 
 impl TracingCall {
@@ -400,15 +402,45 @@ impl BamlTracer {
         params: &BamlMap<String, BamlValue>,
     ) -> TracingCall {
         self.trace_stats.guard().start();
-        let (call_id, call_stack) = ctx.enter(function_name);
+        let (call_id, call_stack, last_tags) = ctx.enter(function_name);
 
         log::trace!(" Entering call {:#?} in {:?}", call_id, function_name);
         let call = TracingCall {
             call_id,
-            new_call_id_stack: call_stack,
+            new_call_id_stack: call_stack.clone(),
             params: params.clone(),
             start_time: web_time::SystemTime::now(),
+            // Note these tags are the ones currently on the stack. While the function runs we may register
+            // more tags with set_tags(). TODO: send them in separate events from function_start.
+            tags: last_tags.clone(),
         };
+
+        // Add function start trace event
+        let trace_event = TraceEvent::new_function_start(
+            call_stack,
+            function_name.to_string(),
+            params
+                .iter()
+                .map(|(k, v)| {
+                    let field_type = infer_type(v).unwrap_or_else(|| {
+                        log::warn!("Failed to infer FieldType for BamlValue in tracing. Defaulting to Null.");
+                        baml_types::FieldType::Primitive(baml_types::TypeValue::Null)
+                    });
+                    (
+                        k.clone(),
+                        BamlValueWithMeta::with_const_meta(v, field_type),
+                    )
+                })
+                .collect(),
+            EvaluationContext {
+                tags: last_tags
+                    .into_iter()
+                    .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
+                    .collect(),
+            },
+            true,
+        );
+        BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
         call
     }
@@ -472,13 +504,48 @@ impl BamlTracer {
         if call.call_id != call_id {
             anyhow::bail!("Call ID mismatch: {} != {}", call.call_id, call_id);
         }
-
+        // Tracerv1 code below (deprecate soon)
         if let Some(tracer) = &self.tracer {
-            tracer.submit(response.to_log_schema(&self.options, event_chain, tags, call))?;
+            tracer.submit(response.to_log_schema(
+                &self.options,
+                event_chain,
+                tags.clone(),
+                call.clone(),
+            ))?;
             guard.finalize();
         } else {
             guard.done();
         }
+
+        // Tracerv2 event publishing here
+        let field_type_for_meta = match &response {
+            Some(val) => infer_type(val).unwrap_or_else(|| {
+                log::warn!(
+                    "Failed to infer FieldType for BamlValue in tracing. Defaulting to Null."
+                );
+                baml_types::FieldType::Primitive(baml_types::TypeValue::Null)
+            }),
+            None => baml_types::FieldType::Primitive(baml_types::TypeValue::Null),
+        };
+        let baml_value_with_meta: BamlValueWithMeta<baml_types::FieldType> =
+            BamlValueWithMeta::with_const_meta(
+                response.as_ref().unwrap_or(&baml_types::BamlValue::Null),
+                field_type_for_meta,
+            );
+
+        let tags = tags
+            .clone()
+            .into_iter()
+            .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
+            .collect();
+        let event_chain = call.new_call_id_stack.clone();
+        let tag_event = TraceEvent::new_set_tags(event_chain, tags);
+        BAML_TRACER.lock().unwrap().put(Arc::new(tag_event));
+
+        let event =
+            TraceEvent::new_function_end(call.new_call_id_stack.clone(), Ok(baml_value_with_meta));
+        BAML_TRACER.lock().unwrap().put(Arc::new(event));
+
         Ok(call_id)
     }
 

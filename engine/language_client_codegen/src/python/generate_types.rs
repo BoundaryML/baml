@@ -75,7 +75,10 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonT
         Ok(PythonTypes {
             enums: ir.walk_enums().map(PythonEnum::from).collect::<Vec<_>>(),
             classes: ir.walk_classes().map(PythonClass::from).collect::<Vec<_>>(),
-            is_pydantic_2: matches!(gen.client_type, baml_types::GeneratorOutputType::PythonPydantic),
+            is_pydantic_2: matches!(
+                gen.client_type,
+                baml_types::GeneratorOutputType::PythonPydantic
+            ),
             structural_recursive_alias_cycles: {
                 let mut cycles = ir
                     .walk_alias_cycles()
@@ -169,7 +172,10 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonS
                 .walk_classes()
                 .map(PartialPythonClass::from)
                 .collect::<Vec<_>>(),
-            is_pydantic_2: matches!(gen.client_type, baml_types::GeneratorOutputType::PythonPydantic),
+            is_pydantic_2: matches!(
+                gen.client_type,
+                baml_types::GeneratorOutputType::PythonPydantic
+            ),
             structural_recursive_alias_cycles: {
                 let mut cycles = ir
                     .walk_alias_cycles()
@@ -201,17 +207,16 @@ impl<'ir> From<ClassWalker<'ir>> for PartialPythonClass<'ir> {
                         (false, false) => {
                             f.elem.r#type.elem.to_partial_type_ref(c.ir, false, false)
                         }
-                        (true, false) => (format!("Optional[{}]",f.elem.r#type.elem.to_type_ref(c.ir, true)), true),
+                        (true, false) => (
+                            format!("Optional[{}]", f.elem.r#type.elem.to_type_ref(c.ir, true)),
+                            true,
+                        ),
                         (false, true) => f.elem.r#type.elem.to_partial_type_ref(c.ir, true, true),
                         (true, true) => (f.elem.r#type.elem.to_type_ref(c.ir, true), false),
                     };
                     (
                         f.elem.name.as_str(),
-                        add_default_value(
-                            c.ir,
-                            &f.elem.r#type.elem,
-                            &field,
-                        ),
+                        add_default_value(c.ir, &f.elem.r#type.elem, &field),
                         f.elem.docstring.as_ref().map(render_docstring),
                     )
                 })
@@ -556,6 +561,7 @@ mod tests {
             streaming_behavior: StreamingBehavior {
                 done: true,
                 state: false,
+                needed: false,
             },
             constraints: vec![],
         };

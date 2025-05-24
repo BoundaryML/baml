@@ -871,7 +871,7 @@ test TestMakePerson() {
     }
 
     // #[tokio::test]
-    async fn test_fn_stream() {
+    async fn test_fn_stream2() {
         let rt = runtime(
             r##"
 function MakePoem(length: int) -> string {

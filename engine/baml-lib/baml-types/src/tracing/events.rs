@@ -48,6 +48,11 @@ impl<'a, T: HasFieldType> TraceEvent<'a, T> {
         })
     }
 
+    pub fn new_set_tags(call_stack: Vec<FunctionCallId>, tags: TraceTags) -> Self {
+        Self::from_existing_call(call_stack, TraceData::SetTags(tags))
+            .expect("Failed to create set tags event")
+    }
+
     pub fn new_function_start(
         // Already has the new call_id of the function
         call_stack: Vec<FunctionCallId>,
@@ -121,6 +126,7 @@ pub enum TraceData<'a, T: HasFieldType> {
     FunctionEnd(FunctionEnd<'a, T>),
 
     // The rest are intermediate events that happen between start and end
+    SetTags(TraceTags),
 
     // LLM request
     LLMRequest(Arc<LoggedLLMRequest>),
@@ -147,6 +153,7 @@ impl<'a, T: HasFieldType> TraceData<'a, T> {
             Self::RawLLMRequest(_) => "RawLLMRequest",
             Self::RawLLMResponse(_) => "RawLLMResponse",
             Self::LLMResponse(_) => "LLMResponse",
+            Self::SetTags(_) => "SetTags",
         }
     }
 }

@@ -45,7 +45,8 @@ impl<'a, T: HasFieldType> IntoRpcEvent<'a, Option<baml_rpc::runtime_api::BamlFun
             }) {
                 Some(baml_function_start) => Some(baml_function_start),
                 None => {
-                    baml_log::error!("observability: Failed to find baml function: {}", self.name);
+                    // It's just a normal function call, not a baml function. No need to log.
+                    // baml_log::error!("observability: Failed to find baml function: {}", self.name);
                     None
                 }
             }
