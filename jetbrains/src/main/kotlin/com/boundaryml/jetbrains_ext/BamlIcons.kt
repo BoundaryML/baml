@@ -4,5 +4,5 @@ import com.intellij.openapi.util.IconLoader
 import javax.swing.Icon
 
 object BamlIcons {
-    val FILETYPE: Icon = IconLoader.getIcon("/META-INF/discord-logo-red.svg", BamlIcons::class.java)
+    val FILETYPE: Icon = IconLoader.getIcon("/icons/baml-lamb-purple.svg", BamlIcons::class.java)
 }

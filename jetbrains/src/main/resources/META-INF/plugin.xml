@@ -13,7 +13,7 @@
         <toolWindow
                 id="BAML Playground"
                 factoryClass="com.boundaryml.jetbrains_ext.BamlToolWindowFactory"
-                icon="/META-INF/discord-logo-red.svg"
+                icon="/icons/baml-lamb-light-mode.svg"
         />
         <postStartupActivity implementation="com.boundaryml.jetbrains_ext.BamlProjectActivity" />
         <fileType name="BAML"

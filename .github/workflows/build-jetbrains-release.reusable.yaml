@@ -72,20 +72,11 @@ jobs:
       - name: Build plugin
         run: ./gradlew buildPlugin
 
-      # Prepare plugin archive content for creating artifact
-      - name: Prepare Plugin Artifact
-        id: artifact
-        shell: bash
-        run: |
-          cd ./build/distributions
-          unzip "$(ls *.zip)" -d content
-
-      # Store already-built plugin as an artifact for downloading
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: baml-jetbrains-zip-${{ matrix._.jetbrains-target }}
-          path: ./jetbrains/build/distributions/content/*/*
+          path: ./jetbrains/build/distributions/*
 
   # Run tests and upload a code coverage report
   test:
@@ -192,3 +183,36 @@ jobs:
         with:
           name: pluginVerifier-result
           path: ./build/reports/pluginVerifier
+
+  publish-to-jetbrains-marketplace:
+    environment: release
+    needs: [build] # Also need determine-version for the condition
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./jetbrains
+    steps:
+      - uses: actions/checkout@v4
+
+      # Set up Java environment for the next steps
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 23
+
+      # Setup Gradle
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Download extension zips
+        uses: actions/download-artifact@v4
+        with:
+          pattern: baml-jetbrains-zip-*
+          path: ./jetbrains/build/distributions/ # Download to a dedicated directory
+
+      - name: List downloaded extension zips
+        run: ls -al ./build/distributions/
+
+      - name: Publish to JetBrains Marketplace
+        run: ./gradlew publishPlugin
+        env:
+          ORG_GRADLE_PROJECT_intellijPlatformPublishingToken: ${{ secrets.ORG_GRADLE_PROJECT_INTELLIJPLATFORMPUBLISHINGTOKEN }}
