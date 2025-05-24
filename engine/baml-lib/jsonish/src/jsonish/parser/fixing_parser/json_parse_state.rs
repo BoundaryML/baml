@@ -173,7 +173,7 @@ impl JsonParseState {
                 }
                 CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
-            Pos::Unknown => CloseStringResult::Continue, // Todo - what is this enum supposed to be called? (Not Unknown)
+            Pos::Unknown => CloseStringResult::Continue,
             Pos::InObjectKey => {
                 // in object key
                 let mut counter = 0;
@@ -207,7 +207,6 @@ impl JsonParseState {
                             let is_bool = current_value.trim().eq_ignore_ascii_case("true")
                                 || current_value.trim().eq_ignore_ascii_case("false");
                             let is_null = current_value.trim().eq_ignore_ascii_case("null");
-                            // let looks_like_code = current_value.contains(" ");
                             let is_identifier =
                                 !(current_value.contains(" ") || current_value.contains("("));
                             let is_possible_value =
