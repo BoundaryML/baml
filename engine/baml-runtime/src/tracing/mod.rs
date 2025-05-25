@@ -462,7 +462,7 @@ impl BamlTracer {
         call: TracingCall,
         ctx: &RuntimeContextManager,
         response: Option<BamlValue>,
-    ) -> Result<Option<uuid::Uuid>> {
+    ) -> Result<uuid::Uuid> {
         let guard = self.trace_stats.guard();
 
         let Some((call_id, event_chain, tags)) = ctx.exit() else {
@@ -482,10 +482,10 @@ impl BamlTracer {
                 .submit(response.to_log_schema(&self.options, event_chain, tags, call))
                 .await?;
             guard.done();
-            Ok(Some(call_id))
+            Ok(call_id)
         } else {
             guard.done();
-            Ok(None)
+            Ok(call_id)
         }
     }
 
@@ -600,16 +600,17 @@ impl BamlTracer {
                 );
             }
         }
+        let new_call_ids = event_chain.iter().map(|s| s.new_call_id.clone()).collect();
 
         if let Some(tracer) = &self.tracer {
             tracer
-                .submit(response.to_log_schema(&self.options, event_chain, tags, call))
+                .submit(response.to_log_schema(&self.options, event_chain.clone(), tags, call))
                 .await?;
             guard.done();
         } else {
             guard.done();
         }
-        Ok((call_id, event_chain))
+        Ok((call_id, new_call_ids))
     }
 
     #[cfg(not(target_arch = "wasm32"))]

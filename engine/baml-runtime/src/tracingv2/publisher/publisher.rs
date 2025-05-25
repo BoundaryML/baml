@@ -44,27 +44,33 @@ enum PublisherMessage {
 /// Global publisher channel.
 /// When the module is first used, we create an unbounded channel and then spawn the publisher task.
 static PUBLISHING_CHANNEL: OnceCell<mpsc::UnboundedSender<PublisherMessage>> = OnceCell::new();
+#[cfg(not(target_arch = "wasm32"))]
 static PUBLISHING_TASK: OnceCell<Arc<tokio::task::JoinHandle<()>>> = OnceCell::new();
 
 fn get_publish_channel(
     allow_missing: bool,
 ) -> Option<&'static mpsc::UnboundedSender<PublisherMessage>> {
-    let Some(join_handle) = PUBLISHING_TASK.get() else {
-        if !allow_missing {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        let Some(join_handle) = PUBLISHING_TASK.get() else {
+            if !allow_missing {
+                baml_log::fatal_once!(
+                    "Tracing publisher not started. Report this bug to the BAML team."
+                );
+            }
+            return None;
+        };
+        if join_handle.is_finished() {
             baml_log::fatal_once!(
-                "Tracing publisher not started. Report this bug to the BAML team."
+                "Tracing publisher ended unexpectedly. Report this bug to the BAML team."
             );
+            return None;
         }
-        return None;
-    };
-    if join_handle.is_finished() {
-        baml_log::fatal_once!(
-            "Tracing publisher ended unexpectedly. Report this bug to the BAML team."
-        );
-        return None;
     }
-    let channel = PUBLISHING_CHANNEL.get();
-    channel
+    {
+        let channel = PUBLISHING_CHANNEL.get();
+        channel
+    }
 }
 
 #[derive(Serialize)]
@@ -160,7 +166,10 @@ impl TypeLookup for RuntimeAST {
     }
 }
 
-pub fn start_publisher(lookup: Arc<AstSignatureWrapper>, rt: Arc<tokio::runtime::Runtime>) {
+pub fn start_publisher(
+    lookup: Arc<AstSignatureWrapper>,
+    #[cfg(not(target_arch = "wasm32"))] rt: Arc<tokio::runtime::Runtime>,
+) {
     if lookup.env_var("BOUNDARY_API_KEY").is_none() {
         log::debug!("Skipping publisher because BOUNDARY_API_KEY is not set");
         return;
@@ -192,7 +201,16 @@ pub fn start_publisher(lookup: Arc<AstSignatureWrapper>, rt: Arc<tokio::runtime:
     });
 
     // Update runtime if channel already existed
+    #[cfg(not(target_arch = "wasm32"))]
     let _ = rt.block_on(flush());
+    #[cfg(target_arch = "wasm32")]
+    {
+        let _ = wasm_bindgen_futures::spawn_local(async move {
+            if let Err(e) = flush().await {
+                log::error!("Failed to flush: {}", e);
+            }
+        });
+    }
     let _ = channel.send(PublisherMessage::UpdateRuntime(lookup));
 }
 

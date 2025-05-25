@@ -208,6 +208,7 @@ impl BamlRuntime {
     }
 
     fn new_runtime(inner: InternalBamlRuntime, env_vars: &HashMap<String, String>) -> Result<Self> {
+        #[cfg(not(target_arch = "wasm32"))]
         let rt = Self::get_tokio_singleton()?;
         let inner = Arc::new(inner);
 
@@ -224,6 +225,7 @@ impl BamlRuntime {
                     "Internal error: Failed to create a event publisher for BAML runtime",
                 )?,
             ),
+            #[cfg(not(target_arch = "wasm32"))]
             rt.clone(),
         );
 
@@ -1197,6 +1199,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
             .get_or_create_tracer(env_vars)
             .finish_baml_call(call, ctx, result)
             .await
+            .map(|r| r.0)
     }
 
     // For non-LLM calls -- used by FFI boundary like with @trace in python
@@ -1228,8 +1231,19 @@ impl ExperimentalTracingInterface for BamlRuntime {
     }
 
     fn flush(&self) -> Result<()> {
-        if let Err(e) = self.async_runtime.block_on(flush()) {
-            baml_log::error!("Failed to flush: {}", e);
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Err(e) = self.async_runtime.block_on(flush()) {
+                baml_log::error!("Failed to flush: {}", e);
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        {
+            let _ = wasm_bindgen_futures::spawn_local(async move {
+                if let Err(e) = flush().await {
+                    baml_log::error!("Failed to flush: {}", e);
+                }
+            });
         }
         self.tracer_wrapper.get_tracer().flush()
     }

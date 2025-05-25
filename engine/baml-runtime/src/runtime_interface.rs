@@ -70,7 +70,7 @@ pub trait ExperimentalTracingInterface {
         ctx: &RuntimeContextManager,
 
         env_vars: &HashMap<String, String>,
-    ) -> Result<Option<uuid::Uuid>>;
+    ) -> Result<uuid::Uuid>;
 
     #[cfg(not(target_arch = "wasm32"))]
     fn finish_call(
