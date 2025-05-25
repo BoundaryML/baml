@@ -95,17 +95,16 @@ impl FunctionResultStream {
         // let mut local_params = crate::BamlMap::new();
         // std::mem::swap(&mut local_params, &mut self.params);
 
-        let call =
-            self.tracer
-                .start_call(&self.function_name, ctx, &self.prepared_func.value, true);
-        let rctx = ctx.create_ctx(tb, cb, env_vars,call.new_call_id_stack.clone());
+        let call = self.tracer.start_call(
+            &self.function_name,
+            ctx,
+            &self.prepared_func.value,
+            true,
+            (!self.collectors.is_empty()).then(|| self.collectors.clone()),
+        );
+        let rctx = ctx.create_ctx(tb, cb, env_vars, call.new_call_id_stack.clone());
         let res = match rctx {
             Ok(rctx) => {
-                let call_id = call.curr_call_id();
-                for collector in self.collectors.iter() {
-                    collector.track_function(call_id.clone());
-                }
-
                 async {
                     let (history, _) = orchestrate_stream(
                         local_orchestrator,
@@ -126,17 +125,16 @@ impl FunctionResultStream {
             Err(e) => Err(e),
         };
 
-        let mut target_id = None;
         let curr_call_id = call.curr_call_id();
         let call_stack = call.new_call_id_stack.clone();
         #[cfg(not(target_arch = "wasm32"))]
         match self.tracer.finish_baml_call(call, ctx, &res) {
-            Ok(id) => target_id = Some(id),
+            Ok(id) => {}
             Err(e) => log::debug!("Error during logging: {}", e),
         }
         #[cfg(target_arch = "wasm32")]
         match self.tracer.finish_baml_call(call, ctx, &res).await {
-            Ok(id) => target_id = Some(id),
+            Ok(id) => {}
             Err(e) => log::debug!("Error during logging: {}", e),
         }
 

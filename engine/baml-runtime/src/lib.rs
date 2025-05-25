@@ -413,14 +413,16 @@ impl BamlRuntime {
         let call = self
             .tracer_wrapper
             .get_or_create_tracer(&env_vars)
-            .start_call(test_name, ctx, &Default::default(), true);
+            .start_call(
+                test_name,
+                ctx,
+                &Default::default(),
+                true,
+                collector.as_ref().map(|c| vec![c.clone()]),
+            );
 
         let expr_fn = self.inner.ir().find_expr_fn(function_name);
         let is_expr_fn = expr_fn.is_ok();
-
-        if let Some(collector) = collector.clone() {
-            collector.track_function(call.curr_call_id());
-        }
 
         let run_to_response = || async {
             // acceptable clone, just used for testing
@@ -673,20 +675,16 @@ impl BamlRuntime {
         env_vars: HashMap<String, String>,
         expr_tx: Option<mpsc::UnboundedSender<Vec<internal_baml_diagnostics::SerializedSpan>>>,
     ) -> (Result<FunctionResult>, FunctionCallId) {
+        // baml_log::info!("env vars: {:#?}", env_vars.clone());
         baml_log::set_from_env(&env_vars).unwrap();
 
         log::trace!("Calling function: {}", function_name);
+        log::debug!("collectors: {:#?}", &collectors);
         let call = self
             .tracer_wrapper
             .get_or_create_tracer(&env_vars)
-            .start_call(&function_name, ctx, params, true);
+            .start_call(&function_name, ctx, params, true, collectors);
         let curr_call_id = call.curr_call_id();
-
-        if let Some(collectors) = collectors {
-            for collector in collectors.iter() {
-                collector.track_function(call.curr_call_id());
-            }
-        }
 
         let fake_syntax_span = Span::fake();
         let response =
@@ -1170,7 +1168,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
     ) -> TracingCall {
         self.tracer_wrapper
             .get_or_create_tracer(env_vars)
-            .start_call(function_name, ctx, params, false)
+            .start_call(function_name, ctx, params, false, None)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1332,11 +1330,9 @@ async fn expr_eval_result(
     match maybe_expr_f {
         Ok(expr_fn) => {
             log::trace!("Calling function: {}", function_name);
-            let call = tracer.start_call(&function_name, mgr, params, true);
+            let collectors = collector.as_ref().map(|c| vec![c.clone()]);
+            let call = tracer.start_call(&function_name, mgr, params, true, collectors);
 
-            if let Some(collector) = collector {
-                collector.track_function(call.curr_call_id());
-            }
             let ctx = mgr.create_ctx(tb, cb, env_vars, call.new_call_id_stack.clone())?;
             let env = EvalEnv {
                 context: initial_context(ir),

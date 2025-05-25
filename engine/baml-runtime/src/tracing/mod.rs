@@ -1,7 +1,7 @@
 pub mod api_wrapper;
 
 use crate::on_log_event::LogEventCallbackSync;
-use crate::tracingv2::storage::storage::BAML_TRACER;
+use crate::tracingv2::storage::storage::{Collector, BAML_TRACER};
 use crate::InnerTraceStats;
 use anyhow::{Context, Result};
 use baml_types::tracing::events::{EvaluationContext, FunctionStart, TraceData, TraceEvent};
@@ -401,6 +401,7 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         params: &BamlMap<String, BamlValue>,
         is_baml_function: bool,
+        collectors: Option<Vec<Arc<Collector>>>,
     ) -> TracingCall {
         self.trace_stats.guard().start();
         let (call_id, call_stack, last_tags, global_tags) = ctx.enter(function_name);
@@ -415,6 +416,14 @@ impl BamlTracer {
             // more tags with set_tags(). Those are picked up via a diff event (SetTags)
             tags: last_tags.clone(),
         };
+
+        // This must happen before the first event is sent.
+        if let Some(collectors) = collectors {
+            // log::debug!("collectors: {:#?}", collectors);
+            for collector in collectors.iter() {
+                collector.track_function(call.curr_call_id());
+            }
+        }
 
         // Add function start trace event
         let trace_event = TraceEvent::new_function_start(

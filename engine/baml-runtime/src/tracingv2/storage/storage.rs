@@ -102,11 +102,11 @@ impl TraceStorage {
 
     /// Append a new event for the given function ID, but only if ref_count > 0.
     pub fn put(&mut self, event: Arc<TraceEventWithMeta>) {
-        log::info!(
-            "#####################   Putting event: {} ############\n{}\n\n",
-            event.call_id,
-            event.content.type_name()
-        );
+        // log::debug!(
+        //     "#####################   Putting event: {} ############\n{}\n\n",
+        //     event.call_id,
+        //     event.content.type_name()
+        // );
         if let Err(e) = crate::tracingv2::publisher::publish_trace_event(event.clone()) {
             log::warn!("Failed to publish trace event: {:?}", e);
         }
@@ -572,7 +572,7 @@ impl Collector {
     }
 
     pub fn track_function(&self, fid: FunctionCallId) {
-        log::trace!("Tracking function: {:?}", fid);
+        log::debug!("Tracking function: {:?}", fid);
 
         // Then add to our set (maintaining insertion order)
         let mut guard = self.tracked_ids.lock().unwrap();

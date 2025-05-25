@@ -249,7 +249,6 @@ impl TracePublisher {
 
         tracing::info!(
             message = "Starting publisher loop",
-            api_key = self.lookup.api_key(),
             base_url = self.lookup.base_url(),
         );
 
@@ -265,7 +264,6 @@ impl TracePublisher {
 
                     match message {
                         PublisherMessage::UpdateRuntime(lookup) => {
-                            baml_log::info!("Updating runtime");
                             self.process_baml_src_upload(&lookup).await;
                             self.lookup = lookup;
                         },
@@ -402,20 +400,19 @@ impl TracePublisher {
 
         tracing::info!("Uploading BAML source");
 
-        // match lookup
-        //     .api_request::<CreateBamlSrcUpload>(CreateBamlSrcUploadRequest { ast })
-        //     .await
-        // {
-        //     Ok(response) => {
-        //         log::debug!("Successfully uploaded BAML source");
-        //         Ok(())
-        //     }
-        //     Err(e) => {
-        //         log::debug!("Failed to upload baml src: {}", e);
-        //         return Err(e.into());
-        //     }
-        // }
-        Ok(())
+        match lookup
+            .api_request::<CreateBamlSrcUpload>(CreateBamlSrcUploadRequest { ast })
+            .await
+        {
+            Ok(response) => {
+                log::debug!("Successfully uploaded BAML source");
+                Ok(())
+            }
+            Err(e) => {
+                log::debug!("Failed to upload baml src: {}", e);
+                return Err(e.into());
+            }
+        }
     }
 
     async fn process_batch(&self, batch: Vec<Arc<TraceEventWithMeta>>) {
