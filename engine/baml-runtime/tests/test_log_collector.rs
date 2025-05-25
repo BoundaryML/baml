@@ -94,7 +94,6 @@ mod internal_tests {
 
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
-        // TODO: Come back to this if the entire thing works
         let call_function_future = runtime.call_function(
             function_name.to_string(),
             &params,

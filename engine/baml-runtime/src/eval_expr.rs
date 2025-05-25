@@ -247,7 +247,7 @@ async fn beta_reduce<'a>(
                     tx.unbounded_send(vec![app_span]).unwrap();
                 }
                 if eval_final_llm_fn {
-                    // TODO: Come back to this if the entire thing works
+                    // TODO: env vars are not supported yet for expressions.
                     let res: anyhow::Result<FunctionResult> = env
                         .runtime
                         .call_function(name.clone(), &args_map, &ctx, None, None, None, HashMap::new())
