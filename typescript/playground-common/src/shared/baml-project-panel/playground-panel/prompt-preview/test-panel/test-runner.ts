@@ -218,7 +218,7 @@ const useRunTests = (maxBatchSize = 5) => {
           clearHighlights() // Clear highlights when all tests are done
         })
       },
-      [maxBatchSize, rt, ctx, wasm],
+      [maxBatchSize, rt, ctx, wasm, envVars],
     ),
   )
 
@@ -394,7 +394,7 @@ const useParallelRunTests = (maxBatchSize = 5) => {
 
         await run()
       },
-      [maxBatchSize, rt, ctx, wasm],
+      [maxBatchSize, rt, ctx, wasm, envVars],
     ),
   )
 
