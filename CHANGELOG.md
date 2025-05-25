@@ -2,6 +2,30 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.89.0](https://github.com/boundaryml/baml/compare/0.88.0..0.89.0) - 2025-05-21
+
+### Features
+- Add `hoist_classes` parameter in `ctx.output_format` (#1957) - ([42ee507](https://github.com/boundaryml/baml/commit/42ee507e21422ea6d7267172c22d534a65f700ac)) - Antonio Sarosi
+- [feat] Adding support for pydantic v1 (#1968) - ([3fdbfd0](https://github.com/boundaryml/baml/commit/3fdbfd05207f44a92d48d952c2ccbfeec9104850)) - hellovai
+- [Go] Add ClientRegistry (#1967) - ([1cb4648](https://github.com/boundaryml/baml/commit/1cb464826d8cbc21b555b725fd6594239605cf01)) - Todd Berman
+
+
+### Bug Fixes
+
+- enum validation to disallow reserved names as enum values (#1955) - ([ae13c4d](https://github.com/boundaryml/baml/commit/ae13c4dfde7cd2f51d17934d564980662cfb9e3b)) - Rahul Tiwari
+- [Go] Maps are being returned not as pointers as they are already pointers (#1956) - ([3d83f99](https://github.com/boundaryml/baml/commit/3d83f9975eb38d0cf0820ff634c7cafd91044be9)) - Todd Berman
+- [go] JSON deserialize Union fix (#1954) - ([f748439](https://github.com/boundaryml/baml/commit/f7484395bf349231ffa626fdd7222f6929e79be6)) - Todd Berman
+- Fix height rendering issue on playground (#1963) - ([bb39c3d](https://github.com/boundaryml/baml/commit/bb39c3d1d0914d6c8b724b471f21023cd519aab2)) - aaronvg
+- Fix nested assert typechecking (#1966) - ([113966f](https://github.com/boundaryml/baml/commit/113966f6f43c2cf2fbcc6c0796ebe353d5f2d3f6)) - Greg Hale
+- Fix issue where tracing logs would not be sent if you had an empty BOUNDARY_BASE_URL env var (#1971) - ([9203f6a](https://github.com/boundaryml/baml/commit/9203f6aa81dd6ca0d4160d82392bbf1183bf8c82)) - aaronvg
+
+
+### Miscellaneous
+- [docs] adding docs for cerebras (#1952) - ([e9d699b](https://github.com/boundaryml/baml/commit/e9d699bd8f7a47b462ad6289991b9231f4e1517f)) - hellovai
+- [docs] adding support for tinfoil models (#1958) - ([9255eb0](https://github.com/boundaryml/baml/commit/9255eb01fecbfdf6dd45ebba7c81274484786887)) - hellovai
+- [MVP] add conditional expressions (#1959) - ([ee15d0f](https://github.com/boundaryml/baml/commit/ee15d0f379f53a93f2d80b39909c74495b19930b)) - Greg Hale
+- use regex_match in constraint docs (#1953) - ([fbba5cc](https://github.com/boundaryml/baml/commit/fbba5cc43066ca719ca7f8a003e5ffba4cfbdb6c)) - Greg Hale
+
 ## [0.88.0](https://github.com/boundaryml/baml/compare/0.87.2..0.88.0) - 2025-05-14
 
 ### Documentation

@@ -161,5 +161,19 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
                 validate_expression(ctx, else_, scope);
             }
         }
+        Expression::ForLoop {
+            identifier,
+            iterator,
+            body,
+            span,
+        } => {
+            validate_expression(ctx, iterator, scope);
+            let mut body_scope = scope.clone();
+            body_scope.insert(identifier.to_string());
+            for stmt in body.stmts.iter() {
+                validate_stmt(ctx, stmt, &mut body_scope);
+                validate_expression(ctx, &stmt.body, &body_scope);
+            }
+        }
     }
 }

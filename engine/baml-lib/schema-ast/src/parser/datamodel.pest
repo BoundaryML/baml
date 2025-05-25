@@ -113,6 +113,7 @@ jinja_block_close = _{ "}}" }
 jinja_body        =  { (!(jinja_block_open | jinja_block_close) ~ ANY)* }
 jinja_expression  =  { jinja_block_open ~ jinja_body ~ jinja_block_close }
 expression        =  {
+    for_loop |
     fn_app |
     if_expression |
     lambda |
@@ -246,6 +247,12 @@ fn_app = { identifier ~ "(" ~ expression? ~ ("," ~ expression)* ~ ")" }
 
 // If expression.
 if_expression = { "if" ~ expression ~ "{" ~ expression ~ "}" ~ ( "else" ~ "{" ~ expression ~ "}" )? }
+
+// For loop, e.g.
+// for (r in resumes) {
+//   ExtractResume(x)   
+// }
+for_loop = { "for" ~ "(" ~ identifier ~ "in" ~ expression ~ ")" ~ expr_block }
 
 // Anonymous function.
 lambda = { named_argument_list ~ "=>" ~ expression }

@@ -89,13 +89,16 @@ def main(
     ruby: bool = typer.Option(False, "--ruby", help="Bump patch for ruby"),
     go: bool = typer.Option(False, "--go", help="Bump patch for go"),
     vscode: bool = typer.Option(False, "--vscode", help="Bump patch for vscode"),
+    jetbrains: bool = typer.Option(
+        False, "--jetbrains", help="Bump patch for jetbrains"
+    ),
     bump_all: bool = typer.Option(False, "--all", help="Bump all versions"),
     allow_dirty: bool = typer.Option(
         False, "--allow-dirty", help="Allow dirty git status"
     ),
 ) -> None:
     # Replace VersionBumpArgs with direct flag access
-    modes = [ts, python, ruby, go, vscode, bump_all]
+    modes = [ts, python, ruby, go, vscode, jetbrains, bump_all]
     if sum(modes) > 1:
         c.print("Error: Only one mode can be enabled.", style="red")
         sys.exit(1)
@@ -179,6 +182,7 @@ def main(
         ruby,
         go,
         vscode,
+        jetbrains,
         bump_all,
         allow_dirty,
         selected_version_bump,
@@ -313,6 +317,7 @@ def perform_version_bumps(
     ruby: bool,
     go: bool,
     vscode: bool,
+    jetbrains: bool,
     all: bool,
     allow_dirty: bool,
     user_confirmation: VersionBumpType,
@@ -327,7 +332,15 @@ def perform_version_bumps(
             user_confirmation,
             "--allow-dirty" if allow_dirty else "",
         )
-        for config in ["python", "typescript", "ruby", "go", "vscode", "integ-tests"]:
+        for config in [
+            "python",
+            "typescript",
+            "ruby",
+            "go",
+            "vscode",
+            "integ-tests",
+            "jetbrains",
+        ]:
             bump2version(
                 "--config-file",
                 f"./versions/{config}.cfg",
@@ -344,6 +357,8 @@ def perform_version_bumps(
         bump2version("--config-file", "./versions/go.cfg", "patch")
     elif vscode:
         bump2version("--config-file", "./versions/vscode.cfg", "patch")
+    elif jetbrains:
+        bump2version("--config-file", "./versions/jetbrains.cfg", "patch")
 
 
 if __name__ == "__main__":
