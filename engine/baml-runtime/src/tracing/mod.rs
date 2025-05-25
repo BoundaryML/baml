@@ -400,9 +400,10 @@ impl BamlTracer {
         function_name: &str,
         ctx: &RuntimeContextManager,
         params: &BamlMap<String, BamlValue>,
+        is_baml_function: bool,
     ) -> TracingCall {
         self.trace_stats.guard().start();
-        let (call_id, call_stack, last_tags) = ctx.enter(function_name);
+        let (call_id, call_stack, last_tags, global_tags) = ctx.enter(function_name);
 
         log::trace!(" Entering call {:#?} in {:?}", call_id, function_name);
         let call = TracingCall {
@@ -411,7 +412,7 @@ impl BamlTracer {
             params: params.clone(),
             start_time: web_time::SystemTime::now(),
             // Note these tags are the ones currently on the stack. While the function runs we may register
-            // more tags with set_tags(). TODO: send them in separate events from function_start.
+            // more tags with set_tags(). Those are picked up via a diff event (SetTags)
             tags: last_tags.clone(),
         };
 
@@ -433,12 +434,13 @@ impl BamlTracer {
                 })
                 .collect(),
             EvaluationContext {
-                tags: last_tags
+                tags: global_tags
                     .into_iter()
+                    .chain(last_tags.into_iter())
                     .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
                     .collect(),
             },
-            true,
+            is_baml_function,
         );
         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
@@ -487,7 +489,7 @@ impl BamlTracer {
         response: Option<BamlValue>,
     ) -> Result<uuid::Uuid> {
         let guard = self.trace_stats.guard();
-        let Some((call_id, event_chain, tags)) = ctx.exit() else {
+        let Some((call_id, event_chain, global_and_user_tags)) = ctx.exit() else {
             anyhow::bail!(
                 "Attempting to finish a call {:#?} without first starting one. Current context {:#?}",
                 call,
@@ -509,7 +511,7 @@ impl BamlTracer {
             tracer.submit(response.to_log_schema(
                 &self.options,
                 event_chain,
-                tags.clone(),
+                global_and_user_tags.clone(),
                 call.clone(),
             ))?;
             guard.finalize();
@@ -533,14 +535,14 @@ impl BamlTracer {
                 field_type_for_meta,
             );
 
-        let tags = tags
-            .clone()
-            .into_iter()
-            .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
-            .collect();
+        // let tags = global_and_user_tags
+        //     .clone()
+        //     .into_iter()
+        //     .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
+        //     .collect();
         let event_chain = call.new_call_id_stack.clone();
-        let tag_event = TraceEvent::new_set_tags(event_chain, tags);
-        BAML_TRACER.lock().unwrap().put(Arc::new(tag_event));
+        // let tag_event = TraceEvent::new_set_tags(event_chain, tags);
+        // BAML_TRACER.lock().unwrap().put(Arc::new(tag_event));
 
         let event =
             TraceEvent::new_function_end(call.new_call_id_stack.clone(), Ok(baml_value_with_meta));

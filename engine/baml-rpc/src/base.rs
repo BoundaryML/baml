@@ -3,7 +3,7 @@ use serde::{Deserializer, Serializer};
 use std::time::Duration;
 use time::OffsetDateTime;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EpochMsTimestamp(time::OffsetDateTime);
 
 impl From<time::OffsetDateTime> for EpochMsTimestamp {

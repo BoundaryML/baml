@@ -25,7 +25,9 @@ pub type BamlContext = (
 pub struct RuntimeContextManager {
     baml_src_reader: Arc<BamlSrcReader>,
     context: Arc<Mutex<Vec<BamlContext>>>,
+    // User defined tags
     env_vars: HashMap<String, String>,
+    // These are system tags. Prefixed with "baml."
     global_tags: Arc<Mutex<HashMap<String, BamlValue>>>,
 }
 
@@ -98,11 +100,23 @@ impl RuntimeContextManager {
                 .map(|(.., call_id)| call_id.clone())
                 .collect::<Vec<FunctionCallId>>()
         };
+
         if !call_id_stack.is_empty() {
+            // Get all tags: global tags + current context tags (which now include the new tags)
+            let all_tags = {
+                let mut all_tags = self.global_tags.lock().unwrap().clone();
+                let ctx = self.context.lock().unwrap();
+                if let Some((.., ctx_tags, _)) = ctx.last() {
+                    all_tags.extend(ctx_tags.into_iter().map(|(k, v)| (k.clone(), v.clone())));
+                }
+                all_tags
+            };
+
             let event = TraceEvent::new_set_tags(
                 call_id_stack,
                 serde_json::Map::from_iter(
-                    tags.into_iter()
+                    all_tags
+                        .into_iter()
                         .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default())),
                 ),
             );
@@ -120,10 +134,17 @@ impl RuntimeContextManager {
     }
 
     // Note, after entering, calling ctx.call_id() will return the call id of the old context still.
+    // Returns the user tags, and global tags separately.
+    // The user tags get replicated to downstream contexts.
     pub fn enter(
         &self,
         name: &str,
-    ) -> (uuid::Uuid, Vec<FunctionCallId>, HashMap<String, BamlValue>) {
+    ) -> (
+        uuid::Uuid,
+        Vec<FunctionCallId>,
+        HashMap<String, BamlValue>,
+        HashMap<String, BamlValue>,
+    ) {
         let last_tags = self.clone_last_tags();
         let call = uuid::Uuid::new_v4();
         let call_id = FunctionCallId::new();
@@ -136,9 +157,11 @@ impl RuntimeContextManager {
         for (k, v) in self.global_tags.lock().unwrap().iter() {
             last_tags.entry(k.clone()).or_insert_with(|| v.clone());
         }
-        (call, call_stack, last_tags)
+        let global_tags = self.global_tags.lock().unwrap().clone();
+        (call, call_stack, last_tags, global_tags)
     }
 
+    // This returns ALL tags together (global and user)
     pub fn exit(&self) -> Option<(uuid::Uuid, Vec<CallCtx>, HashMap<String, BamlValue>)> {
         let mut ctx = self.context.lock().unwrap();
         log::trace!("Exiting: {:#?}", ctx);

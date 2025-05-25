@@ -212,14 +212,31 @@ pub struct LoggedLLMRequest {
     pub prompt: Vec<LLMChatMessage>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct HTTPBody {
     raw: Vec<u8>,
 }
 
-// TODO: Cache parsed JSON and UTF-8 text in order to avoid parsing the bytes
-// on every access (not trivial because we'd need &mut self or interior
-// mutability).
+impl std::fmt::Debug for HTTPBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let preview = if self.raw.len() <= 100 {
+            // If small enough, show as UTF-8 text if possible
+            match std::str::from_utf8(&self.raw) {
+                Ok(text) => format!("\"{}\"", text.escape_debug()),
+                Err(_) => format!("{:?}", self.raw),
+            }
+        } else {
+            // For larger bodies, show length and preview
+            match std::str::from_utf8(&self.raw[..100.min(self.raw.len())]) {
+                Ok(text) => format!("\"{}...\" ({} bytes)", text.escape_debug(), self.raw.len()),
+                Err(_) => format!("[{} bytes]", self.raw.len()),
+            }
+        };
+
+        f.debug_struct("HTTPBody").field("raw", &preview).finish()
+    }
+}
+
 impl HTTPBody {
     pub fn new(body: Vec<u8>) -> Self {
         Self { raw: body }

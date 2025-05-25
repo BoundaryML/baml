@@ -22,7 +22,8 @@ pub use ui::ui_control_plane_projects::{
     ListProjectsResponse, Project, UpdateProject, UpdateProjectRequest, UpdateProjectResponse,
 };
 pub use ui::ui_function_calls::{
-    ListFunctionCalls, ListFunctionCallsRequest, ListFunctionCallsResponse,
+    ListFunctionCallQueryParams, ListFunctionCalls, ListFunctionCallsRequest,
+    ListFunctionCallsResponse,
 };
 
 pub use runtime_api::baml_function_call_error::*;

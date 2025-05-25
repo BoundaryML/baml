@@ -93,9 +93,9 @@ impl FunctionResultStream {
         // let mut local_params = crate::BamlMap::new();
         // std::mem::swap(&mut local_params, &mut self.params);
 
-        let call = self
-            .tracer
-            .start_call(&self.function_name, ctx, &self.prepared_func.value);
+        let call =
+            self.tracer
+                .start_call(&self.function_name, ctx, &self.prepared_func.value, true);
         let rctx = ctx.create_ctx(tb, cb, call.new_call_id_stack.clone());
         let res = match rctx {
             Ok(rctx) => {
@@ -103,15 +103,6 @@ impl FunctionResultStream {
                 for collector in self.collectors.iter() {
                     collector.track_function(call_id.clone());
                 }
-
-                let trace_event = TraceEvent::new_function_start(
-                    call.new_call_id_stack.clone(),
-                    self.function_name.clone(),
-                    self.prepared_func.value2.clone().into_iter().collect(),
-                    baml_types::tracing::events::EvaluationContext::default(),
-                    true,
-                );
-                BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
                 async {
                     let (history, _) = orchestrate_stream(

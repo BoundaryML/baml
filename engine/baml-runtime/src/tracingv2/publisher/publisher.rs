@@ -219,9 +219,15 @@ struct TracePublisher {
 
 impl TracePublisher {
     pub fn new(rx: mpsc::UnboundedReceiver<PublisherMessage>, lookup: Arc<RuntimeAST>) -> Self {
+        let batch_size = lookup
+            .ast
+            .env_var("BAML_TRACE_BATCH_SIZE")
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(12);
+
         Self {
             rx,
-            batch_size: 1,
+            batch_size,
             lookup,
         }
     }
@@ -394,9 +400,96 @@ impl TracePublisher {
     }
 
     async fn process_batch(&self, batch: Vec<Arc<TraceEventWithMeta>>) {
-        let batch_result = self.process_batch_impl(batch).await;
+        let batch_result = self.process_batch_with_splitting(batch).await;
         if let Err(e) = batch_result {
-            baml_log::error!("Failed to upload trace events: {:?}", e);
+            baml_log::error!("Failed to upload trace events after retries: {:?}", e);
+        }
+    }
+
+    /// Process a batch with automatic splitting on failure.
+    /// If a batch fails to upload, we'll recursively split it in half and retry.
+    /// This helps with payload size limits, rate limiting, and transient network issues.
+    async fn process_batch_with_splitting(
+        &self,
+        batch: Vec<Arc<TraceEventWithMeta>>,
+    ) -> Result<()> {
+        // Get minimum batch size from env var, default to 1 (individual events)
+        let min_batch_size = self
+            .lookup
+            .ast
+            .env_var("BAML_MIN_BATCH_SIZE")
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(1);
+        baml_log::info!("Processing batch of {} events", batch.len());
+        baml_log::info!("Events: {:#?}", batch);
+
+        self.process_batch_recursive(batch, min_batch_size).await
+    }
+
+    /// Recursively process batches, splitting on failure until we reach minimum size.
+    async fn process_batch_recursive(
+        &self,
+        batch: Vec<Arc<TraceEventWithMeta>>,
+        min_batch_size: usize,
+    ) -> Result<()> {
+        // Try to upload the batch
+        match self.process_batch_impl(batch.clone()).await {
+            Ok(()) => {
+                tracing::info!("Successfully uploaded batch of {} events", batch.len());
+                Ok(())
+            }
+            Err(e) => {
+                baml_log::error!("Failed to upload batch of {} events: {}", batch.len(), e);
+                // If batch size is at or below minimum, give up
+                if batch.len() <= min_batch_size {
+                    baml_log::error!(
+                        "Failed to upload single/minimum batch of {} events: {}",
+                        batch.len(),
+                        e
+                    );
+                    return Err(e);
+                }
+
+                // Split the batch in half and retry each half
+                let mid = batch.len() / 2;
+                let (first_half, second_half) = batch.split_at(mid);
+
+                tracing::warn!(
+                    "Batch upload failed (size: {}), splitting into {} and {} events: {}",
+                    batch.len(),
+                    first_half.len(),
+                    second_half.len(),
+                    e
+                );
+
+                // Process both halves recursively with Box::pin
+                let first_result =
+                    Box::pin(self.process_batch_recursive(first_half.to_vec(), min_batch_size))
+                        .await;
+                let second_result =
+                    Box::pin(self.process_batch_recursive(second_half.to_vec(), min_batch_size))
+                        .await;
+
+                // If either half failed, propagate the error
+                match (first_result, second_result) {
+                    (Ok(()), Ok(())) => {
+                        tracing::info!("Successfully uploaded split batches");
+                        Ok(())
+                    }
+                    (Err(e1), Ok(())) => {
+                        baml_log::error!("First half failed: {}", e1);
+                        Err(e1)
+                    }
+                    (Ok(()), Err(e2)) => {
+                        baml_log::error!("Second half failed: {}", e2);
+                        Err(e2)
+                    }
+                    (Err(e1), Err(e2)) => {
+                        baml_log::error!("Both halves failed - first: {}, second: {}", e1, e2);
+                        Err(e1) // Return the first error
+                    }
+                }
+            }
         }
     }
 
@@ -415,7 +508,7 @@ impl TracePublisher {
                 .collect(),
         };
 
-        baml_log::info!("trace_event_batch: {:?}", trace_event_batch);
+        baml_log::info!("trace_events_in_batch {}", batch.len());
 
         tracing::info!(
             message = "Trying to upload trace events",
@@ -515,6 +608,8 @@ pub fn publish_trace_event(event: Arc<TraceEventWithMeta>) -> anyhow::Result<()>
 // but that's ok since noone uses our wasm build in node for logging.
 // https://github.com/whizsid/wasmtimer-rs/issues/26
 pub async fn flush() -> anyhow::Result<()> {
+    // TODO: debug
+    baml_log::info!("Flushing trace events");
     let Some(channel) = get_publish_channel(false) else {
         return Ok(());
     };
@@ -524,7 +619,7 @@ pub async fn flush() -> anyhow::Result<()> {
     }
 
     // Set a timeout to avoid waiting indefinitely.
-    let timeout_duration = Duration::from_secs(3);
+    let timeout_duration = Duration::from_secs(6);
 
     match timeout(timeout_duration, ack_rx).await {
         Ok(Ok(())) => Ok(()),

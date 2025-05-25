@@ -40,6 +40,7 @@ use internal_baml_core::ir::repr::initial_context;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::ResponseValueMeta;
 use tokio::sync::Mutex;
+use tracingv2::publisher::flush;
 
 use crate::internal::llm_client::LLMCompleteResponse;
 use baml_types::expr::{Expr, ExprMetadata};
@@ -355,7 +356,9 @@ impl BamlRuntime {
     where
         F: Fn(FunctionResult),
     {
-        let call = self.tracer.start_call(test_name, ctx, &Default::default());
+        let call = self
+            .tracer
+            .start_call(test_name, ctx, &Default::default(), true);
 
         let expr_fn = self.inner.ir().find_expr_fn(function_name);
         let is_expr_fn = expr_fn.is_ok();
@@ -593,7 +596,7 @@ impl BamlRuntime {
         expr_tx: Option<mpsc::UnboundedSender<Vec<internal_baml_diagnostics::SerializedSpan>>>,
     ) -> (Result<FunctionResult>, FunctionCallId) {
         log::trace!("Calling function: {}", function_name);
-        let call = self.tracer.start_call(&function_name, ctx, params);
+        let call = self.tracer.start_call(&function_name, ctx, params, true);
         let curr_call_id = call.curr_call_id();
         if let Some(collectors) = collectors {
             for collector in collectors.iter() {
@@ -621,14 +624,7 @@ impl BamlRuntime {
                                 return (e.into(), curr_call_id);
                             }
                         };
-                    let trace_event = TraceEvent::new_function_start(
-                        call_id_stack.clone(),
-                        function_name.clone(),
-                        prepared_func.baml_args.value2.clone().into_iter().collect(),
-                        baml_types::tracing::events::EvaluationContext::default(),
-                        true,
-                    );
-                    BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+
                     // Call (CANNOT RETURN HERE until trace event is finished)
                     let result = self.inner.call_function_impl(prepared_func, rctx).await;
                     // Trace event
@@ -1040,6 +1036,7 @@ impl<'a> InternalClientLookup<'a> for BamlRuntime {
     }
 }
 
+// These are used by Python and TS etc to trace Py/TS functions. Not baml ones.
 impl ExperimentalTracingInterface for BamlRuntime {
     fn start_call(
         &self,
@@ -1047,7 +1044,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
         params: &BamlMap<String, BamlValue>,
         ctx: &RuntimeContextManager,
     ) -> TracingCall {
-        self.tracer.start_call(function_name, ctx, params)
+        self.tracer.start_call(function_name, ctx, params, false)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1092,6 +1089,9 @@ impl ExperimentalTracingInterface for BamlRuntime {
     }
 
     fn flush(&self) -> Result<()> {
+        if let Err(e) = self.async_runtime.block_on(flush()) {
+            baml_log::error!("Failed to flush: {}", e);
+        }
         self.tracer.flush()
     }
 
@@ -1188,7 +1188,7 @@ async fn expr_eval_result(
     match maybe_expr_f {
         Ok(expr_fn) => {
             log::trace!("Calling function: {}", function_name);
-            let call = tracer.start_call(&function_name, mgr, params);
+            let call = tracer.start_call(&function_name, mgr, params, true);
 
             if let Some(collector) = collector {
                 collector.track_function(call.curr_call_id());
