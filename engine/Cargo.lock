@@ -969,7 +969,7 @@ dependencies = [
 
 [[package]]
 name = "baml-derive"
-version = "0.88.0"
+version = "0.89.0"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -978,7 +978,7 @@ dependencies = [
 
 [[package]]
 name = "baml-ids"
-version = "0.88.0"
+version = "0.89.0"
 dependencies = [
  "anyhow",
  "serde",
