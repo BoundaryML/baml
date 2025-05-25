@@ -1490,7 +1490,6 @@ test_partial_deserializer_streaming!(
     }
 );
 
-
 test_deserializer!(
   test_string_in_object_with_unescaped_quotes,
   r#"class Foo {
@@ -1600,5 +1599,27 @@ test_partial_deserializer_streaming!(
   {
     "rec_one": vec!["and then i said \"hi\", \"and also \"bye"],
     "rec_two": []
+  }
+);
+
+test_deserializer!(
+  test_enum_without_leading_newline,
+  r#"enum Foo {
+    FOO
+    BAR
+  }
+
+  class WithFoo {
+    foo Foo
+    name string
+  }
+  "#,
+  r#"
+    {foo:FOO, name: "Greg"}
+  "#,
+  FieldType::Class("WithFoo".to_string()),
+  {
+    "foo": "FOO",
+    "name": "Greg"
   }
 );

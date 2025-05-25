@@ -19,6 +19,15 @@ pub struct JsonParseState {
     pub completed_values: Vec<(&'static str, Value, Vec<Fixes>)>,
 }
 
+#[derive(Clone, Debug)]
+enum Pos {
+    InNothing,     // 0
+    Unknown,       // 1
+    InObjectKey,   // 2
+    InObjectValue, // 3
+    InArray,       // 4
+}
+
 impl JsonParseState {
     pub fn new() -> Self {
         JsonParseState {
@@ -128,26 +137,26 @@ impl JsonParseState {
         &mut self,
         mut next: Peekable<impl Iterator<Item = (usize, char)>>,
     ) -> CloseStringResult {
-        let pos = if self.collection_stack.len() >= 2 {
+        let pos: Pos = if self.collection_stack.len() >= 2 {
             self.collection_stack
                 .get(self.collection_stack.len() - 2)
                 .map(|(c, _)| match c {
                     JsonCollection::Object(keys, values, _) => {
                         if keys.len() == values.len() {
-                            2
+                            Pos::InObjectKey
                         } else {
-                            3
+                            Pos::InObjectValue
                         }
                     }
-                    JsonCollection::Array(_, _) => 4,
-                    _ => 1,
+                    JsonCollection::Array(_, _) => Pos::InArray,
+                    _ => Pos::Unknown,
                 })
                 .unwrap()
         } else {
-            0
+            Pos::InNothing
         };
         match pos {
-            0 => {
+            Pos::InNothing => {
                 // in nothing, so perhaps the first '{' or '[' is the start of a new object or array
                 let mut counter = 0;
                 for (idx, c) in next.by_ref() {
@@ -164,8 +173,8 @@ impl JsonParseState {
                 }
                 CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
-            1 => CloseStringResult::Continue,
-            2 => {
+            Pos::Unknown => CloseStringResult::Continue,
+            Pos::InObjectKey => {
                 // in object key
                 let mut counter = 0;
                 for (idx, c) in next.by_ref() {
@@ -179,7 +188,7 @@ impl JsonParseState {
                 }
                 CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
-            3 => {
+            Pos::InObjectValue => {
                 // in object value
                 let mut counter = 0;
                 while let Some((idx, c)) = next.next() {
@@ -198,7 +207,10 @@ impl JsonParseState {
                             let is_bool = current_value.trim().eq_ignore_ascii_case("true")
                                 || current_value.trim().eq_ignore_ascii_case("false");
                             let is_null = current_value.trim().eq_ignore_ascii_case("null");
-                            let is_possible_value = is_numeric || is_bool || is_null;
+                            let is_identifier =
+                                !(current_value.contains(" ") || current_value.contains("("));
+                            let is_possible_value =
+                                is_numeric || is_bool || is_null || is_identifier;
 
                             if let Some((_, next_c)) = next.peek() {
                                 match next_c {
@@ -291,7 +303,7 @@ impl JsonParseState {
                 }
                 CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
-            4 => {
+            Pos::InArray => {
                 // in array
                 let mut counter = 0;
                 for (idx, c) in next {
@@ -307,7 +319,6 @@ impl JsonParseState {
                 counter += 1; // Indicate that we called next() one time after the final `Some`.
                 CloseStringResult::Close(counter, CompletionState::Incomplete)
             }
-            _ => unreachable!("Invalid position"),
         }
     }
 

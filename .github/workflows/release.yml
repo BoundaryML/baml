@@ -86,6 +86,9 @@ jobs:
       version: ${{ needs.determine-version.outputs.version_string }}
       # Pass the boolean output directly
       is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
+  
+  build-jetbrains-release:
+    uses: ./.github/workflows/build-jetbrains-release.reusable.yaml
 
   # Kick off integration tests when we build everything.
   # This does not yet succeed/pass consistently, or even run everything, but it's a good start.
@@ -103,6 +106,7 @@ jobs:
       - build-typescript-release
       - build-cli
       - build-vscode-reusable # Depends on the job calling the reusable workflow
+      - build-jetbrains-release
     steps:
       - run: echo "::do-nothing::" >/dev/null
 
@@ -287,6 +291,40 @@ jobs:
           npx @vscode/vsce publish --packagePath ./vsix-artifacts/*.vsix
         env:
           VSCE_PAT: ${{ secrets.VSCODE_PAT }}
+
+  publish-to-jetbrains-marketplace:
+    environment: release
+    needs: [determine-version, all-builds] # Also need determine-version for the condition
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./jetbrains
+    steps:
+      # We need checkout, java, and gradle because there's no CLI for publishing
+      # to JetBrains Marketplace, just a gradle task in the project.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 23
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Download extension zips
+        uses: actions/download-artifact@v4
+        with:
+          pattern: baml-jetbrains-zip-*
+          path: ./jetbrains/build/distributions/
+          merge-multiple: true
+
+      - name: List downloaded extension zips
+        run: ls -al ./jetbrains/build/distributions/
+
+      - name: Publish to JetBrains Marketplace
+        working-directory: ./jetbrains
+        run: ./gradlew publishPlugin
+        env:
+          INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN }}
+
 
   publish-to-github:
     environment: release
