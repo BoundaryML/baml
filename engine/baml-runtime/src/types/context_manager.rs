@@ -25,9 +25,6 @@ pub type BamlContext = (
 pub struct RuntimeContextManager {
     baml_src_reader: Arc<BamlSrcReader>,
     context: Arc<Mutex<Vec<BamlContext>>>,
-    // User defined tags
-    env_vars: HashMap<String, String>,
-    // These are system tags. Prefixed with "baml."
     global_tags: Arc<Mutex<HashMap<String, BamlValue>>>,
 }
 
@@ -40,12 +37,21 @@ impl fmt::Debug for RuntimeContextManager {
     }
 }
 
+impl Default for RuntimeContextManager {
+    fn default() -> Self {
+        Self {
+            baml_src_reader: Arc::new(None),
+            context: Default::default(),
+            global_tags: Default::default(),
+        }
+    }
+}
+
 impl RuntimeContextManager {
     pub fn deep_clone(&self) -> Self {
         Self {
             baml_src_reader: self.baml_src_reader.clone(),
             context: Arc::new(Mutex::new(self.context.lock().unwrap().clone())),
-            env_vars: self.env_vars.clone(),
             global_tags: Arc::new(Mutex::new(self.global_tags.lock().unwrap().clone())),
         }
     }
@@ -74,14 +80,10 @@ impl RuntimeContextManager {
         }
     }
 
-    pub fn new_from_env_vars(
-        env_vars: HashMap<String, String>,
-        baml_src_reader: BamlSrcReader,
-    ) -> Self {
+    pub fn new(baml_src_reader: BamlSrcReader) -> Self {
         Self {
             baml_src_reader: Arc::new(baml_src_reader),
             context: Default::default(),
-            env_vars,
             global_tags: Default::default(),
         }
     }
@@ -195,6 +197,7 @@ impl RuntimeContextManager {
         // 1. Tracer creates a new call id using the current context that's passe dinto call_function()
         // 2. Tracer passes the call_id back in here for a new context
         // 3. profit
+        env_vars: HashMap<String, String>,
         call_id_stack: Vec<FunctionCallId>,
     ) -> Result<RuntimeContext> {
         // let mut tags = self.global_tags.lock().unwrap().clone();
@@ -224,7 +227,7 @@ impl RuntimeContextManager {
 
         let mut ctx = RuntimeContext::new(
             self.baml_src_reader.clone(),
-            self.env_vars.clone(),
+            env_vars,
             tags,
             Default::default(),
             cls,
@@ -252,7 +255,7 @@ impl RuntimeContextManager {
 
         RuntimeContext::new(
             self.baml_src_reader.clone(),
-            self.env_vars.clone(),
+            HashMap::new(),
             ctx.last().map(|(.., x, _)| x).cloned().unwrap_or_default(),
             Default::default(),
             Default::default(),

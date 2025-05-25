@@ -38,6 +38,8 @@ pub trait ExperimentalTracingInterface {
         function_name: &str,
         params: &BamlMap<String, BamlValue>,
         ctx: &RuntimeContextManager,
+        // TODO: return TracinsSpan in canary, but in sam branch its' tracingCall
+        env_vars: &HashMap<String, String>,
     ) -> TracingCall;
 
     #[cfg(target_arch = "wasm32")]
@@ -47,6 +49,7 @@ pub trait ExperimentalTracingInterface {
         call: TracingCall,
         result: &Result<FunctionResult>,
         ctx: &RuntimeContextManager,
+        env_vars: &HashMap<String, String>,
     ) -> Result<uuid::Uuid>;
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -55,6 +58,7 @@ pub trait ExperimentalTracingInterface {
         call: TracingCall,
         result: &Result<FunctionResult>,
         ctx: &RuntimeContextManager,
+        env_vars: &HashMap<String, String>,
     ) -> Result<uuid::Uuid>;
 
     #[cfg(target_arch = "wasm32")]
@@ -64,7 +68,9 @@ pub trait ExperimentalTracingInterface {
         call: TracingCall,
         result: Option<BamlValue>,
         ctx: &RuntimeContextManager,
-    ) -> Result<uuid::Uuid>;
+
+        env_vars: &HashMap<String, String>,
+    ) -> Result<Option<uuid::Uuid>>;
 
     #[cfg(not(target_arch = "wasm32"))]
     fn finish_call(
@@ -72,6 +78,7 @@ pub trait ExperimentalTracingInterface {
         call: TracingCall,
         result: Option<BamlValue>,
         ctx: &RuntimeContextManager,
+        env_vars: &HashMap<String, String>,
     ) -> Result<uuid::Uuid>;
 
     fn flush(&self) -> Result<()>;

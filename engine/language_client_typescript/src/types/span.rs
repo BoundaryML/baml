@@ -1,6 +1,7 @@
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_types::BamlValue;
 use napi_derive::napi;
+use std::collections::HashMap;
 
 use super::runtime_ctx_manager::RuntimeContextManager;
 use crate::{errors::invalid_argument_error, BamlRuntime};
@@ -19,6 +20,7 @@ impl BamlSpan {
         function_name: String,
         args: serde_json::Value,
         ctx: &RuntimeContextManager,
+        env_vars: serde_json::Value,
     ) -> napi::Result<Self> {
         let args: BamlValue = serde_json::from_value(args)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
@@ -26,10 +28,13 @@ impl BamlSpan {
             return Err(invalid_argument_error("Invalid span args"));
         };
 
+        let env_vars: HashMap<String, String> = serde_json::from_value(env_vars)
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
+
         let call = runtime
             .inner
-            .start_call(&function_name, args_map, &ctx.inner);
-        log::trace!("Starting span: {:#?} for {:?}\n", call, function_name);
+            .start_call(&function_name, args_map, &ctx.inner, &env_vars);
+        log::trace!("Starting call: {:#?} for {:?}\n", call, function_name);
         Ok(Self {
             inner: call.into(),
             rt: runtime.inner.clone(),
@@ -42,18 +47,22 @@ impl BamlSpan {
         &mut self,
         result: serde_json::Value,
         ctx: &RuntimeContextManager,
+        env_vars: serde_json::Value,
     ) -> napi::Result<serde_json::Value> {
         log::trace!("Finishing span: {:?}", self.inner);
         let result: BamlValue = serde_json::from_value(result)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
 
-        let span = self
+        let call = self
             .inner
             .take()
             .ok_or_else(|| napi::Error::new(napi::Status::GenericFailure, "Already used span"))?;
 
+        let env_vars: HashMap<String, String> = serde_json::from_value(env_vars)
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
+
         self.rt
-            .finish_call(span, Some(result), &ctx.inner)
+            .finish_call(call, Some(result), &ctx.inner, &env_vars)
             .map(|u| u.to_string())
             .map(|u| serde_json::json!(u))
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))

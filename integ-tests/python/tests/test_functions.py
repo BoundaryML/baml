@@ -55,15 +55,18 @@ async def test_env_vars_reset():
     env_vars = {
         "OPENAI_API_KEY": "sk-1234567890",
     }
-    reset_baml_env_vars(env_vars)
+    with pytest.deprecated_call():
+        reset_baml_env_vars(env_vars)
 
     @trace
     def top_level_async_tracing():
-        reset_baml_env_vars(env_vars)
+        with pytest.deprecated_call():
+            reset_baml_env_vars(env_vars)
 
     @trace
     async def atop_level_async_tracing():
-        reset_baml_env_vars(env_vars)
+        with pytest.deprecated_call():
+            reset_baml_env_vars(env_vars)
 
     with pytest.raises(errors.BamlError):
         # Not allowed to call reset_baml_env_vars inside a traced function
@@ -73,13 +76,8 @@ async def test_env_vars_reset():
         # Not allowed to call reset_baml_env_vars inside a traced function
         await atop_level_async_tracing()
 
-    with pytest.raises(errors.BamlClientHttpError) as excinfo:
-        _ = await b.ExtractPeople(
-            "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop."
-        )
-    assert excinfo.value.status_code == 401
-
-    reset_baml_env_vars(os.environ.copy())
+    with pytest.deprecated_call():
+        reset_baml_env_vars(os.environ.copy())
     people = await b.ExtractPeople(
         "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop."
     )

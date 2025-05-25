@@ -5,6 +5,7 @@ import asyncio
 import contextvars
 import functools
 import inspect
+import os
 import typing
 from .baml_py import BamlLogEvent, RuntimeContextManager, BamlRuntime, BamlSpan
 import atexit
@@ -70,21 +71,21 @@ class CtxManager:
         return self.__ctx()
 
     def start_trace_sync(
-        self, name: str, args: typing.Dict[str, typing.Any]
+        self, name: str, args: typing.Dict[str, typing.Any], env_vars: typing.Dict[str, str]
     ) -> BamlSpan:
         mng = self.__ctx()
-        return BamlSpan.new(self.rt, name, args, mng)
+        return BamlSpan.new(self.rt, name, args, mng, env_vars)
 
     def start_trace_async(
-        self, name: str, args: typing.Dict[str, typing.Any]
+        self, name: str, args: typing.Dict[str, typing.Any], env_vars: typing.Dict[str, str]
     ) -> BamlSpan:
         mng = self.__ctx()
         cln = mng.deep_clone()
         self.ctx.set({current_thread_id(): cln})
-        return BamlSpan.new(self.rt, name, args, cln)
+        return BamlSpan.new(self.rt, name, args, cln, env_vars)
 
-    def end_trace(self, span: BamlSpan, response: typing.Any) -> None:
-        span.finish(response, self.__ctx())
+    def end_trace(self, span: BamlSpan, response: typing.Any, env_vars: typing.Dict[str, str]) -> None:
+        span.finish(response, self.__ctx(), env_vars)
 
     def flush(self) -> None:
         self.rt.flush()
@@ -110,13 +111,13 @@ class CtxManager:
                     for i, arg in enumerate(args)
                 }
                 params.update(kwargs)
-                span = self.start_trace_async(func_name, params)
+                span = self.start_trace_async(func_name, params, os.environ.copy())
                 try:
                     response = await func(*args, **kwargs)
-                    self.end_trace(span, response)
+                    self.end_trace(span, response, os.environ.copy())
                     return response
                 except Exception as e:
-                    self.end_trace(span, e)
+                    self.end_trace(span, e, os.environ.copy())
                     raise e
 
             return typing.cast(F, async_wrapper)
@@ -130,14 +131,14 @@ class CtxManager:
                     for i, arg in enumerate(args)
                 }
                 params.update(kwargs)
-                span = self.start_trace_sync(func_name, params)
+                span = self.start_trace_sync(func_name, params, os.environ.copy())
                 try:
                     response = func(*args, **kwargs)
-                    self.end_trace(span, response)
+                    self.end_trace(span, response, os.environ.copy())
                     return response
                 except Exception as e:
                     print("Except but ending trace!")
-                    self.end_trace(span, e)
+                    self.end_trace(span, e, os.environ.copy())
                     raise e
 
             return typing.cast(F, wrapper)

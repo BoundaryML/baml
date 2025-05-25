@@ -6,7 +6,7 @@ use baml_types::{
 };
 use internal_baml_core::ir::repr::IntermediateRepr;
 use serde_json::json;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     client_registry::ClientRegistry,
@@ -68,12 +68,13 @@ impl FunctionResultStream {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        env_vars: HashMap<String, String>,
     ) -> (Result<FunctionResult>, baml_ids::FunctionCallId)
     where
         F: Fn(FunctionResult),
     {
         let rt = self.tokio_runtime.clone();
-        let fut = self.run(on_event, ctx, tb, cb);
+        let fut = self.run(on_event, ctx, tb, cb, env_vars);
         rt.block_on(fut)
     }
 
@@ -83,6 +84,7 @@ impl FunctionResultStream {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        env_vars: HashMap<String, String>,
     ) -> (Result<FunctionResult>, baml_ids::FunctionCallId)
     where
         F: Fn(FunctionResult),
@@ -96,7 +98,7 @@ impl FunctionResultStream {
         let call =
             self.tracer
                 .start_call(&self.function_name, ctx, &self.prepared_func.value, true);
-        let rctx = ctx.create_ctx(tb, cb, call.new_call_id_stack.clone());
+        let rctx = ctx.create_ctx(tb, cb, env_vars,call.new_call_id_stack.clone());
         let res = match rctx {
             Ok(rctx) => {
                 let call_id = call.curr_call_id();

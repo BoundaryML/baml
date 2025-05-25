@@ -114,6 +114,7 @@ impl BamlRuntimeFfi {
         type_registry: Option<&types::type_builder::TypeBuilder>,
         client_registry: Option<&types::client_registry::ClientRegistry>,
         collector: RArray,
+        env_vars: HashMap<String, String>,
     ) -> Result<FunctionResult> {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
             Ok(args) => args.into_iter().collect(),
@@ -137,6 +138,7 @@ impl BamlRuntimeFfi {
             type_registry.map(|t| &t.inner),
             client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
             Some(collectors),
+            env_vars,
         )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
             (Err(e), _) => Err(Error::new(
@@ -160,6 +162,7 @@ impl BamlRuntimeFfi {
         type_registry: Option<&types::type_builder::TypeBuilder>,
         client_registry: Option<&types::client_registry::ClientRegistry>,
         collector: RArray,
+        env_vars: HashMap<String, String>,
     ) -> Result<FunctionResultStream> {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
             Ok(args) => args.into_iter().collect(),
@@ -185,6 +188,7 @@ impl BamlRuntimeFfi {
             type_registry.map(|t| &t.inner),
             client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
             Some(collectors),
+            env_vars,
         ) {
             Ok(res) => Ok(FunctionResultStream::new(res, rb_self.t.clone())),
             Err(e) => Err(Error::new(
@@ -207,6 +211,7 @@ impl BamlRuntimeFfi {
         ctx: &RuntimeContextManager,
         type_registry: Option<&types::type_builder::TypeBuilder>,
         client_registry: Option<&types::client_registry::ClientRegistry>,
+        env_vars: HashMap<String, String>,
         stream: bool,
     ) -> Result<HTTPRequest> {
         let args = match ruby_to_json::RubyToJson::convert_hash_to_json(args) {
@@ -228,6 +233,7 @@ impl BamlRuntimeFfi {
                 type_registry.map(|t| &t.inner),
                 client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
                 stream,
+                env_vars,
             )
             .map(HTTPRequest::from)
             .map_err(|e| {
@@ -254,6 +260,7 @@ impl BamlRuntimeFfi {
         ctx: &RuntimeContextManager,
         type_registry: Option<&types::type_builder::TypeBuilder>,
         client_registry: Option<&types::client_registry::ClientRegistry>,
+        env_vars: HashMap<String, String>,
     ) -> Result<magnus::Value> {
         let parsed = rb_self
             .inner
@@ -264,6 +271,7 @@ impl BamlRuntimeFfi {
                 &ctx.inner,
                 type_registry.map(|t| &t.inner),
                 client_registry.map(|c| c.inner.borrow_mut()).as_deref(),
+                env_vars,
             )
             .map_err(|e| {
                 Error::new(
@@ -330,15 +338,15 @@ fn init(ruby: &Ruby) -> Result<()> {
         "create_context_manager",
         method!(BamlRuntimeFfi::create_context_manager, 0),
     )?;
-    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 6))?;
+    runtime_class.define_method("call_function", method!(BamlRuntimeFfi::call_function, 7))?;
     runtime_class.define_method(
         "stream_function",
-        method!(BamlRuntimeFfi::stream_function, 6),
+        method!(BamlRuntimeFfi::stream_function, 7),
     )?;
-    runtime_class.define_method("build_request", method!(BamlRuntimeFfi::build_request, 6))?;
+    runtime_class.define_method("build_request", method!(BamlRuntimeFfi::build_request, 7))?;
     runtime_class.define_method(
         "parse_llm_response",
-        method!(BamlRuntimeFfi::parse_llm_response, 8),
+        method!(BamlRuntimeFfi::parse_llm_response, 9),
     )?;
 
     FunctionResult::define_in_ruby(&module)?;

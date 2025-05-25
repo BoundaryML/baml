@@ -95,6 +95,7 @@ mod internal_tests {
             None,
             None,
             Some(collectors),
+            HashMap::new(),
         );
 
         let (res, function_span_id) = runtime.async_runtime.block_on(call_function_future);

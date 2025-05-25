@@ -87,13 +87,10 @@ impl RuntimeAST {
     }
 
     #[allow(dead_code)]
-    pub fn api_key(&self) -> String {
+    pub fn api_key(&self) -> Option<String> {
         // const CHRIS_API_KEY: &str = "7fc9adc617ed731ba6048daffe0e0de2ec168283624d07a94c2ed520183ea3f722633aa2a5eee9109098254e294f995e";
         // return CHRIS_API_KEY.to_string();
-        self.ast
-            .env_var("BOUNDARY_API_KEY")
-            .cloned()
-            .expect("BOUNDARY_API_KEY is not set")
+        self.ast.env_var("BOUNDARY_API_KEY").cloned()
     }
 
     async fn api_request<'req, 'resp, TEndpoint>(
@@ -103,12 +100,18 @@ impl RuntimeAST {
     where
         TEndpoint: ApiEndpoint,
     {
+        if !self.api_key().is_some() {
+            return Err(ApiError::Http {
+                status: reqwest::StatusCode::UNAUTHORIZED,
+                body: format!("BOUNDARY_API_KEY is not set for {}", TEndpoint::path()),
+            });
+        }
         // A) send the request, propagating low‑level network errors
         let response = self
             .client
             .post(format!("{}{}", self.base_url(), TEndpoint::path()))
             .json(&request)
-            .bearer_auth(self.api_key())
+            .bearer_auth(self.api_key().unwrap())
             .send()
             .await
             .map_err(ApiError::Transport)?;
@@ -158,6 +161,12 @@ impl TypeLookup for RuntimeAST {
 }
 
 pub fn start_publisher(lookup: Arc<AstSignatureWrapper>, rt: Arc<tokio::runtime::Runtime>) {
+    if lookup.env_var("BOUNDARY_API_KEY").is_none() {
+        log::debug!("Skipping publisher because BOUNDARY_API_KEY is not set");
+        return;
+    }
+    log::debug!("Starting publisher");
+
     let lookup = Arc::new(RuntimeAST {
         ast: lookup,
         client: reqwest::Client::new(),
@@ -182,18 +191,16 @@ pub fn start_publisher(lookup: Arc<AstSignatureWrapper>, rt: Arc<tokio::runtime:
         tx
     });
 
-    baml_log::info!("Updating runtime");
     // Update runtime if channel already existed
     let _ = rt.block_on(flush());
     let _ = channel.send(PublisherMessage::UpdateRuntime(lookup));
-    baml_log::info!("Updated runtime");
 }
 
 /// Gracefully shutdown the TracePublisher.
 /// 1. Sends a Shutdown message and waits for its ack.
 /// 2. Awaits the background task's JoinHandle so Drop runs.
 pub async fn shutdown_publisher() -> anyhow::Result<()> {
-    baml_log::info!("Shutting down publisher");
+    log::debug!("Shutting down publisher");
     // 1. send Shutdown
     let Some(channel) = get_publish_channel(true) else {
         return Ok(());
@@ -250,8 +257,15 @@ impl TracePublisher {
             tokio::select! {
                 // Process any incoming command or event.
                 Some(message) = self.rx.recv() => {
+
+                    if !self.lookup.api_key().is_some() {
+                        tracing::debug!("Skipping trace event because BOUNDARY_API_KEY is not set");
+                        continue;
+                    }
+
                     match message {
                         PublisherMessage::UpdateRuntime(lookup) => {
+                            baml_log::info!("Updating runtime");
                             self.process_baml_src_upload(&lookup).await;
                             self.lookup = lookup;
                         },
@@ -280,6 +294,10 @@ impl TracePublisher {
                 }
                 // Periodic flush of pending events.
                 _ = tick_interval.tick() => {
+                    if !self.lookup.api_key().is_some() {
+                        tracing::debug!("Skipping trace event because BOUNDARY_API_KEY is not set");
+                        continue;
+                    }
                     if !buffer.is_empty() {
                         self.process_batch(std::mem::take(&mut buffer)).await;
                     }
@@ -384,19 +402,20 @@ impl TracePublisher {
 
         tracing::info!("Uploading BAML source");
 
-        match lookup
-            .api_request::<CreateBamlSrcUpload>(CreateBamlSrcUploadRequest { ast })
-            .await
-        {
-            Ok(response) => {
-                baml_log::info!("Successfully uploaded BAML source");
-                Ok(())
-            }
-            Err(e) => {
-                baml_log::error!("Failed to upload baml src: {}", e);
-                return Err(e.into());
-            }
-        }
+        // match lookup
+        //     .api_request::<CreateBamlSrcUpload>(CreateBamlSrcUploadRequest { ast })
+        //     .await
+        // {
+        //     Ok(response) => {
+        //         log::debug!("Successfully uploaded BAML source");
+        //         Ok(())
+        //     }
+        //     Err(e) => {
+        //         log::debug!("Failed to upload baml src: {}", e);
+        //         return Err(e.into());
+        //     }
+        // }
+        Ok(())
     }
 
     async fn process_batch(&self, batch: Vec<Arc<TraceEventWithMeta>>) {
@@ -420,8 +439,6 @@ impl TracePublisher {
             .env_var("BAML_MIN_BATCH_SIZE")
             .and_then(|s| s.parse::<usize>().ok())
             .unwrap_or(1);
-        baml_log::info!("Processing batch of {} events", batch.len());
-        baml_log::info!("Events: {:#?}", batch);
 
         self.process_batch_recursive(batch, min_batch_size).await
     }
@@ -508,12 +525,10 @@ impl TracePublisher {
                 .collect(),
         };
 
-        baml_log::info!("trace_events_in_batch {}", batch.len());
-
-        tracing::info!(
-            message = "Trying to upload trace events",
-            batch_size = batch.len()
-        );
+        // tracing::info!(
+        //     message = "Trying to upload trace events",
+        //     batch_size = batch.len()
+        // );
 
         // Serialize to JSON.
         #[cfg(not(target_arch = "wasm32"))]
@@ -609,7 +624,7 @@ pub fn publish_trace_event(event: Arc<TraceEventWithMeta>) -> anyhow::Result<()>
 // https://github.com/whizsid/wasmtimer-rs/issues/26
 pub async fn flush() -> anyhow::Result<()> {
     // TODO: debug
-    baml_log::info!("Flushing trace events");
+    baml_log::debug!("Flushing trace events");
     let Some(channel) = get_publish_channel(false) else {
         return Ok(());
     };

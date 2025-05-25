@@ -113,6 +113,7 @@ class BamlRuntime:
         tb: Optional[TypeBuilder],
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
+        env_vars: Dict[str, str],
     ) -> FunctionResult: ...
     def call_function_sync(
         self,
@@ -122,6 +123,7 @@ class BamlRuntime:
         tb: Optional[TypeBuilder],
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
+        env_vars: Dict[str, str],
     ) -> FunctionResult: ...
     @staticmethod
     def from_files(
@@ -139,6 +141,7 @@ class BamlRuntime:
         tb: Optional[TypeBuilder],
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
+        env_vars: Dict[str, str],
     ) -> FunctionResultStream: ...
     def stream_function_sync(
         self,
@@ -149,6 +152,7 @@ class BamlRuntime:
         tb: Optional[TypeBuilder],
         cr: Optional[ClientRegistry],
         collectors: List[Collector],
+        env_vars: Dict[str, str],
     ) -> SyncFunctionResultStream: ...
     def create_context_manager(self) -> RuntimeContextManager: ...
     def flush(self) -> None: ...
@@ -163,6 +167,7 @@ class BamlRuntime:
         ctx: RuntimeContextManager,
         tb: Optional[TypeBuilder],
         cr: Optional[ClientRegistry],
+        env_vars: Dict[str, str],
         is_stream: bool,
     ) -> HTTPRequest: ...
     def build_request_sync(
@@ -172,6 +177,7 @@ class BamlRuntime:
         ctx: RuntimeContextManager,
         tb: Optional[TypeBuilder],
         cr: Optional[ClientRegistry],
+        env_vars: Dict[str, str],
         is_stream: bool,
     ) -> HTTPRequest: ...
     def parse_llm_response(
@@ -185,6 +191,7 @@ class BamlRuntime:
         ctx: RuntimeContextManager,
         tb: Optional[TypeBuilder],
         cr: Optional[ClientRegistry],
+        env_vars: Dict[str, str],
     ) -> Any: ...
 
 

@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Optional, Union, TypedDict, Type
 from typing_extensions import NotRequired, Literal
-
+import os
 import baml_py
 
 from . import types
@@ -11,7 +11,16 @@ from .type_builder import TypeBuilder
 class BamlCallOptions(TypedDict, total=False):
     tb: NotRequired[TypeBuilder]
     client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
+    env: NotRequired[Dict[str, Optional[str]]]
 
+def env_vars_to_dict(overrides: Dict[str, Optional[str]]) -> Dict[str, str]:
+    base = os.environ.copy()
+    for k, v in overrides.items():
+        if v is not None:
+            base[k] = v
+        else:
+            base.pop(k, None)
+    return base
 
 class HttpRequest:
     __runtime: baml_py.BamlRuntime
@@ -35,6 +44,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "{{fn.name}}",
@@ -46,6 +56,7 @@ class HttpRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        env,
         False,
       )
     {% endfor %}
@@ -73,6 +84,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
+      env = env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "{{fn.name}}",
@@ -84,6 +96,7 @@ class HttpStreamRequest:
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        env,
         True,
       )
     {% endfor %}

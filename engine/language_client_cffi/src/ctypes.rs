@@ -7,7 +7,6 @@ use baml_types::{BamlMedia, BamlValue, BamlValueWithMeta, HasFieldType, ToUnionN
 mod cffi_generated;
 
 use cffi_generated::cffi::*;
-use serde::de::Expected;
 
 use crate::BamlFunctionArguments;
 
@@ -105,6 +104,20 @@ impl From<CFFIMapEntry<'_>> for (String, BamlValue) {
             .value()
             .expect("Failed to have CFFIMapEntry value")
             .into();
+        (key, value)
+    }
+}
+
+impl From<CFFIEnvVar<'_>> for (String, String) {
+    fn from(value: CFFIEnvVar<'_>) -> (String, String) {
+        let key = value
+            .key()
+            .expect("Failed to have CFFIEnvVar key")
+            .to_string();
+        let value = value
+            .value()
+            .expect("Failed to have CFFIEnvVar value")
+            .to_string();
         (key, value)
     }
 }
@@ -227,10 +240,14 @@ impl From<CFFIFunctionArguments<'_>> for BamlFunctionArguments {
             .map(|v| v.into())
             .collect();
         let client_registry = value.client_registry().map(|r| r.into());
-
+        let env_vars = value
+            .env()
+            .map(|e| e.iter().map(|v| v.into()).collect())
+            .unwrap_or_default();
         BamlFunctionArguments {
             kwargs,
             client_registry,
+            env_vars,
         }
     }
 }

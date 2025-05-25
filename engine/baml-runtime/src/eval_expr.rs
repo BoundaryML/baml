@@ -247,9 +247,10 @@ async fn beta_reduce<'a>(
                     tx.unbounded_send(vec![app_span]).unwrap();
                 }
                 if eval_final_llm_fn {
+                    // TODO: env vars are not supported yet for expressions.
                     let res: anyhow::Result<FunctionResult> = env
                         .runtime
-                        .call_function(name.clone(), &args_map, &ctx, None, None, None)
+                        .call_function(name.clone(), &args_map, &ctx, None, None, None, HashMap::new())
                         .await
                         .0;
 
@@ -822,7 +823,7 @@ test Poems {
         let (res, _) = rt
             // .run_test("Second", "TestSecond", &ctx, Some(on_event))
             // .run_test("Go", "Go", &ctx, Some(on_event), None)
-            .run_test("Poems", "Poems", &ctx, Some(on_event), None)
+            .run_test("Poems", "Poems", &ctx, Some(on_event), None, HashMap::new())
             // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
             // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
             // .run_test("LlmParseInt", "TestParse", &ctx, Some(on_event))
@@ -947,132 +948,7 @@ test TestMakePerson() {
         // dbg!(&f.item);
         let (res, _) = rt
             // .run_test("Second", "TestSecond", &ctx, Some(on_event))
-            .run_test("Go", "Go", &ctx, Some(on_event), None)
-            // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
-            // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
-            // .run_test("LlmParseInt", "TestParse", &ctx, Some(on_event))
-            .await;
-        dbg!(res);
-        assert!(false);
-    }
-
-    // #[tokio::test]
-    async fn test_fn_stream2() {
-        let rt = runtime(
-            r##"
-function MakePoem(length: int) -> string {
-    client GPT4o
-    prompt #"Write a poem {{ length }} lines long."#
-}
-
-function CombinePoems(poem1: string, poem2: string) -> string {
-    client GPT4o
-    prompt #"Combine the following two poems into one poem.
-
-    Poem 1:
-    {{ poem1 }}
-
-    Poem 2:
-    {{ poem2 }}
-    "#
-}
-
-let poem = MakePoem(1);
-
-let another = {
-  let x = MakePoem(2);
-  let y = MakePoem(3);
-  CombinePoems(x,y)
-};
-
-fn Pipeline() -> string {
-    let x = MakePoem(4);
-    let y = MakePoem(5);
-    let a = MakePoem(6);
-    let b = MakePoem(7);
-    let xy = CombinePoems(x,y);
-    let ab = CombinePoems(a,b);
-    CombinePoems(xy, ab)
-}
-
-fn Pyramid() -> string {
-  CombinePoems( CombinePoems( MakePoem(8), MakePoem(9)), MakePoem(10))
-}
-
-let default_person = Person {
-  name: "John Doe",
-  age: 20,
-  poem: "Never was there a man more plain."
-};
-
-class Person {
-  name string
-  age int
-  poem string
-}
-
-fn MakePerson() -> Person {
-  Person { name: "Greg", poem: "Hello, world!", ..default_person }
-}
-
-fn OuterPyramid() -> string {
-  CombinePoems(poem, another)
-}
-
-fn ExprList() -> string[] {
-  [ MakePoem(11), MakePoem(12) ]
-}
-
-test TestPipeline() {
-  functions [Pipeline]
-  args { }
-}
-
-test TestPyramid() {
-  functions [Pyramid]
-  args { }
-}
-
-test OuterPyramid() {
-  functions [OuterPyramid]
-  args { }
-}
-
-client<llm> GPT4o {
-  provider openai
-  options {
-    model gpt-4o
-    api_key env.OPENAI_API_KEY
-  }
-}
-
-test TestMakePoem() {
-    functions [MakePoem]
-    args { length 4 }
-}
-
-test TestExprList() {
-  functions [ExprList]
-  args { }
-}
-
-test TestMakePerson() {
-  functions [MakePerson]
-  args { }
-}
-        "##,
-        );
-        // dbg!(&rt.inner.ir.find_function("OuterPyramid").unwrap().item);
-        let ctx = rt.create_ctx_manager(BamlValue::String("test".to_string()), None);
-
-        let on_event = |res: FunctionResult| {
-            eprintln!("on_event: {:?}", res);
-        };
-        let f = rt.inner.ir.find_expr_fn("OuterPyramid").unwrap();
-        // dbg!(&f.item);
-        let (res, _) = rt
-            // .run_test("Second", "TestSecond", &ctx, Some(on_event))
-            .run_test("OuterPyramid", "OuterPyramid", &ctx, Some(on_event), None)
+            .run_test("OuterPyramid", "OuterPyramid", &ctx, Some(on_event), None, HashMap::new())
             // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
             // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
             // .run_test("LlmParseInt", "TestParse", &ctx, Some(on_event))

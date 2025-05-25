@@ -26,6 +26,7 @@ type BamlRuntime struct {
 type BamlFunctionArguments struct {
 	Kwargs         map[string]any
 	ClientRegistry *ClientRegistry
+	Env            map[string]string
 }
 
 type ClientRegistry struct {

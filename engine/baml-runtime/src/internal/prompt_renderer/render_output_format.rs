@@ -465,11 +465,11 @@ mod tests {
         )]
         .into_iter()
         .collect();
-        let env_vars: HashMap<&str, &str> = HashMap::new();
-        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars).unwrap();
+        let env_vars = HashMap::new();
+        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars.clone()).unwrap();
         let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
         let ctx: RuntimeContext = ctx_manager
-            .create_ctx(None, None, vec![FunctionCallId::new()])
+            .create_ctx(None, None, env_vars.clone(), vec![FunctionCallId::new()])
             .unwrap();
 
         let field_type = FieldType::Enum("Foo".to_string());
@@ -524,11 +524,11 @@ class Resume {
         )]
         .into_iter()
         .collect();
-        let env_vars: HashMap<&str, &str> = HashMap::new();
-        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars).unwrap();
+        let env_vars = HashMap::new();
+        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars.clone()).unwrap();
         let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
         let ctx: RuntimeContext = ctx_manager
-            .create_ctx(None, None, vec![FunctionCallId::new()])
+            .create_ctx(None, None, env_vars.clone(), vec![FunctionCallId::new()])
             .unwrap();
 
         let field_type = FieldType::class("Resume");
@@ -622,11 +622,11 @@ class Resume {
         )]
         .into_iter()
         .collect();
-        let env_vars: HashMap<&str, &str> = HashMap::new();
-        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars).unwrap();
+        let env_vars = HashMap::new();
+        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars.clone()).unwrap();
         let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
         let ctx: RuntimeContext = ctx_manager
-            .create_ctx(None, None, vec![FunctionCallId::new()])
+            .create_ctx(None, None, env_vars.clone(), vec![FunctionCallId::new()])
             .unwrap();
 
         let field_type = FieldType::class("Resume");

@@ -46,6 +46,8 @@ dependencies = ["build-go-cli"]
 script = "cd ../../integ-tests/go && go build"
 dependencies = ["integ-tests-generate"]
 
+[tasks.integ-tests-run-spec]
+script = "cd ../../integ-tests/go && go test -v -run ${@} ./..."
 #-----------------------------------------------------------------------------
 # Main tasks
 #-----------------------------------------------------------------------------

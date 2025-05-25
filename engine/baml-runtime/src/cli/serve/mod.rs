@@ -6,6 +6,7 @@ use error::BamlError;
 use indexmap::IndexMap;
 use internal_baml_codegen::GeneratorArgs;
 use json_response::Json;
+use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use arg_validation::BamlServeValidate;
@@ -58,6 +59,24 @@ pub struct ServeArgs {
 #[derive(Deserialize, Clone, Debug)]
 pub struct BamlOptions {
     pub client_registry: Option<ClientRegistry>,
+    #[serde(default)]
+    pub env: HashMap<String, Option<String>>,
+}
+
+impl BamlOptions {
+    fn env(&self) -> HashMap<String, String> {
+        if self.env.is_empty() {
+            return std::env::vars().collect();
+        }
+        let mut env = std::env::vars().collect::<HashMap<String, String>>();
+        for (k, v) in &self.env {
+            match v {
+                Some(v) => env.insert(k.clone(), v.clone()),
+                None => env.remove(k),
+            };
+        }
+        env
+    }
 }
 
 impl ServeArgs {
@@ -311,12 +330,17 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             Err(e) => return e.into_response(),
         };
 
-        let ctx_mgr = RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None);
-        let client_registry = b_options.and_then(|options| options.client_registry);
+        let client_registry = b_options.clone().and_then(|options| options.client_registry);
 
         let locked = self.b.read().await;
+        let env_vars: HashMap<String, String> = b_options
+            .as_ref()
+            .map_or_else(
+                || std::env::vars().collect(),
+                |options| options.env(),
+            );
         let (result, _trace_id) = locked
-            .call_function(b_fn, &args, &ctx_mgr, None, client_registry.as_ref(), None)
+            .call_function(b_fn, &args, &Default::default(), None, client_registry.as_ref(), None, env_vars)
             .await;
 
         match result {
@@ -395,19 +419,24 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
             Err(e) => return e.into_response(),
         };
 
-        let client_registry = b_options.and_then(|options| options.client_registry);
+        let client_registry = b_options.clone().and_then(|options| options.client_registry);
 
         tokio::spawn(async move {
-            let ctx_mgr =
-                RuntimeContextManager::new_from_env_vars(std::env::vars().collect(), None);
+            let env_vars: HashMap<String, String> = b_options
+                .as_ref()
+                .map_or_else(
+                    || std::env::vars().collect(),
+                    |options| options.env(),
+                );
 
             let result_stream = self.b.read().await.stream_function(
                 b_fn,
                 &args,
-                &ctx_mgr,
+                &Default::default(),
                 None,
                 client_registry.as_ref(),
                 Some(vec![]),
+                env_vars,
             );
 
             match result_stream {
@@ -424,9 +453,10 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                                     }
                                 }
                             }),
-                            &ctx_mgr,
+                            &Default::default(),
                             None,
                             None,
+                            HashMap::new(),
                         )
                         .await;
 
@@ -729,5 +759,34 @@ mod tests {
             client_registry
         };
         assert_eq!(client_registry, expected_client_registry);
+    }
+
+    #[test]
+    fn test_parse_baml_options_with_env() {
+        // Set up a dummy env var to test removal
+        std::env::set_var("REMOVE_ME", "should_be_removed");
+        std::env::set_var("KEEP_ME", "should_be_overwritten");
+
+        let baml_options: BamlOptions = serde_json::from_str(
+            r#"
+        {
+            "env": {
+                "NEW_VAR": "new_value",
+                "KEEP_ME": "new_value",
+                "REMOVE_ME": null
+            }
+        }"#,
+        )
+        .unwrap();
+
+        // The env() method should:
+        // - Add NEW_VAR
+        // - Overwrite KEEP_ME
+        // - Remove REMOVE_ME
+        let env_map = baml_options.env();
+
+        assert_eq!(env_map.get("NEW_VAR"), Some(&"new_value".to_string()));
+        assert_eq!(env_map.get("KEEP_ME"), Some(&"new_value".to_string()));
+        assert!(!env_map.contains_key("REMOVE_ME"));
     }
 }

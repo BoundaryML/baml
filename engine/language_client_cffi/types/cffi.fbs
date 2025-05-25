@@ -233,9 +233,15 @@ table CFFIFieldTypeStreamState {
   value: CFFIFieldTypeHolder;
 }
 
+table CFFIEnvVar{
+  key: string;
+  value: string;
+}
+
 table CFFIFunctionArguments {
   kwargs: [CFFIMapEntry];
   client_registry: CFFIClientRegistry;
+  env: [CFFIEnvVar];
 }
 
 table CFFIClientRegistry {

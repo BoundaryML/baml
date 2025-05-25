@@ -318,6 +318,30 @@ func encodeMapEntries(builder *flatbuffers.Builder, fields map[string]any, conte
 	return builder.EndVector(numEntries), nil
 }
 
+func encodeEnvVar(builder *flatbuffers.Builder, fields map[string]string) (flatbuffers.UOffsetT, error) {
+	if len(fields) == 0 || fields == nil {
+		return 0, nil // Return 0 offset for empty map
+	}
+
+	entryOffsets := make([]flatbuffers.UOffsetT, 0, len(fields))
+	for k, v := range fields {
+		keyOffset := builder.CreateString(k)
+		valueOffset := builder.CreateString(v)
+		cffi.CFFIEnvVarStart(builder)
+		cffi.CFFIEnvVarAddKey(builder, keyOffset)
+		cffi.CFFIEnvVarAddValue(builder, valueOffset)
+		entryOffset := cffi.CFFIEnvVarEnd(builder)
+		entryOffsets = append(entryOffsets, entryOffset)
+	}
+	numEntries := len(entryOffsets)
+	cffi.CFFIFunctionArgumentsStartEnvVector(builder, numEntries)
+	for i := numEntries - 1; i >= 0; i-- {
+		builder.PrependUOffsetT(entryOffsets[i])
+	}
+
+	return builder.EndVector(numEntries), nil
+}
+
 // encodeChecked now accepts and passes TypeMap
 func encodeChecked(builder *flatbuffers.Builder, checkedVal Checked[any]) (flatbuffers.UOffsetT, error) {
 	valueHolderOffset, err := Encode(builder, checkedVal.Value)
@@ -404,10 +428,22 @@ func encodeFunctionArguments(builder *flatbuffers.Builder, functionArgumentsVal 
 		}
 	}
 
+	var envOffset flatbuffers.UOffsetT
+	if functionArgumentsVal.Env != nil {
+		envOffset, err = encodeEnvVar(builder, functionArgumentsVal.Env)
+		if err != nil {
+			return 0, fmt.Errorf("encoding env vars: %w", err)
+		}
+	}
+
+
 	cffi.CFFIFunctionArgumentsStart(builder)
 	cffi.CFFIFunctionArgumentsAddKwargs(builder, kwargsOffset)
 	if clientRegistryOffset > 0 {
 		cffi.CFFIFunctionArgumentsAddClientRegistry(builder, clientRegistryOffset)
+	}
+	if envOffset > 0 {
+		cffi.CFFIFunctionArgumentsAddEnv(builder, envOffset)
 	}
 
 	return cffi.CFFIFunctionArgumentsEnd(builder), nil
