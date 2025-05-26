@@ -2354,7 +2354,8 @@ mod tests {
                 assert!(!field2.streaming_behavior().state);
                 assert!(type2.attributes.get("stream.with_state").is_some());
                 let type3 = &field3.item.elem.r#type;
-                assert!(field3.streaming_behavior().done);
+                // the field doesnt have this attribute / behavior -- the type does. But we should document why somewhere better.
+                assert!(!field3.streaming_behavior().done);
                 assert!(type3.attributes.get("stream.done").is_some());
             }
             _ => panic!("Expected exactly 3 fields"),
