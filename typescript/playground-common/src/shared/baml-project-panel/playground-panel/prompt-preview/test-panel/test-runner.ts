@@ -82,6 +82,7 @@ const useRunTests = (maxBatchSize = 5) => {
 
         const runTest = async (test: { functionName: string; testName: string }) => {
           console.log('runTest', test)
+          console.log('envVars', envVars)
 
           // TEMPORARY DEBUGGING HELPER:
           // console.log("Try to set flashing regions")
@@ -127,7 +128,6 @@ const useRunTests = (maxBatchSize = 5) => {
                 setState(test, { status: 'running', response: partial })
               },
               findMediaFile,
-              envVars,
               (spans: WasmSpan[]) => {
                 // Send spans to VSCode for highlighting if we're in the VSCode environment
                 const spans_to_send = spans.map((span) => ({
@@ -147,6 +147,8 @@ const useRunTests = (maxBatchSize = 5) => {
                   console.error('Failed to send spans to VSCode:', e)
                 }
               },
+              // TODO this needs to be moved down cause its wrong param.
+              envVars,
             )
             console.log('result', result)
 

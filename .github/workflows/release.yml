@@ -16,8 +16,6 @@ on:
     tags:
       - "test-release/*.*"
       - "*.*"
-    branches:
-      - sam/baml-endpoints2
 concurrency:
   # No suffix specified - in reusable workflows we need a statically-defined suffix
   # to prevent workflow_call workflows from triggering a concurrency deadlock
@@ -88,7 +86,7 @@ jobs:
       version: ${{ needs.determine-version.outputs.version_string }}
       # Pass the boolean output directly
       is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
-  
+
   build-jetbrains-release:
     uses: ./.github/workflows/build-jetbrains-release.reusable.yaml
 
@@ -326,7 +324,6 @@ jobs:
         run: ./gradlew publishPlugin
         env:
           INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN }}
-
 
   publish-to-github:
     environment: release
