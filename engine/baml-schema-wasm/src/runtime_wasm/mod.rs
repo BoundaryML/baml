@@ -431,7 +431,7 @@ impl WasmTestResponses {
 #[allow(dead_code)]
 pub struct WasmTestResponse {
     test_response: anyhow::Result<baml_runtime::TestResponse>,
-    span: Option<uuid::Uuid>,
+    span: Option<String>,
     tracing_project_id: Option<String>,
     func_test_pair: WasmFunctionTestPair,
 }
@@ -1637,7 +1637,7 @@ impl WasmRuntime {
                         // Return WasmTestResponse for this test
                         WasmTestResponse {
                             test_response,
-                            span: Some(uuid::Uuid::parse_str(&span.to_string()).unwrap()),
+                            span: Some(span.to_string()),
                             tracing_project_id: rt
                                 .tracer_wrapper
                                 .get_or_create_tracer(&env_vars)
@@ -1957,7 +1957,7 @@ impl WasmFunction {
 
         Ok(WasmTestResponse {
             test_response,
-            span: Some(uuid::Uuid::parse_str(&span.to_string()).unwrap()),
+            span: Some(span.to_string()),
             tracing_project_id: rt
                 .tracer_wrapper
                 .get_or_create_tracer(&env_vars)
@@ -2025,7 +2025,7 @@ impl WasmFunction {
 
         Ok(WasmTestResponse {
             test_response,
-            span: Some(uuid::Uuid::parse_str(&span.to_string()).unwrap()),
+            span: Some(span.to_string()),
             tracing_project_id: rt
                 .tracer_wrapper
                 .get_or_create_tracer(&env_vars)
