@@ -827,19 +827,37 @@ pub struct NodeAttributes {
     pub symbol_spans: HashMap<String, Vec<ast::Span>>,
 }
 
+fn is_some_true(maybe_value: Option<&UnresolvedValue<()>>) -> bool {
+    match maybe_value {
+        Some(Resolvable::Bool(true, _)) => true,
+        _ => false,
+    }
+}
+
 impl NodeAttributes {
     pub fn get(&self, key: &str) -> Option<&UnresolvedValue<()>> {
         self.meta.get(key)
     }
 
+    pub fn dynamic(&self) -> bool {
+        is_some_true(self.get("dynamic_type"))
+    }
+
+    pub fn alias(&self) -> Option<&baml_types::StringOr> {
+        self.get("alias").and_then(|v| v.as_str())
+    }
+
+    pub fn description(&self) -> Option<&baml_types::StringOr> {
+        self.get("description").and_then(|v| v.as_str())
+    }
+
+    pub fn skip(&self) -> bool {
+        is_some_true(self.get("skip"))
+    }
+
     pub fn streaming_behavior(&self) -> StreamingBehavior {
-        fn is_some_true(maybe_value: Option<&UnresolvedValue<()>>) -> bool {
-            match maybe_value {
-                Some(Resolvable::Bool(true, _)) => true,
-                _ => false,
-            }
-        }
         StreamingBehavior {
+            needed: is_some_true(self.get("stream.not_null")),
             done: is_some_true(self.get("stream.done")),
             state: is_some_true(self.get("stream.with_state")),
         }
@@ -1515,6 +1533,10 @@ impl Function {
     pub fn configs(&self) -> Option<&Vec<FunctionConfig>> {
         Some(&self.configs)
     }
+
+    pub fn default_config(&self) -> Option<&FunctionConfig> {
+        self.configs.iter().find(|c| c.name == self.default_config)
+    }
 }
 
 #[derive(Debug)]
@@ -1916,7 +1938,7 @@ pub struct RetryPolicy {
     pub strategy: RetryPolicyStrategy,
     // NB: the parser DB has a notion of "empty options" vs "no options"; we collapse
     // those here into an empty vec
-    options: Vec<(String, UnresolvedValue<()>)>,
+    pub options: Vec<(String, UnresolvedValue<()>)>,
 }
 
 impl WithRepr<RetryPolicy> for ConfigurationWalker<'_> {
@@ -2146,20 +2168,6 @@ pub fn make_test_ir_and_diagnostics(
     Ok((ir, diagnostics))
 }
 
-/// Pull out `StreamingBehavior` from `NodeAttributes`.
-fn streaming_behavior_from_attributes(attributes: &NodeAttributes) -> StreamingBehavior {
-    fn is_some_true(maybe_value: Option<&UnresolvedValue<()>>) -> bool {
-        match maybe_value {
-            Some(Resolvable::Bool(true, _)) => true,
-            _ => false,
-        }
-    }
-    StreamingBehavior {
-        done: is_some_true(attributes.get("stream.done")),
-        state: is_some_true(attributes.get("stream.with_state")),
-    }
-}
-
 /// Create a context from the expr_functions, top_level_assignments, and
 /// functions in the IR.
 /// This context is used in evaluating expressions.
@@ -2336,26 +2344,27 @@ mod tests {
         )
         .unwrap();
         let foo = ir.find_class("Foo").unwrap();
-        assert!(!foo.streaming_done());
+        assert!(!foo.streaming_behavior().done);
         match foo.walk_fields().collect::<Vec<_>>().as_slice() {
             [field1, field2, field3] => {
                 let type1 = &field1.item.elem.r#type;
-                assert!(field1.streaming_needed());
+                assert!(field1.streaming_behavior().needed);
                 assert!(type1.attributes.get("stream.not_null").is_none());
                 let type2 = &field2.item.elem.r#type;
-                assert!(!field2.streaming_state());
+                assert!(!field2.streaming_behavior().state);
                 assert!(type2.attributes.get("stream.with_state").is_some());
                 let type3 = &field3.item.elem.r#type;
-                assert!(!field3.streaming_done());
+                // the field doesnt have this attribute / behavior -- the type does. But we should document why somewhere better.
+                assert!(!field3.streaming_behavior().done);
                 assert!(type3.attributes.get("stream.done").is_some());
             }
             _ => panic!("Expected exactly 3 fields"),
         }
         let bar = ir.find_class("Bar").unwrap();
-        assert!(bar.streaming_done());
+        assert!(bar.streaming_behavior().done);
         match bar.walk_fields().collect::<Vec<_>>().as_slice() {
             [field1, field2] => {
-                assert!(!field1.streaming_done());
+                assert!(!field1.streaming_behavior().done);
                 assert!(field1
                     .item
                     .elem

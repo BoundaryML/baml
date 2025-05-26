@@ -1,0 +1,229 @@
+/*
+ * EvaluationContext is used to evaluate a function call with context-specific information.
+ *
+ * For example, client_registry and type_builder
+ */
+
+use std::sync::Arc;
+
+use serde::{Deserialize, Serialize};
+
+use super::type_definition::BamlTypeId;
+
+pub type TypeReference = TypeReferenceWithMetadata<TypeMetadata>;
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+pub struct TypeMetadata {
+    checks: Vec<CheckedType>,
+    asserts: Vec<AssertedType>,
+}
+
+impl TypeMetadata {
+    pub fn new(checks: Vec<CheckedType>, asserts: Vec<AssertedType>) -> Self {
+        Self { checks, asserts }
+    }
+
+    pub fn merge(&mut self, other: TypeMetadata) {
+        self.checks.extend(other.checks);
+        self.asserts.extend(other.asserts);
+    }
+}
+
+/// FieldType represents the type of either a class field or a function arg.
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Hash)]
+#[serde(tag = "type", content = "data", rename_all = "snake_case")]
+pub enum TypeReferenceWithMetadata<Metadata> {
+    // Unknown type
+    Unknown, // Not supported
+
+    // Primitive types
+    String(Metadata),
+    Int(Metadata),
+    Float(Metadata),
+    Bool(Metadata),
+    Null(Metadata),
+    Media(MediaTypeDefinition, Metadata),
+    Literal(LiteralTypeDefinition, Metadata),
+
+    // Container types
+    List(Box<TypeReferenceWithMetadata<Metadata>>, Metadata),
+    Map {
+        key: Box<TypeReferenceWithMetadata<Metadata>>,
+        value: Box<TypeReferenceWithMetadata<Metadata>>,
+        metadata: Metadata,
+    },
+    Union {
+        one_of: Vec<TypeReferenceWithMetadata<Metadata>>,
+        selected_index: usize,
+        metadata: Metadata,
+    },
+    Tuple {
+        items: Vec<TypeReferenceWithMetadata<Metadata>>,
+        metadata: Metadata,
+    },
+
+    // User-defined types
+    Class {
+        name: Arc<BamlTypeId>,
+        metadata: Metadata,
+    },
+    Enum {
+        name: Arc<BamlTypeId>,
+        metadata: Metadata,
+    },
+    RecursiveTypeAlias {
+        name: Arc<BamlTypeId>,
+        metadata: Metadata,
+    },
+}
+
+type CheckedType = NarrowingType<String>;
+type AssertedType = NarrowingType<Option<String>>;
+
+impl<Metadata: Default> TypeReferenceWithMetadata<Metadata> {
+    pub fn string() -> Self {
+        Self::String(Metadata::default())
+    }
+
+    pub fn int() -> Self {
+        Self::Int(Metadata::default())
+    }
+
+    pub fn float() -> Self {
+        Self::Float(Metadata::default())
+    }
+
+    pub fn bool() -> Self {
+        Self::Bool(Metadata::default())
+    }
+
+    pub fn null() -> Self {
+        Self::Null(Metadata::default())
+    }
+
+    pub fn media(media_type: MediaTypeDefinition) -> Self {
+        Self::Media(media_type, Metadata::default())
+    }
+
+    pub fn literal(literal_type: LiteralTypeDefinition) -> Self {
+        Self::Literal(literal_type, Metadata::default())
+    }
+
+    pub fn list(item: TypeReferenceWithMetadata<Metadata>) -> Self {
+        Self::List(Box::new(item), Metadata::default())
+    }
+
+    pub fn map(
+        key: TypeReferenceWithMetadata<Metadata>,
+        value: TypeReferenceWithMetadata<Metadata>,
+    ) -> Self {
+        Self::Map {
+            key: Box::new(key),
+            value: Box::new(value),
+            metadata: Metadata::default(),
+        }
+    }
+
+    pub fn union(one_of: Vec<TypeReferenceWithMetadata<Metadata>>) -> Self {
+        Self::Union {
+            one_of,
+            selected_index: 0,
+            metadata: Metadata::default(),
+        }
+    }
+
+    pub fn tuple(items: Vec<TypeReferenceWithMetadata<Metadata>>) -> Self {
+        Self::Tuple {
+            items,
+            metadata: Metadata::default(),
+        }
+    }
+
+    pub fn class(name: Arc<BamlTypeId>) -> Self {
+        Self::Class {
+            name,
+            metadata: Metadata::default(),
+        }
+    }
+
+    pub fn enum_type(name: Arc<BamlTypeId>) -> Self {
+        Self::Enum {
+            name,
+            metadata: Metadata::default(),
+        }
+    }
+
+    pub fn recursive_type_alias(name: Arc<BamlTypeId>) -> Self {
+        Self::RecursiveTypeAlias {
+            name,
+            metadata: Metadata::default(),
+        }
+    }
+
+    pub fn metadata(&self) -> Option<&Metadata> {
+        Some(match self {
+            Self::Unknown => return None,
+            Self::String(metadata) => metadata,
+            Self::Int(metadata) => metadata,
+            Self::Float(metadata) => metadata,
+            Self::Bool(metadata) => metadata,
+            Self::Null(metadata) => metadata,
+            Self::Media(_, metadata) => metadata,
+            Self::Literal(_, metadata) => metadata,
+            Self::List(_, metadata) => metadata,
+            Self::Map { metadata, .. } => metadata,
+            Self::Union { metadata, .. } => metadata,
+            Self::Tuple { metadata, .. } => metadata,
+            Self::Class { metadata, .. } => metadata,
+            Self::Enum { metadata, .. } => metadata,
+            Self::RecursiveTypeAlias { metadata, .. } => metadata,
+        })
+    }
+
+    pub fn metadata_mut(&mut self) -> Option<&mut Metadata> {
+        Some(match self {
+            Self::Unknown => return None,
+            Self::String(metadata) => metadata,
+            Self::Int(metadata) => metadata,
+            Self::Float(metadata) => metadata,
+            Self::Bool(metadata) => metadata,
+            Self::Null(metadata) => metadata,
+            Self::Media(_, metadata) => metadata,
+            Self::Literal(_, metadata) => metadata,
+            Self::List(_, metadata) => metadata,
+            Self::Map { metadata, .. } => metadata,
+            Self::Union { metadata, .. } => metadata,
+            Self::Tuple { metadata, .. } => metadata,
+            Self::Class { metadata, .. } => metadata,
+            Self::Enum { metadata, .. } => metadata,
+            Self::RecursiveTypeAlias { metadata, .. } => metadata,
+        })
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+pub struct NarrowingType<T> {
+    pub name: T,
+    pub expressions: Expression,
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MediaTypeDefinition {
+    Image,
+    Audio,
+}
+
+/// Subset of [`crate::BamlValue`] allowed for literal type definitions.
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
+pub enum LiteralTypeDefinition {
+    String(String),
+    Int(i64),
+    Bool(bool),
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Hash)]
+#[serde(tag = "expression_type", content = "data", rename_all = "snake_case")]
+pub enum Expression {
+    Jinja(String),
+}

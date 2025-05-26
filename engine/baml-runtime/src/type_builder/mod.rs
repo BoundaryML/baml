@@ -520,19 +520,17 @@ impl TypeBuilder {
                             .r#type(f.elem.r#type.elem.to_owned())
                             .with_meta(
                                 "alias",
-                                f.attributes.get("alias").map_or(BamlValue::Null, |v| {
-                                    v.resolve_string(&EvaluationContext::default())
+                                f.attributes.alias().map_or(BamlValue::Null, |v| {
+                                    v.resolve(&EvaluationContext::default())
                                         .map_or(BamlValue::Null, BamlValue::String)
                                 }),
                             )
                             .with_meta(
                                 "description",
-                                f.attributes
-                                    .get("description")
-                                    .map_or(BamlValue::Null, |v| {
-                                        v.resolve_string(&EvaluationContext::default())
-                                            .map_or(BamlValue::Null, BamlValue::String)
-                                    }),
+                                f.attributes.description().map_or(BamlValue::Null, |v| {
+                                    v.resolve(&EvaluationContext::default())
+                                        .map_or(BamlValue::Null, BamlValue::String)
+                                }),
                             );
                     }
                 }
@@ -547,30 +545,28 @@ impl TypeBuilder {
                             .unwrap()
                             .with_meta(
                                 "alias",
+                                variant.attributes.alias().map_or(BamlValue::Null, |v| {
+                                    v.resolve(&EvaluationContext::default())
+                                        .map_or(BamlValue::Null, BamlValue::String)
+                                }),
+                            )
+                            .with_meta(
+                                "description",
                                 variant
                                     .attributes
-                                    .get("alias")
+                                    .description()
                                     .map_or(BamlValue::Null, |v| {
-                                        v.resolve_string(&EvaluationContext::default())
+                                        v.resolve(&EvaluationContext::default())
                                             .map_or(BamlValue::Null, BamlValue::String)
                                     }),
                             )
                             .with_meta(
-                                "description",
-                                variant.attributes.get("description").map_or(
-                                    BamlValue::Null,
-                                    |v| {
-                                        v.resolve_string(&EvaluationContext::default())
-                                            .map_or(BamlValue::Null, BamlValue::String)
-                                    },
-                                ),
-                            )
-                            .with_meta(
                                 "skip",
-                                variant.attributes.get("skip").map_or(BamlValue::Null, |v| {
-                                    v.resolve_bool(&EvaluationContext::default())
-                                        .map_or(BamlValue::Null, BamlValue::Bool)
-                                }),
+                                if variant.attributes.skip() {
+                                    BamlValue::Bool(true)
+                                } else {
+                                    BamlValue::Bool(false)
+                                },
                             );
                     }
                 }

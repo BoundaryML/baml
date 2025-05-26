@@ -12,7 +12,7 @@ use super::runtime_ctx_manager::RuntimeContextManager;
 use crate::runtime::BamlRuntime;
 
 crate::lang_wrapper!(BamlSpan,
-  Option<Option<baml_runtime::tracing::TracingSpan>>,
+  Option<baml_runtime::tracing::TracingCall>,
   no_from,
   rt: std::sync::Arc<baml_runtime::BamlRuntime>
 );
@@ -36,7 +36,7 @@ impl BamlSpan {
 
         let span = runtime
             .inner
-            .start_span(function_name, args_map, &ctx.inner, &env_vars);
+            .start_call(function_name, args_map, &ctx.inner, &env_vars);
 
         log::trace!("Starting span: {:#?} for {:?}\n", span, function_name);
         Ok(Self {
@@ -56,14 +56,14 @@ impl BamlSpan {
         log::trace!("Finishing span: {:?}", self.inner);
         let result = parse_py_type(result.into_bound(py).into_py_any(py)?, true)?;
 
-        let span = self
+        let call = self
             .inner
             .take()
             .ok_or_else(|| BamlError::new_err("Span already finished"))?;
 
         self.rt
-            .finish_span(span, result, &ctx.inner, &env_vars)
+            .finish_call(call, result, &ctx.inner, &env_vars)
             .map_err(BamlError::from_anyhow)
-            .map(|u| u.map(|id| id.to_string()))
+            .map(|u| Some(u.to_string()))
     }
 }

@@ -3,7 +3,7 @@ use std::collections::HashSet;
 
 use baml_types::{GetEnvVar, StringOr};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq)]
 pub enum ClientSpec {
     Named(String),
     /// Shorthand for "<provider>/<model>"
@@ -11,6 +11,13 @@ pub enum ClientSpec {
 }
 
 impl ClientSpec {
+    pub fn dependencies(&self) -> HashSet<String> {
+        match self {
+            ClientSpec::Named(name) => HashSet::from([name.clone()]),
+            ClientSpec::Shorthand(..) => Default::default(),
+        }
+    }
+
     pub fn as_str(&self) -> String {
         match self {
             ClientSpec::Named(n) => n.clone(),
@@ -29,7 +36,7 @@ impl ClientSpec {
 }
 
 /// The provider for the client, e.g. baml-openai-chat
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum ClientProvider {
     /// The OpenAI client provider variant
     OpenAI(OpenAIClientProviderVariant),
@@ -46,7 +53,7 @@ pub enum ClientProvider {
 }
 
 /// The OpenAI client provider variant
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum OpenAIClientProviderVariant {
     /// The base OpenAI client provider variant
     Base,
@@ -59,7 +66,7 @@ pub enum OpenAIClientProviderVariant {
 }
 
 /// The strategy client provider variant
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum StrategyClientProvider {
     /// The round-robin strategy client provider variant
     RoundRobin,
@@ -184,7 +191,7 @@ impl std::fmt::Display for ClientSpec {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub struct SupportedRequestModes {
     // If unset, treat as auto
     pub stream: Option<bool>,
@@ -196,18 +203,18 @@ impl SupportedRequestModes {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub enum UnresolvedFinishReasonFilter {
     All,
-    AllowList(HashSet<StringOr>),
-    DenyList(HashSet<StringOr>),
+    AllowList(Vec<StringOr>),
+    DenyList(Vec<StringOr>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub enum FinishReasonFilter {
     All,
-    AllowList(HashSet<String>),
-    DenyList(HashSet<String>),
+    AllowList(Vec<String>),
+    DenyList(Vec<String>),
 }
 
 impl UnresolvedFinishReasonFilter {
@@ -233,12 +240,12 @@ impl UnresolvedFinishReasonFilter {
                 allow
                     .iter()
                     .map(|s| s.resolve(ctx))
-                    .collect::<Result<HashSet<_>>>()?,
+                    .collect::<Result<Vec<_>>>()?,
             )),
             Self::DenyList(deny) => Ok(FinishReasonFilter::DenyList(
                 deny.iter()
                     .map(|s| s.resolve(ctx))
-                    .collect::<Result<HashSet<_>>>()?,
+                    .collect::<Result<Vec<_>>>()?,
             )),
             Self::All => Ok(FinishReasonFilter::All),
         }
@@ -268,7 +275,7 @@ impl FinishReasonFilter {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub(crate) struct UnresolvedRolesSelection {
     pub allowed: Option<Vec<StringOr>>,
     pub default: Option<StringOr>,
@@ -348,19 +355,19 @@ impl RolesSelection {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub enum UnresolvedAllowedRoleMetadata {
     Value(StringOr),
     All,
     None,
-    Only(HashSet<StringOr>),
+    Only(Vec<StringOr>),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub enum AllowedRoleMetadata {
     All,
     None,
-    Only(HashSet<String>),
+    Only(Vec<String>),
 }
 
 impl UnresolvedAllowedRoleMetadata {
@@ -391,7 +398,7 @@ impl UnresolvedAllowedRoleMetadata {
                 roles
                     .iter()
                     .map(|role| role.resolve(ctx))
-                    .collect::<Result<HashSet<_>>>()?,
+                    .collect::<Result<Vec<_>>>()?,
             )),
         }
     }
@@ -407,7 +414,7 @@ impl AllowedRoleMetadata {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub enum UnresolvedResponseType {
     OpenAI,
     Anthropic,
@@ -415,7 +422,7 @@ pub enum UnresolvedResponseType {
     Vertex,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Hash)]
 pub enum ResponseType {
     OpenAI,
     Anthropic,

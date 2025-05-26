@@ -1,7 +1,6 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use baml_types::tracing::events::HttpRequestId;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::RenderedChatMessage;
 

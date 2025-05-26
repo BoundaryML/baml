@@ -8,8 +8,11 @@ pub struct Organization {
     pub org_id: String,
     pub org_slug: String,
     pub org_display_name: String,
+    #[ts(optional)]
     pub stripe_customer_id: Option<String>,
+    #[ts(optional)]
     pub stripe_subscription_id: Option<String>,
+    #[ts(optional)]
     pub stripe_subscription_status: Option<String>,
 }
 
@@ -30,8 +33,8 @@ pub struct CreateOrganizationResponse {
 pub struct CreateOrganization;
 
 impl ApiEndpoint for CreateOrganization {
-    type Request = CreateOrganizationRequest;
-    type Response = CreateOrganizationResponse;
+    type Request<'a> = CreateOrganizationRequest;
+    type Response<'a> = CreateOrganizationResponse;
 
     const PATH: &'static str = "/v1/create-organization";
 }
@@ -40,10 +43,15 @@ impl ApiEndpoint for CreateOrganization {
 #[ts(export)]
 pub struct UpdateOrganizationRequest {
     pub org_id: String,
+    #[ts(optional)]
     pub org_slug: Option<String>,
+    #[ts(optional)]
     pub org_display_name: Option<String>,
+    #[ts(optional)]
     pub stripe_customer_id: Option<String>,
+    #[ts(optional)]
     pub stripe_subscription_id: Option<String>,
+    #[ts(optional)]
     pub stripe_subscription_status: Option<String>,
 }
 
@@ -56,8 +64,8 @@ pub struct UpdateOrganizationResponse {
 pub struct UpdateOrganization;
 
 impl ApiEndpoint for UpdateOrganization {
-    type Request = UpdateOrganizationRequest;
-    type Response = UpdateOrganizationResponse;
+    type Request<'a> = UpdateOrganizationRequest;
+    type Response<'a> = UpdateOrganizationResponse;
 
     const PATH: &'static str = "/v1/update-organization";
 }
@@ -77,8 +85,8 @@ pub struct GetOrganizationResponse {
 pub struct GetOrganization;
 
 impl ApiEndpoint for GetOrganization {
-    type Request = GetOrganizationRequest;
-    type Response = GetOrganizationResponse;
+    type Request<'a> = GetOrganizationRequest;
+    type Response<'a> = GetOrganizationResponse;
 
     const PATH: &'static str = "/v1/get-organization";
 }

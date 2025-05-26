@@ -2,6 +2,7 @@ use crate::BamlMediaType;
 use crate::Constraint;
 use indexmap::IndexSet;
 use itertools::Itertools;
+use std::collections::HashSet;
 
 mod builder;
 
@@ -98,6 +99,12 @@ pub enum FieldType {
 
 pub trait HasFieldType {
     fn field_type<'a>(&'a self) -> &'a FieldType;
+}
+
+impl HasFieldType for FieldType {
+    fn field_type<'a>(&'a self) -> &'a FieldType {
+        self
+    }
 }
 
 #[derive(serde::Serialize, Debug, Clone, PartialEq, Eq, Hash)]
@@ -234,8 +241,50 @@ impl FieldType {
             _ => None,
         }
     }
-}
 
+    pub fn dependencies(&self) -> HashSet<String> {
+        let mut deps = HashSet::new();
+        let mut queue = vec![self];
+        while let Some(current) = queue.pop() {
+            match current {
+                FieldType::Class(name) => {
+                    deps.insert(name.clone());
+                }
+                FieldType::Enum(name) => {
+                    deps.insert(name.clone());
+                }
+                FieldType::Optional(inner) => {
+                    queue.push(inner);
+                }
+                FieldType::List(inner) => {
+                    queue.push(inner);
+                }
+                FieldType::Map(field_type, field_type1) => {
+                    queue.push(field_type);
+                    queue.push(field_type1);
+                }
+                FieldType::Union(inner) => {
+                    queue.extend(inner.iter());
+                }
+                FieldType::Tuple(inner) => {
+                    queue.extend(inner.iter());
+                }
+                FieldType::Arrow(arrow) => {
+                    queue.extend(arrow.param_types.iter());
+                    queue.push(&arrow.return_type);
+                }
+                FieldType::RecursiveTypeAlias(name) => {
+                    deps.insert(name.clone());
+                }
+                FieldType::WithMetadata { base, .. } => {
+                    queue.push(base);
+                }
+                FieldType::Primitive(_) | FieldType::Literal(_) => {}
+            }
+        }
+        deps
+    }
+}
 pub trait ToUnionName {
     fn to_union_name(&self) -> String;
     fn find_union_types(&self) -> IndexSet<FieldType>;
@@ -322,6 +371,10 @@ impl ToUnionName for FieldType {
 /// Metadata on a type that determines how it behaves under streaming conditions.
 #[derive(Clone, Debug, PartialEq, serde::Serialize, Eq, Hash)]
 pub struct StreamingBehavior {
+    /// A type with the `not_null` property will not be visible in a stream until
+    /// we are certain that it is not null (as in the value has at least begun)
+    pub needed: bool,
+
     /// A type with the `done` property will not be visible in a stream until
     /// we are certain that it is completely available (i.e. the parser did
     /// not finalize it through any early termination, enough tokens were available
@@ -338,6 +391,7 @@ impl StreamingBehavior {
         StreamingBehavior {
             done: self.done || other.done,
             state: self.state || other.state,
+            needed: self.needed || other.needed,
         }
     }
 }
@@ -347,6 +401,7 @@ impl Default for StreamingBehavior {
         StreamingBehavior {
             done: false,
             state: false,
+            needed: false,
         }
     }
 }

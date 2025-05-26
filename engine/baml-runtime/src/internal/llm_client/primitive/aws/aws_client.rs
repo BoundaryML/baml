@@ -21,12 +21,9 @@ use aws_smithy_runtime_api::client::result::SdkError;
 use aws_smithy_runtime_api::http::Headers;
 use aws_smithy_types::Blob;
 use aws_smithy_types::Document;
-use baml_types::tracing::events::{
-    ContentId, FunctionId, HTTPBody, HTTPRequest, HTTPResponse, HttpRequestId, TraceData,
-    TraceEvent, TraceLevel,
-};
-use baml_types::{ApiKeyWithProvenance, BamlMap, BamlMediaContent};
-use baml_types::{BamlMedia, BamlMediaType};
+use baml_ids::HttpRequestId;
+use baml_types::tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, TraceData, TraceEvent};
+use baml_types::{ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
 use futures::stream;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
@@ -42,7 +39,9 @@ use web_time::Instant;
 use web_time::SystemTime;
 
 use crate::client_registry::ClientProperty;
-use crate::internal::llm_client::traits::{ToProviderMessageExt, WithClientProperties};
+use crate::internal::llm_client::traits::{
+    HttpContext, ToProviderMessageExt, WithClientProperties,
+};
 use crate::internal::llm_client::{
     primitive::request::RequestBuilder,
     traits::{
@@ -127,25 +126,28 @@ fn serde_json_to_aws_document(value: serde_json::Value) -> Document {
 
 #[derive(Debug)]
 struct CollectorInterceptor {
-    span_id: Option<Uuid>,
-    http_request_id: HttpRequestId,
+    call_stack: Vec<baml_ids::FunctionCallId>,
+    http_request_id: baml_ids::HttpRequestId,
 }
 
 impl CollectorInterceptor {
-    fn new(span_id: Option<Uuid>, http_request_id: HttpRequestId) -> Self {
+    pub fn new(
+        call_stack: Vec<baml_ids::FunctionCallId>,
+        http_request_id: baml_ids::HttpRequestId,
+    ) -> Self {
         Self {
-            span_id,
+            call_stack,
             http_request_id,
         }
     }
 }
 
-pub fn smithy_json_headers(headers: &Headers) -> serde_json::Value {
-    let mut json_headers = serde_json::Map::new();
+pub fn smithy_json_headers(headers: &Headers) -> HashMap<String, String> {
+    let mut json_headers = HashMap::new();
     for (key, value) in headers.iter() {
-        json_headers.insert(key.to_string(), json!(value));
+        json_headers.insert(key.to_string(), value.to_string());
     }
-    serde_json::Value::Object(json_headers)
+    json_headers
 }
 
 impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterceptor {
@@ -161,32 +163,22 @@ impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterc
         _runtime_components: &aws_sdk_bedrockruntime::config::RuntimeComponents,
         _cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> std::result::Result<(), aws_sdk_bedrockruntime::error::BoxError> {
-        if let Some(span_id) = self.span_id.clone() {
-            let request = context.request();
-            let headers = smithy_json_headers(request.headers());
-            let body = if let Some(bytes) = request.body().bytes() {
-                json_body(JsonBodyInput::Bytes(bytes)).unwrap_or_default()
-            } else {
-                serde_json::Value::Null
-            };
-
-            BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
-                span_id: FunctionId(span_id.to_string()),
-                event_id: ContentId(uuid::Uuid::new_v4().to_string()),
-                span_chain: vec![],
-                timestamp: web_time::SystemTime::now(),
-                callsite: "".to_string(),
-                verbosity: TraceLevel::Info,
-                content: TraceData::RawLLMRequest(Arc::new(HTTPRequest {
-                    id: self.http_request_id.clone(),
-                    url: request.uri().to_string(),
-                    method: request.method().to_string(),
-                    headers,
-                    body: HTTPBody::new(request.body().bytes().unwrap_or_default().to_vec().into()),
-                })),
-                tags: Default::default(),
-            }));
-        }
+        let request = context.request();
+        let headers = smithy_json_headers(request.headers());
+        let body = if let Some(bytes) = request.body().bytes() {
+            json_body(JsonBodyInput::Bytes(bytes)).unwrap_or_default()
+        } else {
+            serde_json::Value::Null
+        };
+        let request = HTTPRequest {
+            id: self.http_request_id.clone(),
+            url: request.uri().to_string(),
+            method: request.method().to_string(),
+            headers,
+            body: HTTPBody::new(request.body().bytes().unwrap_or_default().to_vec().into()),
+        };
+        let event = TraceEvent::new_raw_llm_request(self.call_stack.clone(), Arc::new(request));
+        BAML_TRACER.lock().unwrap().put(Arc::new(event));
 
         Ok(())
     }
@@ -197,43 +189,17 @@ impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterc
         _runtime_components: &aws_sdk_bedrockruntime::config::RuntimeComponents,
         _cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> std::result::Result<(), aws_sdk_bedrockruntime::error::BoxError> {
-        if let Some(span_id) = self.span_id.clone() {
-            let trace_level = if let Some(response) = context.response() {
-                if response.status().is_success() {
-                    TraceLevel::Info
-                } else {
-                    TraceLevel::Error
-                }
-            } else {
-                TraceLevel::Error
+        if let Some(response) = context.response() {
+            let response = HTTPResponse {
+                request_id: self.http_request_id.clone(),
+                status: response.status().as_u16(),
+                headers: Some(smithy_json_headers(response.headers())),
+                body: HTTPBody::new(response.body().bytes().unwrap_or_default().to_vec().into()),
             };
 
-            if let Some(response) = context.response() {
-                let headers = smithy_json_headers(response.headers());
-                let body = if let Some(bytes) = response.body().bytes() {
-                    json_body(JsonBodyInput::Bytes(bytes)).unwrap_or_default()
-                } else {
-                    serde_json::Value::Null
-                };
-
-                BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
-                    span_id: FunctionId(span_id.to_string()),
-                    event_id: ContentId(uuid::Uuid::new_v4().to_string()),
-                    span_chain: vec![],
-                    timestamp: web_time::SystemTime::now(),
-                    callsite: "".to_string(),
-                    verbosity: trace_level,
-                    content: TraceData::RawLLMResponse(Arc::new(HTTPResponse {
-                        request_id: self.http_request_id.clone(),
-                        status: response.status().as_u16(),
-                        headers,
-                        body: HTTPBody::new(
-                            response.body().bytes().unwrap_or_default().to_vec().into(),
-                        ),
-                    })),
-                    tags: Default::default(),
-                }));
-            }
+            let event =
+                TraceEvent::new_raw_llm_response(self.call_stack.clone(), Arc::new(response));
+            BAML_TRACER.lock().unwrap().put(Arc::new(event));
         }
 
         Ok(())
@@ -340,8 +306,8 @@ impl AwsClient {
     // cURL previews.
     async fn client_anyhow(
         &self,
-        span_id: Option<Uuid>,
-        http_request_id: &HttpRequestId,
+        call_stack: Vec<baml_ids::FunctionCallId>,
+        http_request_id: baml_ids::HttpRequestId,
     ) -> Result<bedrock::Client> {
         #[cfg(target_arch = "wasm32")]
         let loader = super::wasm::load_aws_config();
@@ -429,7 +395,10 @@ impl AwsClient {
             .http_client(http_client)
             // Adding a custom http client (above) breaks the stalled stream protection for some reason. If a bedrock request takes longer than 5s (the default grace period, it makes it error out), so we disable it.
             .stalled_stream_protection(StalledStreamProtectionConfig::disabled())
-            .interceptor(CollectorInterceptor::new(span_id, http_request_id.clone()))
+            .interceptor(CollectorInterceptor::new(
+                call_stack,
+                http_request_id.clone(),
+            ))
             .build();
         Ok(BedrockRuntimeClient::from_conf(bedrock_config))
     }
@@ -515,19 +484,16 @@ impl AwsClient {
                 .build()
         });
 
-        let additional_fields_doc = self
-            .properties
-            .additional_model_request_fields
-            .as_ref()
-            .map(|map| {
-                // Convert IndexMap<String, serde_json::Value> to serde_json::Value::Object
-                let json_map: serde_json::Map<String, serde_json::Value> =
-                    map.iter().map(|(k, v)| (k.clone(), v.clone())).collect();
-                let json_value = serde_json::Value::Object(json_map);
-                // Convert serde_json::Value to aws_smithy_types::Document
-                serde_json_to_aws_document(json_value)
-            })
-            .unwrap_or_else(|| Document::Object(HashMap::new())); // Default to empty object
+        let additional_fields_doc = {
+            let json_map: serde_json::Map<String, serde_json::Value> = self
+                .properties
+                .additional_model_request_fields
+                .iter()
+                .map(|(k, v)| (k.clone(), v.clone()))
+                .collect();
+            let json_value = serde_json::Value::Object(json_map);
+            serde_json_to_aws_document(json_value)
+        };
 
         bedrock::operation::converse::ConverseInput::builder()
             .set_inference_config(inference_config)
@@ -621,9 +587,8 @@ impl WithNoCompletion for AwsClient {}
 impl WithStreamChat for AwsClient {
     async fn stream_chat(
         &self,
-        ctx: &RuntimeContext,
+        ctx: &impl HttpContext,
         chat_messages: &[RenderedChatMessage],
-        http_request_id: HttpRequestId,
     ) -> StreamResponse {
         let client = self.context.name.to_string();
         let model = Some(self.properties.model.clone());
@@ -632,7 +597,10 @@ impl WithStreamChat for AwsClient {
         let prompt = internal_baml_jinja::RenderedPrompt::Chat(chat_messages.to_vec());
 
         let aws_client = match self
-            .client_anyhow(ctx.span_id.clone(), &http_request_id)
+            .client_anyhow(
+                ctx.runtime_context().call_id_stack.clone(),
+                ctx.http_request_id().clone(),
+            )
             .await
         {
             Ok(c) => c,
@@ -650,7 +618,7 @@ impl WithStreamChat for AwsClient {
             }
         };
 
-        let request = match self.build_request(ctx, chat_messages) {
+        let request = match self.build_request(ctx.runtime_context(), chat_messages) {
             Ok(r) => r,
             Err(e) => {
                 return Err(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -920,9 +888,8 @@ impl AwsClient {
 impl WithChat for AwsClient {
     async fn chat(
         &self,
-        ctx: &RuntimeContext,
+        ctx: &impl HttpContext,
         chat_messages: &[RenderedChatMessage],
-        http_request_id: HttpRequestId,
     ) -> LLMResponse {
         let client = self.context.name.to_string();
         let model = Some(self.properties.model.clone());
@@ -931,7 +898,10 @@ impl WithChat for AwsClient {
         let prompt = internal_baml_jinja::RenderedPrompt::Chat(chat_messages.to_vec());
 
         let aws_client = match self
-            .client_anyhow(ctx.span_id.clone(), &http_request_id)
+            .client_anyhow(
+                ctx.runtime_context().call_id_stack.clone(),
+                ctx.http_request_id().clone(),
+            )
             .await
         {
             Ok(c) => c,
@@ -949,7 +919,7 @@ impl WithChat for AwsClient {
             }
         };
 
-        let request = match self.build_request(ctx, chat_messages) {
+        let request = match self.build_request(ctx.runtime_context(), chat_messages) {
             Ok(r) => r,
             Err(e) => {
                 return LLMResponse::LLMFailure(LLMErrorResponse {

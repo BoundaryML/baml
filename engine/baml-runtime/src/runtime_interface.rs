@@ -9,7 +9,7 @@ use std::{collections::HashMap, sync::Arc};
 
 use crate::internal::llm_client::llm_provider::LLMProvider;
 use crate::internal::llm_client::orchestrator::{OrchestrationScope, OrchestratorNode};
-use crate::tracing::{BamlTracer, TracingSpan};
+use crate::tracing::{BamlTracer, TracingCall};
 use crate::tracingv2::storage::storage::Collector;
 use crate::type_builder::TypeBuilder;
 use crate::types::on_log_event::LogEventCallbackSync;
@@ -31,77 +31,55 @@ pub(crate) trait RuntimeConstructor {
     ) -> Result<InternalBamlRuntime>;
 }
 
-// This is a runtime that has full access (disk, network, etc) - feature full
-pub trait RuntimeInterface {
-    #[allow(async_fn_in_trait)]
-    async fn call_function_impl(
-        &self,
-        function_name: String,
-        params: &BamlMap<String, BamlValue>,
-        ctx: RuntimeContext,
-    ) -> Result<FunctionResult>;
-
-    fn stream_function_impl(
-        &self,
-        function_name: String,
-        params: &BamlMap<String, BamlValue>,
-        tracer: Arc<BamlTracer>,
-        ctx: RuntimeContext,
-        #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
-        collectors: Vec<Arc<Collector>>,
-    ) -> Result<FunctionResultStream>;
-}
-
-//
 // These are UNSTABLE, and should be considered as a work in progress
-//
-
 pub trait ExperimentalTracingInterface {
-    fn start_span(
+    fn start_call(
         &self,
         function_name: &str,
         params: &BamlMap<String, BamlValue>,
         ctx: &RuntimeContextManager,
+        // TODO: return TracinsSpan in canary, but in sam branch its' tracingCall
         env_vars: &HashMap<String, String>,
-    ) -> Option<TracingSpan>;
+    ) -> TracingCall;
 
     #[cfg(target_arch = "wasm32")]
     #[allow(async_fn_in_trait)]
-    async fn finish_function_span(
+    async fn finish_function_call(
         &self,
-        span: Option<TracingSpan>,
+        call: TracingCall,
         result: &Result<FunctionResult>,
         ctx: &RuntimeContextManager,
         env_vars: &HashMap<String, String>,
-    ) -> Result<Option<uuid::Uuid>>;
+    ) -> Result<uuid::Uuid>;
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn finish_function_span(
+    fn finish_function_call(
         &self,
-        span: Option<TracingSpan>,
+        call: TracingCall,
         result: &Result<FunctionResult>,
         ctx: &RuntimeContextManager,
         env_vars: &HashMap<String, String>,
-    ) -> Result<Option<uuid::Uuid>>;
+    ) -> Result<uuid::Uuid>;
 
     #[cfg(target_arch = "wasm32")]
     #[allow(async_fn_in_trait)]
-    async fn finish_span(
+    async fn finish_call(
         &self,
-        span: Option<TracingSpan>,
+        call: TracingCall,
         result: Option<BamlValue>,
         ctx: &RuntimeContextManager,
+
         env_vars: &HashMap<String, String>,
-    ) -> Result<Option<uuid::Uuid>>;
+    ) -> Result<uuid::Uuid>;
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn finish_span(
+    fn finish_call(
         &self,
-        span: Option<TracingSpan>,
+        call: TracingCall,
         result: Option<BamlValue>,
         ctx: &RuntimeContextManager,
         env_vars: &HashMap<String, String>,
-    ) -> Result<Option<uuid::Uuid>>;
+    ) -> Result<uuid::Uuid>;
 
     fn flush(&self) -> Result<()>;
     fn drain_stats(&self) -> crate::InnerTraceStats;
@@ -134,11 +112,7 @@ pub trait InternalRuntimeInterface {
         ctx: &RuntimeContext,
     ) -> Result<Vec<OrchestratorNode>>;
 
-    fn get_function<'ir>(
-        &'ir self,
-        function_name: &str,
-        ctx: &RuntimeContext,
-    ) -> Result<FunctionWalker<'ir>>;
+    fn get_function<'ir>(&'ir self, function_name: &str) -> Result<FunctionWalker<'ir>>;
     fn get_expr_function<'ir>(
         &'ir self,
         function_name: &str,
@@ -185,6 +159,5 @@ pub trait InternalRuntimeInterface {
         &self,
         function_name: &str,
         test_name: &str,
-        ctx: &RuntimeContextManager,
     ) -> Result<Option<TypeBuilder>>;
 }

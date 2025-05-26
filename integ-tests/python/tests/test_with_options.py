@@ -9,17 +9,17 @@ import sys
 
 @pytest.fixture(autouse=True)
 def ensure_collector_is_empty():
-    assert Collector.__function_span_count() == 0
+    assert Collector.__function_call_count() == 0
     yield
     gc.collect()
-    assert Collector.__function_span_count() == 0
+    assert Collector.__function_call_count() == 0
 
 
 @pytest.mark.asyncio
 async def test_with_options_logger_async():
-    print("### function_span_count", Collector.__function_span_count())
+    print("### function_call_count", Collector.__function_call_count())
     # garbage collected!
-    assert Collector.__function_span_count() == 0
+    assert Collector.__function_call_count() == 0
 
     collector = Collector(name="my-collector")
     function_logs = collector.logs
@@ -54,7 +54,7 @@ async def test_with_options_logger_async():
     gc.collect()
     print("----- gc.collect() -----", file=sys.stderr)
     # still not collected cause it's in use
-    assert Collector.__function_span_count() > 0
+    assert Collector.__function_call_count() > 0
 
 
 def test_with_options_logger_sync():

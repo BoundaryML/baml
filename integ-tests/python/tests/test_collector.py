@@ -10,22 +10,22 @@ import sys
 import asyncio
 
 
-def function_span_count():
-    return Collector.__function_span_count()  # type: ignore
+def function_call_count():
+    return Collector.__function_call_count()  # type: ignore
 
 
 @pytest.fixture(autouse=True)
 def ensure_collector_is_empty():
-    assert function_span_count() == 0
+    assert function_call_count() == 0
     yield
     gc.collect()
-    assert function_span_count() == 0
+    assert function_call_count() == 0
 
 
 @pytest.mark.asyncio
 async def test_collector_async_no_stream_success():
     # garbage collected!
-    assert function_span_count() == 0
+    assert function_call_count() == 0
 
     collector = Collector(name="my-collector")
     function_logs = collector.logs
@@ -115,7 +115,7 @@ async def test_collector_async_no_stream_success():
     gc.collect()
     print("----- gc.collect() -----", file=sys.stderr)
     # still not collected cause it's in use
-    assert function_span_count() > 0
+    assert function_call_count() > 0
 
 
 @pytest.mark.asyncio
@@ -135,7 +135,7 @@ async def test_collector_async_no_stream_no_getting_logs():
     gc.collect()
     print("----- gc.collect() -----", file=sys.stderr)
     # still not collected cause it's in use
-    assert function_span_count() > 0
+    assert function_call_count() > 0
 
 
 @pytest.mark.asyncio
@@ -217,7 +217,7 @@ async def test_collector_async_stream_success():
     gc.collect()
     print("----- gc.collect() -----", file=sys.stderr)
     # still not collected cause it's in use
-    assert function_span_count() > 0
+    assert function_call_count() > 0
 
 
 @pytest.mark.asyncio

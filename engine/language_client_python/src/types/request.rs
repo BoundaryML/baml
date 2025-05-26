@@ -52,14 +52,10 @@ impl HTTPRequest {
     #[getter]
     pub fn headers<'py>(&self, py: Python<'py>) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
-        if let Some(obj) = self.inner.headers.as_object() {
-            for (k, v) in obj {
-                // serde_json::Value::to_string includes quotes around the
-                // string, we only want the string content not the quotes.
-                if let Some(s) = v.as_str() {
-                    dict.set_item(k, s)?;
-                }
-            }
+        for (k, v) in &self.inner.headers {
+            // serde_json::Value::to_string includes quotes around the
+            // string, we only want the string content not the quotes.
+            dict.set_item(k, v)?;
         }
         Ok(dict.into())
     }

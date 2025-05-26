@@ -1,4 +1,7 @@
-use std::sync::{Arc, Mutex};
+use std::{
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
 
 use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
 use either::Either;
@@ -33,7 +36,7 @@ impl Collector {
         let logs = self.logs();
         let log_ids: Vec<String> = logs
             .iter()
-            .map(|log| log.inner.lock().unwrap().id().0.clone())
+            .map(|log| log.inner.lock().unwrap().id().to_string())
             .collect();
         format!(
             "LogCollector(name={}, function_log_ids=[{}])",
@@ -64,7 +67,7 @@ impl Collector {
 
     pub fn id(&self, function_log_id: String) -> Option<FunctionLog> {
         self.inner
-            .function_log_by_id(&baml_types::tracing::events::FunctionId(function_log_id))
+            .function_log_by_id(&baml_ids::FunctionCallId::from_str(&function_log_id).ok()?)
             .map(|inner_function_log| FunctionLog {
                 inner: Arc::new(Mutex::new(inner_function_log.clone())),
             })
@@ -78,8 +81,8 @@ impl Collector {
     }
 
     #[staticmethod]
-    pub fn __function_span_count() -> usize {
-        BAML_TRACER.lock().unwrap().function_span_count()
+    pub fn __function_call_count() -> usize {
+        BAML_TRACER.lock().unwrap().function_call_count()
     }
 
     #[staticmethod]
@@ -115,7 +118,7 @@ impl FunctionLog {
 
     #[getter]
     pub fn id(&self) -> String {
-        self.inner.lock().unwrap().id().0
+        self.inner.lock().unwrap().id().to_string()
     }
 
     #[getter]

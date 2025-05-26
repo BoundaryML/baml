@@ -1,6 +1,7 @@
 use crate::base::EpochMsTimestamp;
 use crate::rpc::ApiEndpoint;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 /**
  * interface Expression<T> {
@@ -18,7 +19,7 @@ interface DashboardQueryParams {
     clientName?: string; // MyFallbackClient -> 4o // o1
     functionId?: string; // function##MyFunction##{hash}..
     functionName?: string; // MyFunction
-    functionSpanId?: string; // specific to uuid / cuid etc
+    functionCallId?: string; // specific to uuid / cuid etc
     sessionId?: string;
     callType?: "async" | "sync";
     startAt?: string; // ISO8601
@@ -52,7 +53,8 @@ interface DashboardQueryParams {
 }
  */
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum FilterOperation {
     PersonId(UnaryBooleanOperator<String>),
     ApiKeyName(UnaryBooleanOperator<String>),
@@ -82,19 +84,22 @@ pub enum FilterOperation {
     },
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct UnaryBooleanOperator<T> {
     pub operator: String,
     pub value: T,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub enum ChartMetric {
     TotalTokenCount,
     LatencyMs,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct ChartParameters {
     pub chart_name: String,
     pub chart_metric: ChartMetric,
@@ -102,26 +107,31 @@ pub struct ChartParameters {
     pub filters: Vec<FilterOperation>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct ChartDefinition {
     pub chart_name: String,
     pub chart_params: ChartParameters,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct GetDashboardDataRequest {
     pub charts: Vec<ChartDefinition>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct ChartDataSeries {
     pub series_name: String,
     /// If there are no data points for a given time window, the value will be None.
     /// The frontend can decide whether to show a gap or a zero.
+    #[ts(type = "[number, number | null][]")]
     pub data: Vec<(EpochMsTimestamp, Option<f64>)>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct ChartData {
     pub chart_name: String,
     pub chart_params: ChartParameters,
@@ -131,7 +141,8 @@ pub struct ChartData {
     pub chart_data: Vec<ChartDataSeries>,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct GetDashboardDataResponse {
     pub charts: Vec<ChartData>,
 }
@@ -139,8 +150,8 @@ pub struct GetDashboardDataResponse {
 struct GetDashboardData;
 
 impl ApiEndpoint for GetDashboardData {
-    type Request = GetDashboardDataRequest;
-    type Response = GetDashboardDataResponse;
+    type Request<'a> = GetDashboardDataRequest;
+    type Response<'a> = GetDashboardDataResponse;
 
     const PATH: &'static str = "/v1/dashboard";
 }

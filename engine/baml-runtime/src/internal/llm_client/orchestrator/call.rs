@@ -1,5 +1,6 @@
 use anyhow::Result;
-use baml_types::{tracing::events::HttpRequestId, BamlValue};
+use baml_ids::HttpRequestId;
+use baml_types::BamlValue;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::{BamlValueWithFlags, ResponseBamlValue};
 use web_time::Duration;
@@ -8,7 +9,7 @@ use crate::{
     internal::{
         llm_client::{
             parsed_value_to_response,
-            traits::{WithClientProperties, WithPrompt, WithSingleCallable},
+            traits::{HttpContext, WithClientProperties, WithPrompt, WithSingleCallable},
             LLMErrorResponse, LLMResponse,
         },
         prompt_renderer::PromptRenderer,
@@ -17,6 +18,30 @@ use crate::{
 };
 
 use super::{OrchestrationScope, OrchestratorNodeIterator};
+
+pub(super) struct CtxWithHttpRequestId<'a> {
+    runtime_context: &'a RuntimeContext,
+    http_request_id: HttpRequestId,
+}
+
+impl<'a> HttpContext for CtxWithHttpRequestId<'a> {
+    fn http_request_id(&self) -> &baml_ids::HttpRequestId {
+        &self.http_request_id
+    }
+
+    fn runtime_context(&self) -> &RuntimeContext {
+        self.runtime_context
+    }
+}
+
+impl<'a> From<&'a RuntimeContext> for CtxWithHttpRequestId<'a> {
+    fn from(runtime_context: &'a RuntimeContext) -> Self {
+        Self {
+            runtime_context,
+            http_request_id: HttpRequestId::new(),
+        }
+    }
+}
 
 pub async fn orchestrate(
     iter: OrchestratorNodeIterator,
@@ -48,8 +73,8 @@ pub async fn orchestrate(
                 continue;
             }
         };
-        let http_request_id = HttpRequestId(uuid::Uuid::new_v4().to_string());
-        let response = node.single_call(ctx, &prompt, http_request_id).await;
+        let ctx = CtxWithHttpRequestId::from(ctx);
+        let response = node.single_call(&ctx, &prompt).await;
         let parsed_response = match &response {
             LLMResponse::Success(s) => {
                 if !node

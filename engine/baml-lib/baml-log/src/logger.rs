@@ -1,6 +1,7 @@
 use colored::*;
 use lazy_static::lazy_static;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::env;
 use std::fmt::{self, Display};
 use std::io::{self, Write};
@@ -24,24 +25,27 @@ mod defaults {
 /// Logging levels in order of verbosity
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Level {
+    /// Fatal errors that prevent program execution
+    Fatal = 0,
     /// Disable all logging
-    Off = 0,
+    Off = 1,
     /// Critical errors that prevent program execution
-    Error = 1,
+    Error = 2,
     /// Concerning but non-fatal errors
-    Warn = 2,
+    Warn = 3,
     /// General information about program execution
-    Info = 3,
+    Info = 4,
     /// Detailed information useful for debugging
-    Debug = 4,
+    Debug = 5,
     /// Very detailed tracing information
-    Trace = 5,
+    Trace = 6,
 }
 
 impl Level {
     /// Convert level to a human-readable string
     pub fn as_str(&self) -> &'static str {
         match self {
+            Level::Fatal => "FATAL",
             Level::Off => "OFF",
             Level::Error => "ERROR",
             Level::Warn => "WARN",
@@ -54,6 +58,7 @@ impl Level {
     /// Get a colored version of the level string
     fn colored(&self) -> ColoredString {
         match self {
+            Level::Fatal => "FATAL".bright_red(),
             Level::Off => "OFF".normal(),
             Level::Error => "ERROR".bright_red(),
             Level::Warn => "WARN".yellow(),
@@ -380,6 +385,7 @@ impl LogConfig {
 lazy_static! {
     /// Thread-safe configuration with runtime modification support
     static ref CONFIG: RwLock<LogConfig> = RwLock::new(LogConfig::from_env());
+    static ref LOGGED_LINES: RwLock<HashSet<(Option<String>, Option<String>, Option<u32>)>> = RwLock::new(HashSet::new());
 }
 
 /// Error type for logging operations
@@ -608,6 +614,27 @@ pub trait Loggable {
     ) -> Result<serde_json::Value, LogError>;
 }
 
+/// Internal function used by logging macros, that that line is only logged once
+pub fn log_internal_once(
+    level: Level,
+    message: &str,
+    module_path: Option<&str>,
+    file: Option<&str>,
+    line: Option<u32>,
+) {
+    let key = (
+        module_path.map(|s| s.to_string()),
+        file.map(|s| s.to_string()),
+        line,
+    );
+
+    let mut logged_lines = LOGGED_LINES.write().unwrap();
+    if !logged_lines.contains(&key) {
+        logged_lines.insert(key);
+        log_internal(level, message, module_path, file, line);
+    }
+}
+
 /// Internal function used by logging macros
 pub fn log_internal(
     level: Level,
@@ -632,6 +659,10 @@ pub fn log_internal(
         }
     }
     .to_logger();
+
+    if !logger.level.is_at_least(level) {
+        return;
+    }
 
     let now = chrono::Local::now()
         .format("%Y-%m-%dT%H:%M:%S%.3f")
@@ -661,6 +692,9 @@ impl Logger {
             // When running in the context of our LSP, we can't write to stdout since that will
             // mess up the LSP communication protocol, which uses stdout/stderr for communication.
             match level {
+                Level::Fatal => {
+                    log::error!("{} [BAML {}] {}", now, level.colored(), message.trim())
+                }
                 Level::Error => {
                     log::error!("{} [BAML {}] {}", now, level.colored(), message.trim())
                 }
@@ -775,6 +809,9 @@ pub fn log_event_internal<T: Loggable>(
             );
         } else {
             match level {
+                Level::Fatal => {
+                    log::error!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
+                }
                 Level::Error => {
                     log::error!("{} [BAML {}] {}", now, level.colored(), payload_str.trim())
                 }

@@ -1,12 +1,13 @@
 use std::sync::Arc;
 
-use crate::tracingv2::storage::{make_trace_event_for_response, storage::BAML_TRACER};
+use crate::{
+    internal::llm_client::traits::HttpContext,
+    tracingv2::storage::{make_trace_event_for_response, storage::BAML_TRACER},
+};
 use anyhow::Result;
 use async_std::stream::StreamExt;
-use baml_types::{
-    tracing::events::{FunctionId, HttpRequestId},
-    BamlValue, BamlValueWithMeta,
-};
+use baml_ids::HttpRequestId;
+use baml_types::{BamlValue, BamlValueWithMeta};
 use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::BamlValueWithFlags;
 use serde_json::json;
@@ -24,7 +25,7 @@ use crate::{
     FunctionResult, RuntimeContext,
 };
 
-use super::{OrchestrationScope, OrchestratorNodeIterator};
+use super::{call::CtxWithHttpRequestId, OrchestrationScope, OrchestratorNodeIterator};
 
 pub async fn orchestrate_stream<F>(
     iter: OrchestratorNodeIterator,
@@ -64,8 +65,8 @@ where
         };
 
         let (system_start, instant_start) = (web_time::SystemTime::now(), web_time::Instant::now());
-        let http_request_id = HttpRequestId(uuid::Uuid::new_v4().to_string());
-        let stream_res = node.stream(ctx, &prompt, http_request_id.clone()).await;
+        let ctx = CtxWithHttpRequestId::from(ctx);
+        let stream_res = node.stream(&ctx, &prompt).await;
         let final_response = match stream_res {
             Ok(response) => response
                 .map(|stream_part| {
@@ -150,18 +151,13 @@ where
         let node_name = node.scope.name();
         let sleep_duration = node.error_sleep_duration().cloned();
 
-        if let Some(span_id) = ctx.span_id {
+        {
             let trace_event = make_trace_event_for_response(
                 &final_response,
-                &FunctionId(span_id.to_string()),
-                &http_request_id,
-                "OrchestratorNode::stream",
+                ctx.runtime_context().call_id_stack.clone(),
+                ctx.http_request_id(),
             );
             BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
-        } else {
-            log::warn!(
-                "No span id found for function while emitting logs. Log event may be dropped."
-            );
         }
         // Don't include flags in final resopnse either until we
         // figure out how to reduce memory usage.

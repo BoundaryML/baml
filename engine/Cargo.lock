@@ -968,6 +968,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "baml-derive"
+version = "0.89.0"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.87",
+]
+
+[[package]]
+name = "baml-ids"
+version = "0.89.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "type-safe-id",
+ "uuid",
+]
+
+[[package]]
 name = "baml-lib"
 version = "0.89.0"
 dependencies = [
@@ -1033,6 +1053,7 @@ version = "0.89.0"
 dependencies = [
  "anyhow",
  "baml-cli",
+ "baml-ids",
  "baml-log",
  "baml-runtime",
  "baml-types",
@@ -1064,6 +1085,7 @@ version = "0.0.1"
 dependencies = [
  "anyhow",
  "assert_cmd",
+ "baml-ids",
  "base64 0.22.1",
  "bytes",
  "console_log",
@@ -1120,7 +1142,9 @@ dependencies = [
  "aws-smithy-types",
  "axum",
  "axum-extra",
+ "baml-ids",
  "baml-log",
+ "baml-rpc",
  "baml-types",
  "base64 0.22.1",
  "bytes",
@@ -1130,6 +1154,7 @@ dependencies = [
  "colored 2.1.0",
  "console_error_panic_hook",
  "console_log",
+ "cowstr",
  "criterion",
  "dashmap",
  "derive-new",
@@ -1219,6 +1244,7 @@ name = "baml-schema-build"
 version = "0.89.0"
 dependencies = [
  "anyhow",
+ "baml-ids",
  "baml-runtime",
  "baml-types",
  "cfg-if",
@@ -1263,6 +1289,7 @@ name = "baml-types"
 version = "0.89.0"
 dependencies = [
  "anyhow",
+ "baml-ids",
  "clap",
  "derive_builder",
  "indexmap 2.8.0",
@@ -1288,6 +1315,7 @@ version = "0.89.0"
 dependencies = [
  "anyhow",
  "baml-cli",
+ "baml-ids",
  "baml-log",
  "baml-runtime",
  "baml-types",
@@ -1674,6 +1702,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "code-product"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9feea482d196b435bb8857c2ec1274926993bc3342953515620eb9641337ee01"
+dependencies = [
+ "code-product-lib",
+ "code-product-macro",
+]
+
+[[package]]
+name = "code-product-lib"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5938681371198e7a690aa008843d39bd3b3b65f17b0101518c388f453c0aaf4e"
+dependencies = [
+ "proc-macro2",
+]
+
+[[package]]
+name = "code-product-macro"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0371403e32bb895fc60f96b3b76a46a17b99a9ff85b3dbff0e1c5ff0f1ec8e13"
+dependencies = [
+ "code-product-lib",
+ "proc-macro2",
+]
+
+[[package]]
 name = "colorchoice"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1742,6 +1799,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "constptr"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9f6b816ec3d57d4febea032f3ce2bf9dca119f999a865f9f24d7020d9eb5167e"
+
+[[package]]
 name = "convert_case"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1771,6 +1834,19 @@ name = "core-foundation-sys"
 version = "0.8.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "773648b94d0e5d620f64f280777445740e61fe701025087ec8b57f45c791888b"
+
+[[package]]
+name = "cowstr"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "613de46416b29f30c0c581b5f4cd7dfc01991f59c416b30aa85a0a82af7c791e"
+dependencies = [
+ "code-product",
+ "constptr",
+ "mutants",
+ "serde",
+ "serde_test",
+]
 
 [[package]]
 name = "cpufeatures"
@@ -3315,6 +3391,8 @@ name = "internal-baml-core"
 version = "0.89.0"
 dependencies = [
  "anyhow",
+ "baml-derive",
+ "baml-rpc",
  "baml-types",
  "base64 0.13.1",
  "bstd",
@@ -3405,6 +3483,7 @@ name = "internal-baml-parser-database"
 version = "0.89.0"
 dependencies = [
  "anyhow",
+ "baml-derive",
  "baml-types",
  "colored 2.1.0",
  "either",
@@ -3464,6 +3543,7 @@ version = "0.89.0"
 dependencies = [
  "anyhow",
  "aws-config",
+ "baml-derive",
  "baml-types",
  "derive_more",
  "either",
@@ -3978,6 +4058,12 @@ dependencies = [
  "wasi 0.11.0+wasi-snapshot-preview1",
  "windows-sys 0.52.0",
 ]
+
+[[package]]
+name = "mutants"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc0287524726960e07b119cebd01678f852f147742ae0d925e6a520dca956126"
 
 [[package]]
 name = "napi"
@@ -5108,6 +5194,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "baml-cli",
+ "baml-ids",
  "baml-log",
  "baml-runtime",
  "baml-types",
@@ -5563,6 +5650,15 @@ name = "serde_spanned"
 version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "87607cb1398ed59d48732e575a4c28a7a8ebf2454b964fe3f224f2afc07909e1"
+dependencies = [
+ "serde",
+]
+
+[[package]]
+name = "serde_test"
+version = "1.0.177"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f901ee573cab6b3060453d2d5f0bae4e6d628c23c0a962ff9b5f1d7c8d4f1ed"
 dependencies = [
  "serde",
 ]

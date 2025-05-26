@@ -4,17 +4,22 @@ use std::{
 };
 
 use anyhow::{Context, Result};
-use baml_types::BamlValue;
+use baml_ids::FunctionCallId;
+use baml_types::{tracing::events::TraceEvent, BamlValue};
 use std::fmt;
 
 use crate::{
-    client_registry::ClientRegistry, tracing::BamlTracer, type_builder::TypeBuilder,
-    RuntimeContext, SpanCtx,
+    client_registry::ClientRegistry, tracing::BamlTracer, tracingv2::storage::storage::BAML_TRACER,
+    type_builder::TypeBuilder, CallCtx, RuntimeContext,
 };
 
-use super::js_callback_provider::AwsCredResult;
 use super::runtime_context::BamlSrcReader;
-pub type BamlContext = (uuid::Uuid, String, HashMap<String, BamlValue>);
+pub type BamlContext = (
+    uuid::Uuid,
+    String,
+    HashMap<String, BamlValue>,
+    FunctionCallId,
+);
 
 #[derive(Clone)]
 pub struct RuntimeContextManager {
@@ -51,29 +56,73 @@ impl RuntimeContextManager {
         }
     }
 
-    pub fn span_id(&self) -> Result<uuid::Uuid> {
-        self.context
+    // pub fn call_id(&self) -> Result<uuid::Uuid> {
+    //     self.context
+    //         .lock()
+    //         .unwrap()
+    //         .last()
+    //         .map(|(id, ..)| *id)
+    //         .ok_or_else(|| anyhow::anyhow!("No call id found. This indicates a bug in BAML. Please report this with a stack trace (RUST_BACKTRACE=1)"))
+    // }
+
+    pub fn call_id_stack(&self, allow_empty: bool) -> Result<Vec<FunctionCallId>> {
+        let res: Vec<FunctionCallId> = self
+            .context
             .lock()
             .unwrap()
-            .last()
-            .map(|(id, ..)| *id)
-            .ok_or_else(|| anyhow::anyhow!("No span id found. This indicates a bug in BAML. Please report this with a stack trace (RUST_BACKTRACE=1)"))
+            .iter()
+            .map(|(.., call_id)| call_id.clone())
+            .collect();
+        if res.is_empty() && !allow_empty {
+            Err(anyhow::anyhow!("No call_id found. This indicates a bug in BAML. Please report this with a stack trace (RUST_BACKTRACE=1)"))
+        } else {
+            Ok(res)
+        }
     }
 
     pub fn new(baml_src_reader: BamlSrcReader) -> Self {
         Self {
             baml_src_reader: Arc::new(baml_src_reader),
-            context: Default::default(), 
+            context: Default::default(),
             global_tags: Default::default(),
         }
     }
 
     pub fn upsert_tags(&self, tags: HashMap<String, BamlValue>) {
-        let mut ctx = self.context.lock().unwrap();
-        if let Some((.., last_tags)) = ctx.last_mut() {
-            last_tags.extend(tags);
-        } else {
-            self.global_tags.lock().unwrap().extend(tags);
+        let call_id_stack = {
+            let mut ctx = self.context.lock().unwrap();
+            if let Some((.., last_tags, _)) = ctx.last_mut() {
+                last_tags.extend(tags.clone());
+            } else {
+                self.global_tags.lock().unwrap().extend(tags.clone());
+            }
+
+            // Extract call_id_stack while we have the lock to avoid deadlock
+            ctx.iter()
+                .map(|(.., call_id)| call_id.clone())
+                .collect::<Vec<FunctionCallId>>()
+        };
+
+        if !call_id_stack.is_empty() {
+            // Get all tags: global tags + current context tags (which now include the new tags)
+            let all_tags = {
+                let mut all_tags = self.global_tags.lock().unwrap().clone();
+                let ctx = self.context.lock().unwrap();
+                if let Some((.., ctx_tags, _)) = ctx.last() {
+                    all_tags.extend(ctx_tags.into_iter().map(|(k, v)| (k.clone(), v.clone())));
+                }
+                all_tags
+            };
+
+            let event = TraceEvent::new_set_tags(
+                call_id_stack,
+                serde_json::Map::from_iter(
+                    all_tags
+                        .into_iter()
+                        .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default())),
+                ),
+            );
+            BAML_TRACER.lock().unwrap().put(Arc::new(event));
         }
     }
 
@@ -82,35 +131,53 @@ impl RuntimeContextManager {
             .lock()
             .unwrap()
             .last()
-            .map(|(_, _, tags)| tags.clone())
+            .map(|(_, _, tags, _)| tags.clone())
             .unwrap_or_default()
     }
 
-    // Note, after entering, calling ctx.span_id() will return the span id of the old context still.
-    pub fn enter(&self, name: &str) -> uuid::Uuid {
+    // Note, after entering, calling ctx.call_id() will return the call id of the old context still.
+    // Returns the user tags, and global tags separately.
+    // The user tags get replicated to downstream contexts.
+    pub fn enter(
+        &self,
+        name: &str,
+    ) -> (
+        uuid::Uuid,
+        Vec<FunctionCallId>,
+        HashMap<String, BamlValue>,
+        HashMap<String, BamlValue>,
+    ) {
         let last_tags = self.clone_last_tags();
-        let span = uuid::Uuid::new_v4();
-        self.context
-            .lock()
-            .unwrap()
-            .push((span, name.to_string(), last_tags));
-        log::trace!("Entering with: {:#?}", self.context.lock().unwrap());
-        span
+        let call = uuid::Uuid::new_v4();
+        let call_id = FunctionCallId::new();
+        let mut ctx = self.context.lock().unwrap();
+        ctx.push((call, name.to_string(), last_tags.clone(), call_id));
+
+        let call_stack = ctx.iter().map(|(.., call_id)| call_id.clone()).collect();
+        log::trace!("Entering with: {:#?}", ctx);
+        let mut last_tags = last_tags;
+        for (k, v) in self.global_tags.lock().unwrap().iter() {
+            last_tags.entry(k.clone()).or_insert_with(|| v.clone());
+        }
+        let global_tags = self.global_tags.lock().unwrap().clone();
+        (call, call_stack, last_tags, global_tags)
     }
 
-    pub fn exit(&self) -> Option<(uuid::Uuid, Vec<SpanCtx>, HashMap<String, BamlValue>)> {
+    // This returns ALL tags together (global and user)
+    pub fn exit(&self) -> Option<(uuid::Uuid, Vec<CallCtx>, HashMap<String, BamlValue>)> {
         let mut ctx = self.context.lock().unwrap();
         log::trace!("Exiting: {:#?}", ctx);
 
         let prev = ctx
             .iter()
-            .map(|(span, name, _)| SpanCtx {
-                span_id: *span,
+            .map(|(call, name, _, call_id)| CallCtx {
+                call_id: *call,
                 name: name.clone(),
+                new_call_id: call_id.clone(),
             })
             .collect();
 
-        let (id, _, mut tags) = ctx.pop()?;
+        let (id, _, mut tags, new_id) = ctx.pop()?;
 
         for (k, v) in self.global_tags.lock().unwrap().iter() {
             tags.entry(k.clone()).or_insert_with(|| v.clone());
@@ -123,31 +190,35 @@ impl RuntimeContextManager {
         &self,
         type_builder: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
-        // the tracer initializes the new span_id,
-        // and then passes it back in here for a new context. It's kind of circular since tracer uses this class to _create_ the span_id....
-        // Anyway RuntimeCtx is passed everywhere and we need to know what the last span_id that the tracer created was.
+        // the tracer initializes the new call_id,
+        // and then passes it back in here for a new context. It's kind of circular since tracer uses this class to _create_ the call_id....
+        // Anyway RuntimeCtx is passed everywhere and we need to know what the last call_id that the tracer created was.
         // tl;dr
-        // 1. Tracer creates a new span id using the current context that's passe dinto call_function()
-        // 2. Tracer passes the span_id back in here for a new context
+        // 1. Tracer creates a new call id using the current context that's passe dinto call_function()
+        // 2. Tracer passes the call_id back in here for a new context
         // 3. profit
         env_vars: HashMap<String, String>,
-        span_id: Option<uuid::Uuid>,
+        call_id_stack: Vec<FunctionCallId>,
     ) -> Result<RuntimeContext> {
-        let mut tags = self.global_tags.lock().unwrap().clone();
-        let ctx_tags = {
-            self.context
-                .lock()
-                .unwrap()
-                .last()
-                .map(|(.., x)| x)
-                .cloned()
-                .unwrap_or_default()
-        };
-        tags.extend(ctx_tags);
+        // let mut tags = self.global_tags.lock().unwrap().clone();
+        // let ctx_tags = {
+        //     self.context
+        //         .lock()
+        //         .unwrap()
+        //         .last()
+        //         .map(|(.., x, _)| x)
+        //         .cloned()
+        //         .unwrap_or_default()
+        // };
+        // tags.extend(ctx_tags);
         let tags = {
+            let mut tags = self.global_tags.lock().unwrap().clone();
             let ctx = self.context.lock().unwrap();
             let ctx = ctx.last();
-            ctx.map(|(.., tags)| tags).cloned().unwrap_or_default()
+            if let Some((.., ctx_tags, _)) = ctx {
+                tags.extend(ctx_tags.into_iter().map(|(k, v)| (k.clone(), v.clone())));
+            }
+            tags
         };
 
         let (cls, enm, als, rec_cls, rec_als) = type_builder
@@ -164,7 +235,7 @@ impl RuntimeContextManager {
             als,
             rec_cls,
             rec_als,
-            span_id,
+            call_id_stack,
         );
 
         ctx.client_overrides = match client_registry {
@@ -184,15 +255,15 @@ impl RuntimeContextManager {
 
         RuntimeContext::new(
             self.baml_src_reader.clone(),
-            Default::default(),
-            ctx.last().map(|(.., x)| x).cloned().unwrap_or_default(),
-            Default::default(),
-            Default::default(),
+            HashMap::new(),
+            ctx.last().map(|(.., x, _)| x).cloned().unwrap_or_default(),
             Default::default(),
             Default::default(),
             Default::default(),
             Default::default(),
-            Some(uuid::Uuid::new_v4()),
+            Default::default(),
+            Default::default(),
+            vec![FunctionCallId::new()],
         )
     }
 

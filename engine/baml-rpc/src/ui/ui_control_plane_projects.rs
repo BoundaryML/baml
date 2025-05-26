@@ -1,4 +1,5 @@
-use crate::{rpc::ApiEndpoint, ProjectId};
+use crate::rpc::ApiEndpoint;
+use baml_ids::ProjectId;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -28,8 +29,8 @@ pub struct ListProjectsResponse {
 pub struct ListProjects;
 
 impl ApiEndpoint for ListProjects {
-    type Request = ListProjectsRequest;
-    type Response = ListProjectsResponse;
+    type Request<'a> = ListProjectsRequest;
+    type Response<'a> = ListProjectsResponse;
 
     const PATH: &'static str = "/v1/list-projects";
 }
@@ -51,19 +52,20 @@ pub struct CreateProjectResponse {
 pub struct CreateProject;
 
 impl ApiEndpoint for CreateProject {
-    type Request = CreateProjectRequest;
-    type Response = CreateProjectResponse;
+    type Request<'a> = CreateProjectRequest;
+    type Response<'a> = CreateProjectResponse;
 
     const PATH: &'static str = "/v1/create-project";
 }
 
-// TODO: fill in partial fields
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct UpdateProjectRequest {
     #[ts(type = "string")]
     pub project_id: ProjectId,
+    #[ts(optional)]
     pub project_slug: Option<String>,
+    #[ts(optional)]
     pub environments: Option<Vec<String>>,
 }
 
@@ -76,8 +78,8 @@ pub struct UpdateProjectResponse {
 pub struct UpdateProject;
 
 impl ApiEndpoint for UpdateProject {
-    type Request = UpdateProjectRequest;
-    type Response = UpdateProjectResponse;
+    type Request<'a> = UpdateProjectRequest;
+    type Response<'a> = UpdateProjectResponse;
 
     const PATH: &'static str = "/v1/update-project";
 }

@@ -1,13 +1,14 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
+use baml_derive::BamlHash;
 use baml_types::{EvaluationContext, StringOr};
 
 use crate::ClientSpec;
 
 use super::helpers::{Error, PropertyHandler};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlHash)]
 pub struct UnresolvedFallback<Meta> {
     strategy: Vec<(either::Either<StringOr, ClientSpec>, Meta)>,
 }
@@ -21,6 +22,19 @@ impl<Meta: Clone> UnresolvedFallback<Meta> {
         UnresolvedFallback {
             strategy: self.strategy.iter().map(|(s, _)| (s.clone(), ())).collect(),
         }
+    }
+
+    pub fn dependencies(&self) -> HashSet<String> {
+        self.strategy
+            .iter()
+            .flat_map(|(s, _)| match s {
+                either::Either::Left(s) => match s {
+                    StringOr::Value(s) => HashSet::from([s.clone()]),
+                    StringOr::EnvVar(_) | StringOr::JinjaExpression(_) => Default::default(),
+                },
+                either::Either::Right(s) => s.dependencies(),
+            })
+            .collect()
     }
 
     pub fn required_env_vars(&self) -> HashSet<String> {
