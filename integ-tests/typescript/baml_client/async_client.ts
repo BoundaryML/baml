@@ -4067,7 +4067,6 @@ export class BamlAsyncClient {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
       const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
-      console.log("collector", collector);
       const raw = await this.runtime.callFunction(
         "TestOpenAIGPT4oMini",
         {
