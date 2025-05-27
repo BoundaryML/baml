@@ -43,7 +43,7 @@ import { Collector, ClientRegistry } from "@boundaryml/baml"
 const collector = new Collector("my-collector")
 const clientRegistry = new ClientRegistry()
 clientRegistry.setPrimary("openai/gpt-4o-mini")
-env = {"BAML_LOG": "DEBUG", "OPENAI_API_KEY": "key-123"}
+const env = {"BAML_LOG": "DEBUG", "OPENAI_API_KEY": "key-123"}
 
 // Create client with default options
 const myB = b.withOptions({ collector, clientRegistry, env })
