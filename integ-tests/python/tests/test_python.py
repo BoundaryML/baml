@@ -42,3 +42,37 @@ def test_pickle():
     p3 = pickle.dumps(i3)
     assert i3 == pickle.loads(pickle.dumps(i3))
     assert p3 == pickle.dumps(pickle.loads(p3))
+
+"""
+from multiprocessing import Process
+from baml_client import b
+
+
+def run():
+    b.ExtractResume("test")
+
+
+if __name__ == "__main__":
+    current = Process(target=run)
+    current.start()
+    current.join()
+"""
+# from baml_client import b
+# def run():
+#     b.ExtractResume("test")
+
+# def test_pickle_multiprocessing():
+#     from multiprocessing import Process
+
+#     current = Process(target=run)
+#     current.start()
+#     current.join()
+
+def test_baml_client_pickle_roundtrip():
+    import pickle
+    from baml_client import b
+    # Pickle and unpickle the b object
+    pickled = pickle.dumps(b)
+    b2 = pickle.loads(pickled)
+    # Check type and that no error occurs
+    assert type(b2) is type(b)

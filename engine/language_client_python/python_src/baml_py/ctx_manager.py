@@ -27,6 +27,16 @@ def current_thread_id() -> int:
 
 
 class CtxManager:
+    def __setstate__(self, state: typing.Dict[str, typing.Any]) -> None:
+        self.rt = state["rt"]
+        self.ctx = contextvars.ContextVar[typing.Dict[int, RuntimeContextManager]](
+            "baml_ctx", default={current_thread_id(): self.rt.create_context_manager()}
+        )
+        atexit.register(self.rt.flush)
+    
+    def __getstate__(self) -> typing.Dict[str, typing.Any]:
+        return {"rt": self.rt}
+
     def __init__(self, rt: BamlRuntime):
         self.rt = rt
         self.ctx = contextvars.ContextVar[typing.Dict[int, RuntimeContextManager]](
