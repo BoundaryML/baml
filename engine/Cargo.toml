@@ -59,7 +59,7 @@ dashmap = "5.5.3"
 derive-new = "0.7"
 derive_builder = "0.20.0"
 derive_more = { version = "0.99.18", features = ["constructor"] }
-either = "1.8.1"
+either = { version = "1.8.1", features = ["serde"] }
 env_logger = "0.11.3"
 futures = { version = "0.3.30", features = ["executor"] }
 http = "1.1.0"

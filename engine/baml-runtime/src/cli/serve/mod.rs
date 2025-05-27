@@ -36,6 +36,7 @@ use std::{path::PathBuf, sync::Arc, task::Poll};
 use tokio::{net::TcpListener, sync::RwLock};
 use tokio_stream::StreamExt;
 
+use crate::tracingv2::storage::storage::Collector;
 use crate::{
     client_registry::ClientRegistry, errors::ExposedError, internal::llm_client::LLMResponse,
     BamlRuntime, FunctionResult, RuntimeContextManager,
@@ -172,6 +173,12 @@ enum AuthEnforcementMode {
     EnforceAndFail(String),
 }
 
+#[derive(Clone)]
+enum BamlCallCollector {
+    None,
+    WithCollector(Arc<Collector>),
+}
+
 impl Server {
     pub async fn new(src_dir: PathBuf, port: u16) -> Result<(Arc<Self>, TcpListener)> {
         let tcp_listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
@@ -266,6 +273,17 @@ impl Server {
 
         let s = self.clone();
         let app = app.route(
+            "/call_with_metrics/:msg",
+            post(
+                move |extract::Path(b_fn): extract::Path<String>,
+                      extract::Json(b_args): extract::Json<serde_json::Value>| async move {
+                    s.clone().baml_call_with_metrics_axum(b_fn, b_args).await
+                },
+            ),
+        );
+
+        let s = self.clone();
+        let app = app.route(
             "/stream/:msg",
             post(
                 move |extract::Path(b_fn): extract::Path<String>,
@@ -324,6 +342,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         b_fn: String,
         b_args: serde_json::Value,
         b_options: Option<BamlOptions>,
+        baml_call_collector: BamlCallCollector,
     ) -> Response {
         let args = match parse_args(&b_fn, b_args) {
             Ok(args) => args,
@@ -339,8 +358,14 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 || std::env::vars().collect(),
                 |options| options.env(),
             );
+
+        let collectors = match baml_call_collector.clone() {
+            BamlCallCollector::None => None,
+            BamlCallCollector::WithCollector(collector) => Some(vec![collector]),
+        };
+
         let (result, _trace_id) = locked
-            .call_function(b_fn, &args, &Default::default(), None, client_registry.as_ref(), None, env_vars)
+            .call_function(b_fn, &args, &Default::default(), None, client_registry.as_ref(), collectors, env_vars)
             .await;
 
         match result {
@@ -349,7 +374,23 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                     match function_result.result_with_constraints_content() {
                         // Just because the LLM returned 2xx doesn't mean that it returned parse-able content!
                         Ok(parsed) => {
-                            (StatusCode::OK, Json(parsed.serialize_final())).into_response()
+                            let body = match baml_call_collector {
+                                BamlCallCollector::None => Json(either::Either::Left(parsed.serialize_final())),
+                                BamlCallCollector::WithCollector(collector) =>{
+                                    let log = collector.last_function_log();
+                                    let metrics = log.map(|mut log| {
+                                        json!({
+                                            "usage": log.usage(),
+                                            "timing": log.timing(),
+                                        })
+                                    });
+                                    Json(either::Either::Right(json!({
+                                        "response": parsed.serialize_final(),
+                                        "metrics": metrics,
+                                    })))
+                                },
+                            };
+                            (StatusCode::OK, body).into_response()
                         }
                         Err(e) => {
                             if let Some(ExposedError::ValidationError {
@@ -390,20 +431,33 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         }
     }
 
+    fn parse_baml_options_from_args(
+        b_args: &serde_json::Value,
+    ) -> Result<Option<BamlOptions>, BamlError> {
+        b_args
+            .get("__baml_options__")
+            .map(BamlOptions::deserialize)
+            .transpose()
+            .map_err(|e| BamlError::InvalidArgument {
+                message: format!("Failed to parse __baml_options__: {}", e),
+            })
+    }
+
     async fn baml_call_axum(self: Arc<Self>, b_fn: String, b_args: serde_json::Value) -> Response {
-        let mut b_options = None;
-        if let Some(options_value) = b_args.get("__baml_options__") {
-            match BamlOptions::deserialize(options_value) {
-                Ok(opts) => b_options = Some(opts),
-                Err(e) => {
-                    return BamlError::InvalidArgument {
-                        message: format!("Failed to parse __baml_options__: {}", e),
-                    }
-                    .into_response()
-                }
-            }
-        }
-        self.baml_call(b_fn, b_args, b_options).await
+        let b_options = match Self::parse_baml_options_from_args(&b_args)  {
+            Ok(opts) => opts,
+            Err(e) => return e.into_response(),
+        };
+        self.baml_call(b_fn, b_args, b_options, BamlCallCollector::None).await
+    }
+
+    async fn baml_call_with_metrics_axum(self: Arc<Self>, b_fn: String, b_args: serde_json::Value) -> Response {
+        let b_options = match Self::parse_baml_options_from_args(&b_args)  {
+            Ok(opts) => opts,
+            Err(e) => return e.into_response(),
+        };
+        let collector = Arc::new(Collector::new(None));
+        self.baml_call(b_fn, b_args, b_options, BamlCallCollector::WithCollector(collector.clone())).await
     }
 
     fn baml_stream(
