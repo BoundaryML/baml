@@ -195,3 +195,33 @@ pub fn parse_function_body(
 ) -> Option<ExpressionBlock> {
     parse_expr_block(token, diagnostics)
 }
+
+pub fn parse_if_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
+    assert_correct_parser!(token, Rule::if_expression);
+    let span = diagnostics.span(token.as_span());
+    let mut tokens = token.into_inner();
+    let condition = parse_expression(tokens.next()?, diagnostics)?;
+    let then_branch = parse_expression(tokens.next()?, diagnostics)?;
+    let else_branch = parse_expression(tokens.next()?, diagnostics);
+    Some(Expression::If(
+        Box::new(condition),
+        Box::new(then_branch),
+        else_branch.map(Box::new),
+        span,
+    ))
+}
+
+pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
+    assert_correct_parser!(token, Rule::for_loop);
+    let span = diagnostics.span(token.as_span());
+    let mut tokens = token.into_inner();
+    let identifier = parse_identifier(tokens.next()?, diagnostics);
+    let iterator = parse_expression(tokens.next()?, diagnostics)?;
+    let body = parse_expr_block(tokens.next()?, diagnostics)?;
+    Some(Expression::ForLoop {
+        identifier,
+        iterator: Box::new(iterator),
+        body,
+        span,
+    })
+}

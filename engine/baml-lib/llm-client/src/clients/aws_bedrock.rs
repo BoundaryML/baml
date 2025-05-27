@@ -8,12 +8,13 @@ use anyhow::Result;
 use indexmap::IndexMap;
 use secrecy::SecretString;
 
+use baml_derive::BamlHash;
 use baml_types::{ApiKeyWithProvenance, EvaluationContext, GetEnvVar, StringOr, UnresolvedValue};
 use serde_json::Value;
 
 use super::helpers::{Error, PropertyHandler};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlHash)]
 pub struct UnresolvedAwsBedrock<Meta> {
     model: Option<StringOr>,
     region: Option<StringOr>,
@@ -26,13 +27,16 @@ pub struct UnresolvedAwsBedrock<Meta> {
     supported_request_modes: SupportedRequestModes,
     inference_config: Option<UnresolvedInferenceConfiguration>,
     finish_reason_filter: UnresolvedFinishReasonFilter,
-    additional_model_request_fields: Option<IndexMap<String, (Meta, UnresolvedValue<Meta>)>>,
+    #[baml_safe_hash]
+    additional_model_request_fields: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlHash)]
 struct UnresolvedInferenceConfiguration {
     max_tokens: Option<i32>,
+    #[baml_safe_hash]
     temperature: Option<f32>,
+    #[baml_safe_hash]
     top_p: Option<f32>,
     stop_sequences: Option<Vec<StringOr>>,
 }
@@ -79,7 +83,7 @@ pub struct ResolvedAwsBedrock {
     pub allowed_role_metadata: AllowedRoleMetadata,
     pub supported_request_modes: SupportedRequestModes,
     pub finish_reason_filter: FinishReasonFilter,
-    pub additional_model_request_fields: Option<IndexMap<String, Value>>,
+    pub additional_model_request_fields: IndexMap<String, Value>,
 }
 
 impl std::fmt::Debug for ResolvedAwsBedrock {
@@ -144,14 +148,11 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
             supported_request_modes: self.supported_request_modes.clone(),
             inference_config: self.inference_config.clone(),
             finish_reason_filter: self.finish_reason_filter.clone(),
-            additional_model_request_fields: self.additional_model_request_fields.as_ref().map(
-                |fields| {
-                    fields
-                        .iter()
-                        .map(|(k, (_, v))| (k.clone(), ((), v.without_meta())))
-                        .collect::<IndexMap<_, _>>()
-                },
-            ),
+            additional_model_request_fields: self
+                .additional_model_request_fields
+                .iter()
+                .map(|(k, (_, v))| (k.clone(), ((), v.without_meta())))
+                .collect::<IndexMap<_, _>>(),
         }
     }
 }
@@ -345,14 +346,9 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
 
         let additional_model_request_fields = self
             .additional_model_request_fields
-            .as_ref()
-            .map(|fields| {
-                fields
-                    .iter()
-                    .map(|(k, (_, v))| Ok((k.clone(), v.resolve_serde::<serde_json::Value>(ctx)?)))
-                    .collect::<Result<IndexMap<_, _>>>()
-            })
-            .transpose()?;
+            .iter()
+            .map(|(k, (_, v))| Ok((k.clone(), v.resolve_serde::<serde_json::Value>(ctx)?)))
+            .collect::<Result<IndexMap<_, _>>>()?;
 
         Ok(ResolvedAwsBedrock {
             model: model.resolve(ctx)?,
@@ -420,7 +416,8 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
         let supported_request_modes = properties.ensure_supported_request_modes();
         let additional_model_request_fields = properties
             .ensure_map("additional_model_request_fields", false)
-            .map(|(_, map, _)| map);
+            .map(|(_, map, _)| map)
+            .unwrap_or_default();
 
         let inference_config = {
             let mut inference_config = UnresolvedInferenceConfiguration {

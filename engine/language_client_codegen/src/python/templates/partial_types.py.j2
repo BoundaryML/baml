@@ -1,9 +1,14 @@
 {#- baml_py must be imported to enable access to baml_py.Image -#}
 import baml_py
 from enum import Enum
+{% if is_pydantic_2 %}
 from pydantic import BaseModel, ConfigDict
-from typing_extensions import TypeAlias
-from typing import Dict, Generic, List, Optional, TypeVar, Union, Literal
+{% else %}
+from pydantic import BaseModel, Extra
+from pydantic.generics import GenericModel
+{% endif %}
+from typing_extensions import TypeAlias, Literal
+from typing import Dict, Generic, List, Optional, TypeVar, Union
 
 from . import types
 from .types import Checked, Check
@@ -16,7 +21,11 @@ from .types import Checked, Check
 ###############################################################################
 
 T = TypeVar('T')
+{%- if is_pydantic_2 %}
 class StreamState(BaseModel, Generic[T]):
+{%- else %}
+class StreamState(GenericModel, Generic[T]):
+{%- endif %}
     value: T
     state: Literal["Pending", "Incomplete", "Complete"]
 
@@ -26,8 +35,16 @@ class {{cls.name}}(BaseModel):
     {%- if let Some(docstring) = cls.docstring %}
     {{docstring}}
     {%- endif %}
+    {%- if is_pydantic_2 %}
     {%- if cls.dynamic %}
     model_config = ConfigDict(extra='allow')
+    {%- endif %}
+    {%- else %}
+    class Config:
+        {%- if cls.dynamic %}
+        extra = Extra.allow
+        {%- endif %}
+        arbitrary_types_allowed = True
     {%- endif %}
     {%- if cls.fields.is_empty() && !cls.dynamic %}pass{% endif %}
 

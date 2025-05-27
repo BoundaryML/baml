@@ -71,7 +71,7 @@ impl IRSemanticStreamingHelper for ScopedIr<'_> {
             FindResult::OnlyIr(cls) | FindResult::Overriden(cls, _) => cls
                 .walk_fields()
                 .filter_map(|field| {
-                    if field.streaming_needed() {
+                    if field.streaming_behavior().needed {
                         Some(field.name().to_string())
                     } else {
                         None

@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use anyhow::Result;
-use baml_types::{tracing::events::HttpRequestId, BamlMap, BamlValue};
+use baml_types::{BamlMap, BamlValue};
 use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 use internal_baml_jinja::RenderedChatMessage;
 use internal_llm_client::{AllowedRoleMetadata, ClientProvider, OpenAIClientProviderVariant};
@@ -22,8 +22,8 @@ use super::{
         OrchestratorNodeIterator,
     },
     traits::{
-        CompletionToProviderBody, ToProviderMessage, WithClient, WithClientProperties, WithPrompt,
-        WithRenderRawCurl, WithRetryPolicy, WithSingleCallable, WithStreamable,
+        CompletionToProviderBody, HttpContext, ToProviderMessage, WithClient, WithClientProperties,
+        WithPrompt, WithRenderRawCurl, WithRetryPolicy, WithSingleCallable, WithStreamable,
     },
     LLMResponse,
 };
@@ -292,22 +292,20 @@ impl WithRenderRawCurl for LLMPrimitiveProvider {
 impl WithSingleCallable for LLMPrimitiveProvider {
     async fn single_call(
         &self,
-        ctx: &RuntimeContext,
+        ctx: &impl HttpContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
-        http_request_id: HttpRequestId,
     ) -> LLMResponse {
-        match_llm_provider!(self, single_call, async, ctx, prompt, http_request_id)
+        match_llm_provider!(self, single_call, async, ctx, prompt)
     }
 }
 
 impl WithStreamable for LLMPrimitiveProvider {
     async fn stream(
         &self,
-        ctx: &RuntimeContext,
+        ctx: &impl HttpContext,
         prompt: &internal_baml_jinja::RenderedPrompt,
-        http_request_id: HttpRequestId,
     ) -> super::traits::StreamResponse {
-        match_llm_provider!(self, stream, async, ctx, prompt, http_request_id)
+        match_llm_provider!(self, stream, async, ctx, prompt)
     }
 }
 

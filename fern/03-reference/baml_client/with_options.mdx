@@ -20,9 +20,10 @@ from baml_py import ClientRegistry, Collector
 collector = Collector(name="my-collector")
 client_registry = ClientRegistry()
 client_registry.set_primary("openai/gpt-4o-mini")
+env = {"BAML_LOG": "DEBUG", "OPENAI_API_KEY": "key-123"}
 
 # Create client with default options
-my_b = b.with_options(collector=collector, client_registry=client_registry)
+my_b = b.with_options(collector=collector, client_registry=client_registry, env=env)
 
 # Uses the default options
 result = my_b.ExtractResume("...")
@@ -42,9 +43,10 @@ import { Collector, ClientRegistry } from "@boundaryml/baml"
 const collector = new Collector("my-collector")
 const clientRegistry = new ClientRegistry()
 clientRegistry.setPrimary("openai/gpt-4o-mini")
+const env = {"BAML_LOG": "DEBUG", "OPENAI_API_KEY": "key-123"}
 
 // Create client with default options
-const myB = b.withOptions({ collector, clientRegistry })
+const myB = b.withOptions({ collector, clientRegistry, env })
 
 // Uses the default options
 const result = await myB.ExtractResume("...")
@@ -63,9 +65,10 @@ require 'baml_client'
 collector = Baml::Collector.new(name: "my-collector")
 client_registry = Baml::ClientRegistry.new
 client_registry.set_primary("openai/gpt-4o-mini")
+env = {"BAML_LOG": "DEBUG", "OPENAI_API_KEY": "key-123"}
 
 # Create client with default options
-my_b = Baml.Client.with_options(collector: collector, client_registry: client_registry)
+my_b = Baml.Client.with_options(collector: collector, client_registry: client_registry, env: env)
 
 # Uses the default options
 result = my_b.ExtractResume(input: "...")
@@ -303,6 +306,7 @@ These can always be overridden on a per-call basis with the `baml_options` param
 | `collector` | [`Collector`](/ref/baml_client/collector) | Collector instance for tracking function calls and usage metrics |
 | `client_registry` | `ClientRegistry` | Registry for managing LLM clients and their configurations |
 | `type_builder` | [`TypeBuilder`](/ref/baml_client/type-builder) | Custom type builder for function inputs and outputs |
+| `env` | `Dict/Object` | Environment variables to set for the client |
 
 ### Configured Client Properties
 
@@ -315,6 +319,7 @@ The configured client maintains the same interface as the base `baml_client`, so
 - [Collector](/ref/baml_client/collector) - Track function calls and usage metrics
 - [TypeBuilder](/ref/baml_client/type-builder) - Build custom types for your functions
 - [Client Registry](/ref/baml_client/client-registry) - Manage LLM clients and their configurations
+- [Environment Variables](/ref/baml/general-baml-syntax/environment-variables) - Set environment variables
 
 <Info>
 The configured client maintains the same interface as the base client, so you can use all the same functions and methods.

@@ -1,76 +1,132 @@
-use std::fmt;
-use std::sync::Arc;
-
-use crate::BamlValue;
 use anyhow::Result;
-use serde::{Deserialize, Serialize, Serializer};
+use std::{collections::HashMap, sync::Arc};
 
-// TODO: use a prefixed UUID type for this
-type SpanId = String;
+use crate::{BamlMap, BamlMedia, BamlValueWithMeta, HasFieldType};
+use baml_ids::{FunctionCallId, FunctionEventId, HttpRequestId};
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub struct FunctionId(pub SpanId);
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub struct ContentId(pub SpanId);
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub struct HttpRequestId(pub SpanId);
-
-impl fmt::Display for HttpRequestId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+pub use super::errors::BamlError;
 
 pub type TraceTags = serde_json::Map<String, serde_json::Value>;
 
 // THESE ARE NOT CLONEABLE!!
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TraceEvent {
+#[derive(Debug)]
+pub struct TraceEvent<'a, T: HasFieldType> {
     /*
-     * (span_id, content_span_id) is a unique identifier for a log event
-     * The query (span_id, *) gets all logs for a function call
+     * (call_id, function_event_id) is a unique identifier for a log event
+     * The query (call_id, *) gets all logs for a function call
      */
-    pub span_id: FunctionId,
+    pub call_id: FunctionCallId,
     // a unique identifier for this particular content
-    pub event_id: ContentId,
+    pub function_event_id: FunctionEventId,
 
     // The content of the log
-    pub content: TraceData,
+    pub content: TraceData<'a, T>,
 
-    // The chain of spans that lead to this log event
-    // Includes span_id at the last position (content_span_id is not included)
-    pub span_chain: Vec<FunctionId>,
+    // The chain of calls that lead to this log event
+    // Includes call_id at the last position (function_event_id is not included)
+    pub call_stack: Vec<FunctionCallId>,
 
     // The timestamp of the log
-    // idk what this does yet #[serde(with = "timestamp_serde")]
-    #[serde(with = "timestamp_serde")]
     pub timestamp: web_time::SystemTime,
-
-    /// human-readable callsite identifier, e.g. "ExtractResume" or "openai/gpt-4o/chat"
-    pub callsite: String,
-
-    /// verbosity level
-    #[serde(with = "level_serde")]
-    pub verbosity: TraceLevel,
-
-    pub tags: TraceTags,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type", content = "data")]
-pub enum TraceData {
-    LogMessage {
-        msg: String,
-    },
+impl<'a, T: HasFieldType> TraceEvent<'a, T> {
+    fn from_existing_call(
+        call_stack: Vec<FunctionCallId>,
+        content: TraceData<'a, T>,
+    ) -> Result<Self> {
+        let Some(last_call_id) = call_stack.last() else {
+            return Err(anyhow::anyhow!("Call stack is empty"));
+        };
+        Ok(Self {
+            call_id: last_call_id.clone(),
+            function_event_id: FunctionEventId::new(),
+            content,
+            call_stack,
+            timestamp: web_time::SystemTime::now(),
+        })
+    }
+
+    pub fn new_set_tags(call_stack: Vec<FunctionCallId>, tags: TraceTags) -> Self {
+        Self::from_existing_call(call_stack, TraceData::SetTags(tags))
+            .expect("Failed to create set tags event")
+    }
+
+    pub fn new_function_start(
+        // Already has the new call_id of the function
+        call_stack: Vec<FunctionCallId>,
+        function_name: String,
+        args: Vec<(String, BamlValueWithMeta<T>)>,
+        options: EvaluationContext,
+        is_baml_function: bool,
+    ) -> Self {
+        Self::from_existing_call(
+            call_stack,
+            TraceData::FunctionStart(FunctionStart {
+                name: function_name,
+                args,
+                options,
+                is_baml_function,
+            }),
+        )
+        .expect("Failed to create function start event")
+    }
+
+    pub fn new_function_end(
+        call_stack: Vec<FunctionCallId>,
+        result: Result<BamlValueWithMeta<T>, BamlError<'a>>,
+    ) -> Self {
+        Self::from_existing_call(
+            call_stack,
+            TraceData::FunctionEnd(match result {
+                Ok(value) => FunctionEnd::Success(value),
+                Err(e) => FunctionEnd::Error(e),
+            }),
+        )
+        .expect("Failed to create function end event")
+    }
+
+    pub fn new_llm_request(
+        call_stack: Vec<FunctionCallId>,
+        request: Arc<LoggedLLMRequest>,
+    ) -> Self {
+        Self::from_existing_call(call_stack, TraceData::LLMRequest(request))
+            .expect("Failed to create LLM request event")
+    }
+
+    pub fn new_llm_response(
+        call_stack: Vec<FunctionCallId>,
+        response: Arc<LoggedLLMResponse>,
+    ) -> Self {
+        Self::from_existing_call(call_stack, TraceData::LLMResponse(response))
+            .expect("Failed to create LLM response event")
+    }
+
+    pub fn new_raw_llm_request(call_stack: Vec<FunctionCallId>, request: Arc<HTTPRequest>) -> Self {
+        Self::from_existing_call(call_stack, TraceData::RawLLMRequest(request))
+            .expect("Failed to create raw LLM request event")
+    }
+
+    pub fn new_raw_llm_response(
+        call_stack: Vec<FunctionCallId>,
+        response: Arc<HTTPResponse>,
+    ) -> Self {
+        Self::from_existing_call(call_stack, TraceData::RawLLMResponse(response))
+            .expect("Failed to create raw LLM response event")
+    }
+}
+
+#[derive(Debug)]
+pub enum TraceData<'a, T: HasFieldType> {
     // All functions, including non-LLM ones
     // All start events
-    FunctionStart(FunctionStart),
+    FunctionStart(FunctionStart<T>),
     // All end events
-    FunctionEnd(FunctionEnd),
+    FunctionEnd(FunctionEnd<'a, T>),
 
     // The rest are intermediate events that happen between start and end
+    SetTags(TraceTags),
 
     // LLM request
     LLMRequest(Arc<LoggedLLMRequest>),
@@ -85,42 +141,48 @@ pub enum TraceData {
     LLMResponse(Arc<LoggedLLMResponse>),
     // ----
 
-    // We don't want to store the parsed LLM response in the log event
-    // as we have it in FunctionEnd
-    #[serde(deserialize_with = "deserialize_ok", serialize_with = "serialize_ok")]
-    Parsed(Result<()>),
+    // In the future, we can send more metadata, like parsing information.
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct BamlOptions {
-    pub type_builder: Option<serde_json::Value>,
-    pub client_registry: Option<serde_json::Value>,
+impl<'a, T: HasFieldType> TraceData<'a, T> {
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Self::FunctionStart(_) => "FunctionStart",
+            Self::FunctionEnd(_) => "FunctionEnd",
+            Self::LLMRequest(_) => "LLMRequest",
+            Self::RawLLMRequest(_) => "RawLLMRequest",
+            Self::RawLLMResponse(_) => "RawLLMResponse",
+            Self::LLMResponse(_) => "LLMResponse",
+            Self::SetTags(_) => "SetTags",
+        }
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct FunctionStart {
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct EvaluationContext {
+    pub tags: TraceTags,
+    // TODO(hellovai): add this
+    // pub type_builder: Option<TypeBuilderValue>,
+    // pub client_registry: Option<ClientRegistryValue>,
+}
+
+#[derive(Debug)]
+pub struct FunctionStart<T: HasFieldType> {
     pub name: String,
-    pub args: Vec<BamlValue>,
-    pub options: BamlOptions,
+    pub is_baml_function: bool,
+    pub args: Vec<(String, BamlValueWithMeta<T>)>,
+    pub options: EvaluationContext,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct FunctionEnd {
-    #[serde(deserialize_with = "deserialize_ok", serialize_with = "serialize_ok")]
-    pub result: Result<BamlValue, anyhow::Error>,
-    // Everything below is duplicated from the start event
-    // to deal with the case where the log is dropped.
-    // P2: as we can for now assume logs are not dropped,
-
-    // pub name: String,
-    // pub start_timestamp: web_time::Instant,
-    // pub start_args: Vec<BamlValue>,
+#[derive(Debug)]
+pub enum FunctionEnd<'a, T: HasFieldType> {
+    Success(BamlValueWithMeta<T>),
+    Error(BamlError<'a>),
 }
 
 // LLM specific events
 
 // TODO: fix this.
-pub type Prompt = serde_json::Value;
 
 // #[derive(Debug, Serialize, Deserialize)]
 // pub enum LLMClientName {
@@ -129,22 +191,52 @@ pub type Prompt = serde_json::Value;
 // }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct LLMChatMessage {
+    pub role: String,
+    pub content: Vec<LLMChatMessagePart>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum LLMChatMessagePart {
+    Text(String),
+    Media(BamlMedia),
+    WithMeta(Box<LLMChatMessagePart>, HashMap<String, serde_json::Value>),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LoggedLLMRequest {
     pub request_id: HttpRequestId,
     pub client_name: String,
     pub client_provider: String,
-    pub params: serde_json::Value,
-    pub prompt: Prompt,
+    pub params: BamlMap<String, serde_json::Value>,
+    pub prompt: Vec<LLMChatMessage>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct HTTPBody {
     raw: Vec<u8>,
 }
 
-// TODO: Cache parsed JSON and UTF-8 text in order to avoid parsing the bytes
-// on every access (not trivial because we'd need &mut self or interior
-// mutability).
+impl std::fmt::Debug for HTTPBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let preview = if self.raw.len() <= 100 {
+            // If small enough, show as UTF-8 text if possible
+            match std::str::from_utf8(&self.raw) {
+                Ok(text) => format!("\"{}\"", text.escape_debug()),
+                Err(_) => format!("{:?}", self.raw),
+            }
+        } else {
+            // For larger bodies, show length and preview
+            match std::str::from_utf8(&self.raw[..100.min(self.raw.len())]) {
+                Ok(text) => format!("\"{}...\" ({} bytes)", text.escape_debug(), self.raw.len()),
+                Err(_) => format!("[{} bytes]", self.raw.len()),
+            }
+        };
+
+        f.debug_struct("HTTPBody").field("raw", &preview).finish()
+    }
+}
+
 impl HTTPBody {
     pub fn new(body: Vec<u8>) -> Self {
         Self { raw: body }
@@ -187,7 +279,7 @@ pub struct HTTPRequest {
     pub id: HttpRequestId,
     pub url: String,
     pub method: String,
-    pub headers: serde_json::Value,
+    pub headers: HashMap<String, String>,
     pub body: HTTPBody,
 }
 
@@ -196,7 +288,7 @@ pub struct HTTPResponse {
     // since LLM requests could be made in parallel, we need to match the response to the request
     pub request_id: HttpRequestId,
     pub status: u16,
-    pub headers: serde_json::Value,
+    pub headers: Option<HashMap<String, String>>,
     pub body: HTTPBody,
 }
 
@@ -226,121 +318,44 @@ pub struct LoggedLLMResponse {
     pub error_message: Option<String>,
 }
 
+impl LoggedLLMResponse {
+    pub fn new_success(
+        request_id: HttpRequestId,
+        model: String,
+        finish_reason: Option<String>,
+        usage: LLMUsage,
+        raw_text_output: String,
+    ) -> Self {
+        Self {
+            request_id,
+            model: Some(model),
+            finish_reason,
+            usage: Some(usage),
+            raw_text_output: Some(raw_text_output),
+            error_message: None,
+        }
+    }
+
+    pub fn new_failure(
+        request_id: HttpRequestId,
+        error_message: String,
+        model: Option<String>,
+        finish_reason: Option<String>,
+    ) -> Self {
+        Self {
+            request_id,
+            model,
+            finish_reason,
+            usage: None,
+            raw_text_output: None,
+            error_message: Some(error_message),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LLMUsage {
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
-}
-
-/// -------------------------------------------------------------------------
-///
-/// Helper deserializer for our Result types.
-///
-/// This assumes that the incoming JSON always represents the Ok variant.
-/// (If you need to support error variants, you will have to expand this logic.)
-///
-use serde::Deserializer;
-fn deserialize_ok<'de, D, T>(deserializer: D) -> Result<Result<T, anyhow::Error>, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    T::deserialize(deserializer).map(Ok)
-}
-
-fn serialize_ok<S, T>(value: &Result<T, anyhow::Error>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-    T: Serialize,
-{
-    match value {
-        Ok(v) => v.serialize(serializer),
-        Err(err) => Err(serde::ser::Error::custom(format!("Error: {}", err))),
-    }
-}
-
-mod timestamp_serde {
-    use serde::{Deserializer, Serializer};
-    use web_time::{Duration, SystemTime};
-
-    pub fn serialize<S>(time: &SystemTime, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // Convert to duration since Unix epoch, then to i64 milliseconds
-        let dur = time
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_err(serde::ser::Error::custom)?;
-        let millis = dur.as_millis() as i64;
-        serializer.serialize_i64(millis)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<SystemTime, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Read the i64 milliseconds, convert back to SystemTime
-        let millis: i64 = serde::Deserialize::deserialize(deserializer)?;
-        Ok(SystemTime::UNIX_EPOCH + Duration::from_millis(millis as u64))
-    }
-}
-
-// Add this helper module for tracing::Level serialization
-mod level_serde {
-    use super::TraceLevel;
-    use serde::{Deserializer, Serializer};
-
-    pub fn serialize<S>(level: &TraceLevel, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_u32(*level as u32)
-    }
-
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<TraceLevel, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let level_num: u32 = serde::Deserialize::deserialize(deserializer)?;
-        match level_num {
-            100 => Ok(TraceLevel::Trace),
-            200 => Ok(TraceLevel::Debug),
-            300 => Ok(TraceLevel::Info),
-            400 => Ok(TraceLevel::Warn),
-            500 => Ok(TraceLevel::Error),
-            600 => Ok(TraceLevel::Fatal),
-            _ => Err(serde::de::Error::custom(format!(
-                "Invalid trace level: {}",
-                level_num
-            ))),
-        }
-    }
-}
-
-// unused yet
-// use like this:
-//  #[serde(with = "level_serde")]
-//  pub verbosity: TraceLevel,
-#[repr(usize)]
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-pub enum TraceLevel {
-    Trace = 100,
-    Debug = 200,
-    Info = 300,
-    Warn = 400,
-    Error = 500,
-    Fatal = 600,
-}
-
-impl Into<TraceLevel> for tracing_core::Level {
-    fn into(self) -> TraceLevel {
-        match self {
-            tracing_core::Level::TRACE => TraceLevel::Trace,
-            tracing_core::Level::DEBUG => TraceLevel::Debug,
-            tracing_core::Level::INFO => TraceLevel::Info,
-            tracing_core::Level::WARN => TraceLevel::Warn,
-            tracing_core::Level::ERROR => TraceLevel::Error,
-        }
-    }
 }

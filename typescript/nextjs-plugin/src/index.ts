@@ -107,7 +107,7 @@ export function withBaml(bamlConfig: BamlNextConfig = {}) {
             '@boundaryml/baml',
             '@boundaryml/baml-darwin-arm64',
             '@boundaryml/baml-darwin-x64',
-            '@boundaryml/baml-linux-arm64-gmu',
+            '@boundaryml/baml-linux-arm64-gnu',
             '@boundaryml/baml-linux-arm64-musl',
             '@boundaryml/baml-linux-x64-gnu',
             '@boundaryml/baml-linux-x64-musl',

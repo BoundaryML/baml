@@ -3,18 +3,18 @@ use internal_baml_jinja::CompletionOptions;
 
 use crate::{internal::llm_client::LLMResponse, RuntimeContext};
 
-use super::StreamResponse;
+use super::{HttpContext, StreamResponse};
 
 pub trait WithCompletion: Sync + Send {
     fn completion_options(&self, ctx: &RuntimeContext) -> Result<CompletionOptions>;
 
     #[allow(async_fn_in_trait)]
-    async fn completion(&self, ctx: &RuntimeContext, prompt: &str) -> LLMResponse;
+    async fn completion(&self, ctx: &impl HttpContext, prompt: &str) -> LLMResponse;
 }
 
 pub trait WithStreamCompletion: Sync + Send {
     #[allow(async_fn_in_trait)]
-    async fn stream_completion(&self, ctx: &RuntimeContext, prompt: &str) -> StreamResponse;
+    async fn stream_completion(&self, ctx: &impl HttpContext, prompt: &str) -> StreamResponse;
 }
 
 pub trait WithNoCompletion {}
@@ -28,7 +28,7 @@ where
     }
 
     #[allow(async_fn_in_trait)]
-    async fn completion(&self, _: &RuntimeContext, _: &str) -> LLMResponse {
+    async fn completion(&self, _: &impl HttpContext, _: &str) -> LLMResponse {
         LLMResponse::InternalFailure("Completion prompts are not supported by this provider".into())
     }
 }
@@ -38,7 +38,7 @@ where
     T: WithNoCompletion + Send + Sync,
 {
     #[allow(async_fn_in_trait)]
-    async fn stream_completion(&self, _: &RuntimeContext, _: &str) -> StreamResponse {
+    async fn stream_completion(&self, _: &impl HttpContext, _: &str) -> StreamResponse {
         Err(LLMResponse::InternalFailure(
             "Completion prompts are not supported by this provider".to_string(),
         ))

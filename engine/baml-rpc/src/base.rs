@@ -3,8 +3,25 @@ use serde::{Deserializer, Serializer};
 use std::time::Duration;
 use time::OffsetDateTime;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct EpochMsTimestamp(time::OffsetDateTime);
+
+impl From<time::OffsetDateTime> for EpochMsTimestamp {
+    fn from(value: time::OffsetDateTime) -> Self {
+        Self(value)
+    }
+}
+
+impl TryFrom<web_time::SystemTime> for EpochMsTimestamp {
+    type Error = anyhow::Error;
+
+    fn try_from(system_time: web_time::SystemTime) -> anyhow::Result<Self> {
+        let duration = system_time.duration_since(web_time::SystemTime::UNIX_EPOCH)?;
+        let offset_date_time =
+            OffsetDateTime::from_unix_timestamp_nanos(duration.as_nanos() as i128)?;
+        Ok(EpochMsTimestamp(offset_date_time))
+    }
+}
 
 impl Serialize for EpochMsTimestamp {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -30,8 +47,8 @@ impl<'de> Deserialize<'de> for EpochMsTimestamp {
     }
 }
 
-impl Into<time::OffsetDateTime> for EpochMsTimestamp {
-    fn into(self) -> time::OffsetDateTime {
-        self.0
+impl From<EpochMsTimestamp> for time::OffsetDateTime {
+    fn from(value: EpochMsTimestamp) -> Self {
+        value.0
     }
 }

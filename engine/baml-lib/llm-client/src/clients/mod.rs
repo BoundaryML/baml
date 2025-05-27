@@ -19,7 +19,7 @@ pub mod vertex;
 /// `Meta` is a generic carrying span information, so that if it comes from a .baml file,
 /// we can trace it back to the original location in said .baml file. In dynamic clients,
 /// though, we can't do that, so we just pass in `()`.
-#[derive(Clone)]
+#[derive(Clone, Hash)]
 pub enum UnresolvedClientProperty<Meta> {
     OpenAI(openai::UnresolvedOpenAI<Meta>),
     Anthropic(anthropic::UnresolvedAnthropic<Meta>),
@@ -55,6 +55,18 @@ impl ResolvedClientProperty {
 }
 
 impl<Meta: Clone> UnresolvedClientProperty<Meta> {
+    pub fn dependencies(&self) -> HashSet<String> {
+        match self {
+            UnresolvedClientProperty::OpenAI(_)
+            | UnresolvedClientProperty::Anthropic(_)
+            | UnresolvedClientProperty::AWSBedrock(_)
+            | UnresolvedClientProperty::Vertex(_)
+            | UnresolvedClientProperty::GoogleAI(_) => Default::default(),
+            UnresolvedClientProperty::RoundRobin(r) => r.dependencies(),
+            UnresolvedClientProperty::Fallback(f) => f.dependencies(),
+        }
+    }
+
     pub fn required_env_vars(&self) -> HashSet<String> {
         match self {
             UnresolvedClientProperty::OpenAI(o) => o.required_env_vars(),

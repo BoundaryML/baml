@@ -1,3 +1,4 @@
+use baml_derive::BamlHash;
 use ouroboros::self_referencing;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
@@ -217,7 +218,7 @@ pub struct RetryPolicy {
     pub options: Option<IndexMap<String, (Span, UnresolvedValue<Span>)>>,
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[derive(Debug, Clone, Copy, serde::Serialize, Hash)]
 /// The strategy to use for retrying a request.
 pub enum RetryPolicyStrategy {
     /// Constant delay.
@@ -226,18 +227,19 @@ pub enum RetryPolicyStrategy {
     ExponentialBackoff(ExponentialBackoffStrategy),
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[derive(Debug, Clone, Copy, serde::Serialize, Hash)]
 /// The strategy to use for retrying a request.
 pub struct ContantDelayStrategy {
     /// The delay in milliseconds.
     pub delay_ms: u32,
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[derive(Debug, Clone, Copy, serde::Serialize, BamlHash)]
 /// The strategy to use for retrying a request.
 pub struct ExponentialBackoffStrategy {
     /// The delay in milliseconds.
     pub delay_ms: u32,
+    #[baml_safe_hash]
     /// The multiplier.
     pub multiplier: f32,
     /// The maximum delay in milliseconds.

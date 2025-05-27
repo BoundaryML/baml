@@ -15,9 +15,11 @@
 # fmt: off
 import baml_py
 from enum import Enum
+
 from pydantic import BaseModel, ConfigDict
-from typing_extensions import TypeAlias
-from typing import Dict, Generic, List, Optional, TypeVar, Union, Literal
+
+from typing_extensions import TypeAlias, Literal
+from typing import Dict, Generic, List, Optional, TypeVar, Union
 
 from . import types
 from .types import Checked, Check

@@ -20,11 +20,16 @@ unused_variables = "allow"
 
 [dependencies]
 anyhow.workspace = true
+baml-ids.workspace = true
+baml-log.workspace = true
+baml-types.workspace = true
+baml-rpc.workspace = true
 base64.workspace = true
 bytes.workspace = true
 cfg-if.workspace = true
 clap.workspace = true
 colored = "2.1.0"
+cowstr.workspace = true
 dashmap.workspace = true
 derive-new.workspace = true
 derive_more.workspace = true
@@ -41,8 +46,6 @@ indoc.workspace = true
 json_comments = "0.2.2"
 jsonish.workspace = true
 internal-baml-codegen.workspace = true
-baml-types.workspace = true
-baml-log.workspace = true
 internal-llm-client.workspace = true
 internal-baml-core.workspace = true
 internal-baml-jinja.workspace = true

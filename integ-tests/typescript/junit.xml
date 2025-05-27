@@ -1,22 +1,17 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="jest tests" tests="130" failures="3" errors="0" time="47.918">
-  <testsuite name="Logger tests" errors="0" failures="1" skipped="0" timestamp="2025-05-08T17:42:51" time="6.554" tests="1">
-    <testcase classname="Logger tests logger works as expected" name="Logger tests logger works as expected" time="0.021">
-      <failure>Error: BamlError: BamlClientError: Something went wrong with the LLM client: reqwest::Error { kind: Request, url: &quot;http://localhost:11434/v1/chat/completions&quot;, source: hyper_util::client::legacy::Error(Connect, ConnectError(&quot;tcp connect error&quot;, Os { code: 61, kind: ConnectionRefused, message: &quot;Connection refused&quot; })) }
-    at BamlAsyncClient.TestOllama (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/baml_client/async_client.ts:3622:18)
+<testsuites name="jest tests" tests="132" failures="1" errors="0" time="43.24">
+  <testsuite name="Logger tests" errors="0" failures="1" skipped="0" timestamp="2025-05-21T18:18:46" time="7.072" tests="1">
+    <testcase classname="Logger tests logger works as expected" name="Logger tests logger works as expected" time="0.072">
+      <failure>BamlClientHttpError: BamlError: BamlClientError: BamlClientHttpError: Request failed with status code: 404 Not Found. {&quot;error&quot;:{&quot;message&quot;:&quot;model \&quot;llama3.1\&quot; not found, try pulling it first&quot;,&quot;type&quot;:&quot;api_error&quot;,&quot;param&quot;:null,&quot;code&quot;:null}}
+    at Function.from (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:99:28)
+    at createBamlErrorUnsafe (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:127:53)
+    at toBamlError (/Users/aaronvillalpando/Projects/baml/engine/language_client_typescript/errors.js:163:16)
+    at BamlAsyncClient.TestOllama (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/baml_client/async_client.ts:3670:24)
     at captureStdout (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/logger.test.ts:35:22)
     at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/logger.test.ts:47:30)</failure>
     </testcase>
   </testsuite>
-  <testsuite name="With Options Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:42:57" time="4.344" tests="3">
-    <testcase classname="With Options Tests should test with options logger async call" name="With Options Tests should test with options logger async call" time="1.908">
-    </testcase>
-    <testcase classname="With Options Tests should test with options logger sync" name="With Options Tests should test with options logger sync" time="0.761">
-    </testcase>
-    <testcase classname="With Options Tests should test with options logger async stream" name="With Options Tests should test with options logger async stream" time="0.854">
-    </testcase>
-  </testsuite>
-  <testsuite name="AWS Provider" errors="0" failures="0" skipped="15" timestamp="2025-05-08T17:43:01" time="1.909" tests="17">
+  <testsuite name="AWS Provider" errors="0" failures="0" skipped="15" timestamp="2025-05-21T18:18:54" time="1.86" tests="17">
     <testcase classname="AWS Provider should support AWS - basic" name="AWS Provider should support AWS - basic" time="0">
       <skipped/>
     </testcase>
@@ -44,7 +39,7 @@
     <testcase classname="AWS Provider Dynamic Client Registry should support AWS credentials configuration" name="AWS Provider Dynamic Client Registry should support AWS credentials configuration" time="0">
       <skipped/>
     </testcase>
-    <testcase classname="AWS Provider Dynamic Client Registry should support AWS profile configuration" name="AWS Provider Dynamic Client Registry should support AWS profile configuration" time="0.748">
+    <testcase classname="AWS Provider Dynamic Client Registry should support AWS profile configuration" name="AWS Provider Dynamic Client Registry should support AWS profile configuration" time="0.691">
     </testcase>
     <testcase classname="AWS Provider Dynamic Client Registry should support both model and model_id parameters" name="AWS Provider Dynamic Client Registry should support both model and model_id parameters" time="0">
       <skipped/>
@@ -67,28 +62,16 @@
       <skipped/>
     </testcase>
   </testsuite>
-  <testsuite name="Collector Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:42:51" time="13.103" tests="6">
-    <testcase classname="Collector Tests should collect logs for non-streaming calls" name="Collector Tests should collect logs for non-streaming calls" time="0.975">
+  <testsuite name="With Options Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:18:47" time="11.145" tests="3">
+    <testcase classname="With Options Tests should test with options logger async call" name="With Options Tests should test with options logger async call" time="2.218">
     </testcase>
-    <testcase classname="Collector Tests should handle streaming calls correctly" name="Collector Tests should handle streaming calls correctly" time="0.89">
+    <testcase classname="With Options Tests should test with options logger sync" name="With Options Tests should test with options logger sync" time="1.064">
     </testcase>
-    <testcase classname="Collector Tests should track cumulative usage across multiple calls" name="Collector Tests should track cumulative usage across multiple calls" time="1.572">
-    </testcase>
-    <testcase classname="Collector Tests should support multiple collectors" name="Collector Tests should support multiple collectors" time="1.511">
-    </testcase>
-    <testcase classname="Collector Tests should handle parallel async calls correctly" name="Collector Tests should handle parallel async calls correctly" time="0.782">
-    </testcase>
-    <testcase classname="Collector Tests should handle sync calls correctly" name="Collector Tests should handle sync calls correctly" time="0.78">
+    <testcase classname="With Options Tests should test with options logger async stream" name="With Options Tests should test with options logger async stream" time="1.175">
     </testcase>
   </testsuite>
-  <testsuite name="Recursive Type Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:42:51" time="13.37" tests="2">
-    <testcase classname="Recursive Type Tests simple recursive type" name="Recursive Type Tests simple recursive type" time="3.641">
-    </testcase>
-    <testcase classname="Recursive Type Tests mutually recursive type" name="Recursive Type Tests mutually recursive type" time="3.402">
-    </testcase>
-  </testsuite>
-  <testsuite name="Expose Request Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:43:03" time="0.825" tests="7">
-    <testcase classname="Expose Request Tests should expose request gpt4" name="Expose Request Tests should expose request gpt4" time="0.003">
+  <testsuite name="Expose Request Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:18:58" time="0.642" tests="7">
+    <testcase classname="Expose Request Tests should expose request gpt4" name="Expose Request Tests should expose request gpt4" time="0.001">
     </testcase>
     <testcase classname="Expose Request Tests should expose request gemini" name="Expose Request Tests should expose request gemini" time="0.001">
     </testcase>
@@ -96,154 +79,132 @@
     </testcase>
     <testcase classname="Expose Request Tests should expose request round robin" name="Expose Request Tests should expose request round robin" time="0.001">
     </testcase>
-    <testcase classname="Expose Request Tests should expose request gpt4 sync" name="Expose Request Tests should expose request gpt4 sync" time="0.001">
+    <testcase classname="Expose Request Tests should expose request gpt4 sync" name="Expose Request Tests should expose request gpt4 sync" time="0.003">
     </testcase>
     <testcase classname="Expose Request Tests should expose request gpt4 stream" name="Expose Request Tests should expose request gpt4 stream" time="0.001">
     </testcase>
     <testcase classname="Expose Request Tests should expose request gpt4 stream sync" name="Expose Request Tests should expose request gpt4 stream sync" time="0.001">
     </testcase>
   </testsuite>
-  <testsuite name="Dynamic Type Tests" errors="0" failures="1" skipped="0" timestamp="2025-05-08T17:42:51" time="15.903" tests="9">
-    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic types single" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic types single" time="0.766">
+  <testsuite name="Collector Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:18:46" time="14.848" tests="6">
+    <testcase classname="Collector Tests should collect logs for non-streaming calls" name="Collector Tests should collect logs for non-streaming calls" time="0.946">
     </testcase>
-    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic types enum" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic types enum" time="0.769">
+    <testcase classname="Collector Tests should handle streaming calls correctly" name="Collector Tests should handle streaming calls correctly" time="1.124">
     </testcase>
-    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic literals" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic literals" time="0.784">
+    <testcase classname="Collector Tests should track cumulative usage across multiple calls" name="Collector Tests should track cumulative usage across multiple calls" time="1.133">
     </testcase>
-    <testcase classname="Dynamic Type Tests Complex Dynamic Types should work with dynamic output map" name="Dynamic Type Tests Complex Dynamic Types should work with dynamic output map" time="1.117">
+    <testcase classname="Collector Tests should support multiple collectors" name="Collector Tests should support multiple collectors" time="2.865">
     </testcase>
-    <testcase classname="Dynamic Type Tests Complex Dynamic Types should work with dynamic output union" name="Dynamic Type Tests Complex Dynamic Types should work with dynamic output union" time="1.684">
+    <testcase classname="Collector Tests should handle parallel async calls correctly" name="Collector Tests should handle parallel async calls correctly" time="1.05">
     </testcase>
-    <testcase classname="Dynamic Type Tests Add Baml should add to existing class" name="Dynamic Type Tests Add Baml should add to existing class" time="1.685">
-      <failure>Error: expect(received).toEqual(expected) // deep equality
-
-- Expected  - 1
-+ Received  + 1
-
-@@ -1,10 +1,10 @@
-  Array [
-    Object {
-      &quot;age&quot;: 30,
-      &quot;extra&quot;: Object {
--       &quot;height&quot;: 6,
-+       &quot;height&quot;: 72,
-        &quot;weight&quot;: 180,
-      },
-      &quot;hair_color&quot;: &quot;YELLOW&quot;,
-      &quot;name&quot;: &quot;John Doe&quot;,
-    },
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/dynamic-types.test.ts:110:19)</failure>
-    </testcase>
-    <testcase classname="Dynamic Type Tests Add Baml should add to existing enum" name="Dynamic Type Tests Add Baml should add to existing enum" time="0.507">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Add Baml should add both class and enum" name="Dynamic Type Tests Add Baml should add both class and enum" time="1.386">
-    </testcase>
-    <testcase classname="Dynamic Type Tests Add Baml should add baml with attrs" name="Dynamic Type Tests Add Baml should add baml with attrs" time="0.685">
+    <testcase classname="Collector Tests should handle sync calls correctly" name="Collector Tests should handle sync calls correctly" time="0.67">
     </testcase>
   </testsuite>
-  <testsuite name="Constraint Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:43:04" time="4.93" tests="4">
-    <testcase classname="Constraint Tests should handle checks in return types" name="Constraint Tests should handle checks in return types" time="1.009">
-    </testcase>
-    <testcase classname="Constraint Tests should handle checks in returned unions" name="Constraint Tests should handle checks in returned unions" time="1.212">
-    </testcase>
-    <testcase classname="Constraint Tests should handle block-level checks" name="Constraint Tests should handle block-level checks" time="0.63">
-    </testcase>
-    <testcase classname="Constraint Tests should handle nested-block-level checks" name="Constraint Tests should handle nested-block-level checks" time="1.216">
+  <testsuite name="Memory usage tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:18:46" time="15.345" tests="1">
+    <testcase classname="Memory usage tests memory usage stays within limits" name="Memory usage tests memory usage stays within limits" time="8.425">
     </testcase>
   </testsuite>
-  <testsuite name="Literal types tests" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:43:04" time="5.87" tests="8">
-    <testcase classname="Literal types tests return literal union" name="Literal types tests return literal union" time="0.863">
+  <testsuite name="Literal types tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:18:58" time="5.848" tests="8">
+    <testcase classname="Literal types tests return literal union" name="Literal types tests return literal union" time="0.72">
     </testcase>
-    <testcase classname="Literal types tests single literal int" name="Literal types tests single literal int" time="0.468">
+    <testcase classname="Literal types tests single literal int" name="Literal types tests single literal int" time="0.529">
     </testcase>
-    <testcase classname="Literal types tests single literal bool" name="Literal types tests single literal bool" time="0.393">
+    <testcase classname="Literal types tests single literal bool" name="Literal types tests single literal bool" time="0.783">
     </testcase>
-    <testcase classname="Literal types tests single literal string" name="Literal types tests single literal string" time="0.868">
+    <testcase classname="Literal types tests single literal string" name="Literal types tests single literal string" time="0.658">
     </testcase>
-    <testcase classname="Literal types tests single class with literal prop" name="Literal types tests single class with literal prop" time="0.453">
+    <testcase classname="Literal types tests single class with literal prop" name="Literal types tests single class with literal prop" time="0.521">
     </testcase>
-    <testcase classname="Literal types tests single class with literal union prop" name="Literal types tests single class with literal union prop" time="0.503">
+    <testcase classname="Literal types tests single class with literal union prop" name="Literal types tests single class with literal union prop" time="0.676">
     </testcase>
-    <testcase classname="Literal types tests literal string union key in map" name="Literal types tests literal string union key in map" time="0.902">
+    <testcase classname="Literal types tests literal string union key in map" name="Literal types tests literal string union key in map" time="0.645">
     </testcase>
-    <testcase classname="Literal types tests single literal string key in map" name="Literal types tests single literal string key in map" time="0.5">
-    </testcase>
-  </testsuite>
-  <testsuite name="Azure Provider" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:43:04" time="5.635" tests="6">
-    <testcase classname="Azure Provider should support azure with default max_tokens" name="Azure Provider should support azure with default max_tokens" time="0.562">
-    </testcase>
-    <testcase classname="Azure Provider should support o1 model without max_tokens" name="Azure Provider should support o1 model without max_tokens" time="1.563">
-    </testcase>
-    <testcase classname="Azure Provider should fail when setting max_tokens for o1 model" name="Azure Provider should fail when setting max_tokens for o1 model" time="0.292">
-    </testcase>
-    <testcase classname="Azure Provider should support non-o1 model with explicit max_tokens" name="Azure Provider should support non-o1 model with explicit max_tokens" time="0.327">
-    </testcase>
-    <testcase classname="Azure Provider should support o1 model with explicit max_completion_tokens" name="Azure Provider should support o1 model with explicit max_completion_tokens" time="1.991">
-    </testcase>
-    <testcase classname="Azure Provider should fail if azure is not configured correctly" name="Azure Provider should fail if azure is not configured correctly" time="0.027">
+    <testcase classname="Literal types tests single literal string key in map" name="Literal types tests single literal string key in map" time="0.497">
     </testcase>
   </testsuite>
-  <testsuite name="Type aliases tests" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:42:51" time="19.323" tests="12">
-    <testcase classname="Type aliases tests primitive union alias" name="Type aliases tests primitive union alias" time="0.523">
+  <testsuite name="Dynamic Type Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:18:46" time="19.763" tests="9">
+    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic types single" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic types single" time="0.945">
     </testcase>
-    <testcase classname="Type aliases tests map alias" name="Type aliases tests map alias" time="2.503">
+    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic types enum" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic types enum" time="0.82">
     </testcase>
-    <testcase classname="Type aliases tests alias union" name="Type aliases tests alias union" time="1.019">
+    <testcase classname="Dynamic Type Tests Basic Dynamic Types should work with dynamic literals" name="Dynamic Type Tests Basic Dynamic Types should work with dynamic literals" time="3.274">
     </testcase>
-    <testcase classname="Type aliases tests alias pointing to recursive class" name="Type aliases tests alias pointing to recursive class" time="0.928">
+    <testcase classname="Dynamic Type Tests Complex Dynamic Types should work with dynamic output map" name="Dynamic Type Tests Complex Dynamic Types should work with dynamic output map" time="1.087">
     </testcase>
-    <testcase classname="Type aliases tests class pointing to alias that points to recursive class" name="Type aliases tests class pointing to alias that points to recursive class" time="0.588">
+    <testcase classname="Dynamic Type Tests Complex Dynamic Types should work with dynamic output union" name="Dynamic Type Tests Complex Dynamic Types should work with dynamic output union" time="1.81">
     </testcase>
-    <testcase classname="Type aliases tests recursive class with alias indirection" name="Type aliases tests recursive class with alias indirection" time="0.733">
+    <testcase classname="Dynamic Type Tests Add Baml should add to existing class" name="Dynamic Type Tests Add Baml should add to existing class" time="1.097">
     </testcase>
-    <testcase classname="Type aliases tests merge alias attributes" name="Type aliases tests merge alias attributes" time="0.63">
+    <testcase classname="Dynamic Type Tests Add Baml should add to existing enum" name="Dynamic Type Tests Add Baml should add to existing enum" time="0.648">
     </testcase>
-    <testcase classname="Type aliases tests simple recursive map alias" name="Type aliases tests simple recursive map alias" time="0.663">
+    <testcase classname="Dynamic Type Tests Add Baml should add both class and enum" name="Dynamic Type Tests Add Baml should add both class and enum" time="1.69">
     </testcase>
-    <testcase classname="Type aliases tests simple recursive list alias" name="Type aliases tests simple recursive list alias" time="0.747">
-    </testcase>
-    <testcase classname="Type aliases tests recursive alias cycles" name="Type aliases tests recursive alias cycles" time="0.585">
-    </testcase>
-    <testcase classname="Type aliases tests json type alias cycle" name="Type aliases tests json type alias cycle" time="1.777">
-    </testcase>
-    <testcase classname="Type aliases tests json type alias as class dependency" name="Type aliases tests json type alias as class dependency" time="2.07">
+    <testcase classname="Dynamic Type Tests Add Baml should add baml with attrs" name="Dynamic Type Tests Add Baml should add baml with attrs" time="1.502">
     </testcase>
   </testsuite>
-  <testsuite name="Anthropic Provider" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:43:06" time="4.494" tests="2">
-    <testcase classname="Anthropic Provider should support anthropic shorthand" name="Anthropic Provider should support anthropic shorthand" time="0.936">
+  <testsuite name="Constraint Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:19:02" time="4.569" tests="4">
+    <testcase classname="Constraint Tests should handle checks in return types" name="Constraint Tests should handle checks in return types" time="1.034">
     </testcase>
-    <testcase classname="Anthropic Provider Streaming should support streaming in Claude" name="Anthropic Provider Streaming should support streaming in Claude" time="2.729">
+    <testcase classname="Constraint Tests should handle checks in returned unions" name="Constraint Tests should handle checks in returned unions" time="0.941">
     </testcase>
-  </testsuite>
-  <testsuite name="Error Handling Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:43:10" time="2.278" tests="5">
-    <testcase classname="Error Handling Tests should raise an error for invalid argument types" name="Error Handling Tests should raise an error for invalid argument types" time="0.004">
+    <testcase classname="Constraint Tests should handle block-level checks" name="Constraint Tests should handle block-level checks" time="0.866">
     </testcase>
-    <testcase classname="Error Handling Tests should raise an error for invalid client configuration" name="Error Handling Tests should raise an error for invalid client configuration" time="0.211">
-    </testcase>
-    <testcase classname="Error Handling Tests should raise a BAMLValidationError with proper details" name="Error Handling Tests should raise a BAMLValidationError with proper details" time="0.617">
-    </testcase>
-    <testcase classname="Error Handling Tests should handle client HTTP errors" name="Error Handling Tests should handle client HTTP errors" time="0.168">
-    </testcase>
-    <testcase classname="Error Handling Tests should raise a BamlClientHttpError with proper details" name="Error Handling Tests should raise a BamlClientHttpError with proper details" time="0.263">
+    <testcase classname="Constraint Tests should handle nested-block-level checks" name="Constraint Tests should handle nested-block-level checks" time="0.866">
     </testcase>
   </testsuite>
-  <testsuite name="Vertex Provider" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:43:09" time="3.489" tests="2">
-    <testcase classname="Vertex Provider should support vertex" name="Vertex Provider should support vertex" time="1.223">
+  <testsuite name="Azure Provider" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:19:01" time="5.364" tests="6">
+    <testcase classname="Azure Provider should support azure with default max_tokens" name="Azure Provider should support azure with default max_tokens" time="0.42">
     </testcase>
-    <testcase classname="Vertex Provider should support vertex with system_instructions" name="Vertex Provider should support vertex with system_instructions" time="1.469">
+    <testcase classname="Azure Provider should support o1 model without max_tokens" name="Azure Provider should support o1 model without max_tokens" time="1.446">
     </testcase>
-  </testsuite>
-  <testsuite name="Map tests" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:43:11" time="1.629" tests="1">
-    <testcase classname="Map tests enum key in map" name="Map tests enum key in map" time="0.813">
+    <testcase classname="Azure Provider should fail when setting max_tokens for o1 model" name="Azure Provider should fail when setting max_tokens for o1 model" time="0.31">
     </testcase>
-  </testsuite>
-  <testsuite name="Tracing Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:43:10" time="3.156" tests="2">
-    <testcase classname="Tracing Tests Sync Tracing supports tracing sync" name="Tracing Tests Sync Tracing supports tracing sync" time="0.001">
+    <testcase classname="Azure Provider should support non-o1 model with explicit max_tokens" name="Azure Provider should support non-o1 model with explicit max_tokens" time="1.228">
     </testcase>
-    <testcase classname="Tracing Tests Async Tracing supports tracing async" name="Tracing Tests Async Tracing supports tracing async" time="2.498">
+    <testcase classname="Azure Provider should support o1 model with explicit max_completion_tokens" name="Azure Provider should support o1 model with explicit max_completion_tokens" time="1.017">
+    </testcase>
+    <testcase classname="Azure Provider should fail if azure is not configured correctly" name="Azure Provider should fail if azure is not configured correctly" time="0.071">
     </testcase>
   </testsuite>
-  <testsuite name="Expose Parser Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:43:12" time="0.606" tests="4">
+  <testsuite name="Recursive Type Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:18:55" time="11.72" tests="2">
+    <testcase classname="Recursive Type Tests simple recursive type" name="Recursive Type Tests simple recursive type" time="2.855">
+    </testcase>
+    <testcase classname="Recursive Type Tests mutually recursive type" name="Recursive Type Tests mutually recursive type" time="8.023">
+    </testcase>
+  </testsuite>
+  <testsuite name="Anthropic Provider" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:19:04" time="3.037" tests="2">
+    <testcase classname="Anthropic Provider should support anthropic shorthand" name="Anthropic Provider should support anthropic shorthand" time="0.708">
+    </testcase>
+    <testcase classname="Anthropic Provider Streaming should support streaming in Claude" name="Anthropic Provider Streaming should support streaming in Claude" time="1.517">
+    </testcase>
+  </testsuite>
+  <testsuite name="Map tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:19:07" time="1.387" tests="1">
+    <testcase classname="Map tests enum key in map" name="Map tests enum key in map" time="0.547">
+    </testcase>
+  </testsuite>
+  <testsuite name="Prompt Renderer Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:19:09" time="0.604" tests="1">
+    <testcase classname="Prompt Renderer Tests maintain field order" name="Prompt Renderer Tests maintain field order" time="0.002">
+    </testcase>
+  </testsuite>
+  <testsuite name="Error Handling Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:19:07" time="2.249" tests="5">
+    <testcase classname="Error Handling Tests should raise an error for invalid argument types" name="Error Handling Tests should raise an error for invalid argument types" time="0.001">
+    </testcase>
+    <testcase classname="Error Handling Tests should raise an error for invalid client configuration" name="Error Handling Tests should raise an error for invalid client configuration" time="0.219">
+    </testcase>
+    <testcase classname="Error Handling Tests should raise a BAMLValidationError with proper details" name="Error Handling Tests should raise a BAMLValidationError with proper details" time="0.458">
+    </testcase>
+    <testcase classname="Error Handling Tests should handle client HTTP errors" name="Error Handling Tests should handle client HTTP errors" time="0.174">
+    </testcase>
+    <testcase classname="Error Handling Tests should raise a BamlClientHttpError with proper details" name="Error Handling Tests should raise a BamlClientHttpError with proper details" time="0.24">
+    </testcase>
+  </testsuite>
+  <testsuite name="Gemini Provider" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:19:07" time="3.272" tests="2">
+    <testcase classname="Gemini Provider Streaming should support streaming in Gemini" name="Gemini Provider Streaming should support streaming in Gemini" time="1.417">
+    </testcase>
+    <testcase classname="Gemini Provider system message should support system_instructions in Gemini" name="Gemini Provider system message should support system_instructions in Gemini" time="0.861">
+    </testcase>
+  </testsuite>
+  <testsuite name="Expose Parser Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:19:09" time="0.652" tests="4">
     <testcase classname="Expose Parser Tests should expose parser" name="Expose Parser Tests should expose parser" time="0.001">
     </testcase>
     <testcase classname="Expose Parser Tests should expose parser sync" name="Expose Parser Tests should expose parser sync" time="0.001">
@@ -253,106 +214,124 @@
     <testcase classname="Expose Parser Tests should expose stream parser sync" name="Expose Parser Tests should expose stream parser sync" time="0.001">
     </testcase>
   </testsuite>
-  <testsuite name="Gemini Provider" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:43:10" time="2.951" tests="2">
-    <testcase classname="Gemini Provider Streaming should support streaming in Gemini" name="Gemini Provider Streaming should support streaming in Gemini" time="1.012">
+  <testsuite name="Tracing Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:19:06" time="3.666" tests="2">
+    <testcase classname="Tracing Tests Sync Tracing supports tracing sync" name="Tracing Tests Sync Tracing supports tracing sync" time="0.001">
     </testcase>
-    <testcase classname="Gemini Provider system message should support system_instructions in Gemini" name="Gemini Provider system message should support system_instructions in Gemini" time="1.058">
-    </testcase>
-  </testsuite>
-  <testsuite name="Memory usage tests" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:42:51" time="26.396" tests="1">
-    <testcase classname="Memory usage tests memory usage stays within limits" name="Memory usage tests memory usage stays within limits" time="19.829">
+    <testcase classname="Tracing Tests Async Tracing supports tracing async" name="Tracing Tests Async Tracing supports tracing async" time="3.01">
     </testcase>
   </testsuite>
-  <testsuite name="OpenAI Provider" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:42:51" time="34.435" tests="9">
-    <testcase classname="OpenAI Provider should support OpenAI shorthand" name="OpenAI Provider should support OpenAI shorthand" time="1.664">
+  <testsuite name="Type aliases tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:18:46" time="23.666" tests="12">
+    <testcase classname="Type aliases tests primitive union alias" name="Type aliases tests primitive union alias" time="0.981">
     </testcase>
-    <testcase classname="OpenAI Provider should support openai with default max_tokens" name="OpenAI Provider should support openai with default max_tokens" time="0.885">
+    <testcase classname="Type aliases tests map alias" name="Type aliases tests map alias" time="1.277">
     </testcase>
-    <testcase classname="OpenAI Provider should support o1 model without max_tokens" name="OpenAI Provider should support o1 model without max_tokens" time="1.822">
+    <testcase classname="Type aliases tests alias union" name="Type aliases tests alias union" time="1.198">
     </testcase>
-    <testcase classname="OpenAI Provider should fail when setting max_tokens for o1 model" name="OpenAI Provider should fail when setting max_tokens for o1 model" time="0.315">
+    <testcase classname="Type aliases tests alias pointing to recursive class" name="Type aliases tests alias pointing to recursive class" time="0.704">
     </testcase>
-    <testcase classname="OpenAI Provider should support non-o1 model with explicit max_tokens" name="OpenAI Provider should support non-o1 model with explicit max_tokens" time="1.872">
+    <testcase classname="Type aliases tests class pointing to alias that points to recursive class" name="Type aliases tests class pointing to alias that points to recursive class" time="1.401">
     </testcase>
-    <testcase classname="OpenAI Provider should support o1 model with explicit max_completion_tokens" name="OpenAI Provider should support o1 model with explicit max_completion_tokens" time="2.157">
+    <testcase classname="Type aliases tests recursive class with alias indirection" name="Type aliases tests recursive class with alias indirection" time="0.98">
     </testcase>
-    <testcase classname="OpenAI Provider should support openai with null max_tokens" name="OpenAI Provider should support openai with null max_tokens" time="1.549">
+    <testcase classname="Type aliases tests merge alias attributes" name="Type aliases tests merge alias attributes" time="2.028">
     </testcase>
-    <testcase classname="OpenAI Provider Streaming should support streaming in OpenAI" name="OpenAI Provider Streaming should support streaming in OpenAI" time="10.942">
+    <testcase classname="Type aliases tests simple recursive map alias" name="Type aliases tests simple recursive map alias" time="1.542">
     </testcase>
-    <testcase classname="OpenAI Provider Streaming should support streaming without iterating" name="OpenAI Provider Streaming should support streaming without iterating" time="6.8">
+    <testcase classname="Type aliases tests simple recursive list alias" name="Type aliases tests simple recursive list alias" time="0.533">
     </testcase>
-  </testsuite>
-  <testsuite name="Basic Input/Output Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-08T17:42:51" time="37.614" tests="21">
-    <testcase classname="Basic Input/Output Tests Input Types single bool" name="Basic Input/Output Tests Input Types single bool" time="0.451">
+    <testcase classname="Type aliases tests recursive alias cycles" name="Type aliases tests recursive alias cycles" time="0.703">
     </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types single string list" name="Basic Input/Output Tests Input Types single string list" time="0.452">
+    <testcase classname="Type aliases tests json type alias cycle" name="Type aliases tests json type alias cycle" time="3.149">
     </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types single class" name="Basic Input/Output Tests Input Types single class" time="1.62">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types multiple classes" name="Basic Input/Output Tests Input Types multiple classes" time="0.699">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types single enum list" name="Basic Input/Output Tests Input Types single enum list" time="0.467">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types single float" name="Basic Input/Output Tests Input Types single float" time="0.484">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Input Types single int" name="Basic Input/Output Tests Input Types single int" time="0.718">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single bool" name="Basic Input/Output Tests Output Types single bool" time="0.537">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single int" name="Basic Input/Output Tests Output Types single int" time="0.46">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single class" name="Basic Input/Output Tests Output Types single class" time="4.173">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single class list" name="Basic Input/Output Tests Output Types single class list" time="5.786">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types enum list" name="Basic Input/Output Tests Output Types enum list" time="0.728">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single class with enum" name="Basic Input/Output Tests Output Types single class with enum" time="0.735">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types optional list and map" name="Basic Input/Output Tests Output Types optional list and map" time="1.58">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single optional string" name="Basic Input/Output Tests Output Types single optional string" time="0.396">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single map string to string" name="Basic Input/Output Tests Output Types single map string to string" time="0.895">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types single map string to map" name="Basic Input/Output Tests Output Types single map string to map" time="0.791">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types literal int" name="Basic Input/Output Tests Output Types literal int" time="0.421">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types literal bool" name="Basic Input/Output Tests Output Types literal bool" time="0.522">
-    </testcase>
-    <testcase classname="Basic Input/Output Tests Output Types literal string" name="Basic Input/Output Tests Output Types literal string" time="0.486">
-    </testcase>
-    <testcase classname="Semantic Streaming Tests should support semantic streaming" name="Semantic Streaming Tests should support semantic streaming" time="8.742">
+    <testcase classname="Type aliases tests json type alias as class dependency" name="Type aliases tests json type alias as class dependency" time="2.371">
     </testcase>
   </testsuite>
-  <testsuite name="Modular API Tests" errors="0" failures="1" skipped="0" timestamp="2025-05-08T17:42:51" time="47.173" tests="6">
-    <testcase classname="Modular API Tests modular openai gpt4" name="Modular API Tests modular openai gpt4" time="1.808">
+  <testsuite name="Vertex Provider" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:19:06" time="4.689" tests="2">
+    <testcase classname="Vertex Provider should support vertex" name="Vertex Provider should support vertex" time="2.001">
     </testcase>
-    <testcase classname="Modular API Tests modular anthropic claude 3 haiku" name="Modular API Tests modular anthropic claude 3 haiku" time="1.541">
+    <testcase classname="Vertex Provider should support vertex with system_instructions" name="Vertex Provider should support vertex with system_instructions" time="1.836">
     </testcase>
-    <testcase classname="Modular API Tests modular google gemini" name="Modular API Tests modular google gemini" time="3.556">
+  </testsuite>
+  <testsuite name="Workflow Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:19:09" time="2.171" tests="1">
+    <testcase classname="Workflow Tests should run workflows" name="Workflow Tests should run workflows" time="1.366">
     </testcase>
-    <testcase classname="Modular API Tests modular openai gpt4 manual http request" name="Modular API Tests modular openai gpt4 manual http request" time="1.67">
+  </testsuite>
+  <testsuite name="OpenAI Provider" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:18:46" time="34.743" tests="9">
+    <testcase classname="OpenAI Provider should support OpenAI shorthand" name="OpenAI Provider should support OpenAI shorthand" time="1.814">
     </testcase>
-    <testcase classname="Modular API Tests modular openai gpt4 streaming" name="Modular API Tests modular openai gpt4 streaming" time="1.918">
+    <testcase classname="OpenAI Provider should support openai with default max_tokens" name="OpenAI Provider should support openai with default max_tokens" time="2.089">
     </testcase>
-    <testcase classname="Modular API Tests openai batch api" name="Modular API Tests openai batch api" time="30.004">
-      <failure>Error: thrown: &quot;Exceeded timeout of 30000 ms for a test.
-Add a timeout value to this test to increase the timeout, if this is a long-running test. See https://jestjs.io/docs/api#testname-fn-timeout.&quot;
-    at /Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/modular.test.ts:161:3
-    at _dispatchDescribe (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/index.js:91:26)
-    at describe (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/index.js:55:5)
-    at Object.&lt;anonymous&gt; (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/tests/modular.test.ts:78:1)
-    at Runtime._execModule (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runtime@29.7.0/node_modules/jest-runtime/build/index.js:1439:24)
-    at Runtime._loadModule (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runtime@29.7.0/node_modules/jest-runtime/build/index.js:1022:12)
-    at Runtime.requireModule (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runtime@29.7.0/node_modules/jest-runtime/build/index.js:882:12)
-    at jestAdapter (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-circus@29.7.0/node_modules/jest-circus/build/legacy-code-todo-rewrite/jestAdapter.js:77:13)
-    at processTicksAndRejections (node:internal/process/task_queues:105:5)
-    at runTestInternal (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:367:16)
-    at runTest (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/runTest.js:444:34)
-    at Object.worker (/Users/aaronvillalpando/Projects/baml/integ-tests/typescript/node_modules/.pnpm/jest-runner@29.7.0/node_modules/jest-runner/build/testWorker.js:106:12)</failure>
+    <testcase classname="OpenAI Provider should support o1 model without max_tokens" name="OpenAI Provider should support o1 model without max_tokens" time="1.674">
+    </testcase>
+    <testcase classname="OpenAI Provider should fail when setting max_tokens for o1 model" name="OpenAI Provider should fail when setting max_tokens for o1 model" time="0.271">
+    </testcase>
+    <testcase classname="OpenAI Provider should support non-o1 model with explicit max_tokens" name="OpenAI Provider should support non-o1 model with explicit max_tokens" time="1.555">
+    </testcase>
+    <testcase classname="OpenAI Provider should support o1 model with explicit max_completion_tokens" name="OpenAI Provider should support o1 model with explicit max_completion_tokens" time="2.102">
+    </testcase>
+    <testcase classname="OpenAI Provider should support openai with null max_tokens" name="OpenAI Provider should support openai with null max_tokens" time="1.312">
+    </testcase>
+    <testcase classname="OpenAI Provider Streaming should support streaming in OpenAI" name="OpenAI Provider Streaming should support streaming in OpenAI" time="7.4">
+    </testcase>
+    <testcase classname="OpenAI Provider Streaming should support streaming without iterating" name="OpenAI Provider Streaming should support streaming without iterating" time="9.665">
+    </testcase>
+  </testsuite>
+  <testsuite name="Basic Input/Output Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:18:46" time="36.391" tests="21">
+    <testcase classname="Basic Input/Output Tests Input Types single bool" name="Basic Input/Output Tests Input Types single bool" time="1.354">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Input Types single string list" name="Basic Input/Output Tests Input Types single string list" time="0.693">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Input Types single class" name="Basic Input/Output Tests Input Types single class" time="0.798">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Input Types multiple classes" name="Basic Input/Output Tests Input Types multiple classes" time="1.072">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Input Types single enum list" name="Basic Input/Output Tests Input Types single enum list" time="0.742">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Input Types single float" name="Basic Input/Output Tests Input Types single float" time="0.782">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Input Types single int" name="Basic Input/Output Tests Input Types single int" time="0.448">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single bool" name="Basic Input/Output Tests Output Types single bool" time="0.642">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single int" name="Basic Input/Output Tests Output Types single int" time="0.511">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single class" name="Basic Input/Output Tests Output Types single class" time="3.887">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single class list" name="Basic Input/Output Tests Output Types single class list" time="3.873">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types enum list" name="Basic Input/Output Tests Output Types enum list" time="0.64">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single class with enum" name="Basic Input/Output Tests Output Types single class with enum" time="1.071">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types optional list and map" name="Basic Input/Output Tests Output Types optional list and map" time="1.755">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single optional string" name="Basic Input/Output Tests Output Types single optional string" time="0.392">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single map string to string" name="Basic Input/Output Tests Output Types single map string to string" time="1.252">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types single map string to map" name="Basic Input/Output Tests Output Types single map string to map" time="0.75">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types literal int" name="Basic Input/Output Tests Output Types literal int" time="0.976">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types literal bool" name="Basic Input/Output Tests Output Types literal bool" time="0.403">
+    </testcase>
+    <testcase classname="Basic Input/Output Tests Output Types literal string" name="Basic Input/Output Tests Output Types literal string" time="0.467">
+    </testcase>
+    <testcase classname="Semantic Streaming Tests should support semantic streaming" name="Semantic Streaming Tests should support semantic streaming" time="7.14">
+    </testcase>
+  </testsuite>
+  <testsuite name="Modular API Tests" errors="0" failures="0" skipped="0" timestamp="2025-05-21T18:18:46" time="42.854" tests="6">
+    <testcase classname="Modular API Tests modular openai gpt4" name="Modular API Tests modular openai gpt4" time="1.624">
+    </testcase>
+    <testcase classname="Modular API Tests modular anthropic claude 3 haiku" name="Modular API Tests modular anthropic claude 3 haiku" time="1.437">
+    </testcase>
+    <testcase classname="Modular API Tests modular google gemini" name="Modular API Tests modular google gemini" time="3.526">
+    </testcase>
+    <testcase classname="Modular API Tests modular openai gpt4 manual http request" name="Modular API Tests modular openai gpt4 manual http request" time="1.503">
+    </testcase>
+    <testcase classname="Modular API Tests modular openai gpt4 streaming" name="Modular API Tests modular openai gpt4 streaming" time="3.979">
+    </testcase>
+    <testcase classname="Modular API Tests openai batch api" name="Modular API Tests openai batch api" time="23.768">
     </testcase>
   </testsuite>
 </testsuites>

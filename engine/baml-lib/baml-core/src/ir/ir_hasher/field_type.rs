@@ -1,0 +1,123 @@
+use std::collections::HashSet;
+
+use baml_types::{BamlMediaType, FieldType, LiteralValue};
+
+#[derive(Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
+pub enum InterfaceFieldType<'a> {
+    Unknown,
+    Null,
+    String,
+    Int,
+    Bool,
+    Float,
+    Media(&'a BamlMediaType),
+    Literal(&'a LiteralValue),
+    Enum(&'a str),
+    Class(&'a str),
+    List(Box<InterfaceFieldType<'a>>),
+    Map(Box<InterfaceFieldType<'a>>, Box<InterfaceFieldType<'a>>),
+    Union(Vec<InterfaceFieldType<'a>>),
+    Tuple(Vec<InterfaceFieldType<'a>>),
+    RecursiveTypeAlias(&'a str),
+}
+
+impl<'a> InterfaceFieldType<'a> {
+    pub fn from_field_type(field_type: &'a FieldType) -> Self {
+        Self::from(field_type).simplify()
+    }
+
+    fn flatten(self) -> Vec<InterfaceFieldType<'a>> {
+        match self {
+            InterfaceFieldType::Union(field_types) => field_types
+                .into_iter()
+                .flat_map(|ft| ft.flatten())
+                .collect(),
+            _ => vec![self],
+        }
+    }
+
+    fn simplify(self) -> InterfaceFieldType<'a> {
+        let flattened = self.flatten();
+        match flattened.len() {
+            0 => InterfaceFieldType::Unknown,
+            1 => flattened.into_iter().next().unwrap(),
+            _ => {
+                let mut simplified: Vec<_> =
+                    flattened.into_iter().map(|ft| ft.simplify()).collect();
+                simplified.sort();
+                simplified.dedup();
+                if simplified.len() == 1 {
+                    simplified.into_iter().next().unwrap()
+                } else {
+                    InterfaceFieldType::Union(simplified)
+                }
+            }
+        }
+    }
+}
+
+impl<'a> InterfaceFieldType<'a> {
+    fn from(field_type: &'a FieldType) -> Self {
+        match field_type {
+            FieldType::Primitive(type_value) => match type_value {
+                baml_types::TypeValue::String => InterfaceFieldType::String,
+                baml_types::TypeValue::Int => InterfaceFieldType::Int,
+                baml_types::TypeValue::Float => InterfaceFieldType::Float,
+                baml_types::TypeValue::Bool => InterfaceFieldType::Bool,
+                baml_types::TypeValue::Null => InterfaceFieldType::Null,
+                baml_types::TypeValue::Media(baml_media_type) => {
+                    InterfaceFieldType::Media(baml_media_type)
+                }
+            },
+            FieldType::Enum(name) => InterfaceFieldType::Enum(name.as_str()),
+            FieldType::Literal(literal_value) => InterfaceFieldType::Literal(literal_value),
+            FieldType::Class(name) => InterfaceFieldType::Class(name.as_str()),
+            FieldType::List(field_type) => {
+                InterfaceFieldType::List(Box::new(Self::from(field_type)))
+            }
+            FieldType::Map(field_type, field_type1) => InterfaceFieldType::Map(
+                Box::new(Self::from(field_type)),
+                Box::new(Self::from(field_type1)),
+            ),
+            FieldType::Union(field_types) => {
+                InterfaceFieldType::Union(field_types.iter().map(|ft| Self::from(ft)).collect())
+            }
+            FieldType::Tuple(field_types) => {
+                InterfaceFieldType::Tuple(field_types.iter().map(|ft| Self::from(ft)).collect())
+            }
+            FieldType::Optional(field_type) => {
+                InterfaceFieldType::Union(vec![Self::from(field_type), InterfaceFieldType::Null])
+            }
+            FieldType::RecursiveTypeAlias(name) => {
+                InterfaceFieldType::RecursiveTypeAlias(name.as_str())
+            }
+            FieldType::Arrow(arrow) => InterfaceFieldType::Unknown,
+            FieldType::WithMetadata {
+                base,
+                constraints,
+                streaming_behavior,
+            } => Self::from(base),
+        }
+    }
+}
+
+#[derive(Debug, PartialEq, Eq, Hash, Ord, PartialOrd)]
+struct ImplementationFieldType {}
+
+impl super::ShallowSignature for FieldType {
+    fn shallow_hash_prefix(&self) -> &'static str {
+        "type_alias"
+    }
+
+    fn shallow_interface_hash(&self) -> impl std::hash::Hash {
+        InterfaceFieldType::from_field_type(self)
+    }
+
+    fn unsorted_interface_dependencies(&self) -> HashSet<String> {
+        self.dependencies()
+    }
+
+    fn shallow_implementation_hash(&self) -> Option<impl std::hash::Hash> {
+        None as Option<ImplementationFieldType>
+    }
+}

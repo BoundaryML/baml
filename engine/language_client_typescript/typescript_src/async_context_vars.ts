@@ -45,19 +45,19 @@ export class BamlCtxManager {
     return store.deepClone()
   }
 
-  startTrace(name: string, args: Record<string, any>): [RuntimeContextManager, BamlSpan] {
+  startTrace(name: string, args: Record<string, any>, envVars: Record<string, string>): [RuntimeContextManager, BamlSpan] {
     const mng = this.cloneContext()
-    return [mng, BamlSpan.new(this.rt, name, args, mng)]
+    return [mng, BamlSpan.new(this.rt, name, args, mng, envVars)]
   }
 
-  endTrace(span: BamlSpan, response: any): void {
+  endTrace(span: BamlSpan, response: any, envVars: Record<string, string>): void {
     const manager = this.ctx.getStore()
     if (!manager) {
       console.error('Context lost before span could be finished\n')
       return
     }
     try {
-      span.finish(response === undefined ? null : response, manager)
+      span.finish(response === undefined ? null : response, manager, envVars)
     } catch (e) {
       console.error('BAML internal error', e)
     }
@@ -88,14 +88,14 @@ export class BamlCtxManager {
         }),
         {},
       )
-      const [mng, span] = this.startTrace(name, params)
+      const [mng, span] = this.startTrace(name, params, process.env as Record<string, string>)
       return this.ctx.run(mng, () => {
         try {
           const response = func(...args)
-          this.endTrace(span, response)
+          this.endTrace(span, response, process.env as Record<string, string>)
           return response
         } catch (e) {
-          this.endTrace(span, e)
+          this.endTrace(span, e, process.env as Record<string, string>)
           throw e
         }
       })
@@ -112,14 +112,14 @@ export class BamlCtxManager {
         }),
         {},
       )
-      const [mng, span] = this.startTrace(name, params)
+      const [mng, span] = this.startTrace(name, params, process.env as Record<string, string>)
       return await this.ctx.run(mng, async () => {
         try {
           const response = await func(...args)
-          this.endTrace(span, response)
+          this.endTrace(span, response, process.env as Record<string, string>)
           return response
         } catch (e) {
-          this.endTrace(span, e)
+          this.endTrace(span, e, process.env as Record<string, string>)
           throw e
         }
       })

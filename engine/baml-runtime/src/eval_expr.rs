@@ -119,6 +119,35 @@ fn subst<'a>(
                 meta: meta.clone(),
             })
         }
+        Expr::If(cond, then, else_, meta) => {
+            let new_cond = subst(cond, var_name, val, env)?;
+            let new_then = subst(then, var_name, val, env)?;
+            let new_else = else_
+                .as_ref()
+                .map(|e| subst(e, var_name, val, env))
+                .transpose()?;
+            Ok(Expr::If(
+                Arc::new(new_cond),
+                Arc::new(new_then),
+                new_else.map(|e| Arc::new(e)),
+                meta.clone(),
+            ))
+        }
+        Expr::ForLoop {
+            item,
+            iterable,
+            body,
+            meta,
+        } => {
+            let new_iterable = subst(iterable, var_name, val, env)?;
+            let new_body = subst(body, var_name, val, env)?;
+            Ok(Expr::ForLoop {
+                item: item.clone(),
+                iterable: Arc::new(new_iterable),
+                body: Arc::new(new_body),
+                meta: meta.clone(),
+            })
+        }
     };
     let res = res?;
     Ok(res)
@@ -131,6 +160,7 @@ async fn beta_reduce<'a>(
     expr: &Expr<ExprMetadata>,
     eval_final_llm_fn: bool,
 ) -> anyhow::Result<Expr<ExprMetadata>> {
+    eprintln!("BETA_REDUCE\n{}\n", expr.dump_str());
     match expr {
         Expr::Atom(_) => Ok(expr.clone()),
         Expr::Let(name, value, body, meta) => {
@@ -217,9 +247,10 @@ async fn beta_reduce<'a>(
                     tx.unbounded_send(vec![app_span]).unwrap();
                 }
                 if eval_final_llm_fn {
+                    // TODO: env vars are not supported yet for expressions.
                     let res: anyhow::Result<FunctionResult> = env
                         .runtime
-                        .call_function(name.clone(), &args_map, &ctx, None, None, None)
+                        .call_function(name.clone(), &args_map, &ctx, None, None, None, HashMap::new())
                         .await
                         .0;
 
@@ -280,6 +311,52 @@ async fn beta_reduce<'a>(
         Expr::ClassConstructor { .. } => Ok(expr.clone()),
         Expr::ArgsTuple(_, _) => Ok(expr.clone()),
         Expr::Lambda(_, _, _) => Ok(expr.clone()),
+        Expr::If(cond, then, else_, meta) => {
+            let new_cond = Box::pin(beta_reduce(env, cond, eval_final_llm_fn)).await?;
+            let new_then = Box::pin(beta_reduce(env, then, eval_final_llm_fn)).await?;
+            let new_else = match else_ {
+                None => None,
+                Some(else_) => {
+                    let new_else = Box::pin(beta_reduce(env, else_, eval_final_llm_fn)).await?;
+                    Some(Arc::new(new_else))
+                }
+            };
+            Ok(Expr::If(
+                Arc::new(new_cond),
+                Arc::new(new_then),
+                new_else,
+                meta.clone(),
+            ))
+        }
+        Expr::ForLoop {
+            item,
+            iterable,
+            body,
+            meta,
+        } => match iterable.as_ref() {
+            Expr::List(iterable_items, meta) => {
+                let new_index = VarIndex {
+                    de_bruijn: 0,
+                    tuple: 0,
+                };
+                let closed_body = body.close(&new_index, item);
+                let unevaluated_results = iterable_items
+                    .iter()
+                    .map(|iterable_item| subst(&closed_body, &new_index, iterable_item, env))
+                    .collect::<anyhow::Result<Vec<_>>>()?;
+                Ok(Expr::List(unevaluated_results, meta.clone()))
+            }
+            _ => {
+                let new_iterable = Box::pin(beta_reduce(env, iterable, eval_final_llm_fn)).await?;
+                let new_body = Box::pin(beta_reduce(env, body, eval_final_llm_fn)).await?;
+                Ok(Expr::ForLoop {
+                    item: item.clone(),
+                    iterable: Arc::new(new_iterable),
+                    body: Arc::new(new_body),
+                    meta: meta.clone(),
+                })
+            }
+        },
         _ => panic!("Tried to beta reduce a {}", expr.dump_str()), // Err(anyhow::anyhow!("Not an application: {:?}", expr)),
     }
 }
@@ -407,6 +484,22 @@ pub async fn eval_to_value_or_llm_call<'a>(
                 }
                 current_expr = res;
             }
+            Expr::If(cond, then, else_, meta) => {
+                let predicate = eval_to_value(env, cond.as_ref()).await?;
+                match predicate {
+                    Some(BamlValueWithMeta::Bool(predicate, _)) => {
+                        if predicate {
+                            current_expr = Arc::unwrap_or_clone(then.clone());
+                        } else {
+                            current_expr = else_
+                                .as_ref()
+                                .map(|e| Arc::unwrap_or_clone(e.clone()))
+                                .unwrap_or(Expr::Atom(BamlValueWithMeta::Null(meta.clone())));
+                        }
+                    }
+                    _ => todo!("Type error"),
+                }
+            }
             Expr::BoundVar(_, _) => {
                 return Err(anyhow::anyhow!("Bare bound variable found"));
             }
@@ -415,6 +508,10 @@ pub async fn eval_to_value_or_llm_call<'a>(
             }
             Expr::ArgsTuple(_, _) => {
                 return Err(anyhow::anyhow!("Bare args tuple found"));
+            }
+            l @ Expr::ForLoop { .. } => {
+                let res = Box::pin(beta_reduce(env, &l, false)).await?;
+                current_expr = res;
             }
         }
     }
@@ -499,6 +596,32 @@ pub async fn eval_to_value<'a>(
                 let val = BamlValueWithMeta::Class(name.clone(), spread_fields, ());
                 return Ok(Some(val));
             }
+            Expr::If(cond, then, else_, meta) => {
+                let predicate = Box::pin(eval_to_value(env, cond.as_ref())).await?;
+                match predicate {
+                    Some(BamlValueWithMeta::Bool(predicate, _)) => {
+                        if predicate {
+                            current_expr = Arc::unwrap_or_clone(then.clone());
+                        } else {
+                            current_expr = else_
+                                .as_ref()
+                                .map(|e| Arc::unwrap_or_clone(e.clone()))
+                                .unwrap_or(Expr::Atom(BamlValueWithMeta::Null(meta.clone())));
+                        }
+                    }
+                    _ => todo!("Type error"),
+                }
+            }
+            // Expr::ForLoop{ item, iterable, body, meta } => {
+            //     match iterable.as_ref() {
+            //         Expr::List(items, _ ) => {
+            //             let mut results: Vec<BamlValueWithMeta<()>> = Vec::new();
+            //             for i in items {
+            //                 let result = Box::pin(eval_to_value(i))
+            //             }
+            //         }
+            //     }
+            // }
             other => {
                 // let new_expr = step(env, &other).await?;
                 let new_expr = Box::pin(beta_reduce(env, &other, true)).await?;
@@ -643,17 +766,50 @@ test TestMakePerson() {
 
 function Echo(msg: string) -> string {
     client GPT4o
-    prompt #"Please repeat the message back to me, with three words of elaboration and a twist: {{ msg }}"#
-  }
+    prompt #"Please repeat the message back to me exactly as it is: {{ msg }}"#
+}
+
+function Quiz(msg: string) -> bool {
+  client GPT4o
+  prompt #"Is the following message true or false? {{ msg }}
+  {{ ctx.output_format }}
+  "#
+}
   
-  function Go() -> string {
-    Echo("Hello")
+function Go() -> string {
+  if Quiz("The sky is green") { Echo("Hello") } else { Echo("World") }
+}
+
+test Go {
+  functions [Go]
+  args {}
+}
+
+class Poem {
+  title string
+  body string
+}
+
+function PoemAbout(topic: string) -> string {
+  client GPT4o
+  prompt #"Write a 10-word poem about {{ topic }}"#
+}
+
+function Poems() -> Poem[] {
+  for (t in ["cats", "birds", "love", "rain"]) {
+    Poem {
+      title: t,
+      body: PoemAbout(t)
+    }
   }
-  
-  test Go {
-    functions [Go]
-    args {}
-  }
+}
+
+test Poems {
+  functions [Poems]
+  args {}
+}
+
+
         "##,
         );
         // dbg!(&rt.inner.ir.find_function("OuterPyramid").unwrap().item);
@@ -666,7 +822,8 @@ function Echo(msg: string) -> string {
         dbg!(&f.item);
         let (res, _) = rt
             // .run_test("Second", "TestSecond", &ctx, Some(on_event))
-            .run_test("Go", "Go", &ctx, Some(on_event), None)
+            // .run_test("Go", "Go", &ctx, Some(on_event), None)
+            .run_test("Poems", "Poems", &ctx, Some(on_event), None, HashMap::new())
             // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
             // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
             // .run_test("LlmParseInt", "TestParse", &ctx, Some(on_event))
@@ -791,7 +948,7 @@ test TestMakePerson() {
         // dbg!(&f.item);
         let (res, _) = rt
             // .run_test("Second", "TestSecond", &ctx, Some(on_event))
-            .run_test("OuterPyramid", "OuterPyramid", &ctx, Some(on_event), None)
+            .run_test("OuterPyramid", "OuterPyramid", &ctx, Some(on_event), None, HashMap::new())
             // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
             // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
             // .run_test("LlmParseInt", "TestParse", &ctx, Some(on_event))

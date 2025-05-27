@@ -34,7 +34,7 @@ module Baml
       params(
         varargs: T.untyped,
         recipe: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AaaSamOutputFormat(
@@ -45,8 +45,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AaaSamOutputFormat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -57,7 +57,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -65,7 +66,7 @@ module Baml
       params(
         varargs: T.untyped,
         data: Baml::Types::LinkedListAliasNode,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AliasThatPointsToRecursiveType(
@@ -76,8 +77,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AliasThatPointsToRecursiveType may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -88,7 +89,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -96,7 +98,7 @@ module Baml
       params(
         varargs: T.untyped,
         money: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AliasWithMultipleAttrs(
@@ -107,8 +109,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AliasWithMultipleAttrs may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -119,7 +121,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -127,7 +130,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::InputClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AliasedInputClass(
@@ -138,8 +141,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AliasedInputClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -150,7 +153,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -158,7 +162,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::InputClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AliasedInputClass2(
@@ -169,8 +173,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AliasedInputClass2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -181,7 +185,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -189,7 +194,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::InputClassNested,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AliasedInputClassNested(
@@ -200,8 +205,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AliasedInputClassNested may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -212,7 +217,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -220,7 +226,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.any(Baml::Types::AliasedEnum, String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AliasedInputEnum(
@@ -231,8 +237,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AliasedInputEnum may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -243,7 +249,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -251,7 +258,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T::Array[T.any(Baml::Types::AliasedEnum, String)],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AliasedInputList(
@@ -262,8 +269,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AliasedInputList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -274,7 +281,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -282,7 +290,7 @@ module Baml
       params(
         varargs: T.untyped,
         optionals: Baml::Types::OptionalListAndMap,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AllowedOptionals(
@@ -293,8 +301,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AllowedOptionals may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -305,7 +313,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -313,7 +322,7 @@ module Baml
       params(
         varargs: T.untyped,
         a: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AssertFn(
@@ -324,8 +333,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AssertFn may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -336,7 +345,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -344,7 +354,7 @@ module Baml
       params(
         varargs: T.untyped,
         aud: Baml::Audio,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AudioInput(
@@ -355,8 +365,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AudioInput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -367,7 +377,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -375,7 +386,7 @@ module Baml
       params(
         varargs: T.untyped,
         aud: Baml::Audio,prompt: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AudioInputOpenai(
@@ -386,8 +397,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AudioInputOpenai may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -398,7 +409,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -406,7 +418,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T::Array[Integer],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def BuildLinkedList(
@@ -417,8 +429,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("BuildLinkedList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -429,7 +441,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -437,7 +450,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::BinaryNode,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def BuildTree(
@@ -448,8 +461,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("BuildTree may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -460,7 +473,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -468,7 +482,7 @@ module Baml
       params(
         varargs: T.untyped,
         cls: Baml::Types::ClassToRecAlias,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ClassThatPointsToRecursiveClassThroughAlias(
@@ -479,8 +493,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ClassThatPointsToRecursiveClassThroughAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -491,7 +505,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -499,7 +514,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ClassifyDynEnumTwo(
@@ -510,8 +525,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ClassifyDynEnumTwo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -522,7 +537,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -530,7 +546,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ClassifyMessage(
@@ -541,8 +557,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ClassifyMessage may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -553,7 +569,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -561,7 +578,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ClassifyMessage2(
@@ -572,8 +589,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ClassifyMessage2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -584,7 +601,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -592,7 +610,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ClassifyMessage3(
@@ -603,8 +621,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ClassifyMessage3 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -615,7 +633,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -623,7 +642,7 @@ module Baml
       params(
         varargs: T.untyped,
         prefix: String,suffix: String,language: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def Completion(
@@ -634,8 +653,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("Completion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -646,7 +665,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -654,7 +674,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def CustomTask(
@@ -665,8 +685,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("CustomTask may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -677,7 +697,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -685,7 +706,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DescribeImage(
@@ -696,8 +717,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DescribeImage may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -708,7 +729,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -716,7 +738,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DescribeImage2(
@@ -727,8 +749,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DescribeImage2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -739,7 +761,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -747,7 +770,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DescribeImage3(
@@ -758,8 +781,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DescribeImage3 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -770,7 +793,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -778,7 +802,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DescribeImage4(
@@ -789,8 +813,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DescribeImage4 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -801,7 +825,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -809,7 +834,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,client_sector: String,client_name: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DescribeMedia1599(
@@ -820,8 +845,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DescribeMedia1599 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -832,7 +857,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -840,7 +866,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DifferentiateUnions(
@@ -851,8 +877,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DifferentiateUnions may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -863,7 +889,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -871,7 +898,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DummyOutputFunction(
@@ -882,8 +909,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DummyOutputFunction may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -894,7 +921,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -902,7 +930,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::DynamicClassOne,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DynamicFunc(
@@ -913,8 +941,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DynamicFunc may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -925,7 +953,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -933,7 +962,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::DynInputOutput,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DynamicInputOutput(
@@ -944,8 +973,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DynamicInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -956,7 +985,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -964,7 +994,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T::Array[Baml::Types::DynInputOutput],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DynamicListInputOutput(
@@ -975,8 +1005,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DynamicListInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -987,7 +1017,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -995,7 +1026,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExpectFailure(
@@ -1006,8 +1037,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExpectFailure may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1018,7 +1049,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1026,7 +1058,7 @@ module Baml
       params(
         varargs: T.untyped,
         document: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractContactInfo(
@@ -1037,8 +1069,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractContactInfo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1049,7 +1081,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1057,7 +1090,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractEntities(
@@ -1068,8 +1101,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractEntities may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1080,7 +1113,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1088,7 +1122,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractHobby(
@@ -1099,8 +1133,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractHobby may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1111,7 +1145,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1119,7 +1154,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractNames(
@@ -1130,8 +1165,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractNames may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1142,7 +1177,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1150,7 +1186,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractPeople(
@@ -1161,8 +1197,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractPeople may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1173,7 +1209,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1181,7 +1218,7 @@ module Baml
       params(
         varargs: T.untyped,
         email: String,reason: T.any(String, String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractReceiptInfo(
@@ -1192,8 +1229,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractReceiptInfo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1204,7 +1241,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1212,7 +1250,7 @@ module Baml
       params(
         varargs: T.untyped,
         resume: String,img: T.nilable(Baml::Image),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractResume(
@@ -1223,8 +1261,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractResume may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1235,7 +1273,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1243,7 +1282,7 @@ module Baml
       params(
         varargs: T.untyped,
         resume: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractResume2(
@@ -1254,8 +1293,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractResume2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1266,7 +1305,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1274,7 +1314,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnClassOptionalOutput(
@@ -1285,8 +1325,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnClassOptionalOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1297,7 +1337,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1305,7 +1346,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnClassOptionalOutput2(
@@ -1316,8 +1357,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnClassOptionalOutput2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1328,7 +1369,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1336,7 +1378,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnEnumListOutput(
@@ -1347,8 +1389,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnEnumListOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1359,7 +1401,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1367,7 +1410,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnEnumOutput(
@@ -1378,8 +1421,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnEnumOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1390,7 +1433,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1398,7 +1442,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::LiteralClassHello,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnLiteralClassInputOutput(
@@ -1409,8 +1453,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnLiteralClassInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1421,7 +1465,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1429,7 +1474,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.any(Baml::Types::LiteralClassOne, Baml::Types::LiteralClassTwo),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnLiteralUnionClassInputOutput(
@@ -1440,8 +1485,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnLiteralUnionClassInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1452,7 +1497,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1460,7 +1506,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: T.nilable(String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnNamedArgsSingleStringOptional(
@@ -1471,8 +1517,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnNamedArgsSingleStringOptional may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1483,7 +1529,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1491,7 +1538,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputBool(
@@ -1502,8 +1549,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1514,7 +1561,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1522,7 +1570,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputClass(
@@ -1533,8 +1581,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1545,7 +1593,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1553,7 +1602,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputClassList(
@@ -1564,8 +1613,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputClassList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1576,7 +1625,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1584,7 +1634,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputClassNested(
@@ -1595,8 +1645,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputClassNested may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1607,7 +1657,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1615,7 +1666,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputClassWithEnum(
@@ -1626,8 +1677,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputClassWithEnum may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1638,7 +1689,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1646,7 +1698,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputInt(
@@ -1657,8 +1709,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1669,7 +1721,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1677,7 +1730,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputLiteralBool(
@@ -1688,8 +1741,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputLiteralBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1700,7 +1753,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1708,7 +1762,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputLiteralInt(
@@ -1719,8 +1773,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputLiteralInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1731,7 +1785,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1739,7 +1794,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputLiteralString(
@@ -1750,8 +1805,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputLiteralString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1762,7 +1817,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1770,7 +1826,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputStringList(
@@ -1781,8 +1837,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputStringList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1793,7 +1849,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1801,7 +1858,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnTestAliasedEnumOutput(
@@ -1812,8 +1869,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnTestAliasedEnumOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1824,7 +1881,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1832,7 +1890,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnTestClassAlias(
@@ -1843,8 +1901,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnTestClassAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1855,7 +1913,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1863,7 +1922,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T.any(Baml::Types::NamedArgsSingleEnum, String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnTestNamedArgsSingleEnum(
@@ -1874,8 +1933,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnTestNamedArgsSingleEnum may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1886,7 +1945,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1894,7 +1954,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def GetDataType(
@@ -1905,8 +1965,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("GetDataType may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1917,7 +1977,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1925,7 +1986,7 @@ module Baml
       params(
         varargs: T.untyped,
         email: Baml::Types::Email,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def GetOrderInfo(
@@ -1936,8 +1997,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("GetOrderInfo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1948,7 +2009,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1956,7 +2018,7 @@ module Baml
       params(
         varargs: T.untyped,
         query: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def GetQuery(
@@ -1967,8 +2029,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("GetQuery may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -1979,7 +2041,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -1987,7 +2050,7 @@ module Baml
       params(
         varargs: T.untyped,
         i1: T::Hash[String, String],i2: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def InOutEnumMapKey(
@@ -1998,8 +2061,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("InOutEnumMapKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2010,7 +2073,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2018,7 +2082,7 @@ module Baml
       params(
         varargs: T.untyped,
         i1: T::Hash[String, String],i2: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def InOutLiteralStringUnionMapKey(
@@ -2029,8 +2093,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("InOutLiteralStringUnionMapKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2041,7 +2105,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2049,7 +2114,7 @@ module Baml
       params(
         varargs: T.untyped,
         m: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def InOutSingleLiteralStringMapKey(
@@ -2060,8 +2125,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("InOutSingleLiteralStringMapKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2072,7 +2137,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2080,7 +2146,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def JsonTypeAliasCycle(
@@ -2091,8 +2157,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("JsonTypeAliasCycle may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2103,7 +2169,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2111,7 +2178,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def LLMEcho(
@@ -2122,8 +2189,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("LLMEcho may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2134,7 +2201,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2142,7 +2210,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def LiteralUnionsTest(
@@ -2153,8 +2221,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("LiteralUnionsTest may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2165,7 +2233,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2173,7 +2242,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MakeBlockConstraint(
@@ -2184,8 +2253,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MakeBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2196,7 +2265,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2204,7 +2274,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MakeClassWithBlockDone(
@@ -2215,8 +2285,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MakeClassWithBlockDone may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2227,7 +2297,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2235,7 +2306,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MakeClassWithExternalDone(
@@ -2246,8 +2317,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MakeClassWithExternalDone may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2258,7 +2329,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2266,7 +2338,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MakeNestedBlockConstraint(
@@ -2277,8 +2349,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MakeNestedBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2289,7 +2361,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2297,7 +2370,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MakeSemanticContainer(
@@ -2308,8 +2381,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MakeSemanticContainer may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2320,7 +2393,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2328,7 +2402,7 @@ module Baml
       params(
         varargs: T.untyped,
         m: T::Hash[String, T::Array[String]],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MapAlias(
@@ -2339,8 +2413,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MapAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2351,7 +2425,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2359,7 +2434,7 @@ module Baml
       params(
         varargs: T.untyped,
         money: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MergeAliasAttributes(
@@ -2370,8 +2445,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MergeAliasAttributes may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2382,7 +2457,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2390,7 +2466,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MyFunc(
@@ -2401,8 +2477,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MyFunc may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2413,7 +2489,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2421,7 +2498,7 @@ module Baml
       params(
         varargs: T.untyped,
         c: T.any(T.any(Integer, String, T::Boolean, Float), T::Array[String], T::Hash[String, T::Array[String]]),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def NestedAlias(
@@ -2432,8 +2509,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("NestedAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2444,7 +2521,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2452,7 +2530,7 @@ module Baml
       params(
         varargs: T.untyped,
         s: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def NullLiteralClassHello(
@@ -2463,8 +2541,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("NullLiteralClassHello may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2475,7 +2553,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2483,7 +2562,7 @@ module Baml
       params(
         varargs: T.untyped,
         s: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def OpenAIWithAnthropicResponseHello(
@@ -2494,8 +2573,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("OpenAIWithAnthropicResponseHello may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2506,7 +2585,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2514,7 +2594,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def OptionalTest_Function(
@@ -2525,8 +2605,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("OptionalTest_Function may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2537,7 +2617,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2545,7 +2626,7 @@ module Baml
       params(
         varargs: T.untyped,
         name: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PredictAge(
@@ -2556,8 +2637,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PredictAge may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2568,7 +2649,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2576,7 +2658,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PredictAgeBare(
@@ -2587,8 +2669,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PredictAgeBare may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2599,7 +2681,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2607,7 +2690,7 @@ module Baml
       params(
         varargs: T.untyped,
         p: T.any(Integer, String, T::Boolean, Float),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PrimitiveAlias(
@@ -2618,8 +2701,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PrimitiveAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2630,7 +2713,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2638,7 +2722,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PromptTestClaude(
@@ -2649,8 +2733,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PromptTestClaude may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2661,7 +2745,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2669,7 +2754,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PromptTestClaudeChat(
@@ -2680,8 +2765,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PromptTestClaudeChat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2692,7 +2777,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2700,7 +2786,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PromptTestClaudeChatNoSystem(
@@ -2711,8 +2797,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PromptTestClaudeChatNoSystem may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2723,7 +2809,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2731,7 +2818,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PromptTestOpenAI(
@@ -2742,8 +2829,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PromptTestOpenAI may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2754,7 +2841,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2762,7 +2850,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PromptTestOpenAIChat(
@@ -2773,8 +2861,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PromptTestOpenAIChat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2785,7 +2873,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2793,7 +2882,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PromptTestOpenAIChatNoSystem(
@@ -2804,8 +2893,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PromptTestOpenAIChatNoSystem may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2816,7 +2905,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2824,7 +2914,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PromptTestStreaming(
@@ -2835,8 +2925,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PromptTestStreaming may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2847,7 +2937,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2855,7 +2946,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def RecursiveAliasCycle(
@@ -2866,8 +2957,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("RecursiveAliasCycle may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2878,7 +2969,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2886,7 +2978,7 @@ module Baml
       params(
         varargs: T.untyped,
         cls: Baml::Types::NodeWithAliasIndirection,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def RecursiveClassWithAliasIndirection(
@@ -2897,8 +2989,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("RecursiveClassWithAliasIndirection may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2909,7 +3001,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2917,7 +3010,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def RecursiveUnionTest(
@@ -2928,8 +3021,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("RecursiveUnionTest may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2940,7 +3033,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2948,7 +3042,7 @@ module Baml
       params(
         varargs: T.untyped,
         money: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ReturnAliasWithMergedAttributes(
@@ -2959,8 +3053,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ReturnAliasWithMergedAttributes may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -2971,7 +3065,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -2979,7 +3074,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ReturnFailingAssert(
@@ -2990,8 +3085,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ReturnFailingAssert may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3002,7 +3097,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3010,7 +3106,7 @@ module Baml
       params(
         varargs: T.untyped,
         s: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ReturnJsonEntry(
@@ -3021,8 +3117,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ReturnJsonEntry may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3033,7 +3129,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3041,7 +3138,7 @@ module Baml
       params(
         varargs: T.untyped,
         a: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ReturnMalformedConstraints(
@@ -3052,8 +3149,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ReturnMalformedConstraints may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3064,7 +3161,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3072,7 +3170,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def SchemaDescriptions(
@@ -3083,8 +3181,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("SchemaDescriptions may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3095,7 +3193,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3103,7 +3202,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def SimpleRecursiveListAlias(
@@ -3114,8 +3213,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("SimpleRecursiveListAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3126,7 +3225,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3134,7 +3234,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def SimpleRecursiveMapAlias(
@@ -3145,8 +3245,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("SimpleRecursiveMapAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3157,7 +3257,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3165,7 +3266,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def StreamBigNumbers(
@@ -3176,8 +3277,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("StreamBigNumbers may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3188,7 +3289,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3196,7 +3298,7 @@ module Baml
       params(
         varargs: T.untyped,
         theme: String,length: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def StreamFailingAssertion(
@@ -3207,8 +3309,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("StreamFailingAssertion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3219,7 +3321,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3227,7 +3330,7 @@ module Baml
       params(
         varargs: T.untyped,
         theme: String,length: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def StreamFailingCheck(
@@ -3238,8 +3341,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("StreamFailingCheck may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3250,7 +3353,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3258,7 +3362,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def StreamOneBigNumber(
@@ -3269,8 +3373,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("StreamOneBigNumber may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3281,7 +3385,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3289,7 +3394,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def StreamUnionIntegers(
@@ -3300,8 +3405,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("StreamUnionIntegers may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3312,7 +3417,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3320,7 +3426,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,yapping: T::Boolean,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def StreamingCompoundNumbers(
@@ -3331,8 +3437,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("StreamingCompoundNumbers may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3343,7 +3449,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3351,7 +3458,7 @@ module Baml
       params(
         varargs: T.untyped,
         document_txt: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def StructureDocument1559(
@@ -3362,8 +3469,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("StructureDocument1559 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3374,7 +3481,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3382,7 +3490,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::RecursiveAliasDependency,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TakeRecAliasDep(
@@ -3393,8 +3501,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TakeRecAliasDep may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3405,7 +3513,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3413,7 +3522,7 @@ module Baml
       params(
         varargs: T.untyped,
         story: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TellStory(
@@ -3424,8 +3533,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TellStory may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3436,7 +3545,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3444,7 +3554,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAnthropic(
@@ -3455,8 +3565,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAnthropic may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3467,7 +3577,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3475,7 +3586,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAnthropicShorthand(
@@ -3486,8 +3597,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAnthropicShorthand may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3498,7 +3609,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3506,7 +3618,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAws(
@@ -3517,8 +3629,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAws may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3529,7 +3641,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3537,7 +3650,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAwsClaude37(
@@ -3548,8 +3661,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAwsClaude37 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3560,7 +3673,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3568,7 +3682,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAwsInferenceProfile(
@@ -3579,8 +3693,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAwsInferenceProfile may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3591,7 +3705,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3599,7 +3714,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAwsInvalidAccessKey(
@@ -3610,8 +3725,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAwsInvalidAccessKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3622,7 +3737,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3630,7 +3746,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAwsInvalidProfile(
@@ -3641,8 +3757,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAwsInvalidProfile may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3653,7 +3769,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3661,7 +3778,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAwsInvalidRegion(
@@ -3672,8 +3789,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAwsInvalidRegion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3684,7 +3801,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3692,7 +3810,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAwsInvalidSessionToken(
@@ -3703,8 +3821,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAwsInvalidSessionToken may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3715,7 +3833,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3723,7 +3842,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzure(
@@ -3734,8 +3853,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzure may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3746,7 +3865,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3754,7 +3874,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzureFailure(
@@ -3765,8 +3885,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzureFailure may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3777,7 +3897,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3785,7 +3906,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzureO1NoMaxTokens(
@@ -3796,8 +3917,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzureO1NoMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3808,7 +3929,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3816,7 +3938,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzureO1WithMaxCompletionTokens(
@@ -3827,8 +3949,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzureO1WithMaxCompletionTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3839,7 +3961,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3847,7 +3970,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzureO1WithMaxTokens(
@@ -3858,8 +3981,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzureO1WithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3870,7 +3993,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3878,7 +4002,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzureO3NoMaxTokens(
@@ -3889,8 +4013,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzureO3NoMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3901,7 +4025,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3909,7 +4034,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzureO3WithMaxCompletionTokens(
@@ -3920,8 +4045,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzureO3WithMaxCompletionTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3932,7 +4057,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3940,7 +4066,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzureWithMaxTokens(
@@ -3951,8 +4077,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzureWithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3963,7 +4089,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -3971,7 +4098,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,not_cached: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestCaching(
@@ -3982,8 +4109,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestCaching may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -3994,7 +4121,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4002,7 +4130,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFallbackClient(
@@ -4013,8 +4141,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFallbackClient may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4025,7 +4153,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4033,7 +4162,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFallbackStrategy(
@@ -4044,8 +4173,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFallbackStrategy may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4056,7 +4185,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4064,7 +4194,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFallbackToShorthand(
@@ -4075,8 +4205,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFallbackToShorthand may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4087,7 +4217,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4095,7 +4226,7 @@ module Baml
       params(
         varargs: T.untyped,
         myBool: T::Boolean,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleBool(
@@ -4106,8 +4237,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4118,7 +4249,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4126,7 +4258,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: Baml::Types::NamedArgsSingleClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleClass(
@@ -4137,8 +4269,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4149,7 +4281,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4157,7 +4290,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T::Array[T.any(Baml::Types::NamedArgsSingleEnumList, String)],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleEnumList(
@@ -4168,8 +4301,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleEnumList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4180,7 +4313,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4188,7 +4322,7 @@ module Baml
       params(
         varargs: T.untyped,
         myFloat: Float,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleFloat(
@@ -4199,8 +4333,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleFloat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4211,7 +4345,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4219,7 +4354,7 @@ module Baml
       params(
         varargs: T.untyped,
         myInt: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleInt(
@@ -4230,8 +4365,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4242,7 +4377,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4250,7 +4386,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, Baml::Types::StringToClassEntry],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleMapStringToClass(
@@ -4261,8 +4397,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleMapStringToClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4273,7 +4409,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4281,7 +4418,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, T::Hash[String, String]],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleMapStringToMap(
@@ -4292,8 +4429,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleMapStringToMap may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4304,7 +4441,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4312,7 +4450,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleMapStringToString(
@@ -4323,8 +4461,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleMapStringToString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4335,7 +4473,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4343,7 +4482,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleString(
@@ -4354,8 +4493,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4366,7 +4505,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4374,7 +4514,7 @@ module Baml
       params(
         varargs: T.untyped,
         myStringArray: T::Array[String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleStringArray(
@@ -4385,8 +4525,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleStringArray may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4397,7 +4537,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4405,7 +4546,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T::Array[String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleStringList(
@@ -4416,8 +4557,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleStringList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4428,7 +4569,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4436,7 +4578,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestGemini(
@@ -4447,8 +4589,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestGemini may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4459,7 +4601,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4467,7 +4610,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestGeminiOpenAiGeneric(
@@ -4478,8 +4621,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestGeminiOpenAiGeneric may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4490,7 +4633,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4498,7 +4642,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestGeminiSystem(
@@ -4509,8 +4653,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestGeminiSystem may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4521,7 +4665,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4529,7 +4674,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestGeminiSystemAsChat(
@@ -4540,8 +4685,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestGeminiSystemAsChat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4552,7 +4697,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4560,7 +4706,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestGroq(
@@ -4571,8 +4717,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestGroq may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4583,7 +4729,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4591,7 +4738,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestImageInput(
@@ -4602,8 +4749,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestImageInput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4614,7 +4761,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4622,7 +4770,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestImageInputAnthropic(
@@ -4633,8 +4781,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestImageInputAnthropic may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4645,7 +4793,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4653,7 +4802,7 @@ module Baml
       params(
         varargs: T.untyped,
         imgs: T::Array[Baml::Image],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestImageListInput(
@@ -4664,8 +4813,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestImageListInput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4676,7 +4825,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4684,7 +4834,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestMemory(
@@ -4695,8 +4845,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestMemory may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4707,7 +4857,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4715,7 +4866,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: Baml::Types::NamedArgsSingleClass,myArg2: Baml::Types::NamedArgsSingleClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestMulticlassNamedArgs(
@@ -4726,8 +4877,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestMulticlassNamedArgs may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4738,7 +4889,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4746,7 +4898,7 @@ module Baml
       params(
         varargs: T.untyped,
         myBool: T::Boolean,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestNamedArgsLiteralBool(
@@ -4757,8 +4909,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestNamedArgsLiteralBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4769,7 +4921,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4777,7 +4930,7 @@ module Baml
       params(
         varargs: T.untyped,
         myInt: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestNamedArgsLiteralInt(
@@ -4788,8 +4941,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestNamedArgsLiteralInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4800,7 +4953,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4808,7 +4962,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestNamedArgsLiteralString(
@@ -4819,8 +4973,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestNamedArgsLiteralString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4831,7 +4985,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4839,7 +4994,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOllama(
@@ -4850,8 +5005,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOllama may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4862,7 +5017,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4870,7 +5026,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOllamaHaiku(
@@ -4881,8 +5037,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOllamaHaiku may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4893,7 +5049,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4901,7 +5058,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAI(
@@ -4912,8 +5069,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAI may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4924,7 +5081,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4932,7 +5090,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIDummyClient(
@@ -4943,8 +5101,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIDummyClient may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4955,7 +5113,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4963,7 +5122,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIGPT4oMini(
@@ -4974,8 +5133,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIGPT4oMini may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -4986,7 +5145,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -4994,7 +5154,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAILegacyProvider(
@@ -5005,8 +5165,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAILegacyProvider may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5017,7 +5177,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5025,7 +5186,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIO1NoMaxTokens(
@@ -5036,8 +5197,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIO1NoMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5048,7 +5209,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5056,7 +5218,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIO1WithMaxCompletionTokens(
@@ -5067,8 +5229,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIO1WithMaxCompletionTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5079,7 +5241,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5087,7 +5250,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIO1WithMaxTokens(
@@ -5098,8 +5261,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIO1WithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5110,7 +5273,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5118,7 +5282,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIShorthand(
@@ -5129,8 +5293,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIShorthand may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5141,7 +5305,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5149,7 +5314,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIWithFinishReasonError(
@@ -5160,8 +5325,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIWithFinishReasonError may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5172,7 +5337,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5180,7 +5346,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIWithMaxTokens(
@@ -5191,8 +5357,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIWithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5203,7 +5369,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5211,7 +5378,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIWithNullMaxTokens(
@@ -5222,8 +5389,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIWithNullMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5234,7 +5401,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5242,7 +5410,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenRouterMistralSmall3_1_24b(
@@ -5253,8 +5421,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenRouterMistralSmall3_1_24b may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5265,7 +5433,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5273,7 +5442,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestRetryConstant(
@@ -5284,8 +5453,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestRetryConstant may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5296,7 +5465,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5304,7 +5474,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestRetryExponential(
@@ -5315,8 +5485,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestRetryExponential may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5327,7 +5497,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5335,7 +5506,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestRoundRobinStrategy(
@@ -5346,8 +5517,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestRoundRobinStrategy may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5358,7 +5529,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5366,7 +5538,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestSingleFallbackClient(
@@ -5377,8 +5549,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestSingleFallbackClient may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5389,7 +5561,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5397,7 +5570,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestThinking(
@@ -5408,8 +5581,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestThinking may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5420,7 +5593,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5428,7 +5602,7 @@ module Baml
       params(
         varargs: T.untyped,
         question: Baml::Types::UniverseQuestionInput,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestUniverseQuestion(
@@ -5439,8 +5613,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestUniverseQuestion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5451,7 +5625,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5459,7 +5634,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestVertex(
@@ -5470,8 +5645,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestVertex may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5482,7 +5657,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5490,7 +5666,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestVertexClaude(
@@ -5501,8 +5677,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestVertexClaude may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5513,7 +5689,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5521,7 +5698,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestVertexWithSystemInstructions(
@@ -5532,8 +5709,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestVertexWithSystemInstructions may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5544,7 +5721,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5552,7 +5730,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.any(String, T::Boolean),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def UnionTest_Function(
@@ -5563,8 +5741,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("UnionTest_Function may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5575,7 +5753,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5583,7 +5762,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: Baml::Types::BlockConstraintForParam,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def UseBlockConstraint(
@@ -5594,8 +5773,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("UseBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5606,7 +5785,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5614,7 +5794,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::MaintainFieldOrder,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def UseMaintainFieldOrder(
@@ -5625,8 +5805,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("UseMaintainFieldOrder may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5637,7 +5817,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5645,7 +5826,7 @@ module Baml
       params(
         varargs: T.untyped,
         a: Baml::Types::MalformedConstraints2,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def UseMalformedConstraints(
@@ -5656,8 +5837,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("UseMalformedConstraints may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5668,7 +5849,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5676,7 +5858,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: Baml::Types::NestedBlockConstraintForParam,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def UseNestedBlockConstraint(
@@ -5687,8 +5869,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("UseNestedBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5699,7 +5881,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -5719,7 +5902,7 @@ module Baml
       params(
         varargs: T.untyped,
         recipe: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AaaSamOutputFormat(
@@ -5730,8 +5913,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AaaSamOutputFormat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5742,7 +5925,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -5750,7 +5934,7 @@ module Baml
       params(
         varargs: T.untyped,
         data: Baml::Types::LinkedListAliasNode,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AliasThatPointsToRecursiveType(
@@ -5761,8 +5945,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AliasThatPointsToRecursiveType may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5773,7 +5957,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -5781,7 +5966,7 @@ module Baml
       params(
         varargs: T.untyped,
         money: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AliasWithMultipleAttrs(
@@ -5792,8 +5977,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AliasWithMultipleAttrs may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5804,7 +5989,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -5812,7 +5998,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::InputClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AliasedInputClass(
@@ -5823,8 +6009,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AliasedInputClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5835,7 +6021,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -5843,7 +6030,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::InputClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AliasedInputClass2(
@@ -5854,8 +6041,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AliasedInputClass2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5866,7 +6053,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -5874,7 +6062,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::InputClassNested,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AliasedInputClassNested(
@@ -5885,8 +6073,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AliasedInputClassNested may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5897,7 +6085,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -5905,7 +6094,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.any(Baml::Types::AliasedEnum, String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AliasedInputEnum(
@@ -5916,8 +6105,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AliasedInputEnum may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5928,7 +6117,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -5936,7 +6126,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T::Array[T.any(Baml::Types::AliasedEnum, String)],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AliasedInputList(
@@ -5947,8 +6137,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AliasedInputList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5959,7 +6149,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -5967,7 +6158,7 @@ module Baml
       params(
         varargs: T.untyped,
         optionals: Baml::Types::OptionalListAndMap,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AllowedOptionals(
@@ -5978,8 +6169,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AllowedOptionals may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -5990,7 +6181,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -5998,7 +6190,7 @@ module Baml
       params(
         varargs: T.untyped,
         a: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AssertFn(
@@ -6009,8 +6201,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AssertFn may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6021,7 +6213,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6029,7 +6222,7 @@ module Baml
       params(
         varargs: T.untyped,
         aud: Baml::Audio,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AudioInput(
@@ -6040,8 +6233,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AudioInput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6052,7 +6245,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6060,7 +6254,7 @@ module Baml
       params(
         varargs: T.untyped,
         aud: Baml::Audio,prompt: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def AudioInputOpenai(
@@ -6071,8 +6265,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("AudioInputOpenai may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6083,7 +6277,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6091,7 +6286,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T::Array[Integer],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def BuildLinkedList(
@@ -6102,8 +6297,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("BuildLinkedList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6114,7 +6309,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6122,7 +6318,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::BinaryNode,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def BuildTree(
@@ -6133,8 +6329,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("BuildTree may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6145,7 +6341,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6153,7 +6350,7 @@ module Baml
       params(
         varargs: T.untyped,
         cls: Baml::Types::ClassToRecAlias,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ClassThatPointsToRecursiveClassThroughAlias(
@@ -6164,8 +6361,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ClassThatPointsToRecursiveClassThroughAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6176,7 +6373,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6184,7 +6382,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ClassifyDynEnumTwo(
@@ -6195,8 +6393,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ClassifyDynEnumTwo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6207,7 +6405,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6215,7 +6414,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ClassifyMessage(
@@ -6226,8 +6425,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ClassifyMessage may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6238,7 +6437,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6246,7 +6446,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ClassifyMessage2(
@@ -6257,8 +6457,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ClassifyMessage2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6269,7 +6469,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6277,7 +6478,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ClassifyMessage3(
@@ -6288,8 +6489,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ClassifyMessage3 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6300,7 +6501,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6308,7 +6510,7 @@ module Baml
       params(
         varargs: T.untyped,
         prefix: String,suffix: String,language: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def Completion(
@@ -6319,8 +6521,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("Completion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6331,7 +6533,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6339,7 +6542,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def CustomTask(
@@ -6350,8 +6553,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("CustomTask may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6362,7 +6565,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6370,7 +6574,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DescribeImage(
@@ -6381,8 +6585,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DescribeImage may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6393,7 +6597,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6401,7 +6606,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DescribeImage2(
@@ -6412,8 +6617,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DescribeImage2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6424,7 +6629,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6432,7 +6638,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DescribeImage3(
@@ -6443,8 +6649,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DescribeImage3 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6455,7 +6661,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6463,7 +6670,7 @@ module Baml
       params(
         varargs: T.untyped,
         classWithImage: Baml::Types::ClassWithImage,img2: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DescribeImage4(
@@ -6474,8 +6681,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DescribeImage4 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6486,7 +6693,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6494,7 +6702,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,client_sector: String,client_name: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DescribeMedia1599(
@@ -6505,8 +6713,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DescribeMedia1599 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6517,7 +6725,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6525,7 +6734,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DifferentiateUnions(
@@ -6536,8 +6745,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DifferentiateUnions may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6548,7 +6757,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6556,7 +6766,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DummyOutputFunction(
@@ -6567,8 +6777,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DummyOutputFunction may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6579,7 +6789,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6587,7 +6798,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::DynamicClassOne,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DynamicFunc(
@@ -6598,8 +6809,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DynamicFunc may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6610,7 +6821,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6618,7 +6830,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::DynInputOutput,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DynamicInputOutput(
@@ -6629,8 +6841,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DynamicInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6641,7 +6853,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6649,7 +6862,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T::Array[Baml::Types::DynInputOutput],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def DynamicListInputOutput(
@@ -6660,8 +6873,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("DynamicListInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6672,7 +6885,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6680,7 +6894,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExpectFailure(
@@ -6691,8 +6905,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExpectFailure may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6703,7 +6917,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6711,7 +6926,7 @@ module Baml
       params(
         varargs: T.untyped,
         document: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractContactInfo(
@@ -6722,8 +6937,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractContactInfo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6734,7 +6949,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6742,7 +6958,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractEntities(
@@ -6753,8 +6969,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractEntities may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6765,7 +6981,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6773,7 +6990,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractHobby(
@@ -6784,8 +7001,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractHobby may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6796,7 +7013,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6804,7 +7022,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractNames(
@@ -6815,8 +7033,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractNames may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6827,7 +7045,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6835,7 +7054,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractPeople(
@@ -6846,8 +7065,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractPeople may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6858,7 +7077,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6866,7 +7086,7 @@ module Baml
       params(
         varargs: T.untyped,
         email: String,reason: T.any(String, String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractReceiptInfo(
@@ -6877,8 +7097,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractReceiptInfo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6889,7 +7109,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6897,7 +7118,7 @@ module Baml
       params(
         varargs: T.untyped,
         resume: String,img: T.nilable(Baml::Image),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractResume(
@@ -6908,8 +7129,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractResume may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6920,7 +7141,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6928,7 +7150,7 @@ module Baml
       params(
         varargs: T.untyped,
         resume: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ExtractResume2(
@@ -6939,8 +7161,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ExtractResume2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6951,7 +7173,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6959,7 +7182,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnClassOptionalOutput(
@@ -6970,8 +7193,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnClassOptionalOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -6982,7 +7205,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -6990,7 +7214,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnClassOptionalOutput2(
@@ -7001,8 +7225,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnClassOptionalOutput2 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7013,7 +7237,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7021,7 +7246,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnEnumListOutput(
@@ -7032,8 +7257,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnEnumListOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7044,7 +7269,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7052,7 +7278,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnEnumOutput(
@@ -7063,8 +7289,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnEnumOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7075,7 +7301,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7083,7 +7310,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::LiteralClassHello,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnLiteralClassInputOutput(
@@ -7094,8 +7321,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnLiteralClassInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7106,7 +7333,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7114,7 +7342,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.any(Baml::Types::LiteralClassOne, Baml::Types::LiteralClassTwo),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnLiteralUnionClassInputOutput(
@@ -7125,8 +7353,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnLiteralUnionClassInputOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7137,7 +7365,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7145,7 +7374,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: T.nilable(String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnNamedArgsSingleStringOptional(
@@ -7156,8 +7385,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnNamedArgsSingleStringOptional may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7168,7 +7397,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7176,7 +7406,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputBool(
@@ -7187,8 +7417,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7199,7 +7429,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7207,7 +7438,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputClass(
@@ -7218,8 +7449,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7230,7 +7461,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7238,7 +7470,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputClassList(
@@ -7249,8 +7481,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputClassList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7261,7 +7493,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7269,7 +7502,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputClassNested(
@@ -7280,8 +7513,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputClassNested may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7292,7 +7525,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7300,7 +7534,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputClassWithEnum(
@@ -7311,8 +7545,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputClassWithEnum may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7323,7 +7557,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7331,7 +7566,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputInt(
@@ -7342,8 +7577,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7354,7 +7589,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7362,7 +7598,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputLiteralBool(
@@ -7373,8 +7609,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputLiteralBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7385,7 +7621,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7393,7 +7630,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputLiteralInt(
@@ -7404,8 +7641,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputLiteralInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7416,7 +7653,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7424,7 +7662,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputLiteralString(
@@ -7435,8 +7673,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputLiteralString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7447,7 +7685,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7455,7 +7694,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnOutputStringList(
@@ -7466,8 +7705,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnOutputStringList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7478,7 +7717,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7486,7 +7726,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnTestAliasedEnumOutput(
@@ -7497,8 +7737,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnTestAliasedEnumOutput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7509,7 +7749,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7517,7 +7758,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnTestClassAlias(
@@ -7528,8 +7769,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnTestClassAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7540,7 +7781,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7548,7 +7790,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T.any(Baml::Types::NamedArgsSingleEnum, String),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def FnTestNamedArgsSingleEnum(
@@ -7559,8 +7801,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("FnTestNamedArgsSingleEnum may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7571,7 +7813,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7579,7 +7822,7 @@ module Baml
       params(
         varargs: T.untyped,
         text: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def GetDataType(
@@ -7590,8 +7833,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("GetDataType may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7602,7 +7845,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7610,7 +7854,7 @@ module Baml
       params(
         varargs: T.untyped,
         email: Baml::Types::Email,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def GetOrderInfo(
@@ -7621,8 +7865,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("GetOrderInfo may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7633,7 +7877,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7641,7 +7886,7 @@ module Baml
       params(
         varargs: T.untyped,
         query: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def GetQuery(
@@ -7652,8 +7897,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("GetQuery may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7664,7 +7909,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7672,7 +7918,7 @@ module Baml
       params(
         varargs: T.untyped,
         i1: T::Hash[String, String],i2: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def InOutEnumMapKey(
@@ -7683,8 +7929,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("InOutEnumMapKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7695,7 +7941,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7703,7 +7950,7 @@ module Baml
       params(
         varargs: T.untyped,
         i1: T::Hash[String, String],i2: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def InOutLiteralStringUnionMapKey(
@@ -7714,8 +7961,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("InOutLiteralStringUnionMapKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7726,7 +7973,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7734,7 +7982,7 @@ module Baml
       params(
         varargs: T.untyped,
         m: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def InOutSingleLiteralStringMapKey(
@@ -7745,8 +7993,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("InOutSingleLiteralStringMapKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7757,7 +8005,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7765,7 +8014,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def JsonTypeAliasCycle(
@@ -7776,8 +8025,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("JsonTypeAliasCycle may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7788,7 +8037,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7796,7 +8046,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def LLMEcho(
@@ -7807,8 +8057,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("LLMEcho may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7819,7 +8069,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7827,7 +8078,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def LiteralUnionsTest(
@@ -7838,8 +8089,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("LiteralUnionsTest may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7850,7 +8101,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7858,7 +8110,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MakeBlockConstraint(
@@ -7869,8 +8121,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MakeBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7881,7 +8133,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7889,7 +8142,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MakeClassWithBlockDone(
@@ -7900,8 +8153,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MakeClassWithBlockDone may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7912,7 +8165,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7920,7 +8174,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MakeClassWithExternalDone(
@@ -7931,8 +8185,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MakeClassWithExternalDone may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7943,7 +8197,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7951,7 +8206,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MakeNestedBlockConstraint(
@@ -7962,8 +8217,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MakeNestedBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -7974,7 +8229,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -7982,7 +8238,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MakeSemanticContainer(
@@ -7993,8 +8249,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MakeSemanticContainer may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8005,7 +8261,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8013,7 +8270,7 @@ module Baml
       params(
         varargs: T.untyped,
         m: T::Hash[String, T::Array[String]],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MapAlias(
@@ -8024,8 +8281,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MapAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8036,7 +8293,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8044,7 +8302,7 @@ module Baml
       params(
         varargs: T.untyped,
         money: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MergeAliasAttributes(
@@ -8055,8 +8313,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MergeAliasAttributes may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8067,7 +8325,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8075,7 +8334,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def MyFunc(
@@ -8086,8 +8345,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("MyFunc may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8098,7 +8357,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8106,7 +8366,7 @@ module Baml
       params(
         varargs: T.untyped,
         c: T.any(T.any(Integer, String, T::Boolean, Float), T::Array[String], T::Hash[String, T::Array[String]]),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def NestedAlias(
@@ -8117,8 +8377,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("NestedAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8129,7 +8389,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8137,7 +8398,7 @@ module Baml
       params(
         varargs: T.untyped,
         s: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def NullLiteralClassHello(
@@ -8148,8 +8409,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("NullLiteralClassHello may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8160,7 +8421,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8168,7 +8430,7 @@ module Baml
       params(
         varargs: T.untyped,
         s: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def OpenAIWithAnthropicResponseHello(
@@ -8179,8 +8441,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("OpenAIWithAnthropicResponseHello may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8191,7 +8453,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8199,7 +8462,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def OptionalTest_Function(
@@ -8210,8 +8473,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("OptionalTest_Function may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8222,7 +8485,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8230,7 +8494,7 @@ module Baml
       params(
         varargs: T.untyped,
         name: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PredictAge(
@@ -8241,8 +8505,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PredictAge may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8253,7 +8517,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8261,7 +8526,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PredictAgeBare(
@@ -8272,8 +8537,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PredictAgeBare may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8284,7 +8549,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8292,7 +8558,7 @@ module Baml
       params(
         varargs: T.untyped,
         p: T.any(Integer, String, T::Boolean, Float),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PrimitiveAlias(
@@ -8303,8 +8569,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PrimitiveAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8315,7 +8581,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8323,7 +8590,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PromptTestClaude(
@@ -8334,8 +8601,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PromptTestClaude may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8346,7 +8613,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8354,7 +8622,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PromptTestClaudeChat(
@@ -8365,8 +8633,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PromptTestClaudeChat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8377,7 +8645,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8385,7 +8654,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PromptTestClaudeChatNoSystem(
@@ -8396,8 +8665,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PromptTestClaudeChatNoSystem may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8408,7 +8677,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8416,7 +8686,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PromptTestOpenAI(
@@ -8427,8 +8697,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PromptTestOpenAI may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8439,7 +8709,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8447,7 +8718,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PromptTestOpenAIChat(
@@ -8458,8 +8729,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PromptTestOpenAIChat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8470,7 +8741,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8478,7 +8750,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PromptTestOpenAIChatNoSystem(
@@ -8489,8 +8761,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PromptTestOpenAIChatNoSystem may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8501,7 +8773,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8509,7 +8782,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def PromptTestStreaming(
@@ -8520,8 +8793,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("PromptTestStreaming may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8532,7 +8805,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8540,7 +8814,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def RecursiveAliasCycle(
@@ -8551,8 +8825,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("RecursiveAliasCycle may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8563,7 +8837,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8571,7 +8846,7 @@ module Baml
       params(
         varargs: T.untyped,
         cls: Baml::Types::NodeWithAliasIndirection,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def RecursiveClassWithAliasIndirection(
@@ -8582,8 +8857,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("RecursiveClassWithAliasIndirection may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8594,7 +8869,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8602,7 +8878,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def RecursiveUnionTest(
@@ -8613,8 +8889,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("RecursiveUnionTest may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8625,7 +8901,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8633,7 +8910,7 @@ module Baml
       params(
         varargs: T.untyped,
         money: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ReturnAliasWithMergedAttributes(
@@ -8644,8 +8921,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ReturnAliasWithMergedAttributes may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8656,7 +8933,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8664,7 +8942,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ReturnFailingAssert(
@@ -8675,8 +8953,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ReturnFailingAssert may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8687,7 +8965,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8695,7 +8974,7 @@ module Baml
       params(
         varargs: T.untyped,
         s: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ReturnJsonEntry(
@@ -8706,8 +8985,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ReturnJsonEntry may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8718,7 +8997,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8726,7 +9006,7 @@ module Baml
       params(
         varargs: T.untyped,
         a: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def ReturnMalformedConstraints(
@@ -8737,8 +9017,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("ReturnMalformedConstraints may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8749,7 +9029,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8757,7 +9038,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def SchemaDescriptions(
@@ -8768,8 +9049,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("SchemaDescriptions may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8780,7 +9061,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8788,7 +9070,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def SimpleRecursiveListAlias(
@@ -8799,8 +9081,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("SimpleRecursiveListAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8811,7 +9093,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8819,7 +9102,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.anything,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def SimpleRecursiveMapAlias(
@@ -8830,8 +9113,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("SimpleRecursiveMapAlias may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8842,7 +9125,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8850,7 +9134,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def StreamBigNumbers(
@@ -8861,8 +9145,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("StreamBigNumbers may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8873,7 +9157,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8881,7 +9166,7 @@ module Baml
       params(
         varargs: T.untyped,
         theme: String,length: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def StreamFailingAssertion(
@@ -8892,8 +9177,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("StreamFailingAssertion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8904,7 +9189,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8912,7 +9198,7 @@ module Baml
       params(
         varargs: T.untyped,
         theme: String,length: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def StreamFailingCheck(
@@ -8923,8 +9209,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("StreamFailingCheck may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8935,7 +9221,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8943,7 +9230,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def StreamOneBigNumber(
@@ -8954,8 +9241,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("StreamOneBigNumber may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8966,7 +9253,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -8974,7 +9262,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def StreamUnionIntegers(
@@ -8985,8 +9273,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("StreamUnionIntegers may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -8997,7 +9285,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9005,7 +9294,7 @@ module Baml
       params(
         varargs: T.untyped,
         digits: Integer,yapping: T::Boolean,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def StreamingCompoundNumbers(
@@ -9016,8 +9305,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("StreamingCompoundNumbers may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9028,7 +9317,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9036,7 +9326,7 @@ module Baml
       params(
         varargs: T.untyped,
         document_txt: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def StructureDocument1559(
@@ -9047,8 +9337,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("StructureDocument1559 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9059,7 +9349,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9067,7 +9358,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::RecursiveAliasDependency,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TakeRecAliasDep(
@@ -9078,8 +9369,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TakeRecAliasDep may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9090,7 +9381,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9098,7 +9390,7 @@ module Baml
       params(
         varargs: T.untyped,
         story: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TellStory(
@@ -9109,8 +9401,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TellStory may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9121,7 +9413,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9129,7 +9422,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAnthropic(
@@ -9140,8 +9433,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAnthropic may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9152,7 +9445,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9160,7 +9454,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAnthropicShorthand(
@@ -9171,8 +9465,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAnthropicShorthand may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9183,7 +9477,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9191,7 +9486,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAws(
@@ -9202,8 +9497,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAws may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9214,7 +9509,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9222,7 +9518,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAwsClaude37(
@@ -9233,8 +9529,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAwsClaude37 may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9245,7 +9541,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9253,7 +9550,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAwsInferenceProfile(
@@ -9264,8 +9561,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAwsInferenceProfile may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9276,7 +9573,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9284,7 +9582,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAwsInvalidAccessKey(
@@ -9295,8 +9593,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAwsInvalidAccessKey may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9307,7 +9605,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9315,7 +9614,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAwsInvalidProfile(
@@ -9326,8 +9625,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAwsInvalidProfile may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9338,7 +9637,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9346,7 +9646,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAwsInvalidRegion(
@@ -9357,8 +9657,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAwsInvalidRegion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9369,7 +9669,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9377,7 +9678,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAwsInvalidSessionToken(
@@ -9388,8 +9689,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAwsInvalidSessionToken may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9400,7 +9701,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9408,7 +9710,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzure(
@@ -9419,8 +9721,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzure may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9431,7 +9733,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9439,7 +9742,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzureFailure(
@@ -9450,8 +9753,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzureFailure may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9462,7 +9765,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9470,7 +9774,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzureO1NoMaxTokens(
@@ -9481,8 +9785,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzureO1NoMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9493,7 +9797,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9501,7 +9806,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzureO1WithMaxCompletionTokens(
@@ -9512,8 +9817,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzureO1WithMaxCompletionTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9524,7 +9829,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9532,7 +9838,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzureO1WithMaxTokens(
@@ -9543,8 +9849,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzureO1WithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9555,7 +9861,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9563,7 +9870,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzureO3NoMaxTokens(
@@ -9574,8 +9881,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzureO3NoMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9586,7 +9893,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9594,7 +9902,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzureO3WithMaxCompletionTokens(
@@ -9605,8 +9913,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzureO3WithMaxCompletionTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9617,7 +9925,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9625,7 +9934,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestAzureWithMaxTokens(
@@ -9636,8 +9945,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestAzureWithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9648,7 +9957,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9656,7 +9966,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,not_cached: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestCaching(
@@ -9667,8 +9977,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestCaching may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9679,7 +9989,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9687,7 +9998,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFallbackClient(
@@ -9698,8 +10009,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFallbackClient may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9710,7 +10021,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9718,7 +10030,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFallbackStrategy(
@@ -9729,8 +10041,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFallbackStrategy may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9741,7 +10053,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9749,7 +10062,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFallbackToShorthand(
@@ -9760,8 +10073,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFallbackToShorthand may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9772,7 +10085,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9780,7 +10094,7 @@ module Baml
       params(
         varargs: T.untyped,
         myBool: T::Boolean,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleBool(
@@ -9791,8 +10105,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9803,7 +10117,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9811,7 +10126,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: Baml::Types::NamedArgsSingleClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleClass(
@@ -9822,8 +10137,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9834,7 +10149,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9842,7 +10158,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T::Array[T.any(Baml::Types::NamedArgsSingleEnumList, String)],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleEnumList(
@@ -9853,8 +10169,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleEnumList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9865,7 +10181,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9873,7 +10190,7 @@ module Baml
       params(
         varargs: T.untyped,
         myFloat: Float,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleFloat(
@@ -9884,8 +10201,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleFloat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9896,7 +10213,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9904,7 +10222,7 @@ module Baml
       params(
         varargs: T.untyped,
         myInt: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleInt(
@@ -9915,8 +10233,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9927,7 +10245,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9935,7 +10254,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, Baml::Types::StringToClassEntry],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleMapStringToClass(
@@ -9946,8 +10265,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleMapStringToClass may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9958,7 +10277,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9966,7 +10286,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, T::Hash[String, String]],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleMapStringToMap(
@@ -9977,8 +10297,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleMapStringToMap may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -9989,7 +10309,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -9997,7 +10318,7 @@ module Baml
       params(
         varargs: T.untyped,
         myMap: T::Hash[String, String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleMapStringToString(
@@ -10008,8 +10329,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleMapStringToString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10020,7 +10341,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10028,7 +10350,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleString(
@@ -10039,8 +10361,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10051,7 +10373,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10059,7 +10382,7 @@ module Baml
       params(
         varargs: T.untyped,
         myStringArray: T::Array[String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleStringArray(
@@ -10070,8 +10393,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleStringArray may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10082,7 +10405,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10090,7 +10414,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: T::Array[String],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestFnNamedArgsSingleStringList(
@@ -10101,8 +10425,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestFnNamedArgsSingleStringList may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10113,7 +10437,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10121,7 +10446,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestGemini(
@@ -10132,8 +10457,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestGemini may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10144,7 +10469,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10152,7 +10478,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestGeminiOpenAiGeneric(
@@ -10163,8 +10489,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestGeminiOpenAiGeneric may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10175,7 +10501,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10183,7 +10510,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestGeminiSystem(
@@ -10194,8 +10521,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestGeminiSystem may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10206,7 +10533,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10214,7 +10542,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestGeminiSystemAsChat(
@@ -10225,8 +10553,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestGeminiSystemAsChat may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10237,7 +10565,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10245,7 +10574,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestGroq(
@@ -10256,8 +10585,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestGroq may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10268,7 +10597,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10276,7 +10606,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestImageInput(
@@ -10287,8 +10617,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestImageInput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10299,7 +10629,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10307,7 +10638,7 @@ module Baml
       params(
         varargs: T.untyped,
         img: Baml::Image,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestImageInputAnthropic(
@@ -10318,8 +10649,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestImageInputAnthropic may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10330,7 +10661,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10338,7 +10670,7 @@ module Baml
       params(
         varargs: T.untyped,
         imgs: T::Array[Baml::Image],
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestImageListInput(
@@ -10349,8 +10681,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestImageListInput may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10361,7 +10693,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10369,7 +10702,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestMemory(
@@ -10380,8 +10713,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestMemory may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10392,7 +10725,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10400,7 +10734,7 @@ module Baml
       params(
         varargs: T.untyped,
         myArg: Baml::Types::NamedArgsSingleClass,myArg2: Baml::Types::NamedArgsSingleClass,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestMulticlassNamedArgs(
@@ -10411,8 +10745,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestMulticlassNamedArgs may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10423,7 +10757,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10431,7 +10766,7 @@ module Baml
       params(
         varargs: T.untyped,
         myBool: T::Boolean,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestNamedArgsLiteralBool(
@@ -10442,8 +10777,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestNamedArgsLiteralBool may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10454,7 +10789,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10462,7 +10798,7 @@ module Baml
       params(
         varargs: T.untyped,
         myInt: Integer,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestNamedArgsLiteralInt(
@@ -10473,8 +10809,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestNamedArgsLiteralInt may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10485,7 +10821,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10493,7 +10830,7 @@ module Baml
       params(
         varargs: T.untyped,
         myString: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestNamedArgsLiteralString(
@@ -10504,8 +10841,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestNamedArgsLiteralString may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10516,7 +10853,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10524,7 +10862,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOllama(
@@ -10535,8 +10873,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOllama may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10547,7 +10885,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10555,7 +10894,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOllamaHaiku(
@@ -10566,8 +10905,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOllamaHaiku may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10578,7 +10917,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10586,7 +10926,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAI(
@@ -10597,8 +10937,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAI may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10609,7 +10949,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10617,7 +10958,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIDummyClient(
@@ -10628,8 +10969,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIDummyClient may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10640,7 +10981,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10648,7 +10990,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIGPT4oMini(
@@ -10659,8 +11001,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIGPT4oMini may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10671,7 +11013,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10679,7 +11022,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAILegacyProvider(
@@ -10690,8 +11033,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAILegacyProvider may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10702,7 +11045,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10710,7 +11054,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIO1NoMaxTokens(
@@ -10721,8 +11065,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIO1NoMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10733,7 +11077,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10741,7 +11086,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIO1WithMaxCompletionTokens(
@@ -10752,8 +11097,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIO1WithMaxCompletionTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10764,7 +11109,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10772,7 +11118,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIO1WithMaxTokens(
@@ -10783,8 +11129,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIO1WithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10795,7 +11141,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10803,7 +11150,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIShorthand(
@@ -10814,8 +11161,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIShorthand may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10826,7 +11173,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10834,7 +11182,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIWithFinishReasonError(
@@ -10845,8 +11193,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIWithFinishReasonError may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10857,7 +11205,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10865,7 +11214,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIWithMaxTokens(
@@ -10876,8 +11225,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIWithMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10888,7 +11237,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10896,7 +11246,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenAIWithNullMaxTokens(
@@ -10907,8 +11257,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenAIWithNullMaxTokens may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10919,7 +11269,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10927,7 +11278,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestOpenRouterMistralSmall3_1_24b(
@@ -10938,8 +11289,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestOpenRouterMistralSmall3_1_24b may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10950,7 +11301,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10958,7 +11310,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestRetryConstant(
@@ -10969,8 +11321,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestRetryConstant may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -10981,7 +11333,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -10989,7 +11342,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestRetryExponential(
@@ -11000,8 +11353,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestRetryExponential may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -11012,7 +11365,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -11020,7 +11374,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestRoundRobinStrategy(
@@ -11031,8 +11385,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestRoundRobinStrategy may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -11043,7 +11397,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -11051,7 +11406,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestSingleFallbackClient(
@@ -11062,8 +11417,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestSingleFallbackClient may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -11074,7 +11429,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -11082,7 +11438,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestThinking(
@@ -11093,8 +11449,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestThinking may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -11105,7 +11461,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -11113,7 +11470,7 @@ module Baml
       params(
         varargs: T.untyped,
         question: Baml::Types::UniverseQuestionInput,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestUniverseQuestion(
@@ -11124,8 +11481,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestUniverseQuestion may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -11136,7 +11493,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -11144,7 +11502,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestVertex(
@@ -11155,8 +11513,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestVertex may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -11167,7 +11525,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -11175,7 +11534,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestVertexClaude(
@@ -11186,8 +11545,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestVertexClaude may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -11198,7 +11557,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -11206,7 +11566,7 @@ module Baml
       params(
         varargs: T.untyped,
         
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def TestVertexWithSystemInstructions(
@@ -11217,8 +11577,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("TestVertexWithSystemInstructions may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -11229,7 +11589,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -11237,7 +11598,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: T.any(String, T::Boolean),
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def UnionTest_Function(
@@ -11248,8 +11609,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("UnionTest_Function may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -11260,7 +11621,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -11268,7 +11630,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: Baml::Types::BlockConstraintForParam,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def UseBlockConstraint(
@@ -11279,8 +11641,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("UseBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -11291,7 +11653,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -11299,7 +11662,7 @@ module Baml
       params(
         varargs: T.untyped,
         input: Baml::Types::MaintainFieldOrder,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def UseMaintainFieldOrder(
@@ -11310,8 +11673,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("UseMaintainFieldOrder may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -11322,7 +11685,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -11330,7 +11694,7 @@ module Baml
       params(
         varargs: T.untyped,
         a: Baml::Types::MalformedConstraints2,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def UseMalformedConstraints(
@@ -11341,8 +11705,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("UseMalformedConstraints may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -11353,7 +11717,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 
@@ -11361,7 +11726,7 @@ module Baml
       params(
         varargs: T.untyped,
         inp: Baml::Types::NestedBlockConstraintForParam,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def UseNestedBlockConstraint(
@@ -11372,8 +11737,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("UseNestedBlockConstraint may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -11384,7 +11749,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 

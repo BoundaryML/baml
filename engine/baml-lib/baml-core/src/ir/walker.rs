@@ -1,5 +1,5 @@
 use anyhow::Result;
-use baml_types::{BamlValue, EvaluationContext, UnresolvedValue};
+use baml_types::{BamlValue, EvaluationContext, StreamingBehavior, UnresolvedValue};
 use indexmap::{IndexMap, IndexSet};
 
 use internal_baml_diagnostics::Span;
@@ -147,8 +147,8 @@ impl<'a> Walker<'a, &'a Enum> {
     pub fn alias(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
         self.item
             .attributes
-            .get("alias")
-            .map(|v| v.resolve_string(ctx))
+            .alias()
+            .map(|v| v.resolve(ctx))
             .transpose()
     }
 
@@ -182,11 +182,7 @@ impl<'a> Walker<'a, &'a Enum> {
 
 impl<'a> Walker<'a, &'a EnumValue> {
     pub fn skip(&self, ctx: &EvaluationContext<'_>) -> Result<bool> {
-        self.item
-            .attributes
-            .get("skip")
-            .map(|v| v.resolve_bool(ctx))
-            .unwrap_or(Ok(false))
+        Ok(self.item.attributes.skip())
     }
 
     pub fn name(&'a self) -> &'a str {
@@ -196,16 +192,16 @@ impl<'a> Walker<'a, &'a EnumValue> {
     pub fn alias(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
         self.item
             .attributes
-            .get("alias")
-            .map(|v| v.resolve_string(ctx))
+            .alias()
+            .map(|v| v.resolve(ctx))
             .transpose()
     }
 
     pub fn description(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
         self.item
             .attributes
-            .get("description")
-            .map(|v| v.resolve_string(ctx))
+            .description()
+            .map(|v| v.resolve(ctx))
             .transpose()
     }
 }
@@ -318,17 +314,13 @@ impl<'a> Walker<'a, &'a Class> {
     pub fn alias(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
         self.item
             .attributes
-            .get("alias")
-            .map(|v| v.resolve_string(ctx))
+            .alias()
+            .map(|v| v.resolve(ctx))
             .transpose()
     }
 
-    pub fn streaming_done(&self) -> bool {
-        self.item.attributes.get("stream.done").is_some()
-    }
-
-    pub fn streaming_state(&self) -> bool {
-        self.item.attributes.get("stream.with_state").is_some()
+    pub fn streaming_behavior(&self) -> StreamingBehavior {
+        self.item.attributes.streaming_behavior()
     }
 
     pub fn walk_fields(&'a self) -> impl Iterator<Item = Walker<'a, &'a Field>> {
@@ -378,11 +370,11 @@ impl<'a> Walker<'a, &'a TypeAlias> {
 }
 
 impl<'a> Walker<'a, &'a Client> {
-    pub fn elem(&'a self) -> &'a repr::Client {
+    pub fn elem(&self) -> &'a repr::Client {
         &self.item.elem
     }
 
-    pub fn name(&'a self) -> &'a str {
+    pub fn name(&self) -> &'a str {
         &self.elem().name
     }
 
@@ -404,7 +396,7 @@ impl<'a> Walker<'a, &'a Client> {
 }
 
 impl<'a> Walker<'a, &'a RetryPolicy> {
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &'a str {
         &self.elem().name.0
     }
 
@@ -463,29 +455,21 @@ impl<'a> Walker<'a, &'a Field> {
     pub fn alias(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
         self.item
             .attributes
-            .get("alias")
-            .map(|v| v.resolve_string(ctx))
+            .alias()
+            .map(|v| v.resolve(ctx))
             .transpose()
     }
 
     pub fn description(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
         self.item
             .attributes
-            .get("description")
-            .map(|v| v.resolve_string(ctx))
+            .description()
+            .map(|v| v.resolve(ctx))
             .transpose()
     }
 
-    pub fn streaming_done(&self) -> bool {
-        self.item.attributes.get("stream.done").is_some()
-    }
-
-    pub fn streaming_needed(&self) -> bool {
-        self.item.attributes.get("stream.not_null").is_some()
-    }
-
-    pub fn streaming_state(&self) -> bool {
-        self.item.attributes.get("stream.with_state").is_some()
+    pub fn streaming_behavior(&self) -> StreamingBehavior {
+        self.item.attributes.streaming_behavior()
     }
 
     pub fn span(&self) -> Option<&crate::Span> {

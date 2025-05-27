@@ -20,27 +20,19 @@ pub(crate) struct GoTypes<'ir> {
 }
 
 pub(crate) fn cast_value(container_variable_name: &str, field_type: &GoType) -> String {
-    if field_type.is_class {
-        return format!(
-            "*({}).(*{})",
-            container_variable_name,
-            filters::type_name_without_pointer(&field_type.name)
-                .ok()
-                .unwrap()
-        );
-    } else if field_type.is_union {
-        return format!("*({container_variable_name}).(*{})", field_type.name);
+    if field_type.is_slice || field_type.is_map {
+        return format!("({}).({})", container_variable_name, field_type.name);
     } else if field_type.is_pointer {
         let inner_type = field_type.underlying_type.as_ref().unwrap();
         return format!(
-            "castOptional({container_variable_name}, func (item any) {} {{
+            "castOptional({container_variable_name}, func (item any) *{} {{
     return {}
 }})",
             inner_type.name,
             cast_value("item", inner_type),
         );
     } else {
-        return format!("({}).({})", container_variable_name, field_type.name);
+        return format!("({}).(*{})", container_variable_name, field_type.name);
     }
 }
 
@@ -231,16 +223,16 @@ struct GoField<'ir> {
 }
 
 pub struct GoType {
-    name: String,
-    is_pointer: bool,
-    is_slice: bool,
-    is_map: bool,
-    is_primitive: bool,
-    is_class: bool,
-    is_integer: bool,
-    is_enum: bool,
-    is_union: bool,
-    underlying_type: Option<Box<GoType>>,
+    pub name: String,
+    pub is_pointer: bool,
+    pub is_slice: bool,
+    pub is_map: bool,
+    pub is_primitive: bool,
+    pub is_class: bool,
+    pub is_integer: bool,
+    pub is_enum: bool,
+    pub is_union: bool,
+    pub underlying_type: Option<Box<GoType>>,
 }
 
 struct GoTypeAlias<'ir> {

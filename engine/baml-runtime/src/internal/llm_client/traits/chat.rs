@@ -1,10 +1,9 @@
 use anyhow::Result;
-use baml_types::tracing::events::HttpRequestId;
 use internal_baml_jinja::{ChatOptions, RenderedChatMessage};
 
 use crate::{internal::llm_client::LLMResponse, RuntimeContext};
 
-use super::StreamResponse;
+use super::{HttpContext, StreamResponse};
 
 pub trait WithChatOptions {
     fn chat_options(&self, ctx: &RuntimeContext) -> Result<ChatOptions>;
@@ -24,21 +23,15 @@ where
 
 pub trait WithChat: Sync + Send + WithChatOptions {
     #[allow(async_fn_in_trait)]
-    async fn chat(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &[RenderedChatMessage],
-        http_request_id: HttpRequestId,
-    ) -> LLMResponse;
+    async fn chat(&self, ctx: &impl HttpContext, prompt: &[RenderedChatMessage]) -> LLMResponse;
 }
 
 pub trait WithStreamChat: Sync + Send {
     #[allow(async_fn_in_trait)]
     async fn stream_chat(
         &self,
-        ctx: &RuntimeContext,
+        ctx: &impl HttpContext,
         prompt: &[RenderedChatMessage],
-        http_request_id: HttpRequestId,
     ) -> StreamResponse;
 }
 
@@ -49,12 +42,7 @@ where
     T: WithNoChat + Send + Sync + WithChatOptions,
 {
     #[allow(async_fn_in_trait)]
-    async fn chat(
-        &self,
-        _: &RuntimeContext,
-        _: &[RenderedChatMessage],
-        _: HttpRequestId,
-    ) -> LLMResponse {
+    async fn chat(&self, _: &impl HttpContext, _: &[RenderedChatMessage]) -> LLMResponse {
         LLMResponse::InternalFailure("Chat prompts are not supported by this provider".to_string())
     }
 }
@@ -64,12 +52,7 @@ where
     T: WithNoChat + Send + Sync,
 {
     #[allow(async_fn_in_trait)]
-    async fn stream_chat(
-        &self,
-        _: &RuntimeContext,
-        _: &[RenderedChatMessage],
-        _: HttpRequestId,
-    ) -> StreamResponse {
+    async fn stream_chat(&self, _: &impl HttpContext, _: &[RenderedChatMessage]) -> StreamResponse {
         Err(LLMResponse::InternalFailure(
             "Chat prompts are not supported by this provider".to_string(),
         ))

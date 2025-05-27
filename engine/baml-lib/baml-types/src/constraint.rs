@@ -20,7 +20,7 @@ impl Constraint {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, serde::Serialize, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, Eq, Hash, Ord, PartialOrd)]
 pub enum ConstraintLevel {
     Check,
     Assert,

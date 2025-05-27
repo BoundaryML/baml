@@ -7,27 +7,19 @@ mod internal_tests {
     use std::collections::HashMap;
 
     use baml_runtime::tracingv2::publisher::publisher::flush;
+    use baml_runtime::tracingv2::storage::storage::Collector;
     use baml_runtime::{tracingv2::storage::storage::BAML_TRACER, BamlRuntime};
     use std::sync::Once;
 
     // use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
     use baml_runtime::InternalRuntimeInterface;
-    use baml_runtime::{
-        internal::llm_client::LLMResponse, DiagnosticsError, IRHelper,
-    };
-    use baml_types::tracing::events::FunctionId;
+    use baml_runtime::{internal::llm_client::LLMResponse, DiagnosticsError, IRHelper};
     use baml_types::BamlValue;
 
     use wasm_bindgen_test::*;
 
-    static INIT: Once = Once::new();
-
-    #[test]
+    #[test_log::test]
     fn test_log_collector() -> Result<(), Box<dyn std::error::Error>> {
-        INIT.call_once(|| {
-            env_logger::init();
-            console_error_panic_hook::set_once();
-        });
         log::info!("Running test_call_function");
 
         let mut files = HashMap::new();
@@ -94,22 +86,25 @@ mod internal_tests {
 
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
+        let collector = std::sync::Arc::new(Collector::new(Some("debug".to_string())));
+        let collectors = vec![collector.clone()];
         let call_function_future = runtime.call_function(
             function_name.to_string(),
             &params,
             &ctx_manager,
             None,
             None,
-            // TODO: add an actual collector
-            None,
+            Some(collectors),
+            HashMap::new(),
         );
 
         let (res, function_span_id) = runtime.async_runtime.block_on(call_function_future);
 
         let trace_storage = BAML_TRACER.lock().unwrap();
-        let trace = trace_storage
-            .get_events(&FunctionId(function_span_id.unwrap_or_default().to_string()))
-            .unwrap();
+        let events = trace_storage.events();
+        let events = events.iter().map(|k| k.0).collect::<Vec<_>>();
+        log::info!("Events: {:#?}", events);
+        let trace = trace_storage.get_events(&function_span_id).unwrap();
 
         log::info!("Trace: {:#?}", trace);
 

@@ -1,7 +1,8 @@
 mod call;
 mod stream;
 
-use baml_types::tracing::events::{HttpRequestId, LLMUsage};
+use baml_ids::HttpRequestId;
+use baml_types::tracing::events::{LLMChatMessage, LLMChatMessagePart, LLMUsage};
 use serde_json::json;
 use web_time::Duration; // Add this line
 
@@ -13,7 +14,7 @@ use crate::{
     RuntimeContext,
 };
 
-use super::traits::{WithClientProperties, WithRenderRawCurl};
+use super::traits::{HttpContext, WithClientProperties, WithRenderRawCurl};
 use super::LLMCompleteResponse;
 use super::{
     strategy::roundrobin::RoundRobinStrategy,
@@ -28,13 +29,12 @@ pub use stream::orchestrate_stream;
 use crate::tracing::Visualize;
 use anyhow::Result;
 use baml_types::tracing::events::{
-    ContentId, FunctionId, HTTPRequest, HTTPResponse, LoggedLLMRequest, LoggedLLMResponse,
-    TraceData, TraceEvent, TraceLevel,
+    HTTPRequest, HTTPResponse, LoggedLLMRequest, LoggedLLMResponse, TraceData, TraceEvent,
 };
 use baml_types::BamlValue;
 use internal_baml_core::ir::repr::IntermediateRepr;
-use internal_baml_jinja::RenderedChatMessage;
 use internal_baml_jinja::RenderedPrompt;
+use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
 use serde::Serialize;
 use std::{collections::HashMap, sync::Arc};
 use web_time::SystemTime;
@@ -201,40 +201,33 @@ impl WithRenderRawCurl for OrchestratorNode {
 }
 
 impl WithSingleCallable for OrchestratorNode {
-    async fn single_call(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-        http_request_id: HttpRequestId,
-    ) -> LLMResponse {
+    async fn single_call(&self, ctx: &impl HttpContext, prompt: &RenderedPrompt) -> LLMResponse {
         // Create IDs for the function call and content
-        if let Some(span_id) = ctx.span_id {
-            let function_id = FunctionId(span_id.to_string());
-            let event_id = ContentId(uuid::Uuid::new_v4().to_string());
-            // Log LLMRequest
-            BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
-                span_id: function_id.clone(),
-                event_id: event_id.clone(),
-                span_chain: vec![],
-                timestamp: SystemTime::now(),
-                callsite: "OrchestratorNode::single_call".to_string(),
-                verbosity: TraceLevel::Info,
-                content: TraceData::LLMRequest(Arc::new(LoggedLLMRequest {
-                    request_id: http_request_id.clone(),
-                    client_name: self.provider.name().to_string(),
-                    client_provider: self.provider.provider_name().to_string(),
-                    params: serde_json::json!({
-                        "request_options": "",
-                    }),
-                    // Some placeholder JSON representation of the prompt
-                    prompt: serde_json::to_value(prompt).unwrap(),
-                })),
-                tags: Default::default(),
-            }));
-        } else {
-            log::warn!(
-                "No span id found for function while emitting logs. Log event may be dropped."
+        {
+            let request = LoggedLLMRequest {
+                request_id: ctx.http_request_id().clone(),
+                client_name: self.provider.name().to_string(),
+                client_provider: self.provider.provider_name().to_string(),
+                params: self.provider.request_options().clone(),
+                prompt: match prompt {
+                    RenderedPrompt::Chat(chat) => chat
+                        .iter()
+                        .map(|m| LLMChatMessage {
+                            role: m.role.clone(),
+                            content: m.parts.iter().map(|p| p.into()).collect(),
+                        })
+                        .collect(),
+                    RenderedPrompt::Completion(completion) => {
+                        todo!("not implemented")
+                    }
+                },
+            };
+
+            let event = TraceEvent::new_llm_request(
+                ctx.runtime_context().call_id_stack.clone(),
+                Arc::new(request),
             );
+            BAML_TRACER.lock().unwrap().put(Arc::new(event));
         }
 
         // Possibly increment RoundRobin scope
@@ -249,25 +242,16 @@ impl WithSingleCallable for OrchestratorNode {
             .for_each(drop);
 
         // Call the underlying LLM
-        let response = self
-            .provider
-            .single_call(ctx, prompt, http_request_id.clone())
-            .await;
+        let response = self.provider.single_call(ctx, prompt).await;
 
         // After we get the response, log LLMResponse
-        if let Some(span_id) = ctx.span_id {
-            let function_id = FunctionId(span_id.to_string());
+        {
             let trace_event = make_trace_event_for_response(
                 &response,
-                &function_id,
-                &http_request_id,
-                "OrchestratorNode::single_call::response",
+                ctx.runtime_context().call_id_stack.clone(),
+                ctx.http_request_id(),
             );
             BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
-        } else {
-            log::warn!(
-                "No span id found for function while emitting logs. Log event may be dropped."
-            );
         }
 
         response
@@ -275,39 +259,32 @@ impl WithSingleCallable for OrchestratorNode {
 }
 
 impl WithStreamable for OrchestratorNode {
-    async fn stream(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-        http_request_id: HttpRequestId,
-    ) -> StreamResponse {
-        let request_id = ContentId(uuid::Uuid::new_v4().to_string());
-        let event_id = ContentId(uuid::Uuid::new_v4().to_string());
+    async fn stream(&self, ctx: &impl HttpContext, prompt: &RenderedPrompt) -> StreamResponse {
+        {
+            let request = LoggedLLMRequest {
+                request_id: ctx.http_request_id().clone(),
+                client_name: self.provider.name().to_string(),
+                client_provider: self.provider.provider_name().to_string(),
+                params: self.provider.request_options().clone(),
+                prompt: match prompt {
+                    RenderedPrompt::Chat(chat) => chat
+                        .iter()
+                        .map(|m| LLMChatMessage {
+                            role: m.role.clone(),
+                            content: m.parts.iter().map(|p| p.into()).collect(),
+                        })
+                        .collect(),
+                    RenderedPrompt::Completion(completion) => {
+                        todo!("not implemented")
+                    }
+                },
+            };
 
-        // Log streaming request
-        if let Some(span_id) = ctx.span_id {
-            BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
-                span_id: FunctionId(span_id.to_string()),
-                event_id: event_id.clone(),
-                span_chain: vec![],
-                timestamp: SystemTime::now(),
-                callsite: "OrchestratorNode::stream".to_string(),
-                verbosity: TraceLevel::Info,
-                content: TraceData::LLMRequest(Arc::new(LoggedLLMRequest {
-                    request_id: http_request_id.clone(),
-                    client_name: self.provider.name().to_string(),
-                    client_provider: self.provider.provider_name().to_string(),
-                    params: serde_json::json!({
-                        "request_options": "",
-                    }),
-                    prompt: serde_json::to_value(prompt).unwrap(),
-                })),
-                tags: Default::default(),
-            }));
-        } else {
-            log::warn!(
-                "No span id found for function while emitting logs. Log event may be dropped."
+            let event = TraceEvent::new_llm_request(
+                ctx.runtime_context().call_id_stack.clone(),
+                Arc::new(request),
             );
+            BAML_TRACER.lock().unwrap().put(Arc::new(event));
         }
 
         // Possibly increment RoundRobin scope
@@ -322,30 +299,19 @@ impl WithStreamable for OrchestratorNode {
             .for_each(drop);
 
         // Perform the streaming call
-        let result = self
-            .provider
-            .stream(ctx, prompt, http_request_id.clone())
-            .await;
+        let result = self.provider.stream(ctx, prompt).await;
 
         // We do not log the full LLMResponse here the same way as single_call,
         // because streaming typically emits chunked events. If you want to log
         // events at the end of the stream, you could handle it after collecting
         // all chunks. For now, just log any immediate error:
         if let Err(err_resp) = &result {
-            if let Some(span_id) = ctx.span_id {
-                let function_id = FunctionId(span_id.to_string());
-                let trace_event = make_trace_event_for_response(
-                    err_resp,
-                    &function_id,
-                    &http_request_id,
-                    "OrchestratorNode::stream",
-                );
-                BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
-            } else {
-                log::warn!(
-                    "No span id found for function while emitting logs. Log event may be dropped."
-                );
-            }
+            let trace_event = make_trace_event_for_response(
+                err_resp,
+                ctx.runtime_context().call_id_stack.clone(),
+                ctx.http_request_id(),
+            );
+            BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
         }
 
         result
