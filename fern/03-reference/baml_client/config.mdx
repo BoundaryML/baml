@@ -58,6 +58,9 @@ Setting can also be modified via functions in `baml_client.config`.
   ```
 
   ### reset_baml_env_vars
+  <Warning>
+  `reset_baml_env_vars` is deprecated and is safe to remove, since environment variables are now lazily loaded on each function call
+  </Warning>
 
   Resets the environment variables to the values in the provided dictionary.
   Will also reset any logging related environment variables to those passed in (if set explicitly).

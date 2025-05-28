@@ -113,6 +113,7 @@ jinja_body        =  { (!(jinja_block_open | jinja_block_close) ~ ANY)* }
 jinja_expression  =  { jinja_block_open ~ jinja_body ~ jinja_block_close }
 expression        =  {
     generic_fn_app |
+    for_loop |
     fn_app |
     if_expression |
     lambda |
@@ -251,12 +252,18 @@ if_expression = { "if" ~ expression ~ NEWLINE? ~
    "{"~ NEWLINE? ~ expression ~ NEWLINE? ~ "}" ~
    ( "else" ~ "{"~ NEWLINE? ~ expression ~ NEWLINE? ~ "}" )? }
 
+// For loop, e.g.
+// for (r in resumes) {
+//   ExtractResume(x)
+// }
+for_loop = { "for" ~ "(" ~ identifier ~ "in" ~ expression ~ ")" ~ expr_block }
+
 // Anonymous function.
 lambda = { named_argument_list ~ "=>" ~ expression }
 
 // Class constructors.
 // e.g. `new MyClass { x = 1, y = 2 }`.
-// 
+//
 class_constructor = { identifier ~ "{" ~ NEWLINE? ~ (class_field_value_pair ~ COMMA? ~ NEWLINE?)* ~ NEWLINE? ~ "}" }
 
 // A single field in a class constructor.

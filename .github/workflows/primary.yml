@@ -81,25 +81,33 @@ jobs:
         run: pnpm install --frozen-lockfile
         working-directory: integ-tests/typescript
       - name: Test Node Generator
-        run: pnpm generate
+        run: |
+          pnpm generate || (echo "::error:: merge canary and run codegen again" && exit 1)
         working-directory: integ-tests/typescript
       - name: Ensure No Changes
-        run: git diff --exit-code
+        run: |
+          git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
       - name: Test Node Generator (1 of 3)
-        run: pnpm generate
+        run: |
+          pnpm generate || (echo "::error:: merge canary and run codegen again" && exit 1)
         working-directory: integ-tests/typescript
       - name: Ensure No Changes (1 of 3)
-        run: git diff --exit-code
+        run: |
+          git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
       - name: Test Node Generator (2 of 3)
-        run: pnpm generate
+        run: |
+          pnpm generate || (echo "::error:: merge canary and run codegen again" && exit 1)
         working-directory: integ-tests/typescript
       - name: Ensure No Changes (2 of 3)
-        run: git diff --exit-code
+        run: |
+          git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
       - name: Test Node Generator (3 of 3)
-        run: pnpm generate
+        run: |
+          pnpm generate || (echo "::error:: merge canary and run codegen again" && exit 1)
         working-directory: integ-tests/typescript
       - name: Ensure No Changes (3 of 3)
-        run: git diff --exit-code
+        run: |
+          git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
   build:
     runs-on: ubuntu-latest
     steps:

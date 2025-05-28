@@ -1,0 +1,42 @@
+<!-- Plugin Configuration File. Read more: https://plugins.jetbrains.com/docs/intellij/plugin-configuration-file.html -->
+<idea-plugin>
+    <id>com.boundaryml.jetbrains_ext</id>
+    <name>BAML Playground</name>
+    <vendor>BoundaryML</vendor>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>org.jetbrains.plugins.textmate</depends>
+
+    <resource-bundle>messages.MyBundle</resource-bundle>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <toolWindow
+                id="BAML Playground"
+                factoryClass="com.boundaryml.jetbrains_ext.BamlToolWindowFactory"
+                icon="/icons/baml-lamb-light-mode.svg"
+        />
+        <postStartupActivity implementation="com.boundaryml.jetbrains_ext.BamlProjectActivity" />
+        <fileType name="BAML"
+                  language="baml"
+                  fieldName="INSTANCE"
+                  implementationClass="com.boundaryml.jetbrains_ext.BamlFileType"
+                  extensions="baml"
+        />
+
+        <textmate.bundleProvider implementation="com.boundaryml.jetbrains_ext.BamlTextMateBundleProvider" />
+        <!--
+          We have to explicitly register textmate as the highlight provider because of a bug in how jetbrains textmate
+          works (and it's incredibly poorly documented). See jetbrains-plugin-fss for prior art
+          https://github.com/qligier/jetbrains-plugin-fss/blob/905622be4058fda8014f874af4acae46f24cc556/src/main/resources/META-INF/plugin.xml#L51-L53
+        -->
+        <editorHighlighterProvider
+                filetype="BAML"
+                implementationClass="org.jetbrains.plugins.textmate.language.syntax.highlighting.TextMateEditorHighlighterProvider"/>
+        <lang.syntaxHighlighterFactory
+                language="baml"
+                implementationClass="org.jetbrains.plugins.textmate.language.syntax.highlighting.TextMateSyntaxHighlighterFactory"/>
+
+    </extensions>
+
+
+</idea-plugin>

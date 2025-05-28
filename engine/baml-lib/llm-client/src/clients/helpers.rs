@@ -4,10 +4,11 @@ use baml_types::{GetEnvVar, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 
 use crate::{
-    SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedResponseType, UnresolvedRolesSelection
+    SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter,
+    UnresolvedResponseType, UnresolvedRolesSelection,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Hash)]
 pub struct UnresolvedUrl(StringOr);
 
 impl UnresolvedUrl {

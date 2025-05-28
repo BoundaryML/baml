@@ -3,7 +3,6 @@ pub mod expr;
 mod map;
 mod media;
 mod minijinja;
-pub mod rpc;
 pub mod tracing;
 
 pub mod baml_value;

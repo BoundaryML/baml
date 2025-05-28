@@ -1,16 +1,15 @@
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    internal::llm_client::{traits::WithClient, ErrorCode, LLMErrorResponse, LLMResponse},
+    internal::llm_client::{
+        traits::{HttpContext, WithClient},
+        ErrorCode, LLMErrorResponse, LLMResponse,
+    },
     tracingv2::storage::storage::BAML_TRACER,
-    RuntimeContext,
 };
 use anyhow::{Context, Result};
 use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
-use baml_types::tracing::events::{
-    BamlOptions, ContentId, FunctionEnd, FunctionId, FunctionStart, HTTPBody, HTTPRequest,
-    HTTPResponse, HttpRequestId, TraceData, TraceEvent, TraceLevel,
-};
+use baml_types::tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, TraceEvent};
 use baml_types::BamlMap;
 use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
 pub use internal_llm_client::ResponseType;
@@ -111,42 +110,31 @@ pub(crate) fn json_body(input: JsonBodyInput) -> Result<serde_json::Value> {
     Ok(serde_json::Value::String(string_to_parse))
 }
 
-pub(crate) fn json_headers(headers: &HeaderMap) -> serde_json::Value {
-    let mut map = serde_json::Map::new();
+pub(crate) fn json_headers(headers: &HeaderMap) -> HashMap<String, String> {
+    let mut map = HashMap::new();
     for (key, value) in headers.iter() {
         let value_str = value.to_str().unwrap_or_default().to_string();
-        map.insert(key.to_string(), serde_json::Value::String(value_str));
+        map.insert(key.to_string(), value_str);
     }
-    serde_json::Value::Object(map)
+    map
 }
 
 async fn log_http_response(
-    runtime_context: &RuntimeContext,
-    trace_level: TraceLevel,
-    http_request_id: HttpRequestId,
+    runtime_context: &impl HttpContext,
     status: u16,
-    headers: serde_json::Value,
+    headers: Option<HashMap<String, String>>,
     body: HTTPBody,
 ) {
-    if let Some(span_id) = runtime_context.span_id {
-        BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
-            span_id: FunctionId(span_id.to_string()),
-            event_id: ContentId(uuid::Uuid::new_v4().to_string()),
-            span_chain: vec![],
-            timestamp: web_time::SystemTime::now(),
-            callsite: "".to_string(),
-            verbosity: trace_level,
-            content: TraceData::RawLLMResponse(Arc::new(HTTPResponse {
-                request_id: http_request_id,
-                status,
-                headers,
-                body,
-            })),
-            tags: Default::default(),
-        }));
-    } else {
-        log::warn!("No span id found for function while emitting logs. Log event may be dropped.",);
-    }
+    let event = TraceEvent::new_raw_llm_response(
+        runtime_context.runtime_context().call_id_stack.clone(),
+        Arc::new(HTTPResponse {
+            request_id: runtime_context.http_request_id().clone(),
+            status,
+            headers,
+            body,
+        }),
+    );
+    BAML_TRACER.lock().unwrap().put(Arc::new(event));
 }
 
 pub(crate) async fn build_and_log_outbound_request(
@@ -154,17 +142,8 @@ pub(crate) async fn build_and_log_outbound_request(
     prompt: either::Either<&String, &[RenderedChatMessage]>,
     allow_proxy: bool,
     stream: bool,
-    runtime_context: &RuntimeContext,
-    http_request_id: HttpRequestId,
-) -> Result<
-    (
-        HttpRequestId,
-        web_time::SystemTime,
-        web_time::Instant,
-        reqwest::Request,
-    ),
-    LLMResponse,
-> {
+    runtime_context: &impl HttpContext,
+) -> Result<(web_time::SystemTime, web_time::Instant, reqwest::Request), LLMResponse> {
     let system_now = web_time::SystemTime::now();
     let instant_now = web_time::Instant::now();
 
@@ -201,16 +180,11 @@ pub(crate) async fn build_and_log_outbound_request(
         }
     };
 
-    if let Some(span_id) = runtime_context.span_id {
-        BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
-            span_id: FunctionId(span_id.to_string()),
-            event_id: ContentId(uuid::Uuid::new_v4().to_string()),
-            span_chain: vec![],
-            timestamp: web_time::SystemTime::now(),
-            callsite: "".to_string(),
-            verbosity: TraceLevel::Info,
-            content: TraceData::RawLLMRequest(Arc::new(HTTPRequest {
-                id: http_request_id.clone(),
+    {
+        let event = TraceEvent::new_raw_llm_request(
+            runtime_context.runtime_context().call_id_stack.clone(),
+            Arc::new(HTTPRequest {
+                id: runtime_context.http_request_id().clone(),
                 url: built_req.url().to_string(),
                 method: built_req.method().to_string(),
                 headers: json_headers(built_req.headers()),
@@ -222,24 +196,21 @@ pub(crate) async fn build_and_log_outbound_request(
                         .unwrap_or_default()
                         .into(),
                 ),
-            })),
-            tags: Default::default(),
-        }));
-    } else {
-        log::warn!("No span id found for function while emitting logs. Log event may be dropped.");
+            }),
+        );
+        BAML_TRACER.lock().unwrap().put(Arc::new(event));
     }
 
-    Ok((http_request_id, system_now, instant_now, built_req))
+    Ok((system_now, instant_now, built_req))
 }
 
 pub async fn execute_request(
     client: &(impl WithClient + RequestBuilder),
     built_req: reqwest::Request,
-    http_request_id: HttpRequestId,
     prompt: either::Either<&String, &[RenderedChatMessage]>,
     system_now: web_time::SystemTime,
     instant_now: web_time::Instant,
-    runtime_context: &RuntimeContext,
+    runtime_context: &impl HttpContext,
     consume_body: bool,
 ) -> Result<(EitherResponse, web_time::SystemTime, web_time::Instant), LLMResponse> {
     let response = match client.http_client().execute(built_req).await {
@@ -247,12 +218,10 @@ pub async fn execute_request(
         Err(e) => {
             log_http_response(
                 runtime_context,
-                TraceLevel::Error,
-                http_request_id.clone(),
                 e.status()
                     .unwrap_or(reqwest::StatusCode::INTERNAL_SERVER_ERROR)
                     .as_u16(),
-                serde_json::Value::Null,
+                None,
                 HTTPBody::new(format!("No response. Error: {:?}", e).into_bytes()),
             )
             .await;
@@ -291,10 +260,8 @@ pub async fn execute_request(
             Err(e) => {
                 log_http_response(
                     runtime_context,
-                    TraceLevel::Error,
-                    http_request_id.clone(),
                     0,
-                    serde_json::Value::Null,
+                    None,
                     HTTPBody::new(format!("Could not read response body: {:?}", e).into_bytes()),
                 )
                 .await;
@@ -320,10 +287,8 @@ pub async fn execute_request(
 
         log_http_response(
             runtime_context,
-            TraceLevel::Error,
-            http_request_id.clone(),
             logged_res.status.as_u16(),
-            json_headers(&logged_res.headers),
+            Some(json_headers(&logged_res.headers)),
             HTTPBody::new(resp_body.clone().into_bytes()),
         )
         .await;
@@ -349,10 +314,8 @@ pub async fn execute_request(
             Err(e) => {
                 log_http_response(
                     runtime_context,
-                    TraceLevel::Error,
-                    http_request_id.clone(),
                     0,
-                    serde_json::Value::Null,
+                    None,
                     HTTPBody::new(format!("Could not read response body: {:?}", e).into_bytes()),
                 )
                 .await;
@@ -377,10 +340,8 @@ pub async fn execute_request(
         };
         log_http_response(
             runtime_context,
-            TraceLevel::Info,
-            http_request_id.clone(),
             logged_response.status.as_u16(),
-            json_headers(&logged_response.headers),
+            Some(json_headers(&logged_response.headers)),
             HTTPBody::new(resp_body.into_bytes()),
         )
         .await;
@@ -404,23 +365,14 @@ pub async fn make_request(
     client: &(impl WithClient + RequestBuilder),
     prompt: either::Either<&String, &[RenderedChatMessage]>,
     stream: bool,
-    runtime_context: &RuntimeContext,
-    http_request_id: HttpRequestId,
+    runtime_context: &impl HttpContext,
 ) -> Result<(LoggedHttpResponse, web_time::SystemTime, web_time::Instant), LLMResponse> {
-    let (request_id, system_now, instant_now, built_req) = build_and_log_outbound_request(
-        client,
-        prompt,
-        true,
-        stream,
-        runtime_context,
-        http_request_id,
-    )
-    .await?;
+    let (system_now, instant_now, built_req) =
+        build_and_log_outbound_request(client, prompt, true, stream, runtime_context).await?;
 
     match execute_request(
         client,
         built_req,
-        request_id,
         prompt,
         system_now,
         instant_now,
@@ -440,11 +392,10 @@ pub async fn make_parsed_request(
     prompt: either::Either<&String, &[RenderedChatMessage]>,
     stream: bool,
     response_type: ResponseType,
-    runtime_context: &RuntimeContext,
-    http_request_id: HttpRequestId,
+    runtime_context: &impl HttpContext,
 ) -> LLMResponse {
     let (response, system_now, instant_now) =
-        match make_request(client, prompt, stream, runtime_context, http_request_id).await {
+        match make_request(client, prompt, stream, runtime_context).await {
             Ok((response, system_now, instant_now)) => (response, system_now, instant_now),
             Err(e) => return e,
         };

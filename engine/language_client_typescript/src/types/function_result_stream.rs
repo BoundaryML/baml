@@ -3,6 +3,7 @@ use napi::threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMod
 use napi::Env;
 use napi::{JsFunction, JsObject, JsUndefined};
 use napi_derive::napi;
+use std::collections::HashMap;
 
 use crate::errors::from_anyhow_error;
 
@@ -17,7 +18,8 @@ crate::lang_wrapper!(
     thread_safe,
     callback: Option<napi::Ref<()>>,
     tb: Option<baml_runtime::type_builder::TypeBuilder>,
-    cb: Option<baml_runtime::client_registry::ClientRegistry>
+    cb: Option<baml_runtime::client_registry::ClientRegistry>,
+    env_vars: HashMap<String, String>
 );
 
 impl FunctionResultStream {
@@ -32,6 +34,7 @@ impl FunctionResultStream {
             callback: event,
             tb,
             cb,
+            env_vars: HashMap::new(),
         }
     }
 }
@@ -88,13 +91,14 @@ impl FunctionResultStream {
         let ctx_mng = rctx.inner.clone();
         let tb = self.tb.clone();
         let cb = self.cb.clone();
+        let env_vars = self.env_vars.clone();
 
         let fut = async move {
             let ctx_mng = ctx_mng;
             let res = inner
                 .lock()
                 .await
-                .run(on_event, &ctx_mng, tb.as_ref(), cb.as_ref())
+                    .run(on_event, &ctx_mng, tb.as_ref(), cb.as_ref(), env_vars)
                 .await;
             res.0.map(FunctionResult::from).map_err(from_anyhow_error)
         };

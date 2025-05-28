@@ -1,0 +1,23 @@
+[package]
+edition = "2021"
+name = "baml-ids"
+version.workspace = true
+authors.workspace = true
+license-file.workspace = true
+description = "Typesafe IDs for BAML backends and runtime"
+
+[package.metadata.rustflags]
+RSTEST_TIMEOUT = "10"
+
+[lints.rust]
+dead_code = "deny"
+elided_named_lifetimes = "deny"
+unused_imports = "deny"
+unused_variables = "deny"
+
+[dependencies]
+type-safe-id = "0.3.2"
+uuid.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+anyhow.workspace = true

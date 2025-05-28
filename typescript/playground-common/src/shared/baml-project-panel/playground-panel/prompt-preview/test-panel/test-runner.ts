@@ -1,7 +1,7 @@
 import type { WasmFunctionResponse, WasmSpan, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { findMediaFile } from '../media-utils'
-import { ctxAtom, runtimeAtom, wasmAtom } from '../../../atoms'
+import { ctxAtom, envVarsAtom, runtimeAtom, wasmAtom } from '../../../atoms'
 import { useAtomCallback } from 'jotai/utils'
 import { vscode } from '../../../vscode'
 import { useCallback } from 'react'
@@ -34,6 +34,7 @@ const useRunTests = (maxBatchSize = 5) => {
   const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)
   const setSelectedFunction = useSetAtom(selectedFunctionAtom)
   const setIsClientCallGraphEnabled = useSetAtom(isClientCallGraphEnabledAtom)
+  const envVars = useAtomValue(envVarsAtom)
   const runTests = useAtomCallback(
     useCallback(
       async (get, set, tests: { functionName: string; testName: string }[]) => {
@@ -81,6 +82,7 @@ const useRunTests = (maxBatchSize = 5) => {
 
         const runTest = async (test: { functionName: string; testName: string }) => {
           console.log('runTest', test)
+          console.log('envVars', envVars)
 
           // TEMPORARY DEBUGGING HELPER:
           // console.log("Try to set flashing regions")
@@ -145,6 +147,8 @@ const useRunTests = (maxBatchSize = 5) => {
                   console.error('Failed to send spans to VSCode:', e)
                 }
               },
+              // TODO this needs to be moved down cause its wrong param.
+              envVars,
             )
             console.log('result', result)
 
@@ -216,7 +220,7 @@ const useRunTests = (maxBatchSize = 5) => {
           clearHighlights() // Clear highlights when all tests are done
         })
       },
-      [maxBatchSize, rt, ctx, wasm],
+      [maxBatchSize, rt, ctx, wasm, envVars],
     ),
   )
 
@@ -230,7 +234,7 @@ const useParallelRunTests = (maxBatchSize = 5) => {
   const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)
   const setSelectedFunction = useSetAtom(selectedFunctionAtom)
   const setIsClientCallGraphEnabled = useSetAtom(isClientCallGraphEnabledAtom)
-
+  const envVars = useAtomValue(envVarsAtom)
   const runParallelTests = useAtomCallback(
     useCallback(
       async (get, set, tests: { functionName: string; testName: string }[]) => {
@@ -347,6 +351,7 @@ const useParallelRunTests = (maxBatchSize = 5) => {
                 )
               },
               findMediaFile,
+              envVars,
             )
 
             const endTime = performance.now()
@@ -391,7 +396,7 @@ const useParallelRunTests = (maxBatchSize = 5) => {
 
         await run()
       },
-      [maxBatchSize, rt, ctx, wasm],
+      [maxBatchSize, rt, ctx, wasm, envVars],
     ),
   )
 

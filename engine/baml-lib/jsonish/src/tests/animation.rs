@@ -27,6 +27,7 @@ pub fn make_test_data1() {
         streaming_behavior: StreamingBehavior {
             done: false,
             state: true,
+            needed: false,
         },
     };
     let target = render_output_format(&ir, &target_type, &Default::default()).unwrap();

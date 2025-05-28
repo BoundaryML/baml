@@ -32,6 +32,8 @@ tracing-core.workspace = true
 web-time.workspace = true
 tokio.workspace = true
 uuid.workspace = true
+baml-ids.workspace = true
+
 [dependencies.indexmap]
 workspace = true
 optional = true

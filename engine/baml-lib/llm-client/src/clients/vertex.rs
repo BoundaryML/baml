@@ -6,18 +6,19 @@ use crate::{
 };
 use anyhow::Result;
 
+use baml_derive::BamlHash;
 use baml_types::{GetEnvVar, StringOr, UnresolvedValue};
 use either::Either;
 use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlHash)]
 enum UnresolvedGcpAuthStrategy<Meta> {
     /// This can be resolved as either FilePath or JsonString
     CredentialsString(StringOr),
     /// This will always be resolved as JsonObject
-    CredentialsJsonObject(IndexMap<String, (Meta, UnresolvedValue<Meta>)>),
+    CredentialsJsonObject(#[baml_safe_hash] IndexMap<String, (Meta, UnresolvedValue<Meta>)>),
     /// This will always be resolved as JsonString
     CredentialsContentString(StringOr),
     /// This will always be resolved as UseSystemDefault
@@ -137,18 +138,20 @@ impl<Meta> UnresolvedGcpAuthStrategy<Meta> {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlHash)]
 pub struct UnresolvedVertex<Meta> {
     // Either base_url or location
     base_url_or_location: Either<UnresolvedUrl, StringOr>,
     project_id: Option<StringOr>,
     auth_strategy: UnresolvedGcpAuthStrategy<Meta>,
     model: StringOr,
+    #[baml_safe_hash]
     headers: IndexMap<String, StringOr>,
     role_selection: UnresolvedRolesSelection,
     allowed_role_metadata: UnresolvedAllowedRoleMetadata,
     supported_request_modes: SupportedRequestModes,
     finish_reason_filter: UnresolvedFinishReasonFilter,
+    #[baml_safe_hash]
     properties: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
     anthropic_version: Option<StringOr>,
 }

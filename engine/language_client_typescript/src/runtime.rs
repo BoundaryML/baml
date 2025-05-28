@@ -106,6 +106,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
+        env_vars: HashMap<String, String>,
     ) -> napi::Result<JsObject> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -136,6 +137,7 @@ impl BamlRuntime {
                     tb.as_ref(),
                     cb.as_ref(),
                     Some(collector_list),
+                    env_vars,
                 )
                 .await;
 
@@ -158,6 +160,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
+        env_vars: HashMap<String, String>,
     ) -> napi::Result<FunctionResult> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -183,6 +186,7 @@ impl BamlRuntime {
             tb.as_ref(),
             cb.as_ref(),
             Some(collector_list),
+            env_vars,
         );
 
         result.map(FunctionResult::from).map_err(from_anyhow_error)
@@ -201,6 +205,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
+        env_vars: HashMap<String, String>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -227,6 +232,7 @@ impl BamlRuntime {
                 tb.as_ref(),
                 client_registry.as_ref(),
                 Some(collector_list),
+                env_vars,
             )
             .map_err(from_anyhow_error)?;
 
@@ -251,6 +257,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         client_registry: Option<&ClientRegistry>,
         collectors: Vec<&Collector>,
+        env_vars: HashMap<String, String>,
     ) -> napi::Result<FunctionResultStream> {
         let args: BamlValue = parse_ts_types::js_object_to_baml_value(env, args)?;
         if !args.is_map() {
@@ -277,6 +284,7 @@ impl BamlRuntime {
                 tb.as_ref(),
                 client_registry.as_ref(),
                 Some(collector_list),
+                env_vars,
             )
             .map_err(from_anyhow_error)?;
 
@@ -298,6 +306,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         stream: bool,
+        env_vars: HashMap<String, String>,
     ) -> napi::Result<JsObject> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -322,6 +331,7 @@ impl BamlRuntime {
                     &ctx_mng,
                     tb.as_ref(),
                     cb.as_ref(),
+                    env_vars,
                     stream,
                 )
                 .await
@@ -342,6 +352,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         stream: bool,
+        env_vars: HashMap<String, String>,
     ) -> napi::Result<HTTPRequest> {
         let args = parse_ts_types::js_object_to_baml_value(env, args)?;
 
@@ -365,6 +376,7 @@ impl BamlRuntime {
                 tb.as_ref(),
                 cb.as_ref(),
                 stream,
+                env_vars,
             )
             .map(HTTPRequest::from)
             .map_err(from_anyhow_error)
@@ -380,6 +392,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        env_vars: HashMap<String, String>,
     ) -> napi::Result<serde_json::Value> {
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
@@ -394,6 +407,7 @@ impl BamlRuntime {
                 &ctx_mng,
                 tb.as_ref(),
                 cb.as_ref(),
+                env_vars,
             )
             .map_err(from_anyhow_error)?;
 

@@ -1,7 +1,7 @@
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
-use crate::ProjectId;
+use baml_ids::ProjectId;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct S3UploadMetadata {

@@ -1,4 +1,5 @@
 use anyhow::Result;
+use itertools::Itertools;
 use std::{
     collections::{HashMap, HashSet},
     str::FromStr,
@@ -21,6 +22,56 @@ pub enum Resolvable<Id, Meta> {
     // The class name and list of fields as resolvable values.
     ClassConstructor(String, Vec<(String, Resolvable<Id, Meta>)>, Meta),
     Null(Meta),
+}
+
+impl<Id: std::hash::Hash, Meta: std::hash::Hash> std::hash::Hash for Resolvable<Id, Meta> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        // include the discriminant
+        match self {
+            Self::String(..) => state.write_u8(0),
+            Self::Numeric(..) => state.write_u8(1),
+            Self::Bool(..) => state.write_u8(2),
+            Self::Array(..) => state.write_u8(3),
+            Self::Map(..) => state.write_u8(4),
+            Self::ClassConstructor(..) => state.write_u8(5),
+            Self::Null(..) => state.write_u8(6),
+        }
+
+        match self {
+            Self::String(s, meta) => {
+                s.hash(state);
+                meta.hash(state);
+            }
+            Self::Numeric(n, meta) => {
+                n.hash(state);
+                meta.hash(state);
+            }
+            Self::Bool(b, meta) => {
+                b.hash(state);
+                meta.hash(state);
+            }
+            Self::Array(a, meta) => {
+                a.hash(state);
+                meta.hash(state);
+            }
+            Self::Map(m, meta) => {
+                let sorted_keys = m.keys().sorted().collect::<Vec<_>>();
+                for k in sorted_keys {
+                    k.hash(state);
+                    m[k].hash(state);
+                }
+                meta.hash(state);
+            }
+            Self::ClassConstructor(c, fields, meta) => {
+                c.hash(state);
+                fields.hash(state);
+                meta.hash(state);
+            }
+            Self::Null(meta) => {
+                meta.hash(state);
+            }
+        }
+    }
 }
 
 impl<Id, Meta> Resolvable<Id, Meta> {

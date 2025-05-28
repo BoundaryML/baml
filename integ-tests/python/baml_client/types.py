@@ -15,9 +15,11 @@
 # fmt: off
 import baml_py
 from enum import Enum
+
 from pydantic import BaseModel, ConfigDict
-from typing_extensions import TypeAlias
-from typing import Dict, Generic, List, Literal, Optional, TypeVar, Union
+
+from typing_extensions import TypeAlias, Literal
+from typing import Dict, Generic, List, Optional, TypeVar, Union
 
 
 T = TypeVar('T')
@@ -27,7 +29,6 @@ class Check(BaseModel):
     name: str
     expression: str
     status: str
-
 class Checked(BaseModel, Generic[T,CheckName]):
     value: T
     checks: Dict[CheckName, Check]

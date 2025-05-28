@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use baml_types::{BamlMedia, BamlMediaContent};
+use baml_types::{tracing::events::LLMChatMessagePart, BamlMedia, BamlMediaContent};
 use serde::Serialize;
 
 #[derive(Debug, PartialEq, Serialize, Clone)]
@@ -9,6 +9,18 @@ pub enum ChatMessagePart {
     Text(String),
     Media(BamlMedia),
     WithMeta(Box<ChatMessagePart>, HashMap<String, serde_json::Value>),
+}
+
+impl From<&ChatMessagePart> for LLMChatMessagePart {
+    fn from(part: &ChatMessagePart) -> Self {
+        match part {
+            ChatMessagePart::Text(t) => LLMChatMessagePart::Text(t.clone()),
+            ChatMessagePart::Media(m) => LLMChatMessagePart::Media(m.clone()),
+            ChatMessagePart::WithMeta(p, meta) => {
+                LLMChatMessagePart::WithMeta(Box::new(p.as_ref().into()), meta.clone())
+            }
+        }
+    }
 }
 
 impl ChatMessagePart {

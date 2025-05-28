@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use pyo3::prelude::{pymethods, PyResult};
 use pyo3::{PyObject, PyRefMut, Python};
 
@@ -11,7 +13,8 @@ crate::lang_wrapper!(
     baml_runtime::FunctionResultStream, thread_safe,
     on_event: Option<PyObject>,
     tb: Option<baml_runtime::type_builder::TypeBuilder>,
-    cb: Option<baml_runtime::client_registry::ClientRegistry>
+    cb: Option<baml_runtime::client_registry::ClientRegistry>,
+    env_vars: HashMap<String, String>
 );
 
 crate::lang_wrapper!(
@@ -19,7 +22,8 @@ crate::lang_wrapper!(
     baml_runtime::FunctionResultStream, sync_thread_safe,
     on_event: Option<PyObject>,
     tb: Option<baml_runtime::type_builder::TypeBuilder>,
-    cb: Option<baml_runtime::client_registry::ClientRegistry>
+    cb: Option<baml_runtime::client_registry::ClientRegistry>,
+    env_vars: HashMap<String, String>
 );
 
 impl FunctionResultStream {
@@ -28,12 +32,14 @@ impl FunctionResultStream {
         event: Option<PyObject>,
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
+        env_vars: HashMap<String, String>
     ) -> Self {
         Self {
             inner: std::sync::Arc::new(tokio::sync::Mutex::new(inner)),
             on_event: event,
             tb,
             cb,
+            env_vars,
         }
     }
 }
@@ -44,12 +50,14 @@ impl SyncFunctionResultStream {
         event: Option<PyObject>,
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
+        env_vars: HashMap<String, String>
     ) -> Self {
         Self {
             inner: std::sync::Arc::new(std::sync::Mutex::new(inner)),
             on_event: event,
             tb,
             cb,
+            env_vars,
         }
     }
 }
@@ -90,11 +98,12 @@ impl FunctionResultStream {
         let ctx_mng = ctx.inner.clone();
         let tb = self.tb.clone();
         let cb = self.cb.clone();
+        let env_vars = self.env_vars.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let ctx_mng = ctx_mng;
             let mut locked = inner.lock().await;
             let (res, _) = locked
-                .run(on_event, &ctx_mng, tb.as_ref(), cb.as_ref())
+                .run(on_event, &ctx_mng, tb.as_ref(), cb.as_ref(), env_vars)
                 .await;
             res.map(FunctionResult::from)
                 .map_err(BamlError::from_anyhow)
@@ -139,10 +148,10 @@ impl SyncFunctionResultStream {
         let ctx_mng = ctx.inner.clone();
         let tb = self.tb.clone();
         let cb = self.cb.clone();
-
+        let env_vars = self.env_vars.clone();
         let ctx_mng = ctx_mng;
         let mut locked = inner.lock().unwrap();
-        let (res, _) = locked.run_sync(on_event, &ctx_mng, tb.as_ref(), cb.as_ref());
+        let (res, _) = locked.run_sync(on_event, &ctx_mng, tb.as_ref(), cb.as_ref(), env_vars);
         res.map(FunctionResult::from)
             .map_err(BamlError::from_anyhow)
     }

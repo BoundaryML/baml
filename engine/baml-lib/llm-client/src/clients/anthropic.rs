@@ -6,6 +6,7 @@ use crate::{
 };
 use anyhow::Result;
 
+use baml_derive::BamlHash;
 use baml_types::{ApiKeyWithProvenance, EvaluationContext, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 use secrecy::SecretString;
@@ -15,14 +16,16 @@ use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 pub const DEFAULT_ANTHROPIC_VERSION: &str = "2023-06-01";
 pub const DEFAULT_MAX_TOKENS: u32 = 4096;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlHash)]
 pub struct UnresolvedAnthropic<Meta> {
     base_url: UnresolvedUrl,
     api_key: StringOr,
     role_selection: UnresolvedRolesSelection,
     allowed_metadata: UnresolvedAllowedRoleMetadata,
     supported_request_modes: SupportedRequestModes,
+    #[baml_safe_hash]
     headers: IndexMap<String, StringOr>,
+    #[baml_safe_hash]
     properties: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
     finish_reason_filter: UnresolvedFinishReasonFilter,
 }

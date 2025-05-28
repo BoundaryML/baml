@@ -21,14 +21,28 @@ import (
 
 var bamlRuntime *baml.BamlRuntime
 
-func init() {
-	var env_vars = map[string]string{}
+func getEnvVars(overrides map[string]string) map[string]string {
+	var env = map[string]string{}
 	for _, env_var := range os.Environ() {
 		key, value, _ := strings.Cut(env_var, "=")
-		env_vars[key] = value
+		env[key] = value
 	}
+	if overrides != nil {
+		// Since go uses empty strings as zero values for string and not a `null` value, we unset env vars that are empty.
+		for key, value := range overrides {
+			if value != "" {
+				env[key] = value
+			} else {
+				delete(env, key)
+			}
+		}
+	}
+	return env
+}
+
+func init() {
 	baml.SetTypeMap(typeMap)
-	runtime, err := baml.CreateRuntime("./baml_src", getBamlFiles(), env_vars)
+	runtime, err := baml.CreateRuntime("./baml_src", getBamlFiles(), getEnvVars(nil))
 	if err != nil {
 		panic(err)
 	}
@@ -47,14 +61,46 @@ func castOptional[T any](result any, castResult func(any) T) *T {
 	return &val
 }
 
-func AaaSamOutputFormat(ctx context.Context, recipe string) (*types.Recipe, error) {
+type callOption struct {
+	clientRegistry *baml.ClientRegistry
+	env            map[string]string
+}
+
+type CallOptionFunc func(*callOption)
+
+func WithClientRegistry(clientRegistry *baml.ClientRegistry) CallOptionFunc {
+	return func(o *callOption) {
+		o.clientRegistry = clientRegistry
+	}
+}
+
+func WithEnv(env map[string]string) CallOptionFunc {
+	return func(o *callOption) {
+		o.env = env
+	}
+}
+
+func AaaSamOutputFormat(ctx context.Context, recipe string, opts ...CallOptionFunc) (*types.Recipe, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"recipe": recipe},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "AaaSamOutputFormat", encoded)
 	if err != nil {
 		return nil, err
@@ -109,14 +155,27 @@ func (*stream) AaaSamOutputFormat(ctx context.Context, recipe string) <-chan *ty
 	return channel
 }
 
-func AliasThatPointsToRecursiveType(ctx context.Context, data types.LinkedListAliasNode) (*types.LinkedListAliasNode, error) {
+func AliasThatPointsToRecursiveType(ctx context.Context, data types.LinkedListAliasNode, opts ...CallOptionFunc) (*types.LinkedListAliasNode, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"data": data},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "AliasThatPointsToRecursiveType", encoded)
 	if err != nil {
 		return nil, err
@@ -171,14 +230,27 @@ func (*stream) AliasThatPointsToRecursiveType(ctx context.Context, data types.Li
 	return channel
 }
 
-func AliasWithMultipleAttrs(ctx context.Context, money int64) (*types.Checked[int64], error) {
+func AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOptionFunc) (*types.Checked[int64], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"money": money},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "AliasWithMultipleAttrs", encoded)
 	if err != nil {
 		return nil, err
@@ -233,14 +305,27 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64) <-chan *
 	return channel
 }
 
-func AliasedInputClass(ctx context.Context, input types.InputClass) (*string, error) {
+func AliasedInputClass(ctx context.Context, input types.InputClass, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "AliasedInputClass", encoded)
 	if err != nil {
 		return nil, err
@@ -295,14 +380,27 @@ func (*stream) AliasedInputClass(ctx context.Context, input types.InputClass) <-
 	return channel
 }
 
-func AliasedInputClass2(ctx context.Context, input types.InputClass) (*string, error) {
+func AliasedInputClass2(ctx context.Context, input types.InputClass, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "AliasedInputClass2", encoded)
 	if err != nil {
 		return nil, err
@@ -357,14 +455,27 @@ func (*stream) AliasedInputClass2(ctx context.Context, input types.InputClass) <
 	return channel
 }
 
-func AliasedInputClassNested(ctx context.Context, input types.InputClassNested) (*string, error) {
+func AliasedInputClassNested(ctx context.Context, input types.InputClassNested, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "AliasedInputClassNested", encoded)
 	if err != nil {
 		return nil, err
@@ -419,14 +530,27 @@ func (*stream) AliasedInputClassNested(ctx context.Context, input types.InputCla
 	return channel
 }
 
-func AliasedInputEnum(ctx context.Context, input types.AliasedEnum) (*string, error) {
+func AliasedInputEnum(ctx context.Context, input types.AliasedEnum, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "AliasedInputEnum", encoded)
 	if err != nil {
 		return nil, err
@@ -481,14 +605,27 @@ func (*stream) AliasedInputEnum(ctx context.Context, input types.AliasedEnum) <-
 	return channel
 }
 
-func AliasedInputList(ctx context.Context, input []types.AliasedEnum) (*string, error) {
+func AliasedInputList(ctx context.Context, input []types.AliasedEnum, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "AliasedInputList", encoded)
 	if err != nil {
 		return nil, err
@@ -543,14 +680,27 @@ func (*stream) AliasedInputList(ctx context.Context, input []types.AliasedEnum) 
 	return channel
 }
 
-func AllowedOptionals(ctx context.Context, optionals types.OptionalListAndMap) (*types.OptionalListAndMap, error) {
+func AllowedOptionals(ctx context.Context, optionals types.OptionalListAndMap, opts ...CallOptionFunc) (*types.OptionalListAndMap, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"optionals": optionals},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "AllowedOptionals", encoded)
 	if err != nil {
 		return nil, err
@@ -605,14 +755,27 @@ func (*stream) AllowedOptionals(ctx context.Context, optionals types.OptionalLis
 	return channel
 }
 
-func AssertFn(ctx context.Context, a int64) (*int64, error) {
+func AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (*int64, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"a": a},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "AssertFn", encoded)
 	if err != nil {
 		return nil, err
@@ -667,14 +830,27 @@ func (*stream) AssertFn(ctx context.Context, a int64) <-chan *int64 {
 	return channel
 }
 
-func AudioInput(ctx context.Context, aud any) (*string, error) {
+func AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"aud": aud},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "AudioInput", encoded)
 	if err != nil {
 		return nil, err
@@ -729,14 +905,27 @@ func (*stream) AudioInput(ctx context.Context, aud any) <-chan *string {
 	return channel
 }
 
-func AudioInputOpenai(ctx context.Context, aud any, prompt string) (*string, error) {
+func AudioInputOpenai(ctx context.Context, aud any, prompt string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"aud": aud, "prompt": prompt},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "AudioInputOpenai", encoded)
 	if err != nil {
 		return nil, err
@@ -791,14 +980,27 @@ func (*stream) AudioInputOpenai(ctx context.Context, aud any, prompt string) <-c
 	return channel
 }
 
-func BuildLinkedList(ctx context.Context, input []int64) (*types.LinkedList, error) {
+func BuildLinkedList(ctx context.Context, input []int64, opts ...CallOptionFunc) (*types.LinkedList, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "BuildLinkedList", encoded)
 	if err != nil {
 		return nil, err
@@ -853,14 +1055,27 @@ func (*stream) BuildLinkedList(ctx context.Context, input []int64) <-chan *types
 	return channel
 }
 
-func BuildTree(ctx context.Context, input types.BinaryNode) (*types.Tree, error) {
+func BuildTree(ctx context.Context, input types.BinaryNode, opts ...CallOptionFunc) (*types.Tree, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "BuildTree", encoded)
 	if err != nil {
 		return nil, err
@@ -915,14 +1130,27 @@ func (*stream) BuildTree(ctx context.Context, input types.BinaryNode) <-chan *ty
 	return channel
 }
 
-func ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, cls types.ClassToRecAlias) (*types.ClassToRecAlias, error) {
+func ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, cls types.ClassToRecAlias, opts ...CallOptionFunc) (*types.ClassToRecAlias, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"cls": cls},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ClassThatPointsToRecursiveClassThroughAlias", encoded)
 	if err != nil {
 		return nil, err
@@ -977,14 +1205,27 @@ func (*stream) ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, 
 	return channel
 }
 
-func ClassifyDynEnumTwo(ctx context.Context, input string) (*types.DynEnumTwo, error) {
+func ClassifyDynEnumTwo(ctx context.Context, input string, opts ...CallOptionFunc) (*types.DynEnumTwo, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ClassifyDynEnumTwo", encoded)
 	if err != nil {
 		return nil, err
@@ -1039,14 +1280,27 @@ func (*stream) ClassifyDynEnumTwo(ctx context.Context, input string) <-chan *typ
 	return channel
 }
 
-func ClassifyMessage(ctx context.Context, input string) (*types.Category, error) {
+func ClassifyMessage(ctx context.Context, input string, opts ...CallOptionFunc) (*types.Category, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ClassifyMessage", encoded)
 	if err != nil {
 		return nil, err
@@ -1101,14 +1355,27 @@ func (*stream) ClassifyMessage(ctx context.Context, input string) <-chan *types.
 	return channel
 }
 
-func ClassifyMessage2(ctx context.Context, input string) (*types.Category, error) {
+func ClassifyMessage2(ctx context.Context, input string, opts ...CallOptionFunc) (*types.Category, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ClassifyMessage2", encoded)
 	if err != nil {
 		return nil, err
@@ -1163,14 +1430,27 @@ func (*stream) ClassifyMessage2(ctx context.Context, input string) <-chan *types
 	return channel
 }
 
-func ClassifyMessage3(ctx context.Context, input string) (*types.Category, error) {
+func ClassifyMessage3(ctx context.Context, input string, opts ...CallOptionFunc) (*types.Category, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ClassifyMessage3", encoded)
 	if err != nil {
 		return nil, err
@@ -1225,14 +1505,27 @@ func (*stream) ClassifyMessage3(ctx context.Context, input string) <-chan *types
 	return channel
 }
 
-func Completion(ctx context.Context, prefix string, suffix string, language string) (*string, error) {
+func Completion(ctx context.Context, prefix string, suffix string, language string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"prefix": prefix, "suffix": suffix, "language": language},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "Completion", encoded)
 	if err != nil {
 		return nil, err
@@ -1287,14 +1580,27 @@ func (*stream) Completion(ctx context.Context, prefix string, suffix string, lan
 	return channel
 }
 
-func CustomTask(ctx context.Context, input string) (*types.Union__BookOrder__FlightConfirmation__GroceryReceipt, error) {
+func CustomTask(ctx context.Context, input string, opts ...CallOptionFunc) (*types.Union__BookOrder__FlightConfirmation__GroceryReceipt, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "CustomTask", encoded)
 	if err != nil {
 		return nil, err
@@ -1349,14 +1655,27 @@ func (*stream) CustomTask(ctx context.Context, input string) <-chan *types.Union
 	return channel
 }
 
-func DescribeImage(ctx context.Context, img any) (*string, error) {
+func DescribeImage(ctx context.Context, img any, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"img": img},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "DescribeImage", encoded)
 	if err != nil {
 		return nil, err
@@ -1411,14 +1730,27 @@ func (*stream) DescribeImage(ctx context.Context, img any) <-chan *string {
 	return channel
 }
 
-func DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, img2 any) (*string, error) {
+func DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"classWithImage": classWithImage, "img2": img2},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "DescribeImage2", encoded)
 	if err != nil {
 		return nil, err
@@ -1473,14 +1805,27 @@ func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWit
 	return channel
 }
 
-func DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, img2 any) (*string, error) {
+func DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"classWithImage": classWithImage, "img2": img2},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "DescribeImage3", encoded)
 	if err != nil {
 		return nil, err
@@ -1535,14 +1880,27 @@ func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWit
 	return channel
 }
 
-func DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, img2 any) (*string, error) {
+func DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"classWithImage": classWithImage, "img2": img2},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "DescribeImage4", encoded)
 	if err != nil {
 		return nil, err
@@ -1597,14 +1955,27 @@ func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWit
 	return channel
 }
 
-func DescribeMedia1599(ctx context.Context, img any, client_sector string, client_name string) (*string, error) {
+func DescribeMedia1599(ctx context.Context, img any, client_sector string, client_name string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"img": img, "client_sector": client_sector, "client_name": client_name},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "DescribeMedia1599", encoded)
 	if err != nil {
 		return nil, err
@@ -1659,14 +2030,27 @@ func (*stream) DescribeMedia1599(ctx context.Context, img any, client_sector str
 	return channel
 }
 
-func DifferentiateUnions(ctx context.Context) (*types.Union__OriginalA__OriginalB, error) {
+func DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) (*types.Union__OriginalA__OriginalB, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "DifferentiateUnions", encoded)
 	if err != nil {
 		return nil, err
@@ -1721,14 +2105,27 @@ func (*stream) DifferentiateUnions(ctx context.Context) <-chan *types.Union__Ori
 	return channel
 }
 
-func DummyOutputFunction(ctx context.Context, input string) (*types.DummyOutput, error) {
+func DummyOutputFunction(ctx context.Context, input string, opts ...CallOptionFunc) (*types.DummyOutput, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "DummyOutputFunction", encoded)
 	if err != nil {
 		return nil, err
@@ -1783,14 +2180,27 @@ func (*stream) DummyOutputFunction(ctx context.Context, input string) <-chan *ty
 	return channel
 }
 
-func DynamicFunc(ctx context.Context, input types.DynamicClassOne) (*types.DynamicClassTwo, error) {
+func DynamicFunc(ctx context.Context, input types.DynamicClassOne, opts ...CallOptionFunc) (*types.DynamicClassTwo, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "DynamicFunc", encoded)
 	if err != nil {
 		return nil, err
@@ -1845,14 +2255,27 @@ func (*stream) DynamicFunc(ctx context.Context, input types.DynamicClassOne) <-c
 	return channel
 }
 
-func DynamicInputOutput(ctx context.Context, input types.DynInputOutput) (*types.DynInputOutput, error) {
+func DynamicInputOutput(ctx context.Context, input types.DynInputOutput, opts ...CallOptionFunc) (*types.DynInputOutput, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "DynamicInputOutput", encoded)
 	if err != nil {
 		return nil, err
@@ -1907,14 +2330,27 @@ func (*stream) DynamicInputOutput(ctx context.Context, input types.DynInputOutpu
 	return channel
 }
 
-func DynamicListInputOutput(ctx context.Context, input []types.DynInputOutput) ([]types.DynInputOutput, error) {
+func DynamicListInputOutput(ctx context.Context, input []types.DynInputOutput, opts ...CallOptionFunc) ([]types.DynInputOutput, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "DynamicListInputOutput", encoded)
 	if err != nil {
 		return nil, err
@@ -1969,14 +2405,27 @@ func (*stream) DynamicListInputOutput(ctx context.Context, input []types.DynInpu
 	return channel
 }
 
-func ExpectFailure(ctx context.Context) (*string, error) {
+func ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ExpectFailure", encoded)
 	if err != nil {
 		return nil, err
@@ -2031,14 +2480,27 @@ func (*stream) ExpectFailure(ctx context.Context) <-chan *string {
 	return channel
 }
 
-func ExtractContactInfo(ctx context.Context, document string) (*types.ContactInfo, error) {
+func ExtractContactInfo(ctx context.Context, document string, opts ...CallOptionFunc) (*types.ContactInfo, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"document": document},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ExtractContactInfo", encoded)
 	if err != nil {
 		return nil, err
@@ -2093,14 +2555,27 @@ func (*stream) ExtractContactInfo(ctx context.Context, document string) <-chan *
 	return channel
 }
 
-func ExtractEntities(ctx context.Context, text string) (*types.DynamicSchema, error) {
+func ExtractEntities(ctx context.Context, text string, opts ...CallOptionFunc) (*types.DynamicSchema, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"text": text},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ExtractEntities", encoded)
 	if err != nil {
 		return nil, err
@@ -2155,14 +2630,27 @@ func (*stream) ExtractEntities(ctx context.Context, text string) <-chan *types.D
 	return channel
 }
 
-func ExtractHobby(ctx context.Context, text string) ([]types.Hobby, error) {
+func ExtractHobby(ctx context.Context, text string, opts ...CallOptionFunc) ([]types.Hobby, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"text": text},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ExtractHobby", encoded)
 	if err != nil {
 		return nil, err
@@ -2217,14 +2705,27 @@ func (*stream) ExtractHobby(ctx context.Context, text string) <-chan []types.Hob
 	return channel
 }
 
-func ExtractNames(ctx context.Context, input string) ([]string, error) {
+func ExtractNames(ctx context.Context, input string, opts ...CallOptionFunc) ([]string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ExtractNames", encoded)
 	if err != nil {
 		return nil, err
@@ -2279,14 +2780,27 @@ func (*stream) ExtractNames(ctx context.Context, input string) <-chan []string {
 	return channel
 }
 
-func ExtractPeople(ctx context.Context, text string) ([]types.Person, error) {
+func ExtractPeople(ctx context.Context, text string, opts ...CallOptionFunc) ([]types.Person, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"text": text},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ExtractPeople", encoded)
 	if err != nil {
 		return nil, err
@@ -2341,14 +2855,27 @@ func (*stream) ExtractPeople(ctx context.Context, text string) <-chan []types.Pe
 	return channel
 }
 
-func ExtractReceiptInfo(ctx context.Context, email string, reason types.Union__string_curiosity__string_personal_finance) (*types.ReceiptInfo, error) {
+func ExtractReceiptInfo(ctx context.Context, email string, reason types.Union__string_curiosity__string_personal_finance, opts ...CallOptionFunc) (*types.ReceiptInfo, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"email": email, "reason": reason},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ExtractReceiptInfo", encoded)
 	if err != nil {
 		return nil, err
@@ -2403,14 +2930,27 @@ func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason type
 	return channel
 }
 
-func ExtractResume(ctx context.Context, resume string, img *any) (*types.Resume, error) {
+func ExtractResume(ctx context.Context, resume string, img *any, opts ...CallOptionFunc) (*types.Resume, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"resume": resume, "img": img},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ExtractResume", encoded)
 	if err != nil {
 		return nil, err
@@ -2465,14 +3005,27 @@ func (*stream) ExtractResume(ctx context.Context, resume string, img *any) <-cha
 	return channel
 }
 
-func ExtractResume2(ctx context.Context, resume string) (*types.Resume, error) {
+func ExtractResume2(ctx context.Context, resume string, opts ...CallOptionFunc) (*types.Resume, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"resume": resume},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ExtractResume2", encoded)
 	if err != nil {
 		return nil, err
@@ -2527,14 +3080,27 @@ func (*stream) ExtractResume2(ctx context.Context, resume string) <-chan *types.
 	return channel
 }
 
-func FnClassOptionalOutput(ctx context.Context, input string) (**types.ClassOptionalOutput, error) {
+func FnClassOptionalOutput(ctx context.Context, input string, opts ...CallOptionFunc) (**types.ClassOptionalOutput, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnClassOptionalOutput", encoded)
 	if err != nil {
 		return nil, err
@@ -2591,14 +3157,27 @@ func (*stream) FnClassOptionalOutput(ctx context.Context, input string) <-chan *
 	return channel
 }
 
-func FnClassOptionalOutput2(ctx context.Context, input string) (**types.ClassOptionalOutput2, error) {
+func FnClassOptionalOutput2(ctx context.Context, input string, opts ...CallOptionFunc) (**types.ClassOptionalOutput2, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnClassOptionalOutput2", encoded)
 	if err != nil {
 		return nil, err
@@ -2655,14 +3234,27 @@ func (*stream) FnClassOptionalOutput2(ctx context.Context, input string) <-chan 
 	return channel
 }
 
-func FnEnumListOutput(ctx context.Context, input string) ([]types.EnumOutput, error) {
+func FnEnumListOutput(ctx context.Context, input string, opts ...CallOptionFunc) ([]types.EnumOutput, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnEnumListOutput", encoded)
 	if err != nil {
 		return nil, err
@@ -2717,14 +3309,27 @@ func (*stream) FnEnumListOutput(ctx context.Context, input string) <-chan []type
 	return channel
 }
 
-func FnEnumOutput(ctx context.Context, input string) (*types.EnumOutput, error) {
+func FnEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (*types.EnumOutput, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnEnumOutput", encoded)
 	if err != nil {
 		return nil, err
@@ -2779,14 +3384,27 @@ func (*stream) FnEnumOutput(ctx context.Context, input string) <-chan *types.Enu
 	return channel
 }
 
-func FnLiteralClassInputOutput(ctx context.Context, input types.LiteralClassHello) (*types.LiteralClassHello, error) {
+func FnLiteralClassInputOutput(ctx context.Context, input types.LiteralClassHello, opts ...CallOptionFunc) (*types.LiteralClassHello, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnLiteralClassInputOutput", encoded)
 	if err != nil {
 		return nil, err
@@ -2841,14 +3459,27 @@ func (*stream) FnLiteralClassInputOutput(ctx context.Context, input types.Litera
 	return channel
 }
 
-func FnLiteralUnionClassInputOutput(ctx context.Context, input types.Union__LiteralClassOne__LiteralClassTwo) (*types.Union__LiteralClassOne__LiteralClassTwo, error) {
+func FnLiteralUnionClassInputOutput(ctx context.Context, input types.Union__LiteralClassOne__LiteralClassTwo, opts ...CallOptionFunc) (*types.Union__LiteralClassOne__LiteralClassTwo, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnLiteralUnionClassInputOutput", encoded)
 	if err != nil {
 		return nil, err
@@ -2903,14 +3534,27 @@ func (*stream) FnLiteralUnionClassInputOutput(ctx context.Context, input types.U
 	return channel
 }
 
-func FnNamedArgsSingleStringOptional(ctx context.Context, myString *string) (*string, error) {
+func FnNamedArgsSingleStringOptional(ctx context.Context, myString *string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myString": myString},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnNamedArgsSingleStringOptional", encoded)
 	if err != nil {
 		return nil, err
@@ -2965,14 +3609,27 @@ func (*stream) FnNamedArgsSingleStringOptional(ctx context.Context, myString *st
 	return channel
 }
 
-func FnOutputBool(ctx context.Context, input string) (*bool, error) {
+func FnOutputBool(ctx context.Context, input string, opts ...CallOptionFunc) (*bool, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnOutputBool", encoded)
 	if err != nil {
 		return nil, err
@@ -3027,14 +3684,27 @@ func (*stream) FnOutputBool(ctx context.Context, input string) <-chan *bool {
 	return channel
 }
 
-func FnOutputClass(ctx context.Context, input string) (*types.TestOutputClass, error) {
+func FnOutputClass(ctx context.Context, input string, opts ...CallOptionFunc) (*types.TestOutputClass, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnOutputClass", encoded)
 	if err != nil {
 		return nil, err
@@ -3089,14 +3759,27 @@ func (*stream) FnOutputClass(ctx context.Context, input string) <-chan *types.Te
 	return channel
 }
 
-func FnOutputClassList(ctx context.Context, input string) ([]types.TestOutputClass, error) {
+func FnOutputClassList(ctx context.Context, input string, opts ...CallOptionFunc) ([]types.TestOutputClass, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnOutputClassList", encoded)
 	if err != nil {
 		return nil, err
@@ -3151,14 +3834,27 @@ func (*stream) FnOutputClassList(ctx context.Context, input string) <-chan []typ
 	return channel
 }
 
-func FnOutputClassNested(ctx context.Context, input string) (*types.TestClassNested, error) {
+func FnOutputClassNested(ctx context.Context, input string, opts ...CallOptionFunc) (*types.TestClassNested, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnOutputClassNested", encoded)
 	if err != nil {
 		return nil, err
@@ -3213,14 +3909,27 @@ func (*stream) FnOutputClassNested(ctx context.Context, input string) <-chan *ty
 	return channel
 }
 
-func FnOutputClassWithEnum(ctx context.Context, input string) (*types.TestClassWithEnum, error) {
+func FnOutputClassWithEnum(ctx context.Context, input string, opts ...CallOptionFunc) (*types.TestClassWithEnum, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnOutputClassWithEnum", encoded)
 	if err != nil {
 		return nil, err
@@ -3275,14 +3984,27 @@ func (*stream) FnOutputClassWithEnum(ctx context.Context, input string) <-chan *
 	return channel
 }
 
-func FnOutputInt(ctx context.Context, input string) (*int64, error) {
+func FnOutputInt(ctx context.Context, input string, opts ...CallOptionFunc) (*int64, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnOutputInt", encoded)
 	if err != nil {
 		return nil, err
@@ -3337,14 +4059,27 @@ func (*stream) FnOutputInt(ctx context.Context, input string) <-chan *int64 {
 	return channel
 }
 
-func FnOutputLiteralBool(ctx context.Context, input string) (*bool, error) {
+func FnOutputLiteralBool(ctx context.Context, input string, opts ...CallOptionFunc) (*bool, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnOutputLiteralBool", encoded)
 	if err != nil {
 		return nil, err
@@ -3399,14 +4134,27 @@ func (*stream) FnOutputLiteralBool(ctx context.Context, input string) <-chan *bo
 	return channel
 }
 
-func FnOutputLiteralInt(ctx context.Context, input string) (*int, error) {
+func FnOutputLiteralInt(ctx context.Context, input string, opts ...CallOptionFunc) (*int, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnOutputLiteralInt", encoded)
 	if err != nil {
 		return nil, err
@@ -3461,14 +4209,27 @@ func (*stream) FnOutputLiteralInt(ctx context.Context, input string) <-chan *int
 	return channel
 }
 
-func FnOutputLiteralString(ctx context.Context, input string) (*string, error) {
+func FnOutputLiteralString(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnOutputLiteralString", encoded)
 	if err != nil {
 		return nil, err
@@ -3523,14 +4284,27 @@ func (*stream) FnOutputLiteralString(ctx context.Context, input string) <-chan *
 	return channel
 }
 
-func FnOutputStringList(ctx context.Context, input string) ([]string, error) {
+func FnOutputStringList(ctx context.Context, input string, opts ...CallOptionFunc) ([]string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnOutputStringList", encoded)
 	if err != nil {
 		return nil, err
@@ -3585,14 +4359,27 @@ func (*stream) FnOutputStringList(ctx context.Context, input string) <-chan []st
 	return channel
 }
 
-func FnTestAliasedEnumOutput(ctx context.Context, input string) (*types.TestEnum, error) {
+func FnTestAliasedEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (*types.TestEnum, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnTestAliasedEnumOutput", encoded)
 	if err != nil {
 		return nil, err
@@ -3647,14 +4434,27 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string) <-chan
 	return channel
 }
 
-func FnTestClassAlias(ctx context.Context, input string) (*types.TestClassAlias, error) {
+func FnTestClassAlias(ctx context.Context, input string, opts ...CallOptionFunc) (*types.TestClassAlias, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnTestClassAlias", encoded)
 	if err != nil {
 		return nil, err
@@ -3709,14 +4509,27 @@ func (*stream) FnTestClassAlias(ctx context.Context, input string) <-chan *types
 	return channel
 }
 
-func FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedArgsSingleEnum) (*string, error) {
+func FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedArgsSingleEnum, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myArg": myArg},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "FnTestNamedArgsSingleEnum", encoded)
 	if err != nil {
 		return nil, err
@@ -3771,14 +4584,27 @@ func (*stream) FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedA
 	return channel
 }
 
-func GetDataType(ctx context.Context, text string) (*types.RaysData, error) {
+func GetDataType(ctx context.Context, text string, opts ...CallOptionFunc) (*types.RaysData, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"text": text},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "GetDataType", encoded)
 	if err != nil {
 		return nil, err
@@ -3833,14 +4659,27 @@ func (*stream) GetDataType(ctx context.Context, text string) <-chan *types.RaysD
 	return channel
 }
 
-func GetOrderInfo(ctx context.Context, email types.Email) (*types.OrderInfo, error) {
+func GetOrderInfo(ctx context.Context, email types.Email, opts ...CallOptionFunc) (*types.OrderInfo, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"email": email},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "GetOrderInfo", encoded)
 	if err != nil {
 		return nil, err
@@ -3895,14 +4734,27 @@ func (*stream) GetOrderInfo(ctx context.Context, email types.Email) <-chan *type
 	return channel
 }
 
-func GetQuery(ctx context.Context, query string) (*types.SearchParams, error) {
+func GetQuery(ctx context.Context, query string, opts ...CallOptionFunc) (*types.SearchParams, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"query": query},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "GetQuery", encoded)
 	if err != nil {
 		return nil, err
@@ -3957,14 +4809,27 @@ func (*stream) GetQuery(ctx context.Context, query string) <-chan *types.SearchP
 	return channel
 }
 
-func InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, i2 map[types.MapKey]string) (map[types.MapKey]string, error) {
+func InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, i2 map[types.MapKey]string, opts ...CallOptionFunc) (map[types.MapKey]string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"i1": i1, "i2": i2},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "InOutEnumMapKey", encoded)
 	if err != nil {
 		return nil, err
@@ -4019,14 +4884,27 @@ func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, 
 	return channel
 }
 
-func InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union__string_one__string_two__string_three__string_four]string, i2 map[types.Union__string_one__string_two__string_three__string_four]string) (map[types.Union__string_one__string_two__string_three__string_four]string, error) {
+func InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union__string_one__string_two__string_three__string_four]string, i2 map[types.Union__string_one__string_two__string_three__string_four]string, opts ...CallOptionFunc) (map[types.Union__string_one__string_two__string_three__string_four]string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"i1": i1, "i2": i2},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "InOutLiteralStringUnionMapKey", encoded)
 	if err != nil {
 		return nil, err
@@ -4081,14 +4959,27 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 	return channel
 }
 
-func InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]string) (map[string]string, error) {
+func InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]string, opts ...CallOptionFunc) (map[string]string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"m": m},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "InOutSingleLiteralStringMapKey", encoded)
 	if err != nil {
 		return nil, err
@@ -4143,14 +5034,27 @@ func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]
 	return channel
 }
 
-func JsonTypeAliasCycle(ctx context.Context, input types.JsonValue) (*types.JsonValue, error) {
+func JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, opts ...CallOptionFunc) (*types.JsonValue, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "JsonTypeAliasCycle", encoded)
 	if err != nil {
 		return nil, err
@@ -4205,14 +5109,27 @@ func (*stream) JsonTypeAliasCycle(ctx context.Context, input types.JsonValue) <-
 	return channel
 }
 
-func LLMEcho(ctx context.Context, input string) (*string, error) {
+func LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "LLMEcho", encoded)
 	if err != nil {
 		return nil, err
@@ -4267,14 +5184,27 @@ func (*stream) LLMEcho(ctx context.Context, input string) <-chan *string {
 	return channel
 }
 
-func LiteralUnionsTest(ctx context.Context, input string) (*types.Union__int_1__bool_true__string_string_output, error) {
+func LiteralUnionsTest(ctx context.Context, input string, opts ...CallOptionFunc) (*types.Union__int_1__bool_true__string_string_output, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "LiteralUnionsTest", encoded)
 	if err != nil {
 		return nil, err
@@ -4329,14 +5259,27 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string) <-chan *type
 	return channel
 }
 
-func MakeBlockConstraint(ctx context.Context) (*types.Checked[types.BlockConstraint], error) {
+func MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (*types.Checked[types.BlockConstraint], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "MakeBlockConstraint", encoded)
 	if err != nil {
 		return nil, err
@@ -4391,14 +5334,27 @@ func (*stream) MakeBlockConstraint(ctx context.Context) <-chan *types.Checked[ty
 	return channel
 }
 
-func MakeClassWithBlockDone(ctx context.Context) (*types.ClassWithBlockDone, error) {
+func MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFunc) (*types.ClassWithBlockDone, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithBlockDone", encoded)
 	if err != nil {
 		return nil, err
@@ -4453,14 +5409,27 @@ func (*stream) MakeClassWithBlockDone(ctx context.Context) <-chan *types.ClassWi
 	return channel
 }
 
-func MakeClassWithExternalDone(ctx context.Context) (*types.ClassWithoutDone, error) {
+func MakeClassWithExternalDone(ctx context.Context, opts ...CallOptionFunc) (*types.ClassWithoutDone, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "MakeClassWithExternalDone", encoded)
 	if err != nil {
 		return nil, err
@@ -4515,14 +5484,27 @@ func (*stream) MakeClassWithExternalDone(ctx context.Context) <-chan *types.Clas
 	return channel
 }
 
-func MakeNestedBlockConstraint(ctx context.Context) (*types.NestedBlockConstraint, error) {
+func MakeNestedBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (*types.NestedBlockConstraint, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "MakeNestedBlockConstraint", encoded)
 	if err != nil {
 		return nil, err
@@ -4577,14 +5559,27 @@ func (*stream) MakeNestedBlockConstraint(ctx context.Context) <-chan *types.Nest
 	return channel
 }
 
-func MakeSemanticContainer(ctx context.Context) (*types.SemanticContainer, error) {
+func MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc) (*types.SemanticContainer, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "MakeSemanticContainer", encoded)
 	if err != nil {
 		return nil, err
@@ -4639,14 +5634,27 @@ func (*stream) MakeSemanticContainer(ctx context.Context) <-chan *types.Semantic
 	return channel
 }
 
-func MapAlias(ctx context.Context, m map[string][]string) (map[string][]string, error) {
+func MapAlias(ctx context.Context, m map[string][]string, opts ...CallOptionFunc) (map[string][]string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"m": m},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "MapAlias", encoded)
 	if err != nil {
 		return nil, err
@@ -4701,14 +5709,27 @@ func (*stream) MapAlias(ctx context.Context, m map[string][]string) <-chan map[s
 	return channel
 }
 
-func MergeAliasAttributes(ctx context.Context, money int64) (*types.MergeAttrs, error) {
+func MergeAliasAttributes(ctx context.Context, money int64, opts ...CallOptionFunc) (*types.MergeAttrs, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"money": money},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "MergeAliasAttributes", encoded)
 	if err != nil {
 		return nil, err
@@ -4763,14 +5784,27 @@ func (*stream) MergeAliasAttributes(ctx context.Context, money int64) <-chan *ty
 	return channel
 }
 
-func MyFunc(ctx context.Context, input string) (*types.DynamicOutput, error) {
+func MyFunc(ctx context.Context, input string, opts ...CallOptionFunc) (*types.DynamicOutput, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "MyFunc", encoded)
 	if err != nil {
 		return nil, err
@@ -4825,14 +5859,27 @@ func (*stream) MyFunc(ctx context.Context, input string) <-chan *types.DynamicOu
 	return channel
 }
 
-func NestedAlias(ctx context.Context, c types.Union__int__string__bool__float__List__string__Map__string_List__string) (*types.Union__int__string__bool__float__List__string__Map__string_List__string, error) {
+func NestedAlias(ctx context.Context, c types.Union__int__string__bool__float__List__string__Map__string_List__string, opts ...CallOptionFunc) (*types.Union__int__string__bool__float__List__string__Map__string_List__string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"c": c},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "NestedAlias", encoded)
 	if err != nil {
 		return nil, err
@@ -4887,14 +5934,27 @@ func (*stream) NestedAlias(ctx context.Context, c types.Union__int__string__bool
 	return channel
 }
 
-func NullLiteralClassHello(ctx context.Context, s string) (*types.ClassForNullLiteral, error) {
+func NullLiteralClassHello(ctx context.Context, s string, opts ...CallOptionFunc) (*types.ClassForNullLiteral, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"s": s},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "NullLiteralClassHello", encoded)
 	if err != nil {
 		return nil, err
@@ -4949,14 +6009,27 @@ func (*stream) NullLiteralClassHello(ctx context.Context, s string) <-chan *type
 	return channel
 }
 
-func OpenAIWithAnthropicResponseHello(ctx context.Context, s string) (*string, error) {
+func OpenAIWithAnthropicResponseHello(ctx context.Context, s string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"s": s},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "OpenAIWithAnthropicResponseHello", encoded)
 	if err != nil {
 		return nil, err
@@ -5011,14 +6084,27 @@ func (*stream) OpenAIWithAnthropicResponseHello(ctx context.Context, s string) <
 	return channel
 }
 
-func OptionalTest_Function(ctx context.Context, input string) ([]*types.OptionalTest_ReturnType, error) {
+func OptionalTest_Function(ctx context.Context, input string, opts ...CallOptionFunc) ([]*types.OptionalTest_ReturnType, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "OptionalTest_Function", encoded)
 	if err != nil {
 		return nil, err
@@ -5073,14 +6159,27 @@ func (*stream) OptionalTest_Function(ctx context.Context, input string) <-chan [
 	return channel
 }
 
-func PredictAge(ctx context.Context, name string) (*types.FooAny, error) {
+func PredictAge(ctx context.Context, name string, opts ...CallOptionFunc) (*types.FooAny, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"name": name},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "PredictAge", encoded)
 	if err != nil {
 		return nil, err
@@ -5135,14 +6234,27 @@ func (*stream) PredictAge(ctx context.Context, name string) <-chan *types.FooAny
 	return channel
 }
 
-func PredictAgeBare(ctx context.Context, inp string) (*types.Checked[int64], error) {
+func PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (*types.Checked[int64], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"inp": inp},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "PredictAgeBare", encoded)
 	if err != nil {
 		return nil, err
@@ -5197,14 +6309,27 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string) <-chan *types.Che
 	return channel
 }
 
-func PrimitiveAlias(ctx context.Context, p types.Union__int__string__bool__float) (*types.Union__int__string__bool__float, error) {
+func PrimitiveAlias(ctx context.Context, p types.Union__int__string__bool__float, opts ...CallOptionFunc) (*types.Union__int__string__bool__float, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"p": p},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "PrimitiveAlias", encoded)
 	if err != nil {
 		return nil, err
@@ -5259,14 +6384,27 @@ func (*stream) PrimitiveAlias(ctx context.Context, p types.Union__int__string__b
 	return channel
 }
 
-func PromptTestClaude(ctx context.Context, input string) (*string, error) {
+func PromptTestClaude(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "PromptTestClaude", encoded)
 	if err != nil {
 		return nil, err
@@ -5321,14 +6459,27 @@ func (*stream) PromptTestClaude(ctx context.Context, input string) <-chan *strin
 	return channel
 }
 
-func PromptTestClaudeChat(ctx context.Context, input string) (*string, error) {
+func PromptTestClaudeChat(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "PromptTestClaudeChat", encoded)
 	if err != nil {
 		return nil, err
@@ -5383,14 +6534,27 @@ func (*stream) PromptTestClaudeChat(ctx context.Context, input string) <-chan *s
 	return channel
 }
 
-func PromptTestClaudeChatNoSystem(ctx context.Context, input string) (*string, error) {
+func PromptTestClaudeChatNoSystem(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "PromptTestClaudeChatNoSystem", encoded)
 	if err != nil {
 		return nil, err
@@ -5445,14 +6609,27 @@ func (*stream) PromptTestClaudeChatNoSystem(ctx context.Context, input string) <
 	return channel
 }
 
-func PromptTestOpenAI(ctx context.Context, input string) (*string, error) {
+func PromptTestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "PromptTestOpenAI", encoded)
 	if err != nil {
 		return nil, err
@@ -5507,14 +6684,27 @@ func (*stream) PromptTestOpenAI(ctx context.Context, input string) <-chan *strin
 	return channel
 }
 
-func PromptTestOpenAIChat(ctx context.Context, input string) (*string, error) {
+func PromptTestOpenAIChat(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "PromptTestOpenAIChat", encoded)
 	if err != nil {
 		return nil, err
@@ -5569,14 +6759,27 @@ func (*stream) PromptTestOpenAIChat(ctx context.Context, input string) <-chan *s
 	return channel
 }
 
-func PromptTestOpenAIChatNoSystem(ctx context.Context, input string) (*string, error) {
+func PromptTestOpenAIChatNoSystem(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "PromptTestOpenAIChatNoSystem", encoded)
 	if err != nil {
 		return nil, err
@@ -5631,14 +6834,27 @@ func (*stream) PromptTestOpenAIChatNoSystem(ctx context.Context, input string) <
 	return channel
 }
 
-func PromptTestStreaming(ctx context.Context, input string) (*string, error) {
+func PromptTestStreaming(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "PromptTestStreaming", encoded)
 	if err != nil {
 		return nil, err
@@ -5693,14 +6909,27 @@ func (*stream) PromptTestStreaming(ctx context.Context, input string) <-chan *st
 	return channel
 }
 
-func RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne) (*types.RecAliasOne, error) {
+func RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne, opts ...CallOptionFunc) (*types.RecAliasOne, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "RecursiveAliasCycle", encoded)
 	if err != nil {
 		return nil, err
@@ -5755,14 +6984,27 @@ func (*stream) RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne)
 	return channel
 }
 
-func RecursiveClassWithAliasIndirection(ctx context.Context, cls types.NodeWithAliasIndirection) (*types.NodeWithAliasIndirection, error) {
+func RecursiveClassWithAliasIndirection(ctx context.Context, cls types.NodeWithAliasIndirection, opts ...CallOptionFunc) (*types.NodeWithAliasIndirection, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"cls": cls},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "RecursiveClassWithAliasIndirection", encoded)
 	if err != nil {
 		return nil, err
@@ -5817,14 +7059,27 @@ func (*stream) RecursiveClassWithAliasIndirection(ctx context.Context, cls types
 	return channel
 }
 
-func RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion) (*types.RecursiveUnion, error) {
+func RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion, opts ...CallOptionFunc) (*types.RecursiveUnion, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "RecursiveUnionTest", encoded)
 	if err != nil {
 		return nil, err
@@ -5879,14 +7134,27 @@ func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnio
 	return channel
 }
 
-func ReturnAliasWithMergedAttributes(ctx context.Context, money int64) (*types.Checked[int64], error) {
+func ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...CallOptionFunc) (*types.Checked[int64], error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"money": money},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ReturnAliasWithMergedAttributes", encoded)
 	if err != nil {
 		return nil, err
@@ -5941,14 +7209,27 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64)
 	return channel
 }
 
-func ReturnFailingAssert(ctx context.Context, inp int64) (*int64, error) {
+func ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallOptionFunc) (*int64, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"inp": inp},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ReturnFailingAssert", encoded)
 	if err != nil {
 		return nil, err
@@ -6003,14 +7284,27 @@ func (*stream) ReturnFailingAssert(ctx context.Context, inp int64) <-chan *int64
 	return channel
 }
 
-func ReturnJsonEntry(ctx context.Context, s string) (*types.JsonTemplate, error) {
+func ReturnJsonEntry(ctx context.Context, s string, opts ...CallOptionFunc) (*types.JsonTemplate, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"s": s},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ReturnJsonEntry", encoded)
 	if err != nil {
 		return nil, err
@@ -6065,14 +7359,27 @@ func (*stream) ReturnJsonEntry(ctx context.Context, s string) <-chan *types.Json
 	return channel
 }
 
-func ReturnMalformedConstraints(ctx context.Context, a int64) (*types.MalformedConstraints, error) {
+func ReturnMalformedConstraints(ctx context.Context, a int64, opts ...CallOptionFunc) (*types.MalformedConstraints, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"a": a},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "ReturnMalformedConstraints", encoded)
 	if err != nil {
 		return nil, err
@@ -6127,14 +7434,27 @@ func (*stream) ReturnMalformedConstraints(ctx context.Context, a int64) <-chan *
 	return channel
 }
 
-func SchemaDescriptions(ctx context.Context, input string) (*types.Schema, error) {
+func SchemaDescriptions(ctx context.Context, input string, opts ...CallOptionFunc) (*types.Schema, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "SchemaDescriptions", encoded)
 	if err != nil {
 		return nil, err
@@ -6189,14 +7509,27 @@ func (*stream) SchemaDescriptions(ctx context.Context, input string) <-chan *typ
 	return channel
 }
 
-func SimpleRecursiveListAlias(ctx context.Context, input types.RecursiveListAlias) (*types.RecursiveListAlias, error) {
+func SimpleRecursiveListAlias(ctx context.Context, input types.RecursiveListAlias, opts ...CallOptionFunc) (*types.RecursiveListAlias, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "SimpleRecursiveListAlias", encoded)
 	if err != nil {
 		return nil, err
@@ -6251,14 +7584,27 @@ func (*stream) SimpleRecursiveListAlias(ctx context.Context, input types.Recursi
 	return channel
 }
 
-func SimpleRecursiveMapAlias(ctx context.Context, input types.RecursiveMapAlias) (*types.RecursiveMapAlias, error) {
+func SimpleRecursiveMapAlias(ctx context.Context, input types.RecursiveMapAlias, opts ...CallOptionFunc) (*types.RecursiveMapAlias, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "SimpleRecursiveMapAlias", encoded)
 	if err != nil {
 		return nil, err
@@ -6313,14 +7659,27 @@ func (*stream) SimpleRecursiveMapAlias(ctx context.Context, input types.Recursiv
 	return channel
 }
 
-func StreamBigNumbers(ctx context.Context, digits int64) (*types.BigNumbers, error) {
+func StreamBigNumbers(ctx context.Context, digits int64, opts ...CallOptionFunc) (*types.BigNumbers, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"digits": digits},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "StreamBigNumbers", encoded)
 	if err != nil {
 		return nil, err
@@ -6375,14 +7734,27 @@ func (*stream) StreamBigNumbers(ctx context.Context, digits int64) <-chan *types
 	return channel
 }
 
-func StreamFailingAssertion(ctx context.Context, theme string, length int64) (*types.TwoStoriesOneTitle, error) {
+func StreamFailingAssertion(ctx context.Context, theme string, length int64, opts ...CallOptionFunc) (*types.TwoStoriesOneTitle, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"theme": theme, "length": length},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "StreamFailingAssertion", encoded)
 	if err != nil {
 		return nil, err
@@ -6437,14 +7809,27 @@ func (*stream) StreamFailingAssertion(ctx context.Context, theme string, length 
 	return channel
 }
 
-func StreamFailingCheck(ctx context.Context, theme string, length int64) (*types.TwoStoriesOneTitleCheck, error) {
+func StreamFailingCheck(ctx context.Context, theme string, length int64, opts ...CallOptionFunc) (*types.TwoStoriesOneTitleCheck, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"theme": theme, "length": length},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "StreamFailingCheck", encoded)
 	if err != nil {
 		return nil, err
@@ -6499,14 +7884,27 @@ func (*stream) StreamFailingCheck(ctx context.Context, theme string, length int6
 	return channel
 }
 
-func StreamOneBigNumber(ctx context.Context, digits int64) (*int64, error) {
+func StreamOneBigNumber(ctx context.Context, digits int64, opts ...CallOptionFunc) (*int64, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"digits": digits},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "StreamOneBigNumber", encoded)
 	if err != nil {
 		return nil, err
@@ -6561,14 +7959,27 @@ func (*stream) StreamOneBigNumber(ctx context.Context, digits int64) <-chan *int
 	return channel
 }
 
-func StreamUnionIntegers(ctx context.Context, digits int64) ([]types.Union__int__string, error) {
+func StreamUnionIntegers(ctx context.Context, digits int64, opts ...CallOptionFunc) ([]types.Union__int__string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"digits": digits},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "StreamUnionIntegers", encoded)
 	if err != nil {
 		return nil, err
@@ -6623,14 +8034,27 @@ func (*stream) StreamUnionIntegers(ctx context.Context, digits int64) <-chan []t
 	return channel
 }
 
-func StreamingCompoundNumbers(ctx context.Context, digits int64, yapping bool) (*types.CompoundBigNumbers, error) {
+func StreamingCompoundNumbers(ctx context.Context, digits int64, yapping bool, opts ...CallOptionFunc) (*types.CompoundBigNumbers, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"digits": digits, "yapping": yapping},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "StreamingCompoundNumbers", encoded)
 	if err != nil {
 		return nil, err
@@ -6685,14 +8109,27 @@ func (*stream) StreamingCompoundNumbers(ctx context.Context, digits int64, yappi
 	return channel
 }
 
-func StructureDocument1559(ctx context.Context, document_txt string) (*types.Document1559, error) {
+func StructureDocument1559(ctx context.Context, document_txt string, opts ...CallOptionFunc) (*types.Document1559, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"document_txt": document_txt},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "StructureDocument1559", encoded)
 	if err != nil {
 		return nil, err
@@ -6747,14 +8184,27 @@ func (*stream) StructureDocument1559(ctx context.Context, document_txt string) <
 	return channel
 }
 
-func TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDependency) (*types.RecursiveAliasDependency, error) {
+func TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDependency, opts ...CallOptionFunc) (*types.RecursiveAliasDependency, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TakeRecAliasDep", encoded)
 	if err != nil {
 		return nil, err
@@ -6809,14 +8259,27 @@ func (*stream) TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDe
 	return channel
 }
 
-func TellStory(ctx context.Context, story string) (*string, error) {
+func TellStory(ctx context.Context, story string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"story": story},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TellStory", encoded)
 	if err != nil {
 		return nil, err
@@ -6871,14 +8334,27 @@ func (*stream) TellStory(ctx context.Context, story string) <-chan *string {
 	return channel
 }
 
-func TestAnthropic(ctx context.Context, input string) (*string, error) {
+func TestAnthropic(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAnthropic", encoded)
 	if err != nil {
 		return nil, err
@@ -6933,14 +8409,27 @@ func (*stream) TestAnthropic(ctx context.Context, input string) <-chan *string {
 	return channel
 }
 
-func TestAnthropicShorthand(ctx context.Context, input string) (*string, error) {
+func TestAnthropicShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAnthropicShorthand", encoded)
 	if err != nil {
 		return nil, err
@@ -6995,14 +8484,27 @@ func (*stream) TestAnthropicShorthand(ctx context.Context, input string) <-chan 
 	return channel
 }
 
-func TestAws(ctx context.Context, input string) (*string, error) {
+func TestAws(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAws", encoded)
 	if err != nil {
 		return nil, err
@@ -7057,14 +8559,27 @@ func (*stream) TestAws(ctx context.Context, input string) <-chan *string {
 	return channel
 }
 
-func TestAwsClaude37(ctx context.Context, input string) (*string, error) {
+func TestAwsClaude37(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAwsClaude37", encoded)
 	if err != nil {
 		return nil, err
@@ -7119,14 +8634,27 @@ func (*stream) TestAwsClaude37(ctx context.Context, input string) <-chan *string
 	return channel
 }
 
-func TestAwsInferenceProfile(ctx context.Context, input string) (*string, error) {
+func TestAwsInferenceProfile(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAwsInferenceProfile", encoded)
 	if err != nil {
 		return nil, err
@@ -7181,14 +8709,27 @@ func (*stream) TestAwsInferenceProfile(ctx context.Context, input string) <-chan
 	return channel
 }
 
-func TestAwsInvalidAccessKey(ctx context.Context, input string) (*string, error) {
+func TestAwsInvalidAccessKey(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidAccessKey", encoded)
 	if err != nil {
 		return nil, err
@@ -7243,14 +8784,27 @@ func (*stream) TestAwsInvalidAccessKey(ctx context.Context, input string) <-chan
 	return channel
 }
 
-func TestAwsInvalidProfile(ctx context.Context, input string) (*string, error) {
+func TestAwsInvalidProfile(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidProfile", encoded)
 	if err != nil {
 		return nil, err
@@ -7305,14 +8859,27 @@ func (*stream) TestAwsInvalidProfile(ctx context.Context, input string) <-chan *
 	return channel
 }
 
-func TestAwsInvalidRegion(ctx context.Context, input string) (*string, error) {
+func TestAwsInvalidRegion(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidRegion", encoded)
 	if err != nil {
 		return nil, err
@@ -7367,14 +8934,27 @@ func (*stream) TestAwsInvalidRegion(ctx context.Context, input string) <-chan *s
 	return channel
 }
 
-func TestAwsInvalidSessionToken(ctx context.Context, input string) (*string, error) {
+func TestAwsInvalidSessionToken(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAwsInvalidSessionToken", encoded)
 	if err != nil {
 		return nil, err
@@ -7429,14 +9009,27 @@ func (*stream) TestAwsInvalidSessionToken(ctx context.Context, input string) <-c
 	return channel
 }
 
-func TestAzure(ctx context.Context, input string) (*string, error) {
+func TestAzure(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAzure", encoded)
 	if err != nil {
 		return nil, err
@@ -7491,14 +9084,27 @@ func (*stream) TestAzure(ctx context.Context, input string) <-chan *string {
 	return channel
 }
 
-func TestAzureFailure(ctx context.Context, input string) (*string, error) {
+func TestAzureFailure(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAzureFailure", encoded)
 	if err != nil {
 		return nil, err
@@ -7553,14 +9159,27 @@ func (*stream) TestAzureFailure(ctx context.Context, input string) <-chan *strin
 	return channel
 }
 
-func TestAzureO1NoMaxTokens(ctx context.Context, input string) (*string, error) {
+func TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAzureO1NoMaxTokens", encoded)
 	if err != nil {
 		return nil, err
@@ -7615,14 +9234,27 @@ func (*stream) TestAzureO1NoMaxTokens(ctx context.Context, input string) <-chan 
 	return channel
 }
 
-func TestAzureO1WithMaxCompletionTokens(ctx context.Context, input string) (*string, error) {
+func TestAzureO1WithMaxCompletionTokens(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAzureO1WithMaxCompletionTokens", encoded)
 	if err != nil {
 		return nil, err
@@ -7677,14 +9309,27 @@ func (*stream) TestAzureO1WithMaxCompletionTokens(ctx context.Context, input str
 	return channel
 }
 
-func TestAzureO1WithMaxTokens(ctx context.Context, input string) (*string, error) {
+func TestAzureO1WithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAzureO1WithMaxTokens", encoded)
 	if err != nil {
 		return nil, err
@@ -7739,14 +9384,27 @@ func (*stream) TestAzureO1WithMaxTokens(ctx context.Context, input string) <-cha
 	return channel
 }
 
-func TestAzureO3NoMaxTokens(ctx context.Context, input string) (*string, error) {
+func TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAzureO3NoMaxTokens", encoded)
 	if err != nil {
 		return nil, err
@@ -7801,14 +9459,27 @@ func (*stream) TestAzureO3NoMaxTokens(ctx context.Context, input string) <-chan 
 	return channel
 }
 
-func TestAzureO3WithMaxCompletionTokens(ctx context.Context, input string) (*string, error) {
+func TestAzureO3WithMaxCompletionTokens(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAzureO3WithMaxCompletionTokens", encoded)
 	if err != nil {
 		return nil, err
@@ -7863,14 +9534,27 @@ func (*stream) TestAzureO3WithMaxCompletionTokens(ctx context.Context, input str
 	return channel
 }
 
-func TestAzureWithMaxTokens(ctx context.Context, input string) (*string, error) {
+func TestAzureWithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestAzureWithMaxTokens", encoded)
 	if err != nil {
 		return nil, err
@@ -7925,14 +9609,27 @@ func (*stream) TestAzureWithMaxTokens(ctx context.Context, input string) <-chan 
 	return channel
 }
 
-func TestCaching(ctx context.Context, input string, not_cached string) (*string, error) {
+func TestCaching(ctx context.Context, input string, not_cached string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input, "not_cached": not_cached},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestCaching", encoded)
 	if err != nil {
 		return nil, err
@@ -7987,14 +9684,27 @@ func (*stream) TestCaching(ctx context.Context, input string, not_cached string)
 	return channel
 }
 
-func TestFallbackClient(ctx context.Context) (*string, error) {
+func TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestFallbackClient", encoded)
 	if err != nil {
 		return nil, err
@@ -8049,14 +9759,27 @@ func (*stream) TestFallbackClient(ctx context.Context) <-chan *string {
 	return channel
 }
 
-func TestFallbackStrategy(ctx context.Context, input string) (*string, error) {
+func TestFallbackStrategy(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestFallbackStrategy", encoded)
 	if err != nil {
 		return nil, err
@@ -8111,14 +9834,27 @@ func (*stream) TestFallbackStrategy(ctx context.Context, input string) <-chan *s
 	return channel
 }
 
-func TestFallbackToShorthand(ctx context.Context, input string) (*string, error) {
+func TestFallbackToShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestFallbackToShorthand", encoded)
 	if err != nil {
 		return nil, err
@@ -8173,14 +9909,27 @@ func (*stream) TestFallbackToShorthand(ctx context.Context, input string) <-chan
 	return channel
 }
 
-func TestFnNamedArgsSingleBool(ctx context.Context, myBool bool) (*string, error) {
+func TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myBool": myBool},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleBool", encoded)
 	if err != nil {
 		return nil, err
@@ -8235,14 +9984,27 @@ func (*stream) TestFnNamedArgsSingleBool(ctx context.Context, myBool bool) <-cha
 	return channel
 }
 
-func TestFnNamedArgsSingleClass(ctx context.Context, myArg types.NamedArgsSingleClass) (*string, error) {
+func TestFnNamedArgsSingleClass(ctx context.Context, myArg types.NamedArgsSingleClass, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myArg": myArg},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleClass", encoded)
 	if err != nil {
 		return nil, err
@@ -8297,14 +10059,27 @@ func (*stream) TestFnNamedArgsSingleClass(ctx context.Context, myArg types.Named
 	return channel
 }
 
-func TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.NamedArgsSingleEnumList) (*string, error) {
+func TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.NamedArgsSingleEnumList, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myArg": myArg},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleEnumList", encoded)
 	if err != nil {
 		return nil, err
@@ -8359,14 +10134,27 @@ func (*stream) TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.
 	return channel
 }
 
-func TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64) (*string, error) {
+func TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myFloat": myFloat},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleFloat", encoded)
 	if err != nil {
 		return nil, err
@@ -8421,14 +10209,27 @@ func (*stream) TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64) 
 	return channel
 }
 
-func TestFnNamedArgsSingleInt(ctx context.Context, myInt int64) (*string, error) {
+func TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myInt": myInt},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleInt", encoded)
 	if err != nil {
 		return nil, err
@@ -8483,14 +10284,27 @@ func (*stream) TestFnNamedArgsSingleInt(ctx context.Context, myInt int64) <-chan
 	return channel
 }
 
-func TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap map[string]types.StringToClassEntry) (map[string]types.StringToClassEntry, error) {
+func TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap map[string]types.StringToClassEntry, opts ...CallOptionFunc) (map[string]types.StringToClassEntry, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myMap": myMap},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleMapStringToClass", encoded)
 	if err != nil {
 		return nil, err
@@ -8545,14 +10359,27 @@ func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap 
 	return channel
 }
 
-func TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap map[string]map[string]string) (map[string]map[string]string, error) {
+func TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap map[string]map[string]string, opts ...CallOptionFunc) (map[string]map[string]string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myMap": myMap},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleMapStringToMap", encoded)
 	if err != nil {
 		return nil, err
@@ -8607,14 +10434,27 @@ func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap ma
 	return channel
 }
 
-func TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[string]string) (map[string]string, error) {
+func TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[string]string, opts ...CallOptionFunc) (map[string]string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myMap": myMap},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleMapStringToString", encoded)
 	if err != nil {
 		return nil, err
@@ -8669,14 +10509,27 @@ func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap
 	return channel
 }
 
-func TestFnNamedArgsSingleString(ctx context.Context, myString string) (*string, error) {
+func TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myString": myString},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleString", encoded)
 	if err != nil {
 		return nil, err
@@ -8731,14 +10584,27 @@ func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string)
 	return channel
 }
 
-func TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArray []string) (*string, error) {
+func TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArray []string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myStringArray": myStringArray},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleStringArray", encoded)
 	if err != nil {
 		return nil, err
@@ -8793,14 +10659,27 @@ func (*stream) TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArr
 	return channel
 }
 
-func TestFnNamedArgsSingleStringList(ctx context.Context, myArg []string) ([]string, error) {
+func TestFnNamedArgsSingleStringList(ctx context.Context, myArg []string, opts ...CallOptionFunc) ([]string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myArg": myArg},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestFnNamedArgsSingleStringList", encoded)
 	if err != nil {
 		return nil, err
@@ -8855,14 +10734,27 @@ func (*stream) TestFnNamedArgsSingleStringList(ctx context.Context, myArg []stri
 	return channel
 }
 
-func TestGemini(ctx context.Context, input string) (*string, error) {
+func TestGemini(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestGemini", encoded)
 	if err != nil {
 		return nil, err
@@ -8917,14 +10809,27 @@ func (*stream) TestGemini(ctx context.Context, input string) <-chan *string {
 	return channel
 }
 
-func TestGeminiOpenAiGeneric(ctx context.Context) (*string, error) {
+func TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestGeminiOpenAiGeneric", encoded)
 	if err != nil {
 		return nil, err
@@ -8979,14 +10884,27 @@ func (*stream) TestGeminiOpenAiGeneric(ctx context.Context) <-chan *string {
 	return channel
 }
 
-func TestGeminiSystem(ctx context.Context, input string) (*string, error) {
+func TestGeminiSystem(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestGeminiSystem", encoded)
 	if err != nil {
 		return nil, err
@@ -9041,14 +10959,27 @@ func (*stream) TestGeminiSystem(ctx context.Context, input string) <-chan *strin
 	return channel
 }
 
-func TestGeminiSystemAsChat(ctx context.Context, input string) (*string, error) {
+func TestGeminiSystemAsChat(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestGeminiSystemAsChat", encoded)
 	if err != nil {
 		return nil, err
@@ -9103,14 +11034,27 @@ func (*stream) TestGeminiSystemAsChat(ctx context.Context, input string) <-chan 
 	return channel
 }
 
-func TestGroq(ctx context.Context, input string) (*string, error) {
+func TestGroq(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestGroq", encoded)
 	if err != nil {
 		return nil, err
@@ -9165,14 +11109,27 @@ func (*stream) TestGroq(ctx context.Context, input string) <-chan *string {
 	return channel
 }
 
-func TestImageInput(ctx context.Context, img any) (*string, error) {
+func TestImageInput(ctx context.Context, img any, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"img": img},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestImageInput", encoded)
 	if err != nil {
 		return nil, err
@@ -9227,14 +11184,27 @@ func (*stream) TestImageInput(ctx context.Context, img any) <-chan *string {
 	return channel
 }
 
-func TestImageInputAnthropic(ctx context.Context, img any) (*string, error) {
+func TestImageInputAnthropic(ctx context.Context, img any, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"img": img},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestImageInputAnthropic", encoded)
 	if err != nil {
 		return nil, err
@@ -9289,14 +11259,27 @@ func (*stream) TestImageInputAnthropic(ctx context.Context, img any) <-chan *str
 	return channel
 }
 
-func TestImageListInput(ctx context.Context, imgs []any) (*string, error) {
+func TestImageListInput(ctx context.Context, imgs []any, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"imgs": imgs},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestImageListInput", encoded)
 	if err != nil {
 		return nil, err
@@ -9351,14 +11334,27 @@ func (*stream) TestImageListInput(ctx context.Context, imgs []any) <-chan *strin
 	return channel
 }
 
-func TestMemory(ctx context.Context, input string) (*types.TestMemoryOutput, error) {
+func TestMemory(ctx context.Context, input string, opts ...CallOptionFunc) (*types.TestMemoryOutput, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestMemory", encoded)
 	if err != nil {
 		return nil, err
@@ -9413,14 +11409,27 @@ func (*stream) TestMemory(ctx context.Context, input string) <-chan *types.TestM
 	return channel
 }
 
-func TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArgsSingleClass, myArg2 types.NamedArgsSingleClass) (*string, error) {
+func TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArgsSingleClass, myArg2 types.NamedArgsSingleClass, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myArg": myArg, "myArg2": myArg2},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestMulticlassNamedArgs", encoded)
 	if err != nil {
 		return nil, err
@@ -9475,14 +11484,27 @@ func (*stream) TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArg
 	return channel
 }
 
-func TestNamedArgsLiteralBool(ctx context.Context, myBool bool) (*string, error) {
+func TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myBool": myBool},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestNamedArgsLiteralBool", encoded)
 	if err != nil {
 		return nil, err
@@ -9537,14 +11559,27 @@ func (*stream) TestNamedArgsLiteralBool(ctx context.Context, myBool bool) <-chan
 	return channel
 }
 
-func TestNamedArgsLiteralInt(ctx context.Context, myInt int) (*string, error) {
+func TestNamedArgsLiteralInt(ctx context.Context, myInt int, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myInt": myInt},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestNamedArgsLiteralInt", encoded)
 	if err != nil {
 		return nil, err
@@ -9599,14 +11634,27 @@ func (*stream) TestNamedArgsLiteralInt(ctx context.Context, myInt int) <-chan *s
 	return channel
 }
 
-func TestNamedArgsLiteralString(ctx context.Context, myString string) (*string, error) {
+func TestNamedArgsLiteralString(ctx context.Context, myString string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"myString": myString},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestNamedArgsLiteralString", encoded)
 	if err != nil {
 		return nil, err
@@ -9661,14 +11709,27 @@ func (*stream) TestNamedArgsLiteralString(ctx context.Context, myString string) 
 	return channel
 }
 
-func TestOllama(ctx context.Context, input string) (**string, error) {
+func TestOllama(ctx context.Context, input string, opts ...CallOptionFunc) (**string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestOllama", encoded)
 	if err != nil {
 		return nil, err
@@ -9725,14 +11786,27 @@ func (*stream) TestOllama(ctx context.Context, input string) <-chan **string {
 	return channel
 }
 
-func TestOllamaHaiku(ctx context.Context, input string) (*types.Haiku, error) {
+func TestOllamaHaiku(ctx context.Context, input string, opts ...CallOptionFunc) (*types.Haiku, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestOllamaHaiku", encoded)
 	if err != nil {
 		return nil, err
@@ -9787,14 +11861,27 @@ func (*stream) TestOllamaHaiku(ctx context.Context, input string) <-chan *types.
 	return channel
 }
 
-func TestOpenAI(ctx context.Context, input string) (*string, error) {
+func TestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAI", encoded)
 	if err != nil {
 		return nil, err
@@ -9849,14 +11936,27 @@ func (*stream) TestOpenAI(ctx context.Context, input string) <-chan *string {
 	return channel
 }
 
-func TestOpenAIDummyClient(ctx context.Context, input string) (*string, error) {
+func TestOpenAIDummyClient(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIDummyClient", encoded)
 	if err != nil {
 		return nil, err
@@ -9911,14 +12011,27 @@ func (*stream) TestOpenAIDummyClient(ctx context.Context, input string) <-chan *
 	return channel
 }
 
-func TestOpenAIGPT4oMini(ctx context.Context, input string) (*string, error) {
+func TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIGPT4oMini", encoded)
 	if err != nil {
 		return nil, err
@@ -9973,14 +12086,27 @@ func (*stream) TestOpenAIGPT4oMini(ctx context.Context, input string) <-chan *st
 	return channel
 }
 
-func TestOpenAILegacyProvider(ctx context.Context, input string) (*string, error) {
+func TestOpenAILegacyProvider(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAILegacyProvider", encoded)
 	if err != nil {
 		return nil, err
@@ -10035,14 +12161,27 @@ func (*stream) TestOpenAILegacyProvider(ctx context.Context, input string) <-cha
 	return channel
 }
 
-func TestOpenAIO1NoMaxTokens(ctx context.Context, input string) (*string, error) {
+func TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIO1NoMaxTokens", encoded)
 	if err != nil {
 		return nil, err
@@ -10097,14 +12236,27 @@ func (*stream) TestOpenAIO1NoMaxTokens(ctx context.Context, input string) <-chan
 	return channel
 }
 
-func TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input string) (*string, error) {
+func TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIO1WithMaxCompletionTokens", encoded)
 	if err != nil {
 		return nil, err
@@ -10159,14 +12311,27 @@ func (*stream) TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input st
 	return channel
 }
 
-func TestOpenAIO1WithMaxTokens(ctx context.Context, input string) (*string, error) {
+func TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIO1WithMaxTokens", encoded)
 	if err != nil {
 		return nil, err
@@ -10221,14 +12386,27 @@ func (*stream) TestOpenAIO1WithMaxTokens(ctx context.Context, input string) <-ch
 	return channel
 }
 
-func TestOpenAIShorthand(ctx context.Context, input string) (*string, error) {
+func TestOpenAIShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIShorthand", encoded)
 	if err != nil {
 		return nil, err
@@ -10283,14 +12461,27 @@ func (*stream) TestOpenAIShorthand(ctx context.Context, input string) <-chan *st
 	return channel
 }
 
-func TestOpenAIWithFinishReasonError(ctx context.Context, input string) (*string, error) {
+func TestOpenAIWithFinishReasonError(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithFinishReasonError", encoded)
 	if err != nil {
 		return nil, err
@@ -10345,14 +12536,27 @@ func (*stream) TestOpenAIWithFinishReasonError(ctx context.Context, input string
 	return channel
 }
 
-func TestOpenAIWithMaxTokens(ctx context.Context, input string) (*string, error) {
+func TestOpenAIWithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithMaxTokens", encoded)
 	if err != nil {
 		return nil, err
@@ -10407,14 +12611,27 @@ func (*stream) TestOpenAIWithMaxTokens(ctx context.Context, input string) <-chan
 	return channel
 }
 
-func TestOpenAIWithNullMaxTokens(ctx context.Context, input string) (*string, error) {
+func TestOpenAIWithNullMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIWithNullMaxTokens", encoded)
 	if err != nil {
 		return nil, err
@@ -10469,14 +12686,27 @@ func (*stream) TestOpenAIWithNullMaxTokens(ctx context.Context, input string) <-
 	return channel
 }
 
-func TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input string) (*string, error) {
+func TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestOpenRouterMistralSmall3_1_24b", encoded)
 	if err != nil {
 		return nil, err
@@ -10531,14 +12761,27 @@ func (*stream) TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input stri
 	return channel
 }
 
-func TestRetryConstant(ctx context.Context) (*string, error) {
+func TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestRetryConstant", encoded)
 	if err != nil {
 		return nil, err
@@ -10593,14 +12836,27 @@ func (*stream) TestRetryConstant(ctx context.Context) <-chan *string {
 	return channel
 }
 
-func TestRetryExponential(ctx context.Context) (*string, error) {
+func TestRetryExponential(ctx context.Context, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestRetryExponential", encoded)
 	if err != nil {
 		return nil, err
@@ -10655,14 +12911,27 @@ func (*stream) TestRetryExponential(ctx context.Context) <-chan *string {
 	return channel
 }
 
-func TestRoundRobinStrategy(ctx context.Context, input string) (*string, error) {
+func TestRoundRobinStrategy(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestRoundRobinStrategy", encoded)
 	if err != nil {
 		return nil, err
@@ -10717,14 +12986,27 @@ func (*stream) TestRoundRobinStrategy(ctx context.Context, input string) <-chan 
 	return channel
 }
 
-func TestSingleFallbackClient(ctx context.Context) (*string, error) {
+func TestSingleFallbackClient(ctx context.Context, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestSingleFallbackClient", encoded)
 	if err != nil {
 		return nil, err
@@ -10779,14 +13061,27 @@ func (*stream) TestSingleFallbackClient(ctx context.Context) <-chan *string {
 	return channel
 }
 
-func TestThinking(ctx context.Context, input string) (*types.CustomStory, error) {
+func TestThinking(ctx context.Context, input string, opts ...CallOptionFunc) (*types.CustomStory, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestThinking", encoded)
 	if err != nil {
 		return nil, err
@@ -10841,14 +13136,27 @@ func (*stream) TestThinking(ctx context.Context, input string) <-chan *types.Cus
 	return channel
 }
 
-func TestUniverseQuestion(ctx context.Context, question types.UniverseQuestionInput) (*types.UniverseQuestion, error) {
+func TestUniverseQuestion(ctx context.Context, question types.UniverseQuestionInput, opts ...CallOptionFunc) (*types.UniverseQuestion, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"question": question},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestUniverseQuestion", encoded)
 	if err != nil {
 		return nil, err
@@ -10903,14 +13211,27 @@ func (*stream) TestUniverseQuestion(ctx context.Context, question types.Universe
 	return channel
 }
 
-func TestVertex(ctx context.Context, input string) (*string, error) {
+func TestVertex(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestVertex", encoded)
 	if err != nil {
 		return nil, err
@@ -10965,14 +13286,27 @@ func (*stream) TestVertex(ctx context.Context, input string) <-chan *string {
 	return channel
 }
 
-func TestVertexClaude(ctx context.Context, input string) (*string, error) {
+func TestVertexClaude(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestVertexClaude", encoded)
 	if err != nil {
 		return nil, err
@@ -11027,14 +13361,27 @@ func (*stream) TestVertexClaude(ctx context.Context, input string) <-chan *strin
 	return channel
 }
 
-func TestVertexWithSystemInstructions(ctx context.Context) (*string, error) {
+func TestVertexWithSystemInstructions(ctx context.Context, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "TestVertexWithSystemInstructions", encoded)
 	if err != nil {
 		return nil, err
@@ -11089,14 +13436,27 @@ func (*stream) TestVertexWithSystemInstructions(ctx context.Context) <-chan *str
 	return channel
 }
 
-func UnionTest_Function(ctx context.Context, input types.Union__string__bool) (*types.UnionTest_ReturnType, error) {
+func UnionTest_Function(ctx context.Context, input types.Union__string__bool, opts ...CallOptionFunc) (*types.UnionTest_ReturnType, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "UnionTest_Function", encoded)
 	if err != nil {
 		return nil, err
@@ -11151,14 +13511,27 @@ func (*stream) UnionTest_Function(ctx context.Context, input types.Union__string
 	return channel
 }
 
-func UseBlockConstraint(ctx context.Context, inp types.BlockConstraintForParam) (*int64, error) {
+func UseBlockConstraint(ctx context.Context, inp types.BlockConstraintForParam, opts ...CallOptionFunc) (*int64, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"inp": inp},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "UseBlockConstraint", encoded)
 	if err != nil {
 		return nil, err
@@ -11213,14 +13586,27 @@ func (*stream) UseBlockConstraint(ctx context.Context, inp types.BlockConstraint
 	return channel
 }
 
-func UseMaintainFieldOrder(ctx context.Context, input types.MaintainFieldOrder) (*types.MaintainFieldOrder, error) {
+func UseMaintainFieldOrder(ctx context.Context, input types.MaintainFieldOrder, opts ...CallOptionFunc) (*types.MaintainFieldOrder, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "UseMaintainFieldOrder", encoded)
 	if err != nil {
 		return nil, err
@@ -11275,14 +13661,27 @@ func (*stream) UseMaintainFieldOrder(ctx context.Context, input types.MaintainFi
 	return channel
 }
 
-func UseMalformedConstraints(ctx context.Context, a types.MalformedConstraints2) (*int64, error) {
+func UseMalformedConstraints(ctx context.Context, a types.MalformedConstraints2, opts ...CallOptionFunc) (*int64, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"a": a},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "UseMalformedConstraints", encoded)
 	if err != nil {
 		return nil, err
@@ -11337,14 +13736,27 @@ func (*stream) UseMalformedConstraints(ctx context.Context, a types.MalformedCon
 	return channel
 }
 
-func UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlockConstraintForParam) (*int64, error) {
+func UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlockConstraintForParam, opts ...CallOptionFunc) (*int64, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
 	args := baml.BamlFunctionArguments{
 		Kwargs: map[string]any{"inp": inp},
+		Env:    getEnvVars(callOpts.env),
 	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
 	}
+
 	result, err := bamlRuntime.CallFunction(ctx, "UseNestedBlockConstraint", encoded)
 	if err != nil {
 		return nil, err

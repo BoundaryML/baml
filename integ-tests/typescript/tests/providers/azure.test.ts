@@ -7,7 +7,7 @@ describe('Azure Provider', () => {
   })
 
   it('should support o1 model without max_tokens', async () => {
-    const res = await b.TestAzureO1NoMaxTokens('Donkey Kong')
+    const res = await b.TestAzureO1NoMaxTokens('Donkey Kong. Mention the word donkey.')
     expect(res.toLowerCase()).toContain('donkey')
   })
 

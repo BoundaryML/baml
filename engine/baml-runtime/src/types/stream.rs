@@ -1,12 +1,12 @@
 use anyhow::Result;
 
-use baml_types::tracing::events::{
-    BamlOptions, ContentId, FunctionEnd, FunctionId, FunctionStart, TraceData, TraceEvent,
-    TraceLevel,
+use baml_types::{
+    tracing::events::{FunctionEnd, FunctionStart, TraceData, TraceEvent},
+    BamlValueWithMeta, FieldType,
 };
 use internal_baml_core::ir::repr::IntermediateRepr;
 use serde_json::json;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     client_registry::ClientRegistry,
@@ -17,7 +17,7 @@ use crate::{
     tracing::BamlTracer,
     tracingv2::storage::storage::{Collector, BAML_TRACER},
     type_builder::TypeBuilder,
-    FunctionResult, RuntimeContextManager,
+    FunctionResult, PreparedFunctionArgs, RuntimeContextManager,
 };
 
 /// Wrapper that holds a stream of responses from a BAML function call.
@@ -27,7 +27,7 @@ use crate::{
 /// users to cancel the stream.
 pub struct FunctionResultStream {
     pub(crate) function_name: String,
-    pub(crate) params: crate::BamlMap<String, crate::BamlValue>,
+    pub(crate) prepared_func: PreparedFunctionArgs,
     pub(crate) renderer: PromptRenderer,
     pub(crate) ir: Arc<IntermediateRepr>,
     pub(crate) orchestrator: OrchestratorNodeIterator,
@@ -68,12 +68,13 @@ impl FunctionResultStream {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
-    ) -> (Result<FunctionResult>, Option<uuid::Uuid>)
+        env_vars: HashMap<String, String>,
+    ) -> (Result<FunctionResult>, baml_ids::FunctionCallId)
     where
         F: Fn(FunctionResult),
     {
         let rt = self.tokio_runtime.clone();
-        let fut = self.run(on_event, ctx, tb, cb);
+        let fut = self.run(on_event, ctx, tb, cb, env_vars);
         rt.block_on(fut)
     }
 
@@ -83,47 +84,25 @@ impl FunctionResultStream {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
-    ) -> (Result<FunctionResult>, Option<uuid::Uuid>)
+        env_vars: HashMap<String, String>,
+    ) -> (Result<FunctionResult>, baml_ids::FunctionCallId)
     where
         F: Fn(FunctionResult),
     {
         let mut local_orchestrator = Vec::new();
         std::mem::swap(&mut local_orchestrator, &mut self.orchestrator);
 
-        let mut local_params = crate::BamlMap::new();
-        std::mem::swap(&mut local_params, &mut self.params);
+        // let mut local_params = crate::BamlMap::new();
+        // std::mem::swap(&mut local_params, &mut self.params);
 
-        let span = self
-            .tracer
-            .start_span(&self.function_name, ctx, &local_params);
-        if let Some(span) = span.clone() {
-            for collector in self.collectors.iter() {
-                collector.track_function(FunctionId(span.clone().span_id.to_string()));
-            }
-            let trace_event = TraceEvent {
-                span_id: FunctionId(span.span_id.to_string()),
-                event_id: ContentId(uuid::Uuid::new_v4().to_string()),
-                span_chain: vec![],
-                timestamp: web_time::SystemTime::now(),
-                callsite: self.function_name.clone(),
-                verbosity: TraceLevel::Info,
-                content: TraceData::FunctionStart(FunctionStart {
-                    name: self.function_name.clone(),
-                    // TODO:
-                    args: vec![],
-                    //  TODO!
-                    options: BamlOptions {
-                        type_builder: None,
-                        client_registry: None,
-                    },
-                }),
-                // TODO: send separately?
-                tags: Default::default(),
-            };
-            BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
-        }
-
-        let rctx = ctx.create_ctx(tb, cb, span.clone().map(|s| s.span_id));
+        let call = self.tracer.start_call(
+            &self.function_name,
+            ctx,
+            &self.prepared_func.value,
+            true,
+            (!self.collectors.is_empty()).then(|| self.collectors.clone()),
+        );
+        let rctx = ctx.create_ctx(tb, cb, env_vars, call.new_call_id_stack.clone());
         let res = match rctx {
             Ok(rctx) => {
                 async {
@@ -132,7 +111,7 @@ impl FunctionResultStream {
                         self.ir.as_ref(),
                         &rctx,
                         &self.renderer,
-                        &baml_types::BamlValue::Map(local_params),
+                        &baml_types::BamlValue::Map(self.prepared_func.value.clone()),
                         |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, true),
                         |content| self.renderer.parse(self.ir.as_ref(), &rctx, content, false),
                         on_event,
@@ -146,63 +125,30 @@ impl FunctionResultStream {
             Err(e) => Err(e),
         };
 
-        let mut target_id = None;
-        if let Some(span) = span.clone() {
-            #[cfg(not(target_arch = "wasm32"))]
-            match self.tracer.finish_baml_span(span, ctx, &res) {
-                Ok(id) => target_id = id,
-                Err(e) => log::debug!("Error during logging: {}", e),
-            }
-            #[cfg(target_arch = "wasm32")]
-            match self.tracer.finish_baml_span(span, ctx, &res).await {
-                Ok(id) => target_id = id,
-                Err(e) => log::debug!("Error during logging: {}", e),
-            }
-        };
-
-        match &res {
-            Ok(result) => {
-                if let Some(span_id) = &span.map(|s| s.span_id.to_string()) {
-                    let trace_event = TraceEvent {
-                        span_id: FunctionId(span_id.to_string()),
-                        event_id: ContentId(uuid::Uuid::new_v4().to_string()),
-                        span_chain: vec![],
-                        timestamp: web_time::SystemTime::now(),
-                        callsite: self.function_name.clone(),
-                        verbosity: TraceLevel::Info,
-                        content: TraceData::FunctionEnd(FunctionEnd {
-                            result: Ok(baml_types::BamlValue::Null),
-                        }),
-                        tags: Default::default(),
-                    };
-                    BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
-                } else {
-                    log::warn!(
-                        "No span id found for function while emitting logs. Log event may be dropped."
-                    );
-                }
-            }
-            Err(e) => {
-                if let Some(span_id) = span.as_ref().map(|s| s.span_id.to_string()) {
-                    let trace_event = TraceEvent {
-                        span_id: FunctionId(span_id.to_string()),
-                        event_id: ContentId(uuid::Uuid::new_v4().to_string()),
-                        span_chain: vec![],
-                        timestamp: web_time::SystemTime::now(),
-                        callsite: self.function_name.clone(),
-                        verbosity: TraceLevel::Info,
-                        content: TraceData::FunctionEnd(FunctionEnd {
-                            result: Err(anyhow::anyhow!("{}", e)),
-                        }),
-                        tags: Default::default(),
-                    };
-                    BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
-                } else {
-                    log::warn!("No span id found for function while emitting logs. Log event may be dropped.");
-                }
-            }
+        let curr_call_id = call.curr_call_id();
+        let call_stack = call.new_call_id_stack.clone();
+        #[cfg(not(target_arch = "wasm32"))]
+        match self.tracer.finish_baml_call(call, ctx, &res) {
+            Ok(id) => {}
+            Err(e) => log::debug!("Error during logging: {}", e),
+        }
+        #[cfg(target_arch = "wasm32")]
+        match self.tracer.finish_baml_call(call, ctx, &res).await {
+            Ok(id) => {}
+            Err(e) => log::debug!("Error during logging: {}", e),
         }
 
-        (res, target_id)
+        let trace_event = TraceEvent::new_function_end(
+            call_stack,
+            match &res {
+                Ok(result) => Ok(baml_types::BamlValueWithMeta::<FieldType>::Null(
+                    FieldType::null(),
+                )),
+                Err(e) => Err(baml_types::tracing::errors::BamlError::from(e).to_owned()),
+            },
+        );
+        BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
+
+        (res, curr_call_id)
     }
 }

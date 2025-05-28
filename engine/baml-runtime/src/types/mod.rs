@@ -12,7 +12,7 @@ pub use js_callback_provider::{
     AwsCredResult, JsCallbackProvider, RuntimeCallbackError, RuntimeCallbackResult,
 };
 pub use response::{FunctionResult, TestFailReason, TestResponse, TestStatus};
-pub use runtime_context::{RuntimeContext, SpanCtx};
+pub use runtime_context::{CallCtx, RuntimeContext};
 pub use stream::FunctionResultStream;
 pub use trace_stats::{InnerTraceStats, TraceStats};
 

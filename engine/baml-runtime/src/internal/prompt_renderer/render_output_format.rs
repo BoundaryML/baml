@@ -448,6 +448,7 @@ fn relevant_data_models<'a>(
 mod tests {
     use std::collections::HashMap;
 
+    use baml_ids::FunctionCallId;
     use internal_baml_jinja::types::RenderOptions;
 
     use super::*;
@@ -465,10 +466,12 @@ mod tests {
         )]
         .into_iter()
         .collect();
-        let env_vars: HashMap<&str, &str> = HashMap::new();
-        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars).unwrap();
+        let env_vars = HashMap::new();
+        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars.clone()).unwrap();
         let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
-        let ctx: RuntimeContext = ctx_manager.create_ctx(None, None, None).unwrap();
+        let ctx: RuntimeContext = ctx_manager
+            .create_ctx(None, None, env_vars.clone(), vec![FunctionCallId::new()])
+            .unwrap();
 
         let field_type = FieldType::Enum("Foo".to_string());
         let render_output =
@@ -522,10 +525,12 @@ class Resume {
         )]
         .into_iter()
         .collect();
-        let env_vars: HashMap<&str, &str> = HashMap::new();
-        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars).unwrap();
+        let env_vars = HashMap::new();
+        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars.clone()).unwrap();
         let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
-        let ctx: RuntimeContext = ctx_manager.create_ctx(None, None, None).unwrap();
+        let ctx: RuntimeContext = ctx_manager
+            .create_ctx(None, None, env_vars.clone(), vec![FunctionCallId::new()])
+            .unwrap();
 
         let field_type = FieldType::class("Resume");
         let render_output =
@@ -618,10 +623,12 @@ class Resume {
         )]
         .into_iter()
         .collect();
-        let env_vars: HashMap<&str, &str> = HashMap::new();
-        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars).unwrap();
+        let env_vars = HashMap::new();
+        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars.clone()).unwrap();
         let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
-        let ctx: RuntimeContext = ctx_manager.create_ctx(None, None, None).unwrap();
+        let ctx: RuntimeContext = ctx_manager
+            .create_ctx(None, None, env_vars.clone(), vec![FunctionCallId::new()])
+            .unwrap();
 
         let field_type = FieldType::class("Resume");
         let render_output =

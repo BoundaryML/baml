@@ -29,26 +29,11 @@ python my_program_using_baml.py
 
 <Tabs>
   <Tab title="python">
-    > **Warning**: If you are using the `python-dotenv` package, please check the import order for some edge cases.
-
-    ```python
-    import dotenv
-    from baml_client import b
-    # This will work regardless of import order, since dotenv is imported as a module
-    dotenv.load_dotenv()
-    ```
-
-    ```python
-    from baml_client import b
-    from dotenv import load_dotenv
-    # This will work since load_dotenv is imported after baml_client
-    load_dotenv()
-    ```
 
     ```python
     from dotenv import load_dotenv
     from baml_client import b
-    # This will not work as expected since baml_client is imported AFTER load_dotenv
+
     load_dotenv()
     ```
   </Tab>
@@ -58,52 +43,13 @@ python my_program_using_baml.py
     import dotenv from 'dotenv'
     import { b } from './baml_client'
 
-    // This should "just work"!
     dotenv.config()
     ```
   </Tab>
   <Tab title="ruby">
     ```ruby
     require 'dotenv/load'
-
-    # Wait to import the BAML client until after loading environment variables
-    # reset_baml_env_vars is not yet implemented in the Ruby client
     require 'baml_client'
-    ```
-  </Tab>
-</Tabs>
-
-
-### For Your App (Manually)
-
-<Info>
-Requires BAML Version 0.57+
-</Info>
-
-Reset the environment variables to those manually set in your code.
-
-<Tabs>
-  <Tab title="python">
-    ```python
-    from baml_client import b
-    from baml_client.config import reset_baml_env_vars
-
-    # This will load the environment variables from the .env file
-    reset_baml_env_vars({ "OPENAI_API_KEY": "sk-super-secret-key" })
-    ```
-  </Tab>
-  <Tab title="typescript">
-    ```typescript
-    // Wait to import the BAML client until after loading environment variables
-    import { b } from './baml_client'
-    import { resetBamlEnvVars } from './baml_client/config'
-
-    resetBamlEnvVars({ "OPENAI_API_KEY": "sk-super-secret-key" })
-    ```
-  </Tab>
-  <Tab title="ruby">
-    ```ruby
-    # not implemented yet
     ```
   </Tab>
 </Tabs>

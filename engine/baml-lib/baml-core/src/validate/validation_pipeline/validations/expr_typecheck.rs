@@ -5,6 +5,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::ir::builtin::builtin_ir;
+use crate::ir::ir_helpers::item_type;
 use crate::ir::IRHelper;
 use crate::ir::IntermediateRepr;
 use crate::validate::validation_pipeline::context::Context;
@@ -78,6 +79,8 @@ pub fn typecheck_exprs(ctx: &mut Context<'_>) -> Result<()> {
     Ok(())
 }
 
+/// A helper function for `typecheck_exprs`. It typechecks a given expression,
+/// within a typing_context (Γ) of types for variables.
 pub fn typecheck_in_context(
     ir: &IntermediateRepr,
     diagnostics: &mut Diagnostics,
@@ -88,34 +91,27 @@ pub fn typecheck_in_context(
     match expr {
         Expr::Atom(atom) => {
             // Atoms always typecheck.
-            Ok(())
+            //  Ok(())
         }
         Expr::LLMFunction(llm_function, args, _) => {
             // Bare functions always typecheck.
-            Ok(())
+            // Ok(())
         }
         // Builtins always typecheck.
-        Expr::Builtin(builtin, _) => Ok(()),
+        Expr::Builtin(builtin, _) => {}
         Expr::FreeVar(var, (var_span, maybe_type)) => {
             if let Some(var_type) = maybe_type {
                 if let Some(ctx_type) = typing_context.get(var) {
-                    if ir.is_subtype(&ctx_type, var_type) {
-                        Ok(())
-                    } else {
+                    if !ir.is_subtype(&ctx_type, var_type) {
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             "Type mismatch",
                             var_span.clone(),
                         ));
-                        Ok(())
                     }
-                } else {
-                    Ok(())
                 }
-            } else {
-                Ok(())
             }
         }
-        Expr::BoundVar(_, _) => Ok(()),
+        Expr::BoundVar(_, _) => {}
         Expr::Lambda(arity, body, (span, maybe_type)) => {
             // (\(x,y) -> x + y) : (Int,Int) -> Int
             if let Some(FieldType::Arrow(arrow)) = maybe_type {
@@ -151,7 +147,6 @@ pub fn typecheck_in_context(
                 }
                 typecheck_in_context(ir, diagnostics, &inner_context, &opened_body)?;
             }
-            Ok(())
         }
         // (\[x,y] -> x + y) (1,2)
         // ([Int,Int] -> Int) ([Int,Int]
@@ -185,16 +180,14 @@ pub fn typecheck_in_context(
                     );
                 }
             }
-            Ok(())
         }
         Expr::Let(name, value, body, _meta) => {
             typecheck_in_context(ir, diagnostics, typing_context, value)?;
             let mut new_typing_context = typing_context.clone();
             new_typing_context.insert(name.to_string(), value.meta().1.clone().unwrap());
             typecheck_in_context(ir, diagnostics, &new_typing_context, body)?;
-            Ok(())
         }
-        Expr::ArgsTuple(args, _) => Ok(()),
+        Expr::ArgsTuple(args, _) => {}
         Expr::List(items, meta) => {
             for item in items.iter() {
                 if let Some(item_type) = item.meta().1.as_ref() {
@@ -208,7 +201,6 @@ pub fn typecheck_in_context(
                 }
                 typecheck_in_context(ir, diagnostics, typing_context, item)?;
             }
-            Ok(())
         }
         Expr::Map(items, meta) => {
             if let Some(map_type) = meta.1.as_ref() {
@@ -236,7 +228,6 @@ pub fn typecheck_in_context(
                     ));
                 }
             }
-            Ok(())
         }
         Expr::ClassConstructor {
             name,
@@ -315,8 +306,6 @@ pub fn typecheck_in_context(
                     meta.0.clone(),
                 ));
             }
-
-            Ok(())
         }
         Expr::If(cond, then, else_, meta) => {
             if !compatible_as_subtype(
@@ -331,28 +320,35 @@ pub fn typecheck_in_context(
             }
             // TODO: Check that then and else have the same type? Or, if they're compatible,
             // who should be a subtype of who?
-            Ok(())
         }
-    }
-}
+        Expr::ForLoop {
+            item,
+            iterable,
+            body,
+            meta,
+        } => {
+            let iterable_type_ok: bool = match &iterable.meta().1 {
+                Some(FieldType::List(_)) => true,
+                _ => false, // TODO: Aliases.
+            };
+            if !iterable_type_ok {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    "For loop must iterate over a list",
+                    iterable.meta().0.clone(),
+                ));
+            }
+        }
+    };
 
-// fn is_subtype(ir: &IntermediateRepr, a: &ExprType, b: &ExprType) -> bool {
-//     match (a, b) {
-//         (ExprType::Atom(a), ExprType::Atom(b)) => ir.is_subtype(a, b),
-//         (ExprType::Arrow(a), ExprType::Arrow(b)) => {
-//             let a_arrow = a.as_ref();
-//             let b_arrow = b.as_ref();
-//             let return_type_ok = is_subtype(ir, &a_arrow.body_type, &b_arrow.body_type);
-//             let arg_types_ok = a_arrow
-//                 .param_types
-//                 .iter()
-//                 .zip(b_arrow.param_types.iter())
-//                 .all(|(a, b)| is_subtype(ir, b, a));
-//             return_type_ok && arg_types_ok
-//         }
-//         _ => false,
-//     }
-// }
+    // Finally, assert that we know the type of the whole expression.
+    if expr.meta().1.is_none() {
+        return Err(anyhow::anyhow!(
+            "type inference failed for expression: {}",
+            expr.dump_str()
+        ));
+    }
+    Ok(())
+}
 
 fn compatible_as_subtype(
     ir: &IntermediateRepr,
@@ -549,6 +545,61 @@ pub fn infer_types_in_context(
             }
             Arc::new(Expr::If(new_cond, new_then, new_else, new_meta))
         }
+        Expr::ForLoop {
+            item,
+            iterable,
+            body,
+            meta,
+        } => {
+            let mut body_context = typing_context.clone();
+            // TODO: Handle aliases. To do this, we will need access to the IR.
+            // We can't have access to the IR until we introduce compiler passes,
+            // otherwise there is a borrowing issue. (To see why, try taking an immutable
+            // reference to `repr` in `from_parser_database`).
+            let item_ty = iterable.meta().1.as_ref().and_then(|t| match t {
+                FieldType::List(inner) => Some(inner),
+                _ => None,
+            });
+            if let Some(item_ty) = item_ty {
+                body_context.insert(item.to_string(), *item_ty.clone());
+            }
+            let new_iterable = infer_types_in_context(typing_context, iterable.clone());
+            let new_body = infer_types_in_context(typing_context, body.clone());
+            let mut new_meta = meta.clone();
+            new_meta.1 = new_body
+                .meta()
+                .1
+                .as_ref()
+                .map(|body_type| FieldType::List(Box::new(body_type.clone())));
+            Arc::new(Expr::ForLoop {
+                item: item.clone(),
+                iterable: iterable.clone(),
+                body: new_body,
+                meta: meta.clone(),
+            })
+        }
+    }
+}
+
+fn deeply_check_inference(expr: &Expr<ExprMetadata>) -> Result<()> {
+    let mut untyped_subexprs = Vec::new();
+    for subexpr in expr.into_iter() {
+        if subexpr.meta().1.is_none() {
+            untyped_subexprs.push(subexpr);
+        }
+    }
+    if untyped_subexprs.is_empty() {
+        Ok(())
+    } else {
+        let error_message = untyped_subexprs
+            .iter()
+            .map(|e| e.dump_str())
+            .collect::<Vec<_>>()
+            .join(",\n");
+        Err(anyhow::anyhow!(
+            "type inference failed for expressions:\n{}",
+            error_message
+        ))
     }
 }
 
