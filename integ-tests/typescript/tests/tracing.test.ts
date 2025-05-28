@@ -1,5 +1,5 @@
 import { b, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from './test-setup'
-import { traceAsync, traceSync, setTags } from '../baml_client'
+import { traceAsync, traceSync, setTags, flush, onLogEvent } from '../baml_client'
 import { scheduler } from 'node:timers/promises'
 
 describe('Tracing Tests', () => {
@@ -71,6 +71,21 @@ describe('Tracing Tests', () => {
       expect(stats.sent).toEqual(stats.started)
       expect(stats.done).toEqual(stats.started)
       expect(stats.failed).toEqual(0)
+    })
+  })
+
+  describe('Events', () => {
+    it("should work with 'onLogEvent'", async () => {
+      flush() // Wait for all logs to be sent so no calls to onLogEvent are missed.
+      onLogEvent((param2) => {
+        console.log('onLogEvent', param2)
+      })
+      const res = await b.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
+      expect(res).toContain('a')
+      const res2 = await b.TestFnNamedArgsSingleStringList(['d', 'e', 'f'])
+      expect(res2).toContain('d')
+      flush() // Wait for all logs to be sent so no calls to onLogEvent are missed.
+      onLogEvent(undefined)
     })
   })
 })

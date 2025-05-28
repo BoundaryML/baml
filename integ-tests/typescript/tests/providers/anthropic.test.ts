@@ -7,6 +7,11 @@ describe('Anthropic Provider', () => {
   })
 
   describe('Streaming', () => {
+    it('should support anthropic shorthand streaming', async () => {
+      const res = await b.stream.TestAnthropicShorthand('Dr. Pepper').getFinalResponse()
+      expect(res.length).toBeGreaterThan(0)
+    })
+
     it('should support streaming in Claude', async () => {
       const stream = b.stream.PromptTestClaude('Mt Rainier is tall')
       const msgs: string[] = []

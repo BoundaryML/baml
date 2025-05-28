@@ -36,6 +36,20 @@ describe('Dynamic Type Tests', () => {
       expect(res[0]['animalLiked']).toEqual('GIRAFFE')
     })
 
+    it('should work with dynamic types class', async () => {
+      let tb = new TypeBuilder()
+      const animalClass = tb.addClass('Animal')
+      animalClass.addProperty('animal', tb.string()).description('The animal mentioned, in singular form.')
+      tb.Person.addProperty('animalLiked', animalClass.type())
+      const res = await b.ExtractPeople(
+        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+        { tb },
+      )
+      expect(res.length).toBeGreaterThan(0)
+      const animalLiked = res[0]['animalLiked']
+      expect(animalLiked['animal']).toContain('giraffe')
+    })
+
     it('should work with dynamic literals', async () => {
       let tb = new TypeBuilder()
       const animals = tb.union(['giraffe', 'elephant', 'lion'].map((animal) => tb.literalString(animal.toUpperCase())))
@@ -47,9 +61,27 @@ describe('Dynamic Type Tests', () => {
       expect(res.length).toBeGreaterThan(0)
       expect(res[0]['animalLiked']).toEqual('GIRAFFE')
     })
+
+    it('should work with dynamic inputs class', async () => {
+      let tb = new TypeBuilder()
+      tb.DynInputOutput.addProperty('new-key', tb.string().optional())
+
+      const res = await b.DynamicInputOutput({ 'new-key': 'hi', testKey: 'myTest' }, { tb })
+      expect(res['new-key']).toEqual('hi')
+      expect(res['testKey']).toEqual('myTest')
+    })
   })
 
   describe('Complex Dynamic Types', () => {
+    it('should work with dynamic inputs list', async () => {
+      let tb = new TypeBuilder()
+      tb.DynInputOutput.addProperty('new-key', tb.string().optional())
+
+      const res = await b.DynamicListInputOutput([{ 'new-key': 'hi', testKey: 'myTest' }], { tb })
+      expect(res[0]['new-key']).toEqual('hi')
+      expect(res[0]['testKey']).toEqual('myTest')
+    })
+
     it('should work with dynamic output map', async () => {
       let tb = new TypeBuilder()
       tb.DynamicOutput.addProperty('hair_color', tb.string())
