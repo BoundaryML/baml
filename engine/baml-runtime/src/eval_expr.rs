@@ -8,6 +8,7 @@ use internal_baml_jinja::types::OutputFormatContent;
 use jsonish::deserializer::deserialize_flags::Flag;
 use jsonish::helpers::render_output_format;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use crate::{BamlRuntime, FunctionResult};
@@ -275,7 +276,7 @@ async fn beta_reduce<'a>(
                             None,
                             None,
                             None,
-                            HashMap::new(),
+                            env.env_vars.clone(),
                         )
                         .await
                         .0;
@@ -316,7 +317,7 @@ async fn beta_reduce<'a>(
                 Builtin::FetchValue => {
                     let evaluated_args = eval_args(env, args).await?;
 
-                    let BamlValue::Class(cls, fields) = &evaluated_args[0] else {
+                    let BamlValue::Class(_, fields) = &evaluated_args[0] else {
                         return Err(anyhow!(
                             "{fetch_value} expects a {request_type} parameter but got: {evaluated_args:?}",
                             fetch_value = builtin::functions::FETCH_VALUE,
@@ -346,35 +347,67 @@ async fn beta_reduce<'a>(
                         ))?
                         .ok_or(anyhow!("Can't convert 'base_url' to string"))?;
 
+                    let headers = fields
+                        .get("headers")
+                        .map(BamlValue::as_map)
+                        .ok_or(anyhow!(
+                            "{fetch_value} argument has no 'headers' field",
+                            fetch_value = builtin::functions::FETCH_VALUE
+                        ))?
+                        .ok_or(anyhow!("Can't convert 'headers' to map"))?;
+
+                    let query_params = fields
+                        .get("query_params")
+                        .map(BamlValue::as_map)
+                        .ok_or(anyhow!(
+                            "{fetch_value} argument has no 'query_params' field",
+                            fetch_value = builtin::functions::FETCH_VALUE
+                        ))?
+                        .ok_or(anyhow!("Can't convert 'query_params' to map"))?;
+
+                    let mut header_map = reqwest::header::HeaderMap::new();
+                    for (key, value) in headers {
+                        header_map.insert(
+                            reqwest::header::HeaderName::from_str(&key)?,
+                            reqwest::header::HeaderValue::from_str(value.as_str().ok_or(
+                                anyhow!("Can't convert header value to string: {:?}", value),
+                            )?)?,
+                        );
+                    }
+
+                    // TODO: There's some code that handles proxy URL extraction
+                    // better in baml-lib/llm-client/src/clients/helpers.rs
+                    // use that here.
+                    if let Some(proxy_url) = env.env_vars.get("BOUNDARY_PROXY_URL") {
+                        header_map.insert(
+                            reqwest::header::HeaderName::from_static("baml-original-url"),
+                            reqwest::header::HeaderValue::from_str(base_url)?,
+                        );
+                        base_url = &proxy_url;
+                    }
+
                     // Highlight.
                     let app_span = SerializedSpan::serialize(&expr.meta().0);
                     if let Some(tx) = &env.expr_tx {
                         tx.unbounded_send(vec![app_span]).unwrap();
                     }
 
-                    // TODO: There's some code that handles proxy URL extraction
-                    // better in baml-lib/llm-client/src/clients/helpers.rs
-                    // use that here.
-                    let client = {
-                        let mut client = reqwest::Client::builder();
+                    let client = reqwest::Client::new();
 
-                        if let Some(proxy_url) = env.env_vars.get("BOUNDARY_PROXY_URL") {
-                            client = client.default_headers({
-                                let mut headers = reqwest::header::HeaderMap::new();
-                                headers.insert(
-                                    reqwest::header::HeaderName::from_static("baml-original-url"),
-                                    reqwest::header::HeaderValue::from_str(base_url)?,
-                                );
-                                headers
-                            });
-                            base_url = &proxy_url;
-                        }
+                    // eprintln!(
+                    //     "Sending HTTP request: {:?}",
+                    //     client
+                    //         .get(base_url)
+                    //         .query(query_params)
+                    //         .headers(header_map.clone())
+                    // );
 
-                        client.build()?
-                    };
-
-                    // TODO: Headers, query params, etc.
-                    let response = client.get(base_url).send().await?;
+                    let response = client
+                        .get(base_url)
+                        .query(query_params)
+                        .headers(header_map)
+                        .send()
+                        .await?;
                     let body = response.text().await?;
 
                     // TODO: If the lines above fail (? operator) then this

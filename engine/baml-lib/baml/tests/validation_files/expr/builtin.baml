@@ -2,7 +2,7 @@ class Todo {
   id int
   todo string
   completed bool
-  userId int 
+  userId int
 }
 
 fn GetTodo() -> Todo {

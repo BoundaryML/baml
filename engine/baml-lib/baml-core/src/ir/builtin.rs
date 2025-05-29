@@ -89,7 +89,7 @@ pub fn builtin_classes() -> Vec<Node<Class>> {
 /// This builds a specialized version of an std generic function.
 ///
 /// For now we only have functions that take in a generic type parameter and
-/// return that same type, generics to not appear in function parameters. So
+/// return that same type, generics do not appear in function parameters. So
 /// managing this is fairly simple, but will require carrying additional data
 /// when actual user defined generics are introduced.
 pub fn builtin_generic_fn(f: Builtin, return_type: FieldType) -> Expr<ExprMetadata> {
