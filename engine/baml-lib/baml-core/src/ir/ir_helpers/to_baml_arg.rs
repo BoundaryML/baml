@@ -96,100 +96,79 @@ impl ArgCoercer {
                     Ok(BamlValueWithMeta::Media(v.clone(), FieldType::audio()))
                 }
                 (TypeValue::Media(media_type), BamlValue::Map(kv)) => {
-                    unimplemented!("Media type coercion not implemented");
-                    // if let Some(BamlValue::String(s)) = kv.get("file") {
-                    //     let mime_type = match kv.get("media_type") {
-                    //         Some(t) => match t.as_str() {
-                    //             Some(s) => Some(s.to_string()),
-                    //             None => {
-                    //                 scope.push_error(format!("Invalid property `media_type` on file {}: expected string, got {:?}", media_type, t.r#type()));
-                    //                 return Err(());
-                    //             }
-                    //         },
-                    //         None => None,
-                    //     };
-
-                    //     for key in kv.keys() {
-                    //         if !["file", "media_type"].contains(&key.as_str()) {
-                    //             scope.push_error(format!(
-                    //                 "Invalid property `{}` on file {}: `media_type` is the only supported property",
-                    //                 key,
-                    //                 media_type
-                    //             ));
-                    //         }
-                    //     }
-                    //     match self.span_path.as_ref() {
-                    //         Some(span_path) => Ok(BamlValue::Media(baml_types::BamlMedia::file(
-                    //             *media_type,
-                    //             span_path.clone(),
-                    //             s.to_string(),
-                    //             mime_type,
-                    //         ))),
-                    //         None => {
-                    //             scope.push_error(
-                    //                 "BAML internal error: span is missing, cannot resolve file ref"
-                    //                     .to_string(),
-                    //             );
-                    //             Err(())
-                    //         }
-                    //     }
-                    // } else if let Some(BamlValue::String(s)) = kv.get("url") {
-                    //     let mime_type = match kv.get("media_type") {
-                    //         Some(t) => match t.as_str() {
-                    //             Some(s) => Some(s.to_string()),
-                    //             None => {
-                    //                 scope.push_error(format!("Invalid property `media_type` on file {}: expected string, got {:?}", media_type, t.r#type()));
-                    //                 return Err(());
-                    //             }
-                    //         },
-                    //         None => None,
-                    //     };
-                    //     for key in kv.keys() {
-                    //         if !["url", "media_type"].contains(&key.as_str()) {
-                    //             scope.push_error(format!(
-                    //                 "Invalid property `{}` on url {}: `media_type` is the only supported property",
-                    //                 key,
-                    //                 media_type
-                    //             ));
-                    //         }
-                    //     }
-                    //     Ok(BamlValue::Media(baml_types::BamlMedia::url(
-                    //         *media_type,
-                    //         s.to_string(),
-                    //         mime_type,
-                    //     )))
-                    // } else if let Some(BamlValue::String(s)) = kv.get("base64") {
-                    //     let mime_type = match kv.get("media_type") {
-                    //         Some(t) => match t.as_str() {
-                    //             Some(s) => Some(s.to_string()),
-                    //             None => {
-                    //                 scope.push_error(format!("Invalid property `media_type` on file {}: expected string, got {:?}", media_type, t.r#type()));
-                    //                 return Err(());
-                    //             }
-                    //         },
-                    //         None => None,
-                    //     };
-                    //     for key in kv.keys() {
-                    //         if !["base64", "media_type"].contains(&key.as_str()) {
-                    //             scope.push_error(format!(
-                    //                 "Invalid property `{}` on base64 {}: `media_type` is the only supported property",
-                    //                 key,
-                    //                 media_type
-                    //             ));
-                    //         }
-                    //     }
-                    //     Ok(BamlValue::Media(baml_types::BamlMedia::base64(
-                    //         *media_type,
-                    //         s.to_string(),
-                    //         mime_type,
-                    //     )))
-                    // } else {
-                    //     scope.push_error(format!(
-                    //         "Invalid image: expected `file`, `url`, or `base64`, got `{}`",
-                    //         value
-                    //     ));
-                    //     Err(())
-                    // }
+                    let mime_type = match kv.get("media_type") {
+                        None => None,
+                        Some(v) => match v.as_str() {
+                            None => {
+                                scope.push_error(format!("Invalid property `media_type` on media {}: expected string, got {:?}", media_type, v.r#type()));
+                                return Err(());
+                            }
+                            Some(val) => Some(val.to_string()),
+                        },
+                    };
+                    if let Some(BamlValue::String(s)) = kv.get("file") {
+                        for key in kv.keys() {
+                            if !["file", "media_type"].contains(&key.as_str()) {
+                                scope.push_error(format!(
+                                    "Invalid property `{}` on file {}: `media_type` is the only supported property",
+                                    key,
+                                    media_type
+                                ));
+                            }
+                        }
+                        match self.span_path.as_ref() {
+                            Some(span_path) => Ok(BamlValueWithMeta::Media(
+                                baml_types::BamlMedia::file(
+                                    *media_type,
+                                    span_path.clone(),
+                                    s.to_string(),
+                                    mime_type,
+                                ),
+                                field_type.clone(),
+                            )),
+                            None => {
+                                scope.push_error(
+                                    "BAML internal error: span is missing, cannot resolve file ref"
+                                        .to_string(),
+                                );
+                                Err(())
+                            }
+                        }
+                    } else if let Some(BamlValue::String(s)) = kv.get("url") {
+                        for key in kv.keys() {
+                            if !["url", "media_type"].contains(&key.as_str()) {
+                                scope.push_error(format!(
+                                    "Invalid property `{}` on url {}: `media_type` is the only supported property",
+                                    key,
+                                    media_type
+                                ));
+                            }
+                        }
+                        Ok(BamlValueWithMeta::Media(
+                            baml_types::BamlMedia::url(*media_type, s.to_string(), mime_type),
+                            field_type.clone(),
+                        ))
+                    } else if let Some(BamlValue::String(s)) = kv.get("base64") {
+                        for key in kv.keys() {
+                            if !["base64", "media_type"].contains(&key.as_str()) {
+                                scope.push_error(format!(
+                                    "Invalid property `{}` on base64 {}: `media_type` is the only supported property",
+                                    key,
+                                    media_type
+                                ));
+                            }
+                        }
+                        Ok(BamlValueWithMeta::Media(
+                            baml_types::BamlMedia::base64(*media_type, s.to_string(), mime_type),
+                            field_type.clone(),
+                        ))
+                    } else {
+                        scope.push_error(format!(
+                            "Invalid media source: expected `file`, `url`, or `base64`, got `{}`",
+                            value
+                        ));
+                        Err(())
+                    }
                 }
                 (_, _) => {
                     scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
