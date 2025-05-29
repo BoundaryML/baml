@@ -1,4 +1,4 @@
-use super::repr::{Class, ExprFunction, Field, Node, NodeAttributes};
+use super::repr::{Class, Enum, EnumValue, ExprFunction, Field, Node, NodeAttributes};
 use crate::{ir::repr::IntermediateRepr, Configuration};
 use baml_types::{
     expr::{Builtin, Expr, ExprMetadata},
@@ -14,11 +14,15 @@ pub mod classes {
     pub const REQUEST: &str = "std::Request";
 }
 
+pub mod enums {
+    pub const HTTP_METHOD: &str = "std::HttpMethod";
+}
+
 /// Builtins are exposed through a separate IR, which can be combined with
 /// the user's IR via `IntermediateRepr::extend`.
 pub fn builtin_ir() -> IntermediateRepr {
     IntermediateRepr {
-        enums: vec![],
+        enums: builtin_enums(),
         classes: builtin_classes(),
         type_aliases: vec![],
         functions: vec![],
@@ -48,6 +52,17 @@ pub fn builtin_classes() -> Vec<Node<Class>> {
         name: String::from(classes::REQUEST),
         docstring: None,
         static_fields: vec![
+            Node {
+                attributes: NodeAttributes::default(),
+                elem: Field {
+                    name: String::from("method"),
+                    r#type: Node {
+                        elem: FieldType::r#enum(enums::HTTP_METHOD),
+                        attributes: NodeAttributes::default(),
+                    },
+                    docstring: None,
+                },
+            },
             Node {
                 attributes: NodeAttributes::default(),
                 elem: Field {
@@ -83,6 +98,20 @@ pub fn builtin_classes() -> Vec<Node<Class>> {
             },
         ],
         inputs: vec![],
+    }])
+}
+
+pub fn builtin_enums() -> Vec<Node<Enum>> {
+    builtin([Enum {
+        name: String::from(enums::HTTP_METHOD),
+        docstring: None,
+        values: vec![(
+            Node {
+                attributes: NodeAttributes::default(),
+                elem: EnumValue(String::from("Get")),
+            },
+            None,
+        )],
     }])
 }
 

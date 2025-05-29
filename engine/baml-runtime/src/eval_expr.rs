@@ -1142,7 +1142,7 @@ test TestMakePerson() {
         assert!(false);
     }
 
-    // #[tokio::test]
+    #[tokio::test]
     async fn test_fetch_value() {
         let rt = runtime(
             r##"
@@ -1155,6 +1155,7 @@ class Todo {
 
 fn GetTodo() -> Todo {
   std::fetch_value<Todo>(std::Request {
+    method: Get,
     base_url: "https://dummyjson.com/todos/1",
     headers: {},
     query_params: {},
@@ -1205,7 +1206,10 @@ test UseFunction() {
                 &ctx,
                 Some(on_event),
                 None,
-                HashMap::new(),
+                HashMap::from([(
+                    "OPENAI_API_KEY".to_string(),
+                    std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY is not set."),
+                )]),
             )
             .await;
         dbg!(res);
