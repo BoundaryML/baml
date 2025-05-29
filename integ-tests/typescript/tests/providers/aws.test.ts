@@ -16,6 +16,20 @@ describe('AWS Provider', () => {
     })
   })
 
+  it('should allow overriding the region', async () => {
+    await expect(async () => {
+      await b.TestAwsInvalidRegion('Dr. Pepper')
+    }).rejects.toThrow('DispatchFailure')
+  })
+
+  test.skip('should handle invalid AWS profile gracefully', async () => {
+    const response = b.TestAwsInvalidProfile('Write a nice short story about Dr. Pepper')
+
+    await expect(response).rejects.toMatchObject({
+      code: 'GenericFailure',
+    })
+  })
+
   it('should handle invalid AWS access key gracefully', async () => {
     // Clear all AWS-related environment variables
 

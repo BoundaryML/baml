@@ -1,6 +1,6 @@
 import { NamedArgsSingleEnumList } from '../baml_client'
 import { partial_types } from '../baml_client/partial_types'
-import { b } from './test-setup'
+import { b, b_sync } from './test-setup'
 
 describe('Basic Input/Output Tests', () => {
   describe('Input Types', () => {
@@ -133,6 +133,33 @@ describe('Basic Input/Output Tests', () => {
       const str = await b.FnOutputLiteralString('input')
       expect(str).toEqual('example output')
     })
+  })
+})
+
+describe('Clients Tests', () => {
+  it('should work with a sync client', () => {
+    const res = b_sync.TestFnNamedArgsSingleStringList(['a', 'b', 'c'])
+    expect(res).toContain('a')
+  })
+})
+
+describe('Streaming Tests', () => {
+  it('should support streaming without iterating', async () => {
+    const final = await b.stream.PromptTestStreaming('Mt Rainier is tall').getFinalResponse()
+    expect(final.length).toBeGreaterThan(0)
+  })
+
+  it('should work with nested classes', async () => {
+    let stream = b.stream.FnOutputClassNested('hi!')
+    let msgs: partial_types.TestClassNested[] = []
+    for await (const msg of stream) {
+      console.log('msg', msg)
+      msgs.push(msg)
+    }
+
+    const final = await stream.getFinalResponse()
+    expect(msgs.length).toBeGreaterThan(0)
+    expect(msgs.at(-1)).toEqual(final)
   })
 })
 

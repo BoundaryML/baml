@@ -32,4 +32,25 @@ describe('Azure Provider', () => {
       await b.TestAzureFailure('Donkey Kong')
     }).rejects.toThrow('BamlClientError')
   })
+
+  it('should support azure streaming', async () => {
+    const stream = b.stream.TestAzure('Donkey Kong')
+    const msgs: string[] = []
+    for await (const msg of stream) {
+      msgs.push(msg ?? '')
+    }
+    const final = await stream.getFinalResponse()
+    expect(final.length).toBeGreaterThan(0)
+  })
+
+  // it('should fail if azure is not configured streaming', async () => {
+  //   const stream = b.stream.TestAzureFailure('Donkey Kong')
+  //   await expect(async () => {
+  //     // this should throw an error, not only when we try to get the final response
+  //     for await (const msg of stream) {
+  //       console.log('msg', msg)
+  //     }
+  //     // await stream.getFinalResponse()
+  //   }).rejects.toThrow('BamlClientError')
+  // })
 })

@@ -1,7 +1,7 @@
 [package]
 edition = "2021"
 name = "baml-ids"
-version.workspace = true
+version = "0.0.1"
 authors.workspace = true
 license-file.workspace = true
 description = "Typesafe IDs for BAML backends and runtime"

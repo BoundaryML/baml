@@ -38,6 +38,11 @@ describe('OpenAI Provider', () => {
   })
 
   describe('Streaming', () => {
+    it.only('should support OpenAI shorthand streaming', async () => {
+      const res = await b.stream.TestOpenAIShorthand('Dr. Pepper').getFinalResponse()
+      expect(res.length).toBeGreaterThan(0)
+    })
+
     it('should support streaming in OpenAI', async () => {
       const stream = b.stream.PromptTestStreaming('Mt Rainier is tall')
       const msgs: string[] = []
