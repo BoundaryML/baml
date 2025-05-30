@@ -211,27 +211,7 @@ console.log(collector.id(invoiceId)?.usage)
 </Tab>
 
 <Tab title="Ruby" language="ruby">
-```ruby
-require 'baml_client'
-require 'async'
-
-Async do
-    collector = Baml::Collector.new(name: "my-collector")
-    my_b = Baml.Client.with_options(collector: collector, client_registry: client_registry)
-    
-    # Run multiple functions in parallel
-    res, invoice = await [
-        my_b.ExtractResume(input: "..."),
-        my_b.ExtractInvoice(input: "...")
-    ]
-
-    # Access results and logs
-    print(res)
-    print(invoice)
-    print(collector.id(res.id).usage)
-    print(collector.id(invoice.id).usage)
-end
-```
+BAML Ruby (beta) does not currently support async/concurrent calls. Reach out to us if it's something you need!
 </Tab>
 </Tabs>
 
