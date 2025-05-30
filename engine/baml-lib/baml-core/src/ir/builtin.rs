@@ -52,17 +52,17 @@ pub fn builtin_classes() -> Vec<Node<Class>> {
         name: String::from(classes::REQUEST),
         docstring: None,
         static_fields: vec![
-            Node {
-                attributes: NodeAttributes::default(),
-                elem: Field {
-                    name: String::from("method"),
-                    r#type: Node {
-                        elem: FieldType::r#enum(enums::HTTP_METHOD),
-                        attributes: NodeAttributes::default(),
-                    },
-                    docstring: None,
-                },
-            },
+            // Node {
+            //     attributes: NodeAttributes::default(),
+            //     elem: Field {
+            //         name: String::from("method"),
+            //         r#type: Node {
+            //             elem: FieldType::r#enum(enums::HTTP_METHOD),
+            //             attributes: NodeAttributes::default(),
+            //         },
+            //         docstring: None,
+            //     },
+            // },
             Node {
                 attributes: NodeAttributes::default(),
                 elem: Field {
