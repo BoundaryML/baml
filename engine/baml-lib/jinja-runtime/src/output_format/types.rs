@@ -160,6 +160,7 @@ pub(crate) enum MapStyle {
 /// Hoist classes setting.
 ///
 /// Recursive classes are always hoisted.
+#[derive(Debug)]
 pub(crate) enum HoistClasses {
     /// Hoist all classes.
     All,
