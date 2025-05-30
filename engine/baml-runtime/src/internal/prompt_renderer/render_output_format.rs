@@ -647,18 +647,20 @@ Month
 - November
 - December
 
-Date {
-  day: int,
-  month: Month,
-  year: int,
-}
-
 Answer in JSON using this schema:
 {
   education: [
     {
-      from_date: Date,
-      to_date: Date or "current",
+      from_date: {
+        day: int,
+        month: Month,
+        year: int,
+      },
+      to_date: {
+        day: int,
+        month: Month,
+        year: int,
+      } or "current",
       school: string,
       description: string,
     }
