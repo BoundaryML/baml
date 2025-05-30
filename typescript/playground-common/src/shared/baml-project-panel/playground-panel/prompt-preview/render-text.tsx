@@ -65,7 +65,7 @@ export const RenderPromptPart: React.FC<{
           const end = start + match[0].length
           // Check if this range overlaps with any existing replacement
           const hasOverlap = replacements.some(
-            (r) => (start >= r.start && start < r.end) || (end > r.start && end <= r.end)
+            (r) => (start >= r.start && start < r.end) || (end > r.start && end <= r.end),
           )
 
           if (!hasOverlap) {
