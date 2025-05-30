@@ -7,6 +7,7 @@ use internal_baml_schema_ast::ast::{ClassConstructor, ClassConstructorField, Exp
 use internal_baml_schema_ast::ast::{WithName, WithSpan};
 
 use crate::ir;
+use crate::ir::builtin::is_builtin_identifier;
 use crate::validate::validation_pipeline::context::Context;
 
 /// Builtin functions.
@@ -110,6 +111,20 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
                     anyhow::anyhow!("Unknown function {}", &app.name.to_string()),
                     app.span().clone(),
                 ));
+            }
+
+            // Validate generics.
+            if is_builtin_identifier(app.name.name()) {
+                if app.type_args.len() == 0 {
+                    ctx.push_error(DatamodelError::new_anyhow_error(
+                        anyhow::anyhow!(
+                            "Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>",
+                            app.name.name(),
+                            app.name.name()
+                        ),
+                        app.span().clone(),
+                    ));
+                }
             }
             for arg in &app.args {
                 validate_expression(ctx, arg, scope);
