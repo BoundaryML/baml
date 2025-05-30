@@ -317,6 +317,7 @@ async fn beta_reduce<'a>(
                 Builtin::FetchValue => {
                     let evaluated_args = eval_args(env, args).await?;
 
+                    // TODO: Type checking / validation elsewhere.
                     let BamlValue::Class(_, fields) = &evaluated_args[0] else {
                         return Err(anyhow!(
                             "{fetch_value} expects a {request_type} parameter but got: {evaluated_args:?}",
@@ -408,7 +409,18 @@ async fn beta_reduce<'a>(
                         .headers(header_map)
                         .send()
                         .await?;
+
+                    let status = response.status();
+
                     let body = response.text().await?;
+
+                    if status.is_client_error() || status.is_server_error() {
+                        return Err(anyhow!(
+                            "HTTP request failed: HTTP {:?}\nBody: {}",
+                            status,
+                            body
+                        ));
+                    }
 
                     // TODO: If the lines above fail (? operator) then this
                     // won't run. We need to wrap this function in another
