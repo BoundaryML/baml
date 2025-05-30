@@ -250,10 +250,12 @@ pub fn typecheck_in_context(
                                     meta.0.clone(),
                                 ));
                             }
+                            typecheck_in_context(ir, diagnostics, typing_context, field_value)?;
                         }
                     }
                 }
             }
+
             let spread_type = spread.as_ref().and_then(|s| s.meta().1.clone());
             if !compatible_as_subtype(ir, &meta.1, &spread_type) {
                 diagnostics.push_error(DatamodelError::new_validation_error(
