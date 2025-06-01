@@ -11,15 +11,30 @@ mod builder;
 #[derive(Debug, Clone, PartialEq, serde::Serialize, Eq, Hash)]
 pub enum TypeGeneric<T> {
     Primitive(TypeValue, T),
-    Enum(String, T),
+    Enum {
+        name: String,
+        dynamic: bool,
+        meta: T,
+    },
     Literal(LiteralValue, T),
-    Class(String, T),
+    Class {
+        name: String,
+        mode: StreamingMode,
+        dynamic: bool,
+        meta: T,
+    },
     List(Box<TypeGeneric<T>>, T),
     Map(Box<TypeGeneric<T>>, Box<TypeGeneric<T>>, T),
     RecursiveTypeAlias(String, T),
     Tuple(Vec<TypeGeneric<T>>, T),
     Arrow(Box<ArrowGeneric<T>>, T),
     Union(UnionTypeGeneric<T>, T),
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash, serde::Serialize)]
+pub enum StreamingMode {
+    NonStreaming,
+    Streaming,
 }
 
 #[derive(serde::Serialize, Debug, Clone, PartialEq, Eq, Hash)]
@@ -170,32 +185,21 @@ impl<'a, T: Default + std::fmt::Debug + Clone> UnionTypeViewGeneric<'a, T> {
     /// See `FieldType::flatten` for context.
     fn flatten(&self) -> Vec<TypeGeneric<T>> {
         match self {
-            UnionTypeViewGeneric::Null => todo!(),
-            UnionTypeViewGeneric::Optional(_type_generic) => todo!(),
-            UnionTypeViewGeneric::OneOf(_type_generics) => todo!(),
-            UnionTypeViewGeneric::OneOfOptional(_type_generics) => todo!(),
+            UnionTypeViewGeneric::Null => vec![(TypeGeneric::null()).clone()],
+            UnionTypeViewGeneric::Optional(field_type) => field_type
+                .flatten()
+                .into_iter()
+                .chain(std::iter::once((TypeGeneric::null()).clone()))
+                .collect(),
+            UnionTypeViewGeneric::OneOf(field_types) => {
+                field_types.iter().flat_map(|t| t.flatten()).collect()
+            }
+            UnionTypeViewGeneric::OneOfOptional(field_types) => field_types
+                .iter()
+                .flat_map(|t| t.flatten())
+                .chain(std::iter::once((TypeGeneric::null()).clone()))
+                .collect(),
         }
-        // match self {
-        //     UnionTypeViewGeneric::Null => vec![(TypeGeneric::null()).clone()],
-        //     UnionTypeViewGeneric::Optional(field_type) =>
-        //     // field_type
-        //     // .flatten()
-        //     // .into_iter()
-        //     // .chain(std::iter::once((TypeGeneric::null()).clone()))
-        //     //.collect(),
-        //     {
-        //         todo!()
-        //     }
-        //     UnionTypeViewGeneric::OneOf(field_types) => {
-        //         field_types.iter().flat_map(|t| t.flatten()).collect()
-        //     }
-        //     UnionTypeViewGeneric::OneOfOptional(field_types) => field_types
-        //         .iter()
-        //         .flat_map(|t| t.flatten())
-        //         .chain(std::iter::once((TypeGeneric::null()).clone()))
-        //         .collect(),
-        // }
-        todo!()
     }
 }
 
@@ -385,8 +389,8 @@ impl std::fmt::Display for FieldType {
         }
 
         let _res = match self {
-            FieldType::Enum(name, _)
-            | FieldType::Class(name, _)
+            FieldType::Enum { name, .. }
+            | FieldType::Class { name, .. }
             | FieldType::RecursiveTypeAlias(name, _) => write!(f, "{name}"),
             FieldType::Primitive(t, _) => write!(f, "{t}"),
             FieldType::Literal(v, _) => write!(f, "{v}"),
@@ -461,10 +465,10 @@ impl<T> TypeGeneric<T> {
 
     pub fn set_meta(&mut self, meta: T) {
         match self {
-            TypeGeneric::Class(_, type_metadata_ir) => *type_metadata_ir = meta,
+            TypeGeneric::Class { meta: m, .. } => *m = meta,
             TypeGeneric::Arrow(_, type_metadata_ir) => *type_metadata_ir = meta,
             TypeGeneric::Primitive(_, type_metadata_ir) => *type_metadata_ir = meta,
-            TypeGeneric::Enum(_, type_metadata_ir) => *type_metadata_ir = meta,
+            TypeGeneric::Enum { meta: m, .. } => *m = meta,
             TypeGeneric::Literal(_, type_metadata_ir) => *type_metadata_ir = meta,
             TypeGeneric::List(_, type_metadata_ir) => *type_metadata_ir = meta,
             TypeGeneric::Map(_, _, type_metadata_ir) => *type_metadata_ir = meta,
@@ -476,10 +480,25 @@ impl<T> TypeGeneric<T> {
 
     pub fn meta(&self) -> &T {
         match self {
-            TypeGeneric::Class(_, type_metadata_ir) => type_metadata_ir,
+            TypeGeneric::Class { meta, .. } => meta,
             TypeGeneric::Arrow(_, type_metadata_ir) => type_metadata_ir,
             TypeGeneric::Primitive(_, type_metadata_ir) => type_metadata_ir,
-            TypeGeneric::Enum(_, type_metadata_ir) => type_metadata_ir,
+            TypeGeneric::Enum { meta, .. } => meta,
+            TypeGeneric::Literal(_, type_metadata_ir) => type_metadata_ir,
+            TypeGeneric::List(_, type_metadata_ir) => type_metadata_ir,
+            TypeGeneric::Map(_, _, type_metadata_ir) => type_metadata_ir,
+            TypeGeneric::RecursiveTypeAlias(_, type_metadata_ir) => type_metadata_ir,
+            TypeGeneric::Tuple(_, type_metadata_ir) => type_metadata_ir,
+            TypeGeneric::Union(_, type_metadata_ir) => type_metadata_ir,
+        }
+    }
+
+    pub fn meta_mut(&mut self) -> &mut T {
+        match self {
+            TypeGeneric::Class { meta, .. } => meta,
+            TypeGeneric::Arrow(_, type_metadata_ir) => type_metadata_ir,
+            TypeGeneric::Primitive(_, type_metadata_ir) => type_metadata_ir,
+            TypeGeneric::Enum { meta, .. } => meta,
             TypeGeneric::Literal(_, type_metadata_ir) => type_metadata_ir,
             TypeGeneric::List(_, type_metadata_ir) => type_metadata_ir,
             TypeGeneric::Map(_, _, type_metadata_ir) => type_metadata_ir,
@@ -572,10 +591,10 @@ impl<T> TypeGeneric<T> {
         let mut queue = vec![self];
         while let Some(current) = queue.pop() {
             match current {
-                TypeGeneric::Class(name, _) => {
+                TypeGeneric::Class { name, .. } => {
                     deps.insert(name.clone());
                 }
-                TypeGeneric::Enum(name, _) => {
+                TypeGeneric::Enum { name, .. } => {
                     deps.insert(name.clone());
                 }
                 TypeGeneric::List(inner, _) => {
@@ -610,128 +629,176 @@ impl<T> TypeGeneric<T> {
         }
         deps
     }
+}
 
-    /// Convert a `FieldType` (a type specified in BAML source code) into
-    /// a `StreamingType` (a type that can be used for streaming).
-    ///
-    /// The streaming-behavior related metadata is applied to the types,
-    /// and the original annotations are also preserved (both for tracking
-    /// the original specification of the type in BAML source code, and because
-    /// not all streaming behavior is reflected in the Base-type).
-    ///
-    /// The types of transformations done here:
-    ///   - Replacing class fields with nullable counterparts
-    ///   - Overriding nullability based on @not_null annotations
-    ///   - Overriding nullability based on the field's type
-    ///   - Preserving the original type according to the @done annotation
-    ///
-    /// We do not explicitly represent @stream.with_state or @stream.checked.
-    /// Downstream consumers of `StreamingType` must check these properties
-    /// in the metadata.
-    pub fn partialize(&self) -> TypeStreaming {
-        // This inner worker function goes from `FieldType` to `FieldType` to be
-        // suitable for recursive use. We only wrap the outermost `FieldType` in
-        // `StreamingType`.
-        fn partialize_helper(field_type: FieldType) -> TypeStreaming {
-            let StreamingBehavior {
+/// Convert a `FieldType` (a type specified in BAML source code) into
+/// a `StreamingType` (a type that can be used for streaming).
+///
+/// The streaming-behavior related metadata is applied to the types, and the
+/// annotations are also recorded in the streaming metadata (because not all
+/// streaming behavior is reflected in the Base-type).
+///
+/// The types of transformations done here:
+///   - Replacing classes with their streaming-module counterparts.
+///   - Overriding nullability based on @not_null annotations
+///   - Overriding nullability based on the field's type
+///   - Preserving the original type according to the @done annotation
+///
+/// We do not explicitly represent @stream.with_state or @stream.checked.
+/// Downstream consumers of `StreamingType` must check these properties
+/// in the metadata.
+pub fn partialize(r#type: &Type) -> TypeStreaming {
+    // This inner worker function goes from `FieldType` to `FieldType` to be
+    // suitable for recursive use. We only wrap the outermost `FieldType` in
+    // `StreamingType`.
+    fn partialize_helper(r#type: &Type) -> TypeStreaming {
+        let StreamingBehavior {
+            done,
+            needed,
+            state,
+            ..
+        } = r#type
+            .streaming_behavior()
+            .combine(&inherent_streaming_behavior(&r#type));
+
+        // A copy of the metadata to use in the new type.
+        let meta = TypeMetaStreaming {
+            streaming_behavior: StreamingBehavior {
                 done,
-                needed,
                 state,
-                ..
-            } = field_type
-                .streaming_behavior()
-                .combine(&inherent_streaming_behavior(&field_type));
+                needed,
+            },
+            constraints: r#type.meta().constraints.clone(),
+        };
 
-            // A copy of the metadata to use in the new type.
-            let meta = TypeMetaStreaming {
-                streaming_behavior: StreamingBehavior {
-                    done,
-                    state,
-                    needed,
-                },
-                constraints: field_type.meta().constraints.clone(),
-            };
-
-            let base_type_streaming = match field_type {
-                FieldType::Primitive(type_value, _) => match type_value {
-                    TypeValue::Null => TypeStreaming::Primitive(TypeValue::Null, meta),
-                    TypeValue::Int => TypeStreaming::Primitive(TypeValue::Int, meta),
-                    TypeValue::Float => TypeStreaming::Primitive(TypeValue::Float, meta),
-                    TypeValue::Bool => TypeStreaming::Primitive(TypeValue::Bool, meta),
-                    TypeValue::String => TypeStreaming::Primitive(TypeValue::String, meta),
-                    TypeValue::Media(_) => {
-                        TypeStreaming::Primitive(TypeValue::Media(BamlMediaType::Image), meta)
-                    }
-                },
-                FieldType::Enum(_, _) => todo!(),
-                FieldType::Literal(_literal_value, _) => todo!(),
-                FieldType::Class(_, _) => todo!(),
-                FieldType::List(_field_type, _) => todo!(),
-                FieldType::Map(_field_type, _field_type1, _) => todo!(),
-                FieldType::RecursiveTypeAlias(_, _) => todo!(),
-                FieldType::Tuple(_field_types, _) => todo!(),
-                FieldType::Arrow(_arrow, _) => todo!(),
-                FieldType::Union(_union_type, _) => todo!(),
-            };
-            if done {
-                base_type_streaming
-            } else {
-                todo!()
-                // FieldType::optional(base_type_streaming)
+        // Streaming behavior of the type, without regard to the `@stream` annotations.
+        // (That annotation will be handled later in this function).
+        let mut base_type_streaming = match r#type {
+            FieldType::Primitive(type_value, _) => match type_value {
+                TypeValue::Null => TypeStreaming::Primitive(TypeValue::Null, meta),
+                TypeValue::Int => TypeStreaming::Primitive(TypeValue::Int, meta),
+                TypeValue::Float => TypeStreaming::Primitive(TypeValue::Float, meta),
+                TypeValue::Bool => TypeStreaming::Primitive(TypeValue::Bool, meta),
+                TypeValue::String => TypeStreaming::Primitive(TypeValue::String, meta),
+                TypeValue::Media(_) => {
+                    TypeStreaming::Primitive(TypeValue::Media(BamlMediaType::Image), meta)
+                }
+            },
+            FieldType::Enum { name, dynamic, .. } => TypeStreaming::Enum {
+                name: name.clone(),
+                dynamic: *dynamic,
+                meta: meta.clone(),
+            },
+            FieldType::Literal(literal_value, _) => {
+                TypeStreaming::Literal(literal_value.clone(), meta)
             }
-        }
-
-        // Types have inherent streaming behavior. For example literals and
-        // numbers are inherently @done. These behaviors are applied even
-        // without user annotations.
-        fn inherent_streaming_behavior(field_type: &FieldType) -> StreamingBehavior {
-            match field_type {
-                FieldType::Primitive(type_value, _) => match type_value {
-                    TypeValue::String => StreamingBehavior::default(),
-                    TypeValue::Int => StreamingBehavior {
-                        done: true,
-                        needed: false,
-                        state: false,
-                    },
-                    TypeValue::Float => StreamingBehavior {
-                        done: true,
-                        needed: false,
-                        state: false,
-                    },
-                    TypeValue::Bool => StreamingBehavior {
-                        done: true,
-                        needed: false,
-                        state: false,
-                    },
-                    TypeValue::Null => StreamingBehavior::default(),
-                    TypeValue::Media(_) => StreamingBehavior::default(),
+            FieldType::Class { name, dynamic, .. } => TypeStreaming::Class {
+                name: name.clone(),
+                mode: if done {
+                    StreamingMode::NonStreaming
+                } else {
+                    StreamingMode::Streaming
                 },
-                FieldType::Enum(..) => StreamingBehavior {
-                    done: true,
-                    needed: false,
-                    state: false,
-                },
-                FieldType::Literal(_, _) => StreamingBehavior {
-                    done: true,
-                    needed: false,
-                    state: false,
-                },
-                FieldType::Class(..) => StreamingBehavior::default(),
-                FieldType::List(..) => StreamingBehavior::default(),
-                FieldType::Map(..) => StreamingBehavior::default(),
-                FieldType::RecursiveTypeAlias(..) => StreamingBehavior::default(),
-                FieldType::Tuple(..) => StreamingBehavior::default(),
-                FieldType::Arrow(..) => StreamingBehavior::default(),
-                FieldType::Union(inner, _) => inner
-                    .types
-                    .iter()
-                    .fold(StreamingBehavior::default(), |acc, t| {
-                        acc.combine(&inherent_streaming_behavior(t))
-                    }),
+                dynamic: *dynamic,
+                meta: meta.clone(),
+            },
+            FieldType::List(item_type, _) => {
+                TypeStreaming::List(Box::new(partialize(item_type)), meta)
             }
+            FieldType::Map(key_type, item_type, _) => TypeStreaming::Map(
+                Box::new(partialize(key_type)),
+                Box::new(partialize(item_type)),
+                meta,
+            ),
+            FieldType::RecursiveTypeAlias(name, _) => {
+                TypeStreaming::RecursiveTypeAlias(name.clone(), meta)
+            }
+            FieldType::Tuple(field_types, _) => {
+                TypeStreaming::Tuple(field_types.iter().map(|t| partialize(t)).collect(), meta)
+            }
+            FieldType::Arrow(arrow, _) => TypeStreaming::Arrow(
+                Box::new(ArrowGeneric {
+                    param_types: arrow.param_types.iter().map(|t| partialize(t)).collect(),
+                    return_type: partialize(&arrow.return_type),
+                }),
+                meta,
+            ),
+            FieldType::Union(union_type, _) => {
+                let (variants, _is_optional) = union_type.view_as_iter();
+                TypeStreaming::Union(
+                    UnionTypeGeneric::new(variants.iter().map(|t| partialize(t)).collect()),
+                    meta,
+                )
+            }
+        };
+        if needed || base_type_streaming.is_optional() {
+            // Needed streaming types, and streaming types that are optional, need
+            // no further processing to add optionality.
+            base_type_streaming
+        } else {
+            // Currently base_type_streaming has the interesting metadata.
+            // In the union we create to make base_type_streaming optional,
+            // we want that inner metadata to be default, our outer union to
+            // have the metadata. So we create a new default metadata and swap
+            // its memory with that of the inner base_type.
+            let meta = base_type_streaming.meta().clone();
+            *base_type_streaming.meta_mut() = TypeMetaStreaming::default();
+            let mut optional_value = TypeStreaming::optional(base_type_streaming);
+            *optional_value.meta_mut() = meta;
+            optional_value
         }
-        todo!()
     }
+
+    // Types have inherent streaming behavior. For example literals and
+    // numbers are inherently @done. These behaviors are applied even
+    // without user annotations.
+    fn inherent_streaming_behavior(field_type: &FieldType) -> StreamingBehavior {
+        match field_type {
+            FieldType::Primitive(type_value, _) => match type_value {
+                TypeValue::String => StreamingBehavior::default(),
+                TypeValue::Int => StreamingBehavior {
+                    done: true,
+                    needed: false,
+                    state: false,
+                },
+                TypeValue::Float => StreamingBehavior {
+                    done: true,
+                    needed: false,
+                    state: false,
+                },
+                TypeValue::Bool => StreamingBehavior {
+                    done: true,
+                    needed: false,
+                    state: false,
+                },
+                TypeValue::Null => StreamingBehavior::default(),
+                TypeValue::Media(_) => StreamingBehavior::default(),
+            },
+            FieldType::Enum { .. } => StreamingBehavior {
+                done: true,
+                needed: false,
+                state: false,
+            },
+            FieldType::Literal(_, _) => StreamingBehavior {
+                done: true,
+                needed: false,
+                state: false,
+            },
+            FieldType::Class { .. } => StreamingBehavior::default(),
+            FieldType::List(..) => StreamingBehavior::default(),
+            FieldType::Map(..) => StreamingBehavior::default(),
+            FieldType::RecursiveTypeAlias(..) => StreamingBehavior::default(),
+            FieldType::Tuple(..) => StreamingBehavior::default(),
+            FieldType::Arrow(..) => StreamingBehavior::default(),
+            FieldType::Union(inner, _) => inner
+                .types
+                .iter()
+                .fold(StreamingBehavior::default(), |acc, t| {
+                    acc.combine(&inherent_streaming_behavior(t))
+                }),
+        }
+    }
+    partialize_helper(r#type)
 }
 
 impl TypeGeneric<TypeMeta> {
@@ -758,9 +825,9 @@ impl ToUnionName for FieldType {
                 set
             }
             FieldType::Primitive(_, _)
-            | FieldType::Enum(_, _)
+            | FieldType::Enum { .. }
             | FieldType::Literal(_, _)
-            | FieldType::Class(_, _)
+            | FieldType::Class { .. }
             | FieldType::RecursiveTypeAlias(_, _)
             | FieldType::Arrow(_, _) => IndexSet::new(),
             FieldType::Tuple(inner, _) => inner.iter().flat_map(|t| t.find_union_types()).collect(),
@@ -770,7 +837,7 @@ impl ToUnionName for FieldType {
     fn to_union_name(&self) -> String {
         match self {
             FieldType::Primitive(type_value, _) => type_value.to_string(),
-            FieldType::Enum(name, _) => name.to_string(),
+            FieldType::Enum { name, .. } => name.to_string(),
             FieldType::Literal(literal_value, _) => match literal_value {
                 LiteralValue::String(value) => format!(
                     "string_{}",
@@ -782,7 +849,7 @@ impl ToUnionName for FieldType {
                 LiteralValue::Int(val) => format!("int_{}", val.to_string()),
                 LiteralValue::Bool(val) => format!("bool_{}", val.to_string()),
             },
-            FieldType::Class(name, _) => name.to_string(),
+            FieldType::Class { name, .. } => name.to_string(),
             FieldType::List(field_type, _) => {
                 format!("List__{}", field_type.to_union_name())
             }
@@ -925,7 +992,7 @@ mod tests {
     fn const_null_equals_synthetic_null() {
         let optional_int = FieldType::optional(FieldType::int());
         let union = FieldType::Union(
-            UnionType::new(vec![FieldType::int(), FieldType::null()]),
+            UnionTypeGeneric::new(vec![FieldType::int(), FieldType::null()]),
             TypeMeta::default(),
         );
         assert_eq!(optional_int, union)
@@ -994,5 +1061,55 @@ mod tests {
             optional_int.flatten(),
             vec![FieldType::int(), FieldType::null()]
         )
+    }
+
+    #[test]
+    // null => null
+    fn partialize_base_case() {
+        let null = FieldType::null();
+        assert_eq!(
+            partialize(&null),
+            TypeStreaming::Primitive(TypeValue::Null, TypeMetaStreaming::default())
+        );
+    }
+
+    #[test]
+    // Foo => stream.Foo | null
+    fn partialize_bare_class() {
+        let class = FieldType::class("MyClass");
+        assert_eq!(
+            partialize(&class),
+            TypeGeneric::optional(TypeStreaming::Class {
+                name: "MyClass".to_string(),
+                dynamic: false,
+                mode: StreamingMode::Streaming,
+                meta: TypeMetaStreaming::default(),
+            })
+        );
+    }
+
+    #[test]
+    // Foo @stream.done => Foo
+    fn partialize_class_with_done() {
+        let mut class = FieldType::class("MyClass");
+        let mut expected = TypeGeneric::optional(TypeStreaming::Class {
+            name: "MyClass".to_string(),
+            mode: StreamingMode::NonStreaming,
+            dynamic: false,
+            meta: TypeMetaStreaming::default(),
+        });
+        expected.meta_mut().streaming_behavior.done = true;
+        class.meta_mut().streaming_behavior.done = true;
+        assert_eq!(partialize(&class), expected);
+    }
+
+    #[test]
+    fn partialize_simple_union() {
+        let union = FieldType::union(vec![FieldType::int(), FieldType::string()]);
+        let expected = TypeStreaming::optional(TypeStreaming::union(vec![
+            TypeStreaming::int(),
+            TypeStreaming::string(),
+        ]));
+        assert_eq!(partialize(&union), expected);
     }
 }

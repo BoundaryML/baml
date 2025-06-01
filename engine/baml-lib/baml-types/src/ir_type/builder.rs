@@ -1,4 +1,4 @@
-use super::{BamlMediaType, TypeGeneric, TypeValue, UnionTypeGeneric};
+use super::{BamlMediaType, StreamingMode, TypeGeneric, TypeValue, UnionTypeGeneric};
 
 impl<T: Default + std::fmt::Debug> TypeGeneric<T> {
     pub fn string() -> Self {
@@ -42,11 +42,20 @@ impl<T: Default + std::fmt::Debug> TypeGeneric<T> {
     }
 
     pub fn r#enum(name: &str) -> Self {
-        TypeGeneric::Enum(name.to_string(), T::default())
+        TypeGeneric::Enum {
+            name: name.to_string(),
+            dynamic: false,
+            meta: T::default(),
+        }
     }
 
     pub fn class(name: &str) -> Self {
-        TypeGeneric::Class(name.to_string(), T::default())
+        TypeGeneric::Class {
+            name: name.to_string(),
+            dynamic: false,
+            mode: StreamingMode::NonStreaming,
+            meta: T::default(),
+        }
     }
 
     pub fn list(inner: Self) -> Self {
