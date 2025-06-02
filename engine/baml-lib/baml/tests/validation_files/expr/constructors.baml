@@ -3,7 +3,7 @@ class MyClass {
     b string
 }
 
-let x = MyClass { a: 1, b: 2 };
+let x = MyClass { a: 1, b: "2" };
 
 let y = MyClass { a: 1, ..x };
 

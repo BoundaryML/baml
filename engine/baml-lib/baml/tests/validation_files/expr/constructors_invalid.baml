@@ -18,18 +18,6 @@ fn Foo() -> Bar {
   x
 }
 
-// error: Error validating: std::Request.base_url expected type string, but found int
-//   -->  expr/constructors_invalid.baml:9
-//    | 
-//  8 |   let req_bad = std::Request { 
-//  9 |     base_url: 10,
-//    | 
-// error: Error validating: std::Request.query_params expected type map<string, string>, but found map<string, int>
-//   -->  expr/constructors_invalid.baml:11
-//    | 
-// 10 |     headers: {},
-// 11 |     query_params: { a 10 },
-//    | 
 // error: Error validating: Bar.a expected type int, but found string
 //   -->  expr/constructors_invalid.baml:7
 //    | 
@@ -47,4 +35,16 @@ fn Foo() -> Bar {
 //    | 
 //  6 | fn Foo() -> Bar {
 //  7 |   let x = Bar { a: "hello", c: 12 };
+//    | 
+// error: Error validating: std::Request.base_url expected type string, but found int
+//   -->  expr/constructors_invalid.baml:9
+//    | 
+//  8 |   let req_bad = std::Request { 
+//  9 |     base_url: 10,
+//    | 
+// error: Error validating: std::Request.query_params expected type map<string, string>, but found map<string, int>
+//   -->  expr/constructors_invalid.baml:11
+//    | 
+// 10 |     headers: {},
+// 11 |     query_params: { a 10 },
 //    | 

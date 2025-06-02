@@ -1,13 +1,13 @@
 use anyhow::Result;
-use baml_types::expr::{Builtin, VarIndex};
+use baml_types::expr::VarIndex;
 use baml_types::TypeValue;
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::ir::builtin::builtin_ir;
 use crate::ir::ir_helpers::item_type;
-use crate::ir::IRHelper;
 use crate::ir::IntermediateRepr;
+use crate::ir::{repr::initial_context, IRHelper};
 use crate::validate::validation_pipeline::context::Context;
 use crate::Configuration;
 use baml_types::{
@@ -18,8 +18,10 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::ir::IRHelperExtended;
 
-// TODO: Move this out of the validation pipeline into a separate IR->IR pass.
-// That will allow us to remove the internal `from_parser_database` call.
+/// Check the types of all expressions in the IR.
+/// It relies on the types previously inferred and added to the expression metadata.
+/// TODO: move this to a compiler pass, so that it transforms IR to IR.
+/// TODO: Implement it directly in terms of the bidirectional typing algorithm.
 pub fn typecheck_exprs(ctx: &mut Context<'_>) -> Result<()> {
     let null_configuration = Configuration::new();
 
@@ -74,8 +76,17 @@ pub fn typecheck_exprs(ctx: &mut Context<'_>) -> Result<()> {
             &typing_context,
             &expr_fn_with_types,
         )?;
+        // deeply_check_inference(&expr_fn_with_types)?;
     }
 
+    for toplevel_assignment in ir.toplevel_assignments.iter() {
+        typecheck_in_context(
+            &ir,
+            &mut ctx.diagnostics,
+            &typing_context,
+            &toplevel_assignment.elem.expr.elem,
+        )?;
+    }
     Ok(())
 }
 
@@ -87,7 +98,7 @@ pub fn typecheck_in_context(
     typing_context: &HashMap<String, FieldType>,
     expr: &Expr<ExprMetadata>,
 ) -> Result<()> {
-    eprintln!("TYPECHECKING: {:?}", expr.dump_str());
+    // eprintln!("TYPECHECKING: {:?}", expr.dump_str());
     match expr {
         Expr::Atom(atom) => {
             // Atoms always typecheck.
@@ -181,11 +192,13 @@ pub fn typecheck_in_context(
                 }
             }
         }
-        Expr::Let(name, value, body, _meta) => {
+        Expr::Let(binder, value, body, meta) => {
             typecheck_in_context(ir, diagnostics, typing_context, value)?;
-            let mut new_typing_context = typing_context.clone();
-            new_typing_context.insert(name.to_string(), value.meta().1.clone().unwrap());
-            typecheck_in_context(ir, diagnostics, &new_typing_context, body)?;
+            let mut body_context = typing_context.clone();
+            if let Some(value_type) = value.meta().1.clone() {
+                body_context.insert(binder.to_string(), value_type);
+            }
+            typecheck_in_context(ir, diagnostics, &body_context, body)?;
         }
         Expr::ArgsTuple(args, _) => {}
         Expr::List(items, meta) => {
@@ -260,6 +273,11 @@ pub fn typecheck_in_context(
                                 ));
                             }
                             typecheck_in_context(ir, diagnostics, typing_context, field_value)?;
+                        } else {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Class {} has no field {}", name, field_name),
+                                field_value.meta().0.clone(),
+                            ));
                         }
                     }
                 }

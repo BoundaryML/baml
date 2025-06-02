@@ -8,7 +8,7 @@ class Bar {
 
 let x = Foo { bar: Bar { name: 10 }};
 
-// error: Error validating: Type mismatch in class constructor
+// error: Error validating: Bar.name expected type string, but found int
 //   -->  expr/constructors_nested.baml:9
 //    | 
 //  8 | 
