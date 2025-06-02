@@ -259,11 +259,7 @@ pub fn typecheck_in_context(
                                     field_value.meta().0.clone(),
                                 ));
                             }
-                        } else {
-                            diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Class {} has no field {}", name, field_name),
-                                field_value.meta().0.clone(),
-                            ));
+                            typecheck_in_context(ir, diagnostics, typing_context, field_value)?;
                         }
                     }
                 }
@@ -298,7 +294,6 @@ pub fn typecheck_in_context(
                 ));
             }
 
-            // Typecheck the spread.
             let spread_type = spread.as_ref().and_then(|s| s.meta().1.clone());
             if !compatible_as_subtype(ir, &meta.1, &spread_type) {
                 diagnostics.push_error(DatamodelError::new_validation_error(
