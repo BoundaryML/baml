@@ -2,22 +2,32 @@ use crate::base::EpochMsTimestamp;
 use crate::rpc::ApiEndpoint;
 use crate::ProjectId;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::str::FromStr;
+use std::fmt::Display;
 use ts_rs::TS;
 
 use super::ui_types;
 
 // TODO: Add support for `in`, `exists`, `contains` operators
-#[derive(Debug, Deserialize, Serialize, TS)]
+#[derive(Debug, Deserialize, Serialize, TS, Clone)]
 #[ts(export)]
-pub enum Operator {
+pub enum StringOperator {
     #[serde(rename = "eq")]
     Eq,
     #[serde(rename = "ne")]
     Ne,
     #[serde(rename = "regex")]
     Regex,
+    #[serde(rename = "contains")]
+    Contains,
+}
+
+#[derive(Debug, Deserialize, Serialize, TS, Clone)]
+#[ts(export)]
+pub enum NumericOperator {
+    #[serde(rename = "eq")]
+    Eq,
+    #[serde(rename = "ne")]
+    Ne,
     #[serde(rename = "gt")]
     Gt,
     #[serde(rename = "lt")]
@@ -28,401 +38,296 @@ pub enum Operator {
     Lte,
 }
 
-impl FromStr for Operator {
-    type Err = String;
+#[derive(Debug, Deserialize, Serialize, TS, Clone)]
+#[ts(export)]
+pub enum BooleanOperator {
+    #[serde(rename = "eq")]
+    Eq,
+    #[serde(rename = "ne")]
+    Ne,
+}
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match s {
-            "eq" => Ok(Operator::Eq),
-            "ne" => Ok(Operator::Ne),
-            "regex" => Ok(Operator::Regex),
-            "gt" => Ok(Operator::Gt),
-            "lt" => Ok(Operator::Lt),
-            "gte" => Ok(Operator::Gte),
-            "lte" => Ok(Operator::Lte),
-            _ => Err(format!("Unknown operator: {}", s)),
+#[derive(Debug, Deserialize, Serialize, TS, Clone)]
+#[ts(export)]
+#[serde(untagged)]
+pub enum FilterExpressionValue {
+    String(String),
+    #[ts(type = "number")]
+    Number(u64),
+    Boolean(bool),
+}
+
+#[derive(Debug, Deserialize, Serialize, TS, Clone)]
+#[ts(export)]
+pub struct FilterExpressionFormat {
+    pub operator: String,
+    pub value: FilterExpressionValue,
+}
+
+impl<T> From<FilterExpressionFormat> for FilterExpression<T> {
+    fn from(format: FilterExpressionFormat) -> Self {
+        match (format.operator.as_str(), format.value) {
+            ("eq", FilterExpressionValue::String(value)) => FilterExpression::String {
+                operator: StringOperator::Eq,
+                value,
+            },
+            ("ne", FilterExpressionValue::String(value)) => FilterExpression::String {
+                operator: StringOperator::Ne,
+                value,
+            },
+            ("regex", FilterExpressionValue::String(value)) => FilterExpression::String {
+                operator: StringOperator::Regex,
+                value,
+            },
+            ("contains", FilterExpressionValue::String(value)) => FilterExpression::String {
+                operator: StringOperator::Contains,
+                value,
+            },
+            ("eq", FilterExpressionValue::Number(value)) => FilterExpression::Numeric {
+                operator: NumericOperator::Eq,
+                value,
+            },
+            ("ne", FilterExpressionValue::Number(value)) => FilterExpression::Numeric {
+                operator: NumericOperator::Ne,
+                value,
+            },
+            ("gt", FilterExpressionValue::Number(value)) => FilterExpression::Numeric {
+                operator: NumericOperator::Gt,
+                value,
+            },
+            ("lt", FilterExpressionValue::Number(value)) => FilterExpression::Numeric {
+                operator: NumericOperator::Lt,
+                value,
+            },
+            ("gte", FilterExpressionValue::Number(value)) => FilterExpression::Numeric {
+                operator: NumericOperator::Gte,
+                value,
+            },
+            ("lte", FilterExpressionValue::Number(value)) => FilterExpression::Numeric {
+                operator: NumericOperator::Lte,
+                value,
+            },
+            ("eq", FilterExpressionValue::Boolean(value)) => FilterExpression::Boolean {
+                operator: BooleanOperator::Eq,
+                value,
+            },
+            ("ne", FilterExpressionValue::Boolean(value)) => FilterExpression::Boolean {
+                operator: BooleanOperator::Ne,
+                value,
+            },
+            _ => panic!("Invalid operator or value type combination"),
         }
     }
 }
 
-impl Default for Operator {
-    fn default() -> Self {
-        Operator::Eq
-    }
-}
-
-#[derive(Debug, Deserialize, Serialize, TS)]
+#[derive(Debug, Deserialize, Serialize, TS, Clone)]
 #[ts(export)]
-pub struct FilterValue<T> {
-    pub operator: Operator,
-    pub value: T,
+#[serde(untagged)]
+pub enum FilterExpression<T> {
+    String {
+        operator: StringOperator,
+        value: String,
+    },
+    Numeric {
+        operator: NumericOperator,
+        #[ts(type = "number")]
+        value: u64,
+    },
+    Boolean {
+        operator: BooleanOperator,
+        value: bool,
+    },
+    Any {
+        operator: StringOperator,
+        value: T,
+    },
+    Format(FilterExpressionFormat),
 }
 
-impl<T> FilterValue<T> {
-    pub fn new(operator: Operator, value: T) -> Self {
-        Self { operator, value }
+impl<T> FilterExpression<T> {
+    pub fn new_string(operator: StringOperator, value: String) -> Self {
+        Self::String { operator, value }
     }
 
-    pub fn eq(value: T) -> Self {
-        Self::new(Operator::Eq, value)
+    pub fn new_numeric(operator: NumericOperator, value: u64) -> Self {
+        Self::Numeric { operator, value }
+    }
+
+    pub fn new_boolean(operator: BooleanOperator, value: bool) -> Self {
+        Self::Boolean { operator, value }
+    }
+
+    pub fn eq_string(value: String) -> Self {
+        Self::new_string(StringOperator::Eq, value)
+    }
+
+    pub fn eq_numeric(value: u64) -> Self {
+        Self::new_numeric(NumericOperator::Eq, value)
+    }
+
+    pub fn eq_boolean(value: bool) -> Self {
+        Self::new_boolean(BooleanOperator::Eq, value)
     }
 }
 
 // Query parameters struct for URL deserialization
 //
-// This struct supports rich filtering through URL query parameters with the following patterns:
+// This struct supports rich filtering through URL query parameters with the following format:
 //
-// Basic filters (defaults to eq operator):
-//   ?project_id=proj_123&function_name=myFunction&status=success
+// Basic fields:
+//   ?project_id=proj_123&function_call_id=call_456
 //
-// Operator-based filters using field__operator format:
-//   ?function_name__regex=^test_.*&start_time__gte=1748131389246&status__ne=error
-//
-// Tag filters:
-//   ?tag_environment=production&tag_version__ne=1.0.0&tag_user__regex=admin.*
+// Filter fields using JSON format:
+//   ?function_name={"op":"eq","v":"myFunction"}
+//   ?status={"op":"ne","v":"error"}
+//   ?startAt={"op":"gte","v":1748131389246}
 //
 // Supported operators: eq, ne, regex, gt, lt, gte, lte
 //
 // Examples:
-//   - Get calls after a timestamp: ?start_time__gte=1748131389246
-//   - Get calls with function name pattern: ?function_name__regex=^extract_.*
-//   - Get calls excluding errors: ?status__ne=error
-//   - Get calls with specific tag: ?tag_environment=production
-//   - Complex query: ?project_id=proj_123&start_time__gte=1748131389246&function_name__regex=^test_.*&tag_env=staging
-#[derive(Debug, Deserialize, Serialize)]
-#[serde(rename_all = "snake_case")]
-pub struct ListFunctionCallQueryParams {
-    pub project_id: ProjectId,
-    pub function_call_id: Option<String>,
+//   - Get calls with function name pattern: ?function_name={"op":"regex","v":"^extract_.*"}
+//   - Get calls excluding errors: ?status={"op":"ne","v":"error"}
+//   - Get calls after a timestamp: ?startAt={"op":"gte","v":1748131389246}
+//   - Complex query: ?project_id=proj_123&function_name={"op":"regex","v":"^test_.*"}&status={"op":"eq","v":"success"}
 
-    // Simple field filters (defaults to eq operator)
-    pub env_id: Option<String>,
-    pub person_id: Option<String>,
-    pub api_key: Option<String>,
-    pub client: Option<String>,
-    pub function_id: Option<String>,
-    pub function_name: Option<String>,
-    pub session_id: Option<String>,
-    pub call_type: Option<String>,
-    pub call_id: Option<String>,
-    pub status: Option<String>,
-    pub relative_time: Option<String>,
-    pub streamed: Option<bool>,
-
-    // Time filters
-    pub start_time: Option<u64>,
-    pub end_time: Option<u64>,
-
-    // Operator-based filters (field__operator format)
-    pub env_id__eq: Option<String>,
-    pub env_id__ne: Option<String>,
-    pub env_id__regex: Option<String>,
-
-    pub person_id__eq: Option<String>,
-    pub person_id__ne: Option<String>,
-    pub person_id__regex: Option<String>,
-
-    pub function_name__eq: Option<String>,
-    pub function_name__ne: Option<String>,
-    pub function_name__regex: Option<String>,
-
-    pub status__eq: Option<String>,
-    pub status__ne: Option<String>,
-
-    pub start_time__gt: Option<u64>,
-    pub start_time__gte: Option<u64>,
-    pub start_time__lt: Option<u64>,
-    pub start_time__lte: Option<u64>,
-
-    pub end_time__gt: Option<u64>,
-    pub end_time__gte: Option<u64>,
-    pub end_time__lt: Option<u64>,
-    pub end_time__lte: Option<u64>,
-
-    // Dynamic tag filters
-    #[serde(flatten)]
-    pub extra: HashMap<String, String>,
+#[derive(Debug, Deserialize, Serialize, TS, Clone)]
+#[ts(export)]
+pub enum SortDirection {
+    #[serde(rename = "asc")]
+    Ascending,
+    #[serde(rename = "desc")]
+    Descending,
 }
 
-impl ListFunctionCallQueryParams {
-    /// Convert QueryParams to Filter with proper operator handling
-    pub fn to_filter(self) -> Result<Filter, String> {
-        let mut filter = Filter::default();
+impl Default for SortDirection {
+    fn default() -> Self {
+        SortDirection::Descending
+    }
+}
 
-        // Handle simple fields with eq operator or explicit operators
-        if let Some(value) = self.env_id {
-            filter.env_id = Some(FilterValue::eq(value));
-        }
-        if let Some(value) = self.env_id__eq {
-            filter.env_id = Some(FilterValue::new(Operator::Eq, value));
-        }
-        if let Some(value) = self.env_id__ne {
-            filter.env_id = Some(FilterValue::new(Operator::Ne, value));
-        }
-        if let Some(value) = self.env_id__regex {
-            filter.env_id = Some(FilterValue::new(Operator::Regex, value));
-        }
+#[derive(Debug, Deserialize, Serialize, TS, Clone)]
+#[serde(rename_all = "camelCase")]
+#[ts(export)]
+pub enum OrderField {
+    FunctionName,
+    StartTime,
+    EndTime,
+    Status,
+    Streamed,
+    CallType,
+    Error,
+}
 
-        if let Some(value) = self.person_id {
-            filter.person_id = Some(FilterValue::eq(value));
+impl Display for OrderField {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            OrderField::FunctionName => write!(f, "function_name"),
+            OrderField::StartTime => write!(f, "start_time"),
+            OrderField::EndTime => write!(f, "end_time"),
+            OrderField::Status => write!(f, "status"),
+            OrderField::Streamed => write!(f, "streamed"),
+            OrderField::CallType => write!(f, "call_type"),
+            OrderField::Error => write!(f, "error"),
         }
-        if let Some(value) = self.person_id__eq {
-            filter.person_id = Some(FilterValue::new(Operator::Eq, value));
-        }
-        if let Some(value) = self.person_id__ne {
-            filter.person_id = Some(FilterValue::new(Operator::Ne, value));
-        }
-        if let Some(value) = self.person_id__regex {
-            filter.person_id = Some(FilterValue::new(Operator::Regex, value));
-        }
-
-        if let Some(value) = self.api_key {
-            filter.api_key = Some(FilterValue::eq(value));
-        }
-        if let Some(value) = self.client {
-            filter.client = Some(FilterValue::eq(value));
-        }
-        if let Some(value) = self.function_id {
-            filter.function_id = Some(FilterValue::eq(value));
-        }
-
-        if let Some(value) = self.function_name {
-            filter.function_name = Some(FilterValue::eq(value));
-        }
-        if let Some(value) = self.function_name__eq {
-            filter.function_name = Some(FilterValue::new(Operator::Eq, value));
-        }
-        if let Some(value) = self.function_name__ne {
-            filter.function_name = Some(FilterValue::new(Operator::Ne, value));
-        }
-        if let Some(value) = self.function_name__regex {
-            filter.function_name = Some(FilterValue::new(Operator::Regex, value));
-        }
-
-        if let Some(value) = self.session_id {
-            filter.session_id = Some(FilterValue::eq(value));
-        }
-        if let Some(value) = self.call_type {
-            filter.call_type = Some(FilterValue::eq(value));
-        }
-        if let Some(value) = self.call_id {
-            filter.call_id = Some(FilterValue::eq(value));
-        }
-        if let Some(value) = self.streamed {
-            filter.streamed = Some(FilterValue::eq(value));
-        }
-
-        if let Some(value) = self.status {
-            filter.status = Some(FilterValue::eq(value));
-        }
-        if let Some(value) = self.status__eq {
-            filter.status = Some(FilterValue::new(Operator::Eq, value));
-        }
-        if let Some(value) = self.status__ne {
-            filter.status = Some(FilterValue::new(Operator::Ne, value));
-        }
-
-        if let Some(value) = self.relative_time {
-            filter.relative_time = Some(FilterValue::eq(value));
-        }
-
-        // Handle time filters
-        if let Some(timestamp) = self.start_time {
-            let epoch_time = EpochMsTimestamp::try_from(
-                web_time::SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(timestamp),
-            )
-            .map_err(|e| format!("Invalid start_time timestamp: {}", e))?;
-            filter.start_at = Some(FilterValue::eq(epoch_time));
-        }
-
-        if let Some(timestamp) = self.start_time__gt {
-            let epoch_time = EpochMsTimestamp::try_from(
-                web_time::SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(timestamp),
-            )
-            .map_err(|e| format!("Invalid start_time__gt timestamp: {}", e))?;
-            filter.start_at = Some(FilterValue::new(Operator::Gt, epoch_time));
-        }
-
-        if let Some(timestamp) = self.start_time__gte {
-            let epoch_time = EpochMsTimestamp::try_from(
-                web_time::SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(timestamp),
-            )
-            .map_err(|e| format!("Invalid start_time__gte timestamp: {}", e))?;
-            filter.start_at = Some(FilterValue::new(Operator::Gte, epoch_time));
-        }
-
-        if let Some(timestamp) = self.start_time__lt {
-            let epoch_time = EpochMsTimestamp::try_from(
-                web_time::SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(timestamp),
-            )
-            .map_err(|e| format!("Invalid start_time__lt timestamp: {}", e))?;
-            filter.start_at = Some(FilterValue::new(Operator::Lt, epoch_time));
-        }
-
-        if let Some(timestamp) = self.start_time__lte {
-            let epoch_time = EpochMsTimestamp::try_from(
-                web_time::SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(timestamp),
-            )
-            .map_err(|e| format!("Invalid start_time__lte timestamp: {}", e))?;
-            filter.start_at = Some(FilterValue::new(Operator::Lte, epoch_time));
-        }
-
-        if let Some(timestamp) = self.end_time {
-            let epoch_time = EpochMsTimestamp::try_from(
-                web_time::SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(timestamp),
-            )
-            .map_err(|e| format!("Invalid end_time timestamp: {}", e))?;
-            filter.end_at = Some(FilterValue::eq(epoch_time));
-        }
-
-        if let Some(timestamp) = self.end_time__gt {
-            let epoch_time = EpochMsTimestamp::try_from(
-                web_time::SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(timestamp),
-            )
-            .map_err(|e| format!("Invalid end_time__gt timestamp: {}", e))?;
-            filter.end_at = Some(FilterValue::new(Operator::Gt, epoch_time));
-        }
-
-        if let Some(timestamp) = self.end_time__gte {
-            let epoch_time = EpochMsTimestamp::try_from(
-                web_time::SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(timestamp),
-            )
-            .map_err(|e| format!("Invalid end_time__gte timestamp: {}", e))?;
-            filter.end_at = Some(FilterValue::new(Operator::Gte, epoch_time));
-        }
-
-        if let Some(timestamp) = self.end_time__lt {
-            let epoch_time = EpochMsTimestamp::try_from(
-                web_time::SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(timestamp),
-            )
-            .map_err(|e| format!("Invalid end_time__lt timestamp: {}", e))?;
-            filter.end_at = Some(FilterValue::new(Operator::Lt, epoch_time));
-        }
-
-        if let Some(timestamp) = self.end_time__lte {
-            let epoch_time = EpochMsTimestamp::try_from(
-                web_time::SystemTime::UNIX_EPOCH + std::time::Duration::from_millis(timestamp),
-            )
-            .map_err(|e| format!("Invalid end_time__lte timestamp: {}", e))?;
-            filter.end_at = Some(FilterValue::new(Operator::Lte, epoch_time));
-        }
-
-        // Handle dynamic tag filters
-        let mut tags = HashMap::new();
-        for (key, value) in self.extra {
-            if let Some(tag_key) = key.strip_prefix("tag_") {
-                // Parse tag value - could be JSON or simple string
-                let tag_value: serde_json::Value =
-                    if value.starts_with('"') || value.starts_with('{') || value.starts_with('[') {
-                        serde_json::from_str(&value)
-                            .unwrap_or_else(|_| serde_json::Value::String(value))
-                    } else {
-                        serde_json::Value::String(value)
-                    };
-
-                // Check for operator in tag key (e.g., tag_environment__eq)
-                if let Some((actual_key, operator_str)) = tag_key.split_once("__") {
-                    let operator = Operator::from_str(operator_str).unwrap_or_default();
-                    tags.insert(
-                        actual_key.to_string(),
-                        FilterValue::new(operator, tag_value),
-                    );
-                } else {
-                    tags.insert(tag_key.to_string(), FilterValue::eq(tag_value));
-                }
-            }
-        }
-
-        if !tags.is_empty() {
-            filter.tags = Some(tags);
-        }
-
-        Ok(filter)
     }
 }
 
 #[derive(Debug, Deserialize, Serialize, TS)]
-#[serde(rename_all = "camelCase")]
 #[ts(export)]
-pub struct Filter {
-    #[ts(optional)]
-    pub env_id: Option<FilterValue<String>>,
-    #[ts(optional)]
-    pub person_id: Option<FilterValue<String>>,
-    #[ts(optional)]
-    pub api_key: Option<FilterValue<String>>,
-    #[ts(optional)]
-    pub client: Option<FilterValue<String>>,
-    #[ts(optional)]
-    pub function_id: Option<FilterValue<String>>,
-    #[ts(optional)]
-    pub function_name: Option<FilterValue<String>>,
-    #[ts(optional)]
-    pub session_id: Option<FilterValue<String>>,
-    #[ts(optional)]
-    pub call_type: Option<FilterValue<String>>,
-    #[ts(type = "FilterValue<number>", optional)]
-    pub start_at: Option<FilterValue<EpochMsTimestamp>>,
-    #[ts(type = "FilterValue<number>", optional)]
-    pub end_at: Option<FilterValue<EpochMsTimestamp>>,
-    #[ts(optional)]
-    pub relative_time: Option<FilterValue<String>>,
-    #[ts(optional)]
-    pub call_id: Option<FilterValue<String>>,
-    #[ts(optional)]
-    pub streamed: Option<FilterValue<bool>>,
-    #[ts(optional)]
-    pub status: Option<FilterValue<String>>,
-    #[ts(type = "Record<string, FilterValue<any>>", optional)]
-    pub tags: Option<std::collections::HashMap<String, FilterValue<serde_json::Value>>>,
+pub struct OrderBy {
+    pub field: OrderField,
+    #[serde(default)]
+    pub direction: SortDirection,
 }
 
-impl Default for Filter {
-    fn default() -> Self {
-        Self {
-            env_id: None,
-            person_id: None,
-            api_key: None,
-            client: None,
-            function_id: None,
-            function_name: None,
-            session_id: None,
-            call_type: None,
-            start_at: None,
-            end_at: None,
-            relative_time: None,
-            call_id: None,
-            streamed: None,
-            status: None,
-            tags: None,
-        }
-    }
+#[derive(Debug, Deserialize, Serialize, TS, Clone)]
+#[ts(export)]
+pub enum RelativeTime {
+    #[serde(rename = "1h")]
+    OneHour,
+    #[serde(rename = "1d")]
+    OneDay,
+    #[serde(rename = "1w")]
+    OneWeek,
+    #[serde(rename = "1m")]
+    OneMonth,
+}
+
+#[derive(Debug, Deserialize, Serialize, TS, Clone)]
+#[ts(export)]
+pub enum FunctionCallStatus {
+    #[serde(rename = "success")]
+    Success,
+    #[serde(rename = "error")]
+    Error,
+    #[serde(rename = "running")]
+    Running,
+    #[serde(rename = "incomplete")]
+    Incomplete,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
 #[ts(export)]
 pub struct ListFunctionCallsRequest {
+    #[ts(optional)]
+    #[serde(default = "default_order_by")]
+    pub order_by: Option<OrderBy>,
     #[ts(type = "string")]
     pub project_id: ProjectId,
+    /// Maximum number of function calls to return. Defaults to 100 if not specified.
+    #[serde(default = "default_limit")]
     #[ts(optional)]
-    pub function_call_id: Option<String>,
+    pub limit: Option<u32>,
+    /// Number of function calls to skip. Used for pagination. Defaults to 0 if not specified.
+    #[serde(default = "default_offset")]
     #[ts(optional)]
-    pub filter: Option<Filter>,
+    pub offset: Option<u32>,
+    #[ts(optional)]
+    pub function_call_id: Option<FilterExpression<String>>,
+    #[ts(optional)]
+    pub function_id: Option<FilterExpression<String>>,
+    #[ts(optional)]
+    pub function_name: Option<FilterExpression<String>>,
+    #[ts(type = "FilterExpression<number>", optional)]
+    #[serde(default)]
+    pub start_time: Option<FilterExpression<EpochMsTimestamp>>,
+    #[ts(type = "FilterExpression<number>", optional)]
+    #[serde(default)]
+    pub end_time: Option<FilterExpression<EpochMsTimestamp>>,
+    #[ts(optional)]
+    #[serde(default)]
+    pub status: Option<FilterExpression<FunctionCallStatus>>,
+    #[ts(optional)]
+    #[serde(default)]
+    pub tags: Option<Vec<FilterExpression<String>>>,
+    #[ts(optional)]
+    #[serde(default)]
+    pub streamed: Option<FilterExpression<bool>>,
+    #[serde(default = "default_relative_time")]
+    #[ts(optional)]
+    pub relative_time: Option<RelativeTime>,
 }
 
-impl ListFunctionCallsRequest {
-    /// Create from query parameters
-    pub fn from_query_params(params: ListFunctionCallQueryParams) -> Result<Self, String> {
-        let project_id = params.project_id.clone();
-        let function_call_id = params.function_call_id.clone();
-        let filter = Some(params.to_filter()?);
+fn default_relative_time() -> Option<RelativeTime> {
+    Some(RelativeTime::OneHour)
+}
 
-        Ok(Self {
-            project_id,
-            function_call_id,
-            filter,
-        })
-    }
+fn default_order_by() -> Option<OrderBy> {
+    Some(OrderBy {
+        field: OrderField::StartTime,
+        direction: SortDirection::Descending,
+    })
+}
+
+/// Default limit for pagination
+fn default_limit() -> Option<u32> {
+    Some(100)
+}
+
+/// Default offset for pagination
+fn default_offset() -> Option<u32> {
+    Some(0)
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -440,4 +345,59 @@ impl ApiEndpoint for ListFunctionCalls {
     type Response<'a> = ListFunctionCallsResponse;
 
     const PATH: &'static str = "/v1/function-calls";
+}
+
+// use super::*;
+// use serde_json::json;
+
+#[test]
+fn test_deserialize_list_function_calls_request_with_start_time() {
+    let json_str = r#"{
+        "projectId": "proj_01jvb3fnp1f09ta2a6g016t4kz",
+        "startTime": {
+            "operator": "gte",
+            "value": 4294967295
+        }
+    }"#;
+
+    let request: ListFunctionCallsRequest = serde_json::from_str(json_str).unwrap();
+
+    assert_eq!(
+        request.project_id.to_string(),
+        "proj_01jvb3fnp1f09ta2a6g016t4kz"
+    );
+
+    match request.start_time {
+        Some(FilterExpression::Numeric { operator, value }) => {
+            assert!(matches!(operator, NumericOperator::Gte));
+            assert_eq!(value, 4294967295);
+        }
+        _ => panic!("Expected Numeric filter expression for startTime"),
+    }
+}
+
+#[test]
+fn test_deserialize_list_function_calls_request_with_end_time() {
+    let json_str = r#"{
+        "projectId": "proj_01jvb3fnp1f09ta2a6g016t4kz",
+        "endTime": {
+            "operator": "lte",
+            "value": 4294967295
+        }
+    }"#;
+
+    let request: ListFunctionCallsRequest = serde_json::from_str(json_str).unwrap();
+
+    assert_eq!(
+        request.project_id.to_string(),
+        "proj_01jvb3fnp1f09ta2a6g016t4kz"
+    );
+
+    match request.end_time {
+        Some(FilterExpression::Numeric { operator, value }) => {
+            assert!(matches!(operator, NumericOperator::Lte));
+            assert_eq!(value, 4294967295);
+        }
+        _ => panic!("Expected Numeric filter expression for endTime"),
+    }
 }
