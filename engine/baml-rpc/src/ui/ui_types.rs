@@ -1,5 +1,6 @@
+use std::collections::HashMap;
+
 use baml_ids::FunctionCallId;
-use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -123,7 +124,7 @@ pub struct UiHttpRequest {
     pub url: String,
     pub method: String,
     #[ts(type = "Record<string, any>")]
-    pub headers: IndexMap<String, String>,
+    pub headers: HashMap<String, String>,
     pub body: String,
 }
 
@@ -134,7 +135,7 @@ pub struct UiHttpResponse {
     pub end_time: EpochMsTimestamp,
     pub status_code: u16,
     #[ts(type = "Record<string, any>")]
-    pub headers: IndexMap<String, serde_json::Value>,
+    pub headers: HashMap<String, serde_json::Value>,
     pub body: String,
 }
 
