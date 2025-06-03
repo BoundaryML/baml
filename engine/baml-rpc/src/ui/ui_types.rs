@@ -1,4 +1,5 @@
 use baml_ids::FunctionCallId;
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -102,23 +103,39 @@ pub struct UiUsageEstimate {
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 pub struct UiFunctionCallDetails {
-    // pub http_calls: Vec<UiReprHttpCall>,
-    // TODO: fix this
-    #[ts(type = "any[]")]
-    pub http_calls: Vec<serde_json::Value>,
+    pub http_calls: Vec<UiHttpCall>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 pub struct UiHttpCall {
-    #[serde(rename = "start_epoch_ms")]
-    #[ts(type = "number | null")]
-    pub start_time: Option<EpochMsTimestamp>,
-    #[serde(rename = "end_epoch_ms")]
-    #[ts(type = "number | null")]
-    pub end_time: Option<EpochMsTimestamp>,
+    pub http_request: UiHttpRequest,
+    pub http_response: Option<UiHttpResponse>,
 
     pub is_stream: bool,
     pub is_selected: bool,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+pub struct UiHttpRequest {
+    #[serde(rename = "start_epoch_ms")]
+    #[ts(type = "number")]
+    pub start_time: EpochMsTimestamp,
+    pub url: String,
+    pub method: String,
+    #[ts(type = "Record<string, any>")]
+    pub headers: IndexMap<String, String>,
+    pub body: String,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+pub struct UiHttpResponse {
+    #[serde(rename = "end_epoch_ms")]
+    #[ts(type = "number")]
+    pub end_time: EpochMsTimestamp,
+    pub status_code: u16,
+    #[ts(type = "Record<string, any>")]
+    pub headers: IndexMap<String, serde_json::Value>,
+    pub body: String,
 }
 
 #[derive(Debug, Deserialize, Serialize, TS)]

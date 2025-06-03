@@ -4,6 +4,7 @@ use crate::{
     ast::{evaluation_context::TypeBuilderValue, tops::BamlFunctionId},
     base::EpochMsTimestamp,
 };
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 
 use baml_ids::{FunctionCallId, FunctionEventId};
@@ -101,18 +102,18 @@ pub enum IntermediateData<'a> {
     LLMRequest {
         client_name: String,
         client_provider: String,
-        params: HashMap<String, Cow<'a, serde_json::Value>>,
+        params: IndexMap<String, Cow<'a, serde_json::Value>>,
         prompt: Vec<LLMChatMessage<'a>>,
     },
     RawLLMRequest {
         url: String,
         method: String,
-        headers: HashMap<String, String>,
+        headers: IndexMap<String, String>,
         body: HTTPBody<'a>,
     },
     RawLLMResponse {
         status: u16,
-        headers: Option<HashMap<String, String>>,
+        headers: Option<IndexMap<String, String>>,
         body: HTTPBody<'a>,
     },
     LLMResponse {
