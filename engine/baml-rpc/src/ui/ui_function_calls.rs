@@ -283,20 +283,17 @@ impl fmt::Display for FunctionCallStatus {
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", default)]
 #[ts(export)]
 pub struct ListFunctionCallsRequest {
     #[ts(optional)]
-    #[serde(default = "default_order_by")]
     pub order_by: Option<OrderBy>,
     #[ts(type = "string")]
     pub project_id: ProjectId,
     /// Maximum number of function calls to return. Defaults to 100 if not specified.
-    #[serde(default = "default_limit")]
     #[ts(optional)]
     pub limit: Option<u32>,
     /// Number of function calls to skip. Used for pagination. Defaults to 0 if not specified.
-    #[serde(default = "default_offset")]
     #[ts(optional)]
     pub offset: Option<u32>,
     #[ts(optional)]
@@ -306,21 +303,15 @@ pub struct ListFunctionCallsRequest {
     #[ts(optional)]
     pub function_name: Option<FilterExpression<String>>,
     #[ts(type = "FilterExpression<number>", optional)]
-    #[serde(default)]
     pub start_time: Option<FilterExpression<EpochMsTimestamp>>,
     #[ts(type = "FilterExpression<number>", optional)]
-    #[serde(default)]
     pub end_time: Option<FilterExpression<EpochMsTimestamp>>,
     #[ts(optional)]
-    #[serde(default)]
     pub status: Option<FilterExpression<FunctionCallStatus>>,
     #[ts(optional)]
-    #[serde(default)]
     pub tags: Option<Vec<TagFilter>>,
     #[ts(optional)]
-    #[serde(default)]
     pub streamed: Option<FilterExpression<bool>>,
-    #[serde(default = "default_relative_time")]
     #[ts(optional)]
     pub relative_time: Option<RelativeTime>,
 }
@@ -329,9 +320,12 @@ impl Default for ListFunctionCallsRequest {
     fn default() -> Self {
         Self {
             project_id: ProjectId::new(),
-            order_by: default_order_by(),
-            limit: default_limit(),
-            offset: default_offset(),
+            order_by: Some(OrderBy {
+                field: OrderField::StartTime,
+                direction: SortDirection::Descending,
+            }),
+            limit: Some(100),
+            offset: Some(0),
             function_call_id: None,
             function_id: None,
             function_name: None,
@@ -340,30 +334,9 @@ impl Default for ListFunctionCallsRequest {
             status: None,
             tags: None,
             streamed: None,
-            relative_time: default_relative_time(),
+            relative_time: None,
         }
     }
-}
-
-fn default_relative_time() -> Option<RelativeTime> {
-    Some(RelativeTime::OneHour)
-}
-
-fn default_order_by() -> Option<OrderBy> {
-    Some(OrderBy {
-        field: OrderField::StartTime,
-        direction: SortDirection::Descending,
-    })
-}
-
-/// Default limit for pagination
-fn default_limit() -> Option<u32> {
-    Some(100)
-}
-
-/// Default offset for pagination
-fn default_offset() -> Option<u32> {
-    Some(0)
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
