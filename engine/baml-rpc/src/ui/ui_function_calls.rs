@@ -2,6 +2,7 @@ use crate::base::EpochMsTimestamp;
 use crate::rpc::ApiEndpoint;
 use crate::ProjectId;
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::fmt::Display;
 use ts_rs::TS;
 
@@ -64,22 +65,22 @@ pub struct FilterExpressionFormat {
     pub value: FilterExpressionValue,
 }
 
-impl<T> From<FilterExpressionFormat> for FilterExpression<T> {
+impl From<FilterExpressionFormat> for FilterExpression<String> {
     fn from(format: FilterExpressionFormat) -> Self {
         match (format.operator.as_str(), format.value) {
-            ("eq", FilterExpressionValue::String(value)) => FilterExpression::String {
+            ("eq", FilterExpressionValue::String(value)) => FilterExpression::Any {
                 operator: StringOperator::Eq,
                 value,
             },
-            ("ne", FilterExpressionValue::String(value)) => FilterExpression::String {
+            ("ne", FilterExpressionValue::String(value)) => FilterExpression::Any {
                 operator: StringOperator::Ne,
                 value,
             },
-            ("regex", FilterExpressionValue::String(value)) => FilterExpression::String {
+            ("regex", FilterExpressionValue::String(value)) => FilterExpression::Any {
                 operator: StringOperator::Regex,
                 value,
             },
-            ("contains", FilterExpressionValue::String(value)) => FilterExpression::String {
+            ("contains", FilterExpressionValue::String(value)) => FilterExpression::Any {
                 operator: StringOperator::Contains,
                 value,
             },
@@ -122,12 +123,16 @@ impl<T> From<FilterExpressionFormat> for FilterExpression<T> {
 
 #[derive(Debug, Deserialize, Serialize, TS, Clone)]
 #[ts(export)]
+pub struct TagFilter {
+    pub operator: StringOperator,
+    pub key: String,
+    pub value: String,
+}
+
+#[derive(Debug, Deserialize, Serialize, TS, Clone)]
+#[ts(export)]
 #[serde(untagged)]
 pub enum FilterExpression<T> {
-    String {
-        operator: StringOperator,
-        value: String,
-    },
     Numeric {
         operator: NumericOperator,
         #[ts(type = "number")]
@@ -145,8 +150,8 @@ pub enum FilterExpression<T> {
 }
 
 impl<T> FilterExpression<T> {
-    pub fn new_string(operator: StringOperator, value: String) -> Self {
-        Self::String { operator, value }
+    pub fn new_string(operator: StringOperator, value: T) -> Self {
+        Self::Any { operator, value }
     }
 
     pub fn new_numeric(operator: NumericOperator, value: u64) -> Self {
@@ -157,7 +162,7 @@ impl<T> FilterExpression<T> {
         Self::Boolean { operator, value }
     }
 
-    pub fn eq_string(value: String) -> Self {
+    pub fn eq_string(value: T) -> Self {
         Self::new_string(StringOperator::Eq, value)
     }
 
@@ -266,6 +271,17 @@ pub enum FunctionCallStatus {
     Incomplete,
 }
 
+impl fmt::Display for FunctionCallStatus {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            FunctionCallStatus::Success => write!(f, "success"),
+            FunctionCallStatus::Error => write!(f, "error"),
+            FunctionCallStatus::Running => write!(f, "running"),
+            FunctionCallStatus::Incomplete => write!(f, "incomplete"),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export)]
@@ -300,13 +316,33 @@ pub struct ListFunctionCallsRequest {
     pub status: Option<FilterExpression<FunctionCallStatus>>,
     #[ts(optional)]
     #[serde(default)]
-    pub tags: Option<Vec<FilterExpression<String>>>,
+    pub tags: Option<Vec<TagFilter>>,
     #[ts(optional)]
     #[serde(default)]
     pub streamed: Option<FilterExpression<bool>>,
     #[serde(default = "default_relative_time")]
     #[ts(optional)]
     pub relative_time: Option<RelativeTime>,
+}
+
+impl Default for ListFunctionCallsRequest {
+    fn default() -> Self {
+        Self {
+            project_id: ProjectId::new(),
+            order_by: default_order_by(),
+            limit: default_limit(),
+            offset: default_offset(),
+            function_call_id: None,
+            function_id: None,
+            function_name: None,
+            start_time: None,
+            end_time: None,
+            status: None,
+            tags: None,
+            streamed: None,
+            relative_time: default_relative_time(),
+        }
+    }
 }
 
 fn default_relative_time() -> Option<RelativeTime> {
@@ -356,7 +392,7 @@ fn test_deserialize_list_function_calls_request_with_start_time() {
         "projectId": "proj_01jvb3fnp1f09ta2a6g016t4kz",
         "startTime": {
             "operator": "gte",
-            "value": 4294967295
+            "value": 1748895831481
         }
     }"#;
 
@@ -370,7 +406,7 @@ fn test_deserialize_list_function_calls_request_with_start_time() {
     match request.start_time {
         Some(FilterExpression::Numeric { operator, value }) => {
             assert!(matches!(operator, NumericOperator::Gte));
-            assert_eq!(value, 4294967295);
+            assert_eq!(value, 1748895831481);
         }
         _ => panic!("Expected Numeric filter expression for startTime"),
     }
@@ -401,3 +437,82 @@ fn test_deserialize_list_function_calls_request_with_end_time() {
         _ => panic!("Expected Numeric filter expression for endTime"),
     }
 }
+
+// #[test]
+// fn test_deserialize_tag_filter_expression() {
+//     let json_str = r#"{
+//         "operator": "eq",
+//         "key": "test.tag",
+//         "value": "testValue"
+//     }"#;
+
+//     let filter: FilterExpression<String> = serde_json::from_str(json_str).unwrap();
+
+//     match filter {
+//         FilterExpression::Tag {
+//             operator,
+//             key,
+//             value,
+//         } => {
+//             assert!(matches!(operator, StringOperator::Eq));
+//             assert_eq!(key, "test.tag");
+//             assert_eq!(value, "testValue");
+//         }
+//         _ => panic!("Expected Tag filter expression"),
+//     }
+// }
+
+// #[test]
+// fn test_deserialize_list_function_calls_request_with_tags() {
+//     let json_str = r#"{
+//         "projectId": "proj_01jvb3fnp1f09ta2a6g016t4kz",
+//         "tags": [
+//             {
+//                 "operator": "eq",
+//                 "key": "test.tag",
+//                 "value": "testValue"
+//             },
+//             {
+//                 "operator": "eq",
+//                 "key": "baml.language",
+//                 "value": "typescript"
+//             }
+//         ]
+//     }"#;
+
+//     let request: ListFunctionCallsRequest = serde_json::from_str(json_str).unwrap();
+
+//     assert_eq!(
+//         request.project_id.to_string(),
+//         "proj_01jvb3fnp1f09ta2a6g016t4kz"
+//     );
+
+//     let tags = request.tags.unwrap();
+//     assert_eq!(tags.len(), 2);
+
+//     match &tags[0] {
+//         FilterExpression::Tag {
+//             operator,
+//             key,
+//             value,
+//         } => {
+//             assert!(matches!(operator, StringOperator::Eq));
+//             assert_eq!(key, "test.tag");
+//             assert_eq!(value, "testValue");
+//         }
+//         _ => panic!("Expected Tag filter expression for first tag"),
+//     }
+
+//     match &tags[1] {
+//         FilterExpression::Tag {
+//             operator,
+//             key,
+//             value,
+//         } => {
+//             assert!(matches!(operator, StringOperator::Eq));
+//             assert_eq!(key, "baml.language");
+//             assert_eq!(value, "typescript");
+//         }
+//         _ => panic!("Expected Tag filter expression for second tag"),
+//     }
+// }
