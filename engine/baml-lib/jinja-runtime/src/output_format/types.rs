@@ -1050,7 +1050,7 @@ Color
                 r#"Answer in JSON using this schema:
 {
   // 111
-  //  
+  //   
   school: string or null,
   // 2222222
   degree: string,
