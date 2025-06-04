@@ -711,7 +711,6 @@ where
             unimplemented!("WithMetadata is not supported")
         }
         baml_types::FieldType::Arrow(_) => unimplemented!("Functions are not supported."),
-        baml_types::FieldType::Generic(_) => unimplemented!("Generic types not supported"),
     };
 
     CFFIFieldTypeHolder::create(

@@ -1426,7 +1426,6 @@ fn get_dummy_value(
             get_dummy_value(indent, allow_multiline, base)
         }
         baml_runtime::FieldType::Arrow(_) => None,
-        baml_runtime::FieldType::Generic(_) => None,
     }
 }
 

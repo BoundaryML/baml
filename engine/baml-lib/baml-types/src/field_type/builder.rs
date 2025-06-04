@@ -49,10 +49,6 @@ impl FieldType {
         FieldType::Class(name.to_string())
     }
 
-    pub fn generic(name: &str) -> Self {
-        FieldType::Generic(name.to_string())
-    }
-
     pub fn list(inner: FieldType) -> Self {
         FieldType::List(Box::new(inner))
     }

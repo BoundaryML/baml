@@ -256,9 +256,6 @@ impl ToTypeReferenceInTypeDefinition<'_> for FieldType {
             FieldType::Arrow(_) => {
                 todo!("Arrow types should not be used in generated type definitions")
             }
-            FieldType::Generic(_) => {
-                todo!("Generic types should not be used in generated type definitions")
-            }
             FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(checks) => {
                     let base_type_ref = base.to_partial_type_ref(ir, false);

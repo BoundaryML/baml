@@ -370,13 +370,6 @@ impl ArgCoercer {
                 ));
                 Err(())
             }
-            // Basically unreachable, should not run.
-            (FieldType::Generic(_), _) => {
-                scope.push_error(format!(
-                    "A json value may not be coerced into a generic type"
-                ));
-                Err(())
-            }
             (FieldType::WithMetadata { .. }, _) => {
                 unreachable!("The return value of distribute_constraints can never be FieldType::Constrainted");
             }

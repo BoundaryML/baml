@@ -59,7 +59,6 @@ impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::FieldType
         let simplified = self.simplify();
         use baml_rpc::{LiteralTypeDefinition, MediaTypeDefinition, TypeMetadata, TypeReference};
         match simplified {
-            baml_types::FieldType::Generic(_) => TypeReference::Unknown,
             baml_types::FieldType::Primitive(type_value) => match type_value {
                 baml_types::TypeValue::String => TypeReference::string(),
                 baml_types::TypeValue::Int => TypeReference::int(),

@@ -487,7 +487,6 @@ fn has_none_default(ir: &IntermediateRepr, field_type: &FieldType) -> bool {
         FieldType::Map(_, _) => false,
         FieldType::RecursiveTypeAlias(_) => false,
         FieldType::Tuple(_) => false,
-        FieldType::Generic(_) => false,
         FieldType::Union(variants) => variants
             .iter()
             .map(|variant| has_none_default(ir, variant))
@@ -591,7 +590,6 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 None => base.to_type_ref_2(ir, use_module_prefix).name,
             },
             FieldType::Arrow(_) => panic!("Generation is not supported with expr fns"),
-            FieldType::Generic(_) => panic!("Generation is not supported with generics"),
         }
     }
 
@@ -670,7 +668,6 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 unreachable!("distribute_metadata makes this branch unreachable.")
             }
             FieldType::Arrow(_) => panic!("Generation is not supported with expr fns"),
-            FieldType::Generic(_) => panic!("Generation is not supported with generics"),
         };
         let base_type_ref = if is_partial_type {
             base_rep

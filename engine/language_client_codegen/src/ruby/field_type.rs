@@ -60,9 +60,6 @@ impl ToRuby for FieldType {
             FieldType::Arrow(_) => {
                 todo!("Arrow types should not be used in generated type definitions")
             }
-            FieldType::Generic(_) => {
-                todo!("Generic types should not be used in generated type definitions")
-            }
             FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
                 Some(_) => {
                     let base_type_ref = base.to_ruby();

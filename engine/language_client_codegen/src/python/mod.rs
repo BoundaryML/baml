@@ -10,7 +10,7 @@ use internal_baml_core::{
     configuration::{GeneratorDefaultClientMode, GeneratorOutputType},
     ir::{
         repr::{IntermediateRepr, Walker},
-        ExprFnAsFunctionWalker, FieldType, IRHelper, IRHelperExtended
+        ExprFnAsFunctionWalker, FieldType, IRHelper, IRHelperExtended,
     },
 };
 
@@ -249,9 +249,7 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonClient 
                     args: f
                         .inputs()
                         .iter()
-                        .map(|(name, r#type)| {
-                            (name.to_string(), r#type.to_type_ref(ir), None)
-                        })
+                        .map(|(name, r#type)| (name.to_string(), r#type.to_type_ref(ir), None))
                         .collect(),
                 })
             })
@@ -321,9 +319,6 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             },
             FieldType::Arrow(_) => {
                 todo!("Arrow types should not be used in generated type definitions")
-            }
-            FieldType::Generic(_) => {
-                todo!("Generic types should not be used in generated type definitions")
             }
         }
     }
@@ -465,9 +460,6 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             FieldType::Arrow(_) => {
                 todo!("Arrow types should not be used in generated type definitions")
             }
-            FieldType::Generic(_) => {
-                todo!("Generic types should not be used in generated type definitions")
-            }
         };
 
         let rep_with_checks = match field_type_attributes(self) {
@@ -505,7 +497,6 @@ fn default_value_for_parameter_type(field_type: &FieldType) -> Option<&'static s
         FieldType::Union(xs) => None,
         FieldType::WithMetadata { base, .. } => default_value_for_parameter_type(base),
         FieldType::Arrow(_) => None,
-        FieldType::Generic(_) => None,
     }
 }
 
@@ -550,7 +541,7 @@ client<llm> GPT35 {
     model gpt-4
     api_key env.OPENAI_API_KEY
   }
-} 
+}
 
 // class Foo {
 //   i int @stream.not_null @stream.with_state

@@ -165,7 +165,6 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 None => base.to_type_ref(ir, _with_checked),
             },
             FieldType::Arrow(_) => panic!("Generation is not supported with expr fns"),
-            FieldType::Generic(_) => panic!("Generation is not supported with generics"),
         }
     }
 
@@ -221,7 +220,6 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 None => base.to_partial_type_ref(ir, with_checked),
             },
             FieldType::Arrow(_) => panic!("Generation is not supported with expr fns"),
-            FieldType::Generic(_) => panic!("Generation is not supported with generics"),
         }
     }
 }

@@ -421,7 +421,6 @@ impl OutputFormatContent {
                     auto_prefix(base, options, render_state, output_format_content)
                 }
                 FieldType::Arrow(_) => None, // TODO: Error? Arrow shouldn't appear here.
-                FieldType::Generic(_) => None, // TODO: Error? Arrow shouldn't appear here.
             }
         }
 
@@ -709,12 +708,6 @@ impl OutputFormatContent {
                 return Err(minijinja::Error::new(
                     minijinja::ErrorKind::BadSerialization,
                     "Arrow type is not supported in LLM function outputs",
-                ))
-            }
-            FieldType::Generic(_) => {
-                return Err(minijinja::Error::new(
-                    minijinja::ErrorKind::BadSerialization,
-                    "Generic type is not supported in LLM function outputs",
                 ))
             }
         })
@@ -1057,7 +1050,7 @@ Color
                 r#"Answer in JSON using this schema:
 {
   // 111
-  //   
+  //
   school: string or null,
   // 2222222
   degree: string,

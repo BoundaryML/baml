@@ -21,7 +21,6 @@ pub enum FieldType {
     Optional(Box<FieldType>),
     RecursiveTypeAlias(String),
     Arrow(Box<Arrow>),
-    Generic(String),
     WithMetadata {
         base: Box<FieldType>,
         constraints: Vec<Constraint>,
@@ -121,8 +120,7 @@ impl std::fmt::Display for FieldType {
         match self {
             FieldType::Enum(name)
             | FieldType::Class(name)
-            | FieldType::RecursiveTypeAlias(name)
-            | FieldType::Generic(name) => write!(f, "{name}"),
+            | FieldType::RecursiveTypeAlias(name) => write!(f, "{name}"),
             FieldType::Primitive(t) => write!(f, "{t}"),
             FieldType::Literal(v) => write!(f, "{v}"),
             FieldType::Union(choices) => {
@@ -250,9 +248,6 @@ impl FieldType {
         let mut queue = vec![self];
         while let Some(current) = queue.pop() {
             match current {
-                FieldType::Generic(_) => {
-                    // Generic is not used anywhere for now.
-                }
                 FieldType::Class(name) => {
                     deps.insert(name.clone());
                 }
@@ -313,7 +308,6 @@ impl ToUnionName for FieldType {
             | FieldType::Literal(_)
             | FieldType::Class(_)
             | FieldType::RecursiveTypeAlias(_)
-            | FieldType::Generic(_)
             | FieldType::Arrow(_) => IndexSet::new(),
             FieldType::Tuple(inner) => inner.iter().flat_map(|t| t.find_union_types()).collect(),
             FieldType::Optional(inner) => inner.find_union_types(),
@@ -326,7 +320,6 @@ impl ToUnionName for FieldType {
             FieldType::Primitive(type_value) => type_value.to_string(),
             FieldType::Enum(name)
             | FieldType::Class(name)
-            | FieldType::Generic(name)
             | FieldType::RecursiveTypeAlias(name) => name.to_string(),
             FieldType::Literal(literal_value) => match literal_value {
                 LiteralValue::String(value) => format!(

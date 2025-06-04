@@ -687,9 +687,6 @@ impl<'ir> ToTypeReferenceInTypeDefinition<'ir> for FieldType {
             FieldType::Arrow(_) => {
                 todo!("Arrow types should not be used in generated type definitions")
             }
-            FieldType::Generic(_) => {
-                todo!("Generic types should not be used in generated type definitions")
-            }
         })
     }
 }

@@ -331,7 +331,6 @@ fn required_done<T>(
             })
         }
         FieldType::Arrow(_) => false, // TODO: Error? Arrow shouldn't appear here.
-        FieldType::Generic(_) => false, // TODO: Error? Generic shouldn't appear here.
         FieldType::WithMetadata { .. } => {
             unreachable!("distribute_metadata always consumes `WithMetadata`.")
         }

@@ -269,7 +269,6 @@ fn has_none_default(ir: &IntermediateRepr, field_type: &FieldType) -> bool {
             unreachable!("FieldType::WithMetadata is always consumed by distribute_metadata")
         }
         FieldType::Arrow(_) => false,
-        FieldType::Generic(_) => false,
     }
 }
 
@@ -367,9 +366,6 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             },
             FieldType::Arrow(_) => {
                 todo!("Arrow types should not be used in generated type definitions")
-            }
-            FieldType::Generic(_) => {
-                todo!("Generic types should not be used in generated type definitions")
             }
         }
     }
@@ -482,9 +478,6 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
             }
             FieldType::Arrow(_) => {
                 todo!("Arrow types should not be used in generated type definitions")
-            }
-            FieldType::Generic(_) => {
-                todo!("Generic types should not be used in generated type definitions")
             }
         };
         let base_type_ref = if is_partial_type {

@@ -59,8 +59,6 @@ impl<'a> InterfaceFieldType<'a> {
 impl<'a> InterfaceFieldType<'a> {
     fn from(field_type: &'a FieldType) -> Self {
         match field_type {
-            // Generic is not used anywhere for now.
-            FieldType::Generic(_) => InterfaceFieldType::Unknown,
             FieldType::Primitive(type_value) => match type_value {
                 baml_types::TypeValue::String => InterfaceFieldType::String,
                 baml_types::TypeValue::Int => InterfaceFieldType::Int,
