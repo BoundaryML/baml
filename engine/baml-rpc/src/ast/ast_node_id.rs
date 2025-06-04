@@ -1,5 +1,4 @@
 use serde::{Deserialize, Serialize};
-use serde_with::{serde_as, DisplayFromStr};
 use ts_rs::TS;
 
 // u64 are serde'd as Strings in this type, because we use this type directly in
@@ -7,17 +6,17 @@ use ts_rs::TS;
 // output_format_json_quote_64bit_integers,
 // https://github.com/ClickHouse/ClickHouse/issues/114 and
 // https://gloo-global.slack.com/archives/C085SCFUETC/p1748989355944309
-#[serde_as]
+// #[serde_as]
 #[derive(Debug, PartialEq, Eq, Hash, Deserialize, Serialize, Clone, TS)]
 #[ts(export)]
 pub struct AstNodeId {
     type_name: String,
     name: String,
     #[ts(type = "string")]
-    #[serde_as(as = "DisplayFromStr")]
+    // #[serde_as(as = "DisplayFromStr")]
     interface_hash: u64,
     #[ts(type = "string")]
-    #[serde_as(as = "Option<DisplayFromStr>")]
+    // #[serde_as(as = "Option<DisplayFromStr>")]
     impl_hash: Option<u64>,
 }
 
