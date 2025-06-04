@@ -54,6 +54,42 @@ impl UiFunctionIdString {
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum UiBamlFunctionCallError {
+    ExternalException {
+        message: String,
+    },
+    InternalException {
+        message: String,
+    },
+    Base {
+        message: String,
+    },
+    InvalidArgument {
+        message: String,
+    },
+    Client {
+        message: String,
+    },
+    ClientHttp {
+        message: String,
+        status_code: i32,
+    },
+    ClientFinishReason {
+        finish_reason: String,
+        message: String,
+        prompt: String,
+        raw_output: String,
+    },
+    Validation {
+        raw_output: String,
+        message: String,
+        prompt: String,
+    },
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct UiFunctionCall {
     #[ts(type = "string")]
     pub function_call_id: FunctionCallId,
@@ -62,9 +98,8 @@ pub struct UiFunctionCall {
     #[ts(optional)]
     pub function_id: Option<UiFunctionIdString>,
 
-    #[ts(optional)]
-    #[ts(type = "Record<string, any> | null")]
-    pub tags: Option<serde_json::Map<String, serde_json::Value>>,
+    #[ts(type = "Record<string, any>")]
+    pub tags: serde_json::Map<String, serde_json::Value>,
 
     #[serde(rename = "start_epoch_ms")]
     #[ts(type = "number | null")]
@@ -79,8 +114,7 @@ pub struct UiFunctionCall {
     pub inputs: Vec<UiFunctionInput>,
     #[ts(as = "Option<BamlValue>")]
     pub output: serde_json::Value,
-    #[ts(type = "any", optional)]
-    pub error: Option<serde_json::Value>,
+    pub error: Option<UiBamlFunctionCallError>,
 
     pub is_root: bool,
     #[ts(type = "string | null")]
@@ -92,14 +126,17 @@ pub struct UiFunctionCall {
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 pub struct UiUsageEstimate {
-    #[ts(type = "number | null")]
-    pub input_bytes: Option<u64>,
-    #[ts(type = "number | null")]
-    pub output_bytes: Option<u64>,
+    // TODO: these estimates are pulled straight from LLMResponse and
+    // does not reflect the cost of failed retries.
     #[ts(type = "number | null")]
     pub input_tokens: Option<u64>,
     #[ts(type = "number | null")]
     pub output_tokens: Option<u64>,
+    // TODO: add cost estimate data here
+    // This is tricky to do because we need provider & model to effectively
+    // resolve the token costs. Even restricting to just openai is non-straightforward,
+    // and frankly I'm skeptical that restricting to just openai is a sufficiently common
+    // implementation use case.
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
