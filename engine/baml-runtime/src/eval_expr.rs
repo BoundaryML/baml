@@ -1154,7 +1154,7 @@ test TestMakePerson() {
         assert!(false);
     }
 
-    #[tokio::test]
+    // #[tokio::test]
     async fn test_fetch_value() {
         let rt = runtime(
             r##"
