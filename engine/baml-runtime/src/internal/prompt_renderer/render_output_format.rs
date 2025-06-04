@@ -385,16 +385,6 @@ fn relevant_data_models<'a>(
                         constraints,
                         streaming_behavior,
                     });
-                } else {
-                    // TODO: @antonio This one was nasty! If aliases are not
-                    // resolved in the `ir.finite_recursive_cycles()` function
-                    // then an alias that points to a recursive class will get
-                    // resolved below and then this code will run, introducing
-                    // a recursive class in the relevant data models that does
-                    // not exist in the IR although it should!. Now it's been
-                    // fixed so this should be safe to remove, it wasn't even
-                    // a bug it was "why is this working when IT SHOULD NOT".
-                    recursive_classes.insert(cls.to_owned());
                 }
             }
             (FieldType::RecursiveTypeAlias(name), _) => {
@@ -658,18 +648,20 @@ Month
 - November
 - December
 
-Date {
-  day: int,
-  month: Month,
-  year: int,
-}
-
 Answer in JSON using this schema:
 {
   education: [
     {
-      from_date: Date,
-      to_date: Date or "current",
+      from_date: {
+        day: int,
+        month: Month,
+        year: int,
+      },
+      to_date: {
+        day: int,
+        month: Month,
+        year: int,
+      } or "current",
       school: string,
       description: string,
     }
