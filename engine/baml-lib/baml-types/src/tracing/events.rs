@@ -117,6 +117,7 @@ impl<'a, T: HasFieldType> TraceEvent<'a, T> {
     }
 }
 
+// DO NOT CLONE!
 #[derive(Debug)]
 pub enum TraceData<'a, T: HasFieldType> {
     // All functions, including non-LLM ones

@@ -102,6 +102,7 @@ impl std::str::FromStr for AstNodeId {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
+        log::info!("Parsing AstNodeId: {}", s);
         let parts = s.split("##").collect::<Vec<_>>();
         if parts.len() != 4 {
             return Err(anyhow::anyhow!("Invalid unique id: {}", s));

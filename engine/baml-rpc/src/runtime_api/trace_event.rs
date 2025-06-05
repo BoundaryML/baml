@@ -14,7 +14,7 @@ use super::baml_value::{BamlValue, Media};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TraceEventBatch<'a> {
-    pub events: Vec<TraceEvent<'a>>,
+    pub events: Vec<BackendTraceEvent<'a>>,
 }
 
 /// This is intentionally VERY similar to TraceEvent in
@@ -22,7 +22,7 @@ pub struct TraceEventBatch<'a> {
 /// If the convertion from baml-types to baml-rpc is not possible,
 /// WE HAVE A BREAKING CHANGE.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TraceEvent<'a> {
+pub struct BackendTraceEvent<'a> {
     /*
      * (call_id, content_event_id) is a unique identifier for a log event
      * The query (call_id, *) gets all logs for a function call
