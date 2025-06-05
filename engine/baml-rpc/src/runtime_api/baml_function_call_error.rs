@@ -16,12 +16,14 @@ pub enum BamlFunctionCallError<'a> {
         message: Cow<'a, str>,
     },
     InvalidArgument {
+        // invlaid argument to baml function
         message: Cow<'a, str>,
     },
     Client {
         message: Cow<'a, str>,
     },
     ClientHttp {
+        // invalid argument exceptions from llm providers would fall under here
         message: Cow<'a, str>,
         status_code: i32,
     },
@@ -35,5 +37,6 @@ pub enum BamlFunctionCallError<'a> {
         raw_output: Cow<'a, str>,
         message: Cow<'a, str>,
         prompt: Cow<'a, str>,
+        //
     },
 }

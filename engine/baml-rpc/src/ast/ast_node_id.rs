@@ -13,10 +13,16 @@ pub struct AstNodeId {
     type_name: String,
     name: String,
     #[ts(type = "string")]
-    // #[serde_as(as = "DisplayFromStr")]
+    #[serde(
+        serialize_with = "serialize_u64_to_string",
+        deserialize_with = "deserialize_string_to_u64"
+    )]
     interface_hash: u64,
-    #[ts(type = "string")]
-    // #[serde_as(as = "Option<DisplayFromStr>")]
+    #[ts(type = "string | null")]
+    #[serde(
+        serialize_with = "serialize_optional_u64_to_string",
+        deserialize_with = "deserialize_optional_string_to_optional_u64"
+    )]
     impl_hash: Option<u64>,
 }
 
@@ -113,5 +119,113 @@ impl std::str::FromStr for AstNodeId {
                 Err(_) => return Err(anyhow::anyhow!("Invalid unique id: {}", s)),
             },
         })
+    }
+}
+
+// mod u64_as_str {
+//     use serde::Deserialize;
+
+//     pub fn serialize<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer,
+//     {
+//         serializer.serialize_str(&value.to_string())
+//     }
+
+//     pub fn deserialize<'de, D>(deserializer: D) -> Result<u64, D::Error>
+//     where
+//         D: serde::Deserializer<'de>,
+//     {
+//         let s = String::deserialize(deserializer)?;
+//         Ok(s.parse().unwrap())
+//     }
+// }
+
+// mod u64_as_str_option {
+//     use serde::Deserialize;
+
+//     pub fn serialize<S>(value: &Option<u64>, serializer: S) -> Result<S::Ok, S::Error>
+//     where
+//         S: serde::Serializer,
+//     {
+//         match value {
+//             Some(v) => serializer.serialize_str(&v.to_string()),
+//             None => serializer.serialize_none(),
+//         }
+//     }
+
+//     pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
+//     where
+//         D: serde::Deserializer<'de>,
+//     {
+//         let s = Option::<String>::deserialize(deserializer)?;
+//         match s {
+//             Some(s) => Ok(Some(s.parse::<u64>().map_err(serde::de::Error::custom)?)),
+//             None => Ok(None),
+//         }
+//     }
+// }
+
+// Helper function to deserialize string to u64
+fn deserialize_string_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrNum {
+        String(String),
+        Num(u64),
+    }
+
+    match StringOrNum::deserialize(deserializer)? {
+        StringOrNum::String(s) => s.parse::<u64>().map_err(serde::de::Error::custom),
+        StringOrNum::Num(i) => Ok(i),
+    }
+}
+
+// Helper function to deserialize optional string to Option<u64>
+fn deserialize_optional_string_to_optional_u64<'de, D>(
+    deserializer: D,
+) -> Result<Option<u64>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum StringOrNumOrNull {
+        String(String),
+        Num(u64),
+        Null,
+    }
+
+    match StringOrNumOrNull::deserialize(deserializer)? {
+        StringOrNumOrNull::String(s) => {
+            s.parse::<u64>().map(Some).map_err(serde::de::Error::custom)
+        }
+        StringOrNumOrNull::Num(i) => Ok(Some(i)),
+        StringOrNumOrNull::Null => Ok(None),
+    }
+}
+
+// Helper function to serialize u64 to string
+fn serialize_u64_to_string<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    serializer.serialize_str(&value.to_string())
+}
+
+// Helper function to serialize Option<u64> to string
+fn serialize_optional_u64_to_string<S>(
+    value: &Option<u64>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match value {
+        Some(v) => serializer.serialize_str(&v.to_string()),
+        None => serializer.serialize_none(),
     }
 }
