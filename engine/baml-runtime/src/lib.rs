@@ -41,6 +41,7 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::ResponseValueMeta;
 use tracingv2::publisher::flush;
 
+use crate::errors::IntoBamlError;
 use crate::internal::llm_client::LLMCompleteResponse;
 use baml_types::expr::{Expr, ExprMetadata};
 use baml_types::tracing::events::HTTPBody;
@@ -719,24 +720,23 @@ impl BamlRuntime {
 
                         // Call (CANNOT RETURN HERE until trace event is finished)
                         let result = self.inner.call_function_impl(prepared_func, rctx).await;
+                        // eprintln!("result: {:?}", result);
                         // Trace event
                         let trace_event = TraceEvent::new_function_end(
                             call_id_stack.clone(),
                             match &result {
-                                Ok(result) => match result.parsed() {
-                                    Some(Ok(value)) => Ok(value.0.map_meta(|f| f.3.clone())),
-                                    Some(Err(e)) => {
-                                        Err(baml_types::tracing::errors::BamlError::from(e))
-                                    }
-                                    None => Err(baml_types::tracing::errors::BamlError::Base {
-                                        message: format!(
-                                            "No parsed result found for function: {}",
-                                            function_name
-                                        )
-                                        .into(),
-                                    }),
+                                Ok(result) => match result.result_with_constraints_content() {
+                                    Ok(value) => Ok(value.0.map_meta(|f| f.3.clone())),
+                                    Err(e) => { Err((&e).into_baml_error()) }
+                                    // None => Err(baml_types::tracing::errors::BamlError::Base {
+                                    //     message: format!(
+                                    //         "No parsed result found for function: {}",
+                                    //         function_name
+                                    //     )
+                                    //     .into(),
+                                    // }),
                                 },
-                                Err(e) => Err(baml_types::tracing::errors::BamlError::from(e)),
+                                Err(e) => Err(e.into_baml_error()),
                             },
                         );
                         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));

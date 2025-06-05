@@ -9,15 +9,10 @@ use serde_json::json;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    client_registry::ClientRegistry,
-    internal::{
+    client_registry::ClientRegistry, internal::{
         llm_client::orchestrator::{orchestrate_stream, OrchestratorNodeIterator},
         prompt_renderer::PromptRenderer,
-    },
-    tracing::BamlTracer,
-    tracingv2::storage::storage::{Collector, BAML_TRACER},
-    type_builder::TypeBuilder,
-    FunctionResult, PreparedFunctionArgs, RuntimeContextManager,
+    }, tracing::BamlTracer, tracingv2::storage::storage::{Collector, BAML_TRACER}, type_builder::TypeBuilder, FunctionResult, IntoBamlError, PreparedFunctionArgs, RuntimeContextManager
 };
 
 /// Wrapper that holds a stream of responses from a BAML function call.
@@ -144,7 +139,7 @@ impl FunctionResultStream {
                 Ok(result) => Ok(baml_types::BamlValueWithMeta::<FieldType>::Null(
                     FieldType::null(),
                 )),
-                Err(e) => Err(baml_types::tracing::errors::BamlError::from(e).to_owned()),
+                Err(e) => Err(e.into_baml_error()),
             },
         );
         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));

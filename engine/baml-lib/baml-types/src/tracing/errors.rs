@@ -40,14 +40,14 @@ pub enum BamlError<'a> {
     },
 }
 
-impl<'a> From<&anyhow::Error> for BamlError<'a> {
-    fn from(e: &anyhow::Error) -> Self {
-        if let Some(baml_error) = e.downcast_ref::<BamlError>() {
-            baml_error.clone()
-        } else {
-            BamlError::External {
-                message: Cow::Owned(e.to_string()),
-            }
-        }
-    }
-}
+// impl<'a> From<&anyhow::Error> for BamlError<'a> {
+//     fn from(e: &anyhow::Error) -> Self {
+//         if let Some(baml_error) = e.downcast_ref::<BamlError>() {
+//             baml_error.clone()
+//         } else {
+//             BamlError::External {
+//                 message: Cow::Owned(e.to_string()),
+//             }
+//         }
+//     }
+// }
