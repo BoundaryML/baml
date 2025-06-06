@@ -102,7 +102,6 @@ impl std::str::FromStr for AstNodeId {
     type Err = anyhow::Error;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        log::info!("Parsing AstNodeId: {}", s);
         let parts = s.split("##").collect::<Vec<_>>();
         if parts.len() != 4 {
             return Err(anyhow::anyhow!("Invalid unique id: {}", s));
@@ -122,50 +121,6 @@ impl std::str::FromStr for AstNodeId {
         })
     }
 }
-
-// mod u64_as_str {
-//     use serde::Deserialize;
-
-//     pub fn serialize<S>(value: &u64, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: serde::Serializer,
-//     {
-//         serializer.serialize_str(&value.to_string())
-//     }
-
-//     pub fn deserialize<'de, D>(deserializer: D) -> Result<u64, D::Error>
-//     where
-//         D: serde::Deserializer<'de>,
-//     {
-//         let s = String::deserialize(deserializer)?;
-//         Ok(s.parse().unwrap())
-//     }
-// }
-
-// mod u64_as_str_option {
-//     use serde::Deserialize;
-
-//     pub fn serialize<S>(value: &Option<u64>, serializer: S) -> Result<S::Ok, S::Error>
-//     where
-//         S: serde::Serializer,
-//     {
-//         match value {
-//             Some(v) => serializer.serialize_str(&v.to_string()),
-//             None => serializer.serialize_none(),
-//         }
-//     }
-
-//     pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<u64>, D::Error>
-//     where
-//         D: serde::Deserializer<'de>,
-//     {
-//         let s = Option::<String>::deserialize(deserializer)?;
-//         match s {
-//             Some(s) => Ok(Some(s.parse::<u64>().map_err(serde::de::Error::custom)?)),
-//             None => Ok(None),
-//         }
-//     }
-// }
 
 // Helper function to deserialize string to u64
 fn deserialize_string_to_u64<'de, D>(deserializer: D) -> Result<u64, D::Error>
