@@ -218,14 +218,22 @@ impl RequestBuilder for VertexClient {
 
         let base_url = match &self.properties.base_url_or_location {
             BaseUrlOrLocation::BaseUrl(base_url) => base_url.to_string(),
-            BaseUrlOrLocation::Location(location) => format!(
-                "https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/google/models",
-                location = location,
-                project_id = match self.properties.project_id.as_ref() {
-                    Some(project_id) => project_id.to_string(),
-                    None => vertex_auth.project_id().await?.to_string(),
-                }
-            ),
+            BaseUrlOrLocation::Location(location) => {
+                let domain = if location == "global" {
+                    "aiplatform.googleapis.com".to_string()
+                } else {
+                    format!("{location}-aiplatform.googleapis.com")
+                };
+                format!(
+                    "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/google/models",
+                    domain = domain,
+                    location = location,
+                    project_id = match self.properties.project_id.as_ref() {
+                        Some(project_id) => project_id.to_string(),
+                        None => vertex_auth.project_id().await?.to_string(),
+                    }
+                )
+            },
         };
 
         let baml_original_url = format!(
