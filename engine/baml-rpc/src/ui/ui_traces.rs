@@ -2,7 +2,6 @@ use crate::base::EpochMsTimestamp;
 use crate::rpc::ApiEndpoint;
 use crate::ProjectId;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
 use ts_rs::TS;
 
 use super::ui_function_calls::{
@@ -28,25 +27,7 @@ pub struct UsageEstimateAggregate {
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct TraceCall {
-    // Call invocation data - always the root_id returned
-    pub function_call_id: String,
-    pub function_name: String,
-    // pub is_llm: bool, // whether it's a standalone llm call not in a @trace.
-
-    // Same as function_calls API with full_data=false
-    #[ts(skip)]
-    pub tags: HashMap<String, serde_json::Value>,
-
-    // Timing information
-    #[ts(type = "number", optional)]
-    pub start_epoch_ms: Option<EpochMsTimestamp>,
-    #[ts(type = "number", optional)]
-    pub end_epoch_ms: Option<EpochMsTimestamp>,
-
-    // Status information
-    pub status: FunctionCallStatus,
-
+pub struct NodeDetails {
     // Aggregate info for performance - calculated server-side
     #[ts(type = "number")]
     pub children_functions: u32,
@@ -64,27 +45,19 @@ pub struct TraceCall {
     pub children_limit: Option<u32>, // How many children were requested/returned
     #[ts(type = "number", optional)]
     pub children_offset: Option<u32>, // Pagination offset for children
-
-    // Return limited children (lazy loaded) - only if explicitly requested
-    // Only if you click on this.
-    pub children: Vec<TraceChildFunctionCall>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct TraceChildFunctionCall {
+pub struct TraceCall {
+    // Base function call data - reuse UiFunctionCall to avoid duplication
     pub function_call: ui_types::UiFunctionCall,
 
-    // Lazy loading metadata for this child
-    pub has_children: bool,
-    pub children_loaded: bool,
-    #[ts(type = "number")]
-    pub children_count: u32, // Direct children count
-    #[ts(type = "number")]
-    pub total_descendants: u32, // Total descendants count
+    // Node-specific metadata for hierarchy and lazy loading
+    pub node_details: NodeDetails,
 
-    // Nested children (only loaded if requested)
-    pub children: Vec<TraceChildFunctionCall>,
+    // Recursive children - each child is also a TraceCall
+    pub children: Vec<TraceCall>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -122,6 +95,9 @@ pub struct ListTracesRequest {
     /// Offset for children pagination within each trace.
     #[ts(optional)]
     pub children_offset: Option<u32>,
+    /// Whether to calculate usage estimates. Defaults to true.
+    #[ts(optional)]
+    pub include_usage_estimates: Option<bool>,
 
     // Existing filters
     #[ts(optional)]
@@ -160,6 +136,7 @@ impl Default for ListTracesRequest {
             max_depth: Some(1),
             children_limit: Some(50),
             children_offset: Some(0),
+            include_usage_estimates: Some(true),
             function_call_id: None,
             function_id: None,
             function_name: None,
@@ -191,13 +168,20 @@ pub struct GetTraceChildrenRequest {
     /// Offset for pagination.
     #[ts(optional)]
     pub offset: Option<u32>,
+    /// Whether to calculate usage estimates. Defaults to true.
+    #[ts(optional)]
+    pub include_usage_estimates: Option<bool>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct GetTraceChildrenResponse {
+    // The function_call_id of the parent function call
     pub function_call_id: String,
-    pub children: Vec<TraceChildFunctionCall>,
+    // The function_call details of the parent function call
+    pub function_call: ui_types::UiFunctionCall,
+    // The children of the parent function call
+    pub children: Vec<TraceCall>,
     // Breadcrumb trail
     #[ts(type = "number")]
     pub total_children: u32, // For pagination
