@@ -300,7 +300,10 @@ pub fn redact_headers(headers: HashMap<String, String>) -> HashMap<String, Strin
                 "auth",
             ];
 
-            if sensitive_keywords
+            // tokens is usually for input and output tokens
+            if key_lower.contains("ratelimit") || key_lower.contains("tokens") {
+                (key, value)
+            } else if sensitive_keywords
                 .iter()
                 .any(|&keyword| key_lower.contains(keyword))
             {
