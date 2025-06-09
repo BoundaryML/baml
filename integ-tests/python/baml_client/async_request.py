@@ -13,14 +13,12 @@
 # flake8: noqa: E501,F401
 # pylint: disable=unused-import,line-too-long
 # fmt: off
-from typing import Any, Dict, List, Optional, Union, TypedDict, Type
-from typing_extensions import NotRequired, Literal
-import os
+from typing import Dict, List, Optional, Union
+from typing_extensions import Literal
 
 import baml_py
 
 from . import _baml
-from .types import Checked, Check
 
 
 class AsyncHttpRequest:
