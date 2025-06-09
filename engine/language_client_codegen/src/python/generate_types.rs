@@ -364,7 +364,7 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                 Some(checks) => {
                     let base_type_ref = base.to_type_ref(ir, use_module_prefix);
                     let checks_type_ref = type_name_for_checks(&checks);
-                    format!("baml_client.types.Checked[{base_type_ref},{checks_type_ref}]")
+                    format!("Checked[{base_type_ref},{checks_type_ref}]")
                 }
                 None => base.to_type_ref(ir, use_module_prefix),
             },
