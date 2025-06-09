@@ -18,7 +18,7 @@ from typing_extensions import NotRequired, Literal
 import os
 import baml_py
 
-from . import types
+from .. import baml_client
 from .types import Checked, Check
 from .type_builder import TypeBuilder
 
@@ -73,7 +73,7 @@ class HttpRequest:
     
     def AliasThatPointsToRecursiveType(
         self,
-        data: types.LinkedListAliasNode,
+        data: baml_client.types.LinkedListAliasNode,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -123,7 +123,7 @@ class HttpRequest:
     
     def AliasedInputClass(
         self,
-        input: types.InputClass,
+        input: baml_client.types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -148,7 +148,7 @@ class HttpRequest:
     
     def AliasedInputClass2(
         self,
-        input: types.InputClass,
+        input: baml_client.types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -173,7 +173,7 @@ class HttpRequest:
     
     def AliasedInputClassNested(
         self,
-        input: types.InputClassNested,
+        input: baml_client.types.InputClassNested,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -198,7 +198,7 @@ class HttpRequest:
     
     def AliasedInputEnum(
         self,
-        input: types.AliasedEnum,
+        input: baml_client.types.AliasedEnum,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -223,7 +223,7 @@ class HttpRequest:
     
     def AliasedInputList(
         self,
-        input: List[types.AliasedEnum],
+        input: List[baml_client.types.AliasedEnum],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -248,7 +248,7 @@ class HttpRequest:
     
     def AllowedOptionals(
         self,
-        optionals: types.OptionalListAndMap,
+        optionals: baml_client.types.OptionalListAndMap,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -373,7 +373,7 @@ class HttpRequest:
     
     def BuildTree(
         self,
-        input: types.BinaryNode,
+        input: baml_client.types.BinaryNode,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -398,7 +398,7 @@ class HttpRequest:
     
     def ClassThatPointsToRecursiveClassThroughAlias(
         self,
-        cls: types.ClassToRecAlias,
+        cls: baml_client.types.ClassToRecAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -598,7 +598,7 @@ class HttpRequest:
     
     def DescribeImage2(
         self,
-        classWithImage: types.ClassWithImage,img2: baml_py.Image,
+        classWithImage: baml_client.types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -623,7 +623,7 @@ class HttpRequest:
     
     def DescribeImage3(
         self,
-        classWithImage: types.ClassWithImage,img2: baml_py.Image,
+        classWithImage: baml_client.types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -648,7 +648,7 @@ class HttpRequest:
     
     def DescribeImage4(
         self,
-        classWithImage: types.ClassWithImage,img2: baml_py.Image,
+        classWithImage: baml_client.types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -748,7 +748,7 @@ class HttpRequest:
     
     def DynamicFunc(
         self,
-        input: types.DynamicClassOne,
+        input: baml_client.types.DynamicClassOne,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -773,7 +773,7 @@ class HttpRequest:
     
     def DynamicInputOutput(
         self,
-        input: types.DynInputOutput,
+        input: baml_client.types.DynInputOutput,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -798,7 +798,7 @@ class HttpRequest:
     
     def DynamicListInputOutput(
         self,
-        input: List[types.DynInputOutput],
+        input: List[baml_client.types.DynInputOutput],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -1148,7 +1148,7 @@ class HttpRequest:
     
     def FnLiteralClassInputOutput(
         self,
-        input: types.LiteralClassHello,
+        input: baml_client.types.LiteralClassHello,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -1173,7 +1173,7 @@ class HttpRequest:
     
     def FnLiteralUnionClassInputOutput(
         self,
-        input: Union[types.LiteralClassOne, types.LiteralClassTwo],
+        input: Union[baml_client.types.LiteralClassOne, baml_client.types.LiteralClassTwo],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -1523,7 +1523,7 @@ class HttpRequest:
     
     def FnTestNamedArgsSingleEnum(
         self,
-        myArg: types.NamedArgsSingleEnum,
+        myArg: baml_client.types.NamedArgsSingleEnum,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -1573,7 +1573,7 @@ class HttpRequest:
     
     def GetOrderInfo(
         self,
-        email: types.Email,
+        email: baml_client.types.Email,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -1623,7 +1623,7 @@ class HttpRequest:
     
     def InOutEnumMapKey(
         self,
-        i1: Dict[types.MapKey, str],i2: Dict[types.MapKey, str],
+        i1: Dict[baml_client.types.MapKey, str],i2: Dict[baml_client.types.MapKey, str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -1698,7 +1698,7 @@ class HttpRequest:
     
     def JsonTypeAliasCycle(
         self,
-        input: types.JsonValue,
+        input: baml_client.types.JsonValue,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -2323,7 +2323,7 @@ class HttpRequest:
     
     def RecursiveAliasCycle(
         self,
-        input: types.RecAliasOne,
+        input: baml_client.types.RecAliasOne,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -2348,7 +2348,7 @@ class HttpRequest:
     
     def RecursiveClassWithAliasIndirection(
         self,
-        cls: types.NodeWithAliasIndirection,
+        cls: baml_client.types.NodeWithAliasIndirection,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -2373,7 +2373,7 @@ class HttpRequest:
     
     def RecursiveUnionTest(
         self,
-        input: types.RecursiveUnion,
+        input: baml_client.types.RecursiveUnion,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -2523,7 +2523,7 @@ class HttpRequest:
     
     def SimpleRecursiveListAlias(
         self,
-        input: types.RecursiveListAlias,
+        input: baml_client.types.RecursiveListAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -2548,7 +2548,7 @@ class HttpRequest:
     
     def SimpleRecursiveMapAlias(
         self,
-        input: types.RecursiveMapAlias,
+        input: baml_client.types.RecursiveMapAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -2748,7 +2748,7 @@ class HttpRequest:
     
     def TakeRecAliasDep(
         self,
-        input: types.RecursiveAliasDependency,
+        input: baml_client.types.RecursiveAliasDependency,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -3348,7 +3348,7 @@ class HttpRequest:
     
     def TestFnNamedArgsSingleClass(
         self,
-        myArg: types.NamedArgsSingleClass,
+        myArg: baml_client.types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -3373,7 +3373,7 @@ class HttpRequest:
     
     def TestFnNamedArgsSingleEnumList(
         self,
-        myArg: List[types.NamedArgsSingleEnumList],
+        myArg: List[baml_client.types.NamedArgsSingleEnumList],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -3448,7 +3448,7 @@ class HttpRequest:
     
     def TestFnNamedArgsSingleMapStringToClass(
         self,
-        myMap: Dict[str, types.StringToClassEntry],
+        myMap: Dict[str, baml_client.types.StringToClassEntry],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -3823,7 +3823,7 @@ class HttpRequest:
     
     def TestMulticlassNamedArgs(
         self,
-        myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
+        myArg: baml_client.types.NamedArgsSingleClass,myArg2: baml_client.types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -4398,7 +4398,7 @@ class HttpRequest:
     
     def TestUniverseQuestion(
         self,
-        question: types.UniverseQuestionInput,
+        question: baml_client.types.UniverseQuestionInput,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -4523,7 +4523,7 @@ class HttpRequest:
     
     def UseBlockConstraint(
         self,
-        inp: types.BlockConstraintForParam,
+        inp: baml_client.types.BlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -4548,7 +4548,7 @@ class HttpRequest:
     
     def UseMaintainFieldOrder(
         self,
-        input: types.MaintainFieldOrder,
+        input: baml_client.types.MaintainFieldOrder,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -4573,7 +4573,7 @@ class HttpRequest:
     
     def UseMalformedConstraints(
         self,
-        a: types.MalformedConstraints2,
+        a: baml_client.types.MalformedConstraints2,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -4598,7 +4598,7 @@ class HttpRequest:
     
     def UseNestedBlockConstraint(
         self,
-        inp: types.NestedBlockConstraintForParam,
+        inp: baml_client.types.NestedBlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -4684,7 +4684,7 @@ class HttpStreamRequest:
     
     def AliasThatPointsToRecursiveType(
         self,
-        data: types.LinkedListAliasNode,
+        data: baml_client.types.LinkedListAliasNode,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -4734,7 +4734,7 @@ class HttpStreamRequest:
     
     def AliasedInputClass(
         self,
-        input: types.InputClass,
+        input: baml_client.types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -4759,7 +4759,7 @@ class HttpStreamRequest:
     
     def AliasedInputClass2(
         self,
-        input: types.InputClass,
+        input: baml_client.types.InputClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -4784,7 +4784,7 @@ class HttpStreamRequest:
     
     def AliasedInputClassNested(
         self,
-        input: types.InputClassNested,
+        input: baml_client.types.InputClassNested,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -4809,7 +4809,7 @@ class HttpStreamRequest:
     
     def AliasedInputEnum(
         self,
-        input: types.AliasedEnum,
+        input: baml_client.types.AliasedEnum,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -4834,7 +4834,7 @@ class HttpStreamRequest:
     
     def AliasedInputList(
         self,
-        input: List[types.AliasedEnum],
+        input: List[baml_client.types.AliasedEnum],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -4859,7 +4859,7 @@ class HttpStreamRequest:
     
     def AllowedOptionals(
         self,
-        optionals: types.OptionalListAndMap,
+        optionals: baml_client.types.OptionalListAndMap,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -4984,7 +4984,7 @@ class HttpStreamRequest:
     
     def BuildTree(
         self,
-        input: types.BinaryNode,
+        input: baml_client.types.BinaryNode,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -5009,7 +5009,7 @@ class HttpStreamRequest:
     
     def ClassThatPointsToRecursiveClassThroughAlias(
         self,
-        cls: types.ClassToRecAlias,
+        cls: baml_client.types.ClassToRecAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -5209,7 +5209,7 @@ class HttpStreamRequest:
     
     def DescribeImage2(
         self,
-        classWithImage: types.ClassWithImage,img2: baml_py.Image,
+        classWithImage: baml_client.types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -5234,7 +5234,7 @@ class HttpStreamRequest:
     
     def DescribeImage3(
         self,
-        classWithImage: types.ClassWithImage,img2: baml_py.Image,
+        classWithImage: baml_client.types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -5259,7 +5259,7 @@ class HttpStreamRequest:
     
     def DescribeImage4(
         self,
-        classWithImage: types.ClassWithImage,img2: baml_py.Image,
+        classWithImage: baml_client.types.ClassWithImage,img2: baml_py.Image,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -5359,7 +5359,7 @@ class HttpStreamRequest:
     
     def DynamicFunc(
         self,
-        input: types.DynamicClassOne,
+        input: baml_client.types.DynamicClassOne,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -5384,7 +5384,7 @@ class HttpStreamRequest:
     
     def DynamicInputOutput(
         self,
-        input: types.DynInputOutput,
+        input: baml_client.types.DynInputOutput,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -5409,7 +5409,7 @@ class HttpStreamRequest:
     
     def DynamicListInputOutput(
         self,
-        input: List[types.DynInputOutput],
+        input: List[baml_client.types.DynInputOutput],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -5759,7 +5759,7 @@ class HttpStreamRequest:
     
     def FnLiteralClassInputOutput(
         self,
-        input: types.LiteralClassHello,
+        input: baml_client.types.LiteralClassHello,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -5784,7 +5784,7 @@ class HttpStreamRequest:
     
     def FnLiteralUnionClassInputOutput(
         self,
-        input: Union[types.LiteralClassOne, types.LiteralClassTwo],
+        input: Union[baml_client.types.LiteralClassOne, baml_client.types.LiteralClassTwo],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -6134,7 +6134,7 @@ class HttpStreamRequest:
     
     def FnTestNamedArgsSingleEnum(
         self,
-        myArg: types.NamedArgsSingleEnum,
+        myArg: baml_client.types.NamedArgsSingleEnum,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -6184,7 +6184,7 @@ class HttpStreamRequest:
     
     def GetOrderInfo(
         self,
-        email: types.Email,
+        email: baml_client.types.Email,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -6234,7 +6234,7 @@ class HttpStreamRequest:
     
     def InOutEnumMapKey(
         self,
-        i1: Dict[types.MapKey, str],i2: Dict[types.MapKey, str],
+        i1: Dict[baml_client.types.MapKey, str],i2: Dict[baml_client.types.MapKey, str],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -6309,7 +6309,7 @@ class HttpStreamRequest:
     
     def JsonTypeAliasCycle(
         self,
-        input: types.JsonValue,
+        input: baml_client.types.JsonValue,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -6934,7 +6934,7 @@ class HttpStreamRequest:
     
     def RecursiveAliasCycle(
         self,
-        input: types.RecAliasOne,
+        input: baml_client.types.RecAliasOne,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -6959,7 +6959,7 @@ class HttpStreamRequest:
     
     def RecursiveClassWithAliasIndirection(
         self,
-        cls: types.NodeWithAliasIndirection,
+        cls: baml_client.types.NodeWithAliasIndirection,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -6984,7 +6984,7 @@ class HttpStreamRequest:
     
     def RecursiveUnionTest(
         self,
-        input: types.RecursiveUnion,
+        input: baml_client.types.RecursiveUnion,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -7134,7 +7134,7 @@ class HttpStreamRequest:
     
     def SimpleRecursiveListAlias(
         self,
-        input: types.RecursiveListAlias,
+        input: baml_client.types.RecursiveListAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -7159,7 +7159,7 @@ class HttpStreamRequest:
     
     def SimpleRecursiveMapAlias(
         self,
-        input: types.RecursiveMapAlias,
+        input: baml_client.types.RecursiveMapAlias,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -7359,7 +7359,7 @@ class HttpStreamRequest:
     
     def TakeRecAliasDep(
         self,
-        input: types.RecursiveAliasDependency,
+        input: baml_client.types.RecursiveAliasDependency,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -7959,7 +7959,7 @@ class HttpStreamRequest:
     
     def TestFnNamedArgsSingleClass(
         self,
-        myArg: types.NamedArgsSingleClass,
+        myArg: baml_client.types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -7984,7 +7984,7 @@ class HttpStreamRequest:
     
     def TestFnNamedArgsSingleEnumList(
         self,
-        myArg: List[types.NamedArgsSingleEnumList],
+        myArg: List[baml_client.types.NamedArgsSingleEnumList],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -8059,7 +8059,7 @@ class HttpStreamRequest:
     
     def TestFnNamedArgsSingleMapStringToClass(
         self,
-        myMap: Dict[str, types.StringToClassEntry],
+        myMap: Dict[str, baml_client.types.StringToClassEntry],
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -8434,7 +8434,7 @@ class HttpStreamRequest:
     
     def TestMulticlassNamedArgs(
         self,
-        myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
+        myArg: baml_client.types.NamedArgsSingleClass,myArg2: baml_client.types.NamedArgsSingleClass,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -9009,7 +9009,7 @@ class HttpStreamRequest:
     
     def TestUniverseQuestion(
         self,
-        question: types.UniverseQuestionInput,
+        question: baml_client.types.UniverseQuestionInput,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -9134,7 +9134,7 @@ class HttpStreamRequest:
     
     def UseBlockConstraint(
         self,
-        inp: types.BlockConstraintForParam,
+        inp: baml_client.types.BlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -9159,7 +9159,7 @@ class HttpStreamRequest:
     
     def UseMaintainFieldOrder(
         self,
-        input: types.MaintainFieldOrder,
+        input: baml_client.types.MaintainFieldOrder,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -9184,7 +9184,7 @@ class HttpStreamRequest:
     
     def UseMalformedConstraints(
         self,
-        a: types.MalformedConstraints2,
+        a: baml_client.types.MalformedConstraints2,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
@@ -9209,7 +9209,7 @@ class HttpStreamRequest:
     
     def UseNestedBlockConstraint(
         self,
-        inp: types.NestedBlockConstraintForParam,
+        inp: baml_client.types.NestedBlockConstraintForParam,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)

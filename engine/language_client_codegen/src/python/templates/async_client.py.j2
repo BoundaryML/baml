@@ -5,7 +5,7 @@ import os
 import baml_py
 from pydantic import BaseModel, ValidationError, create_model
 
-from . import partial_types, types
+from .. import baml_client
 from .types import Checked, Check
 from .type_builder import TypeBuilder
 from .parser import LlmResponseParser, LlmStreamParser
@@ -129,7 +129,7 @@ class BamlAsyncClient:
         collectors,
         env,
       )
-      return cast({{fn.return_type}}, raw.cast_to(types, types, partial_types, False))
+      return cast({{fn.return_type}}, raw.cast_to(baml_client.types, baml_client.types, baml_client.partial_types, False))
     {% endfor %}
 
 
@@ -177,8 +177,8 @@ class BamlStreamClient:
 
       return baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}](
         raw,
-        lambda x: cast({{fn.partial_return_type}}, x.cast_to(types, types, partial_types, True)),
-        lambda x: cast({{fn.return_type}}, x.cast_to(types, types, partial_types, False)),
+        lambda x: cast({{fn.partial_return_type}}, x.cast_to(baml_client.types, baml_client.types, baml_client.partial_types, True)),
+        lambda x: cast({{fn.return_type}}, x.cast_to(baml_client.types, baml_client.types, baml_client.partial_types, False)),
         self.__ctx_manager.get(),
       )
     {% endfor %}

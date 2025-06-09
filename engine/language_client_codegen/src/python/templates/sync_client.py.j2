@@ -6,7 +6,7 @@ import os
 import baml_py
 from pydantic import BaseModel, ValidationError, create_model
 
-from . import partial_types, types
+from .. import baml_client
 from .types import Checked, Check
 from .type_builder import TypeBuilder
 from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME

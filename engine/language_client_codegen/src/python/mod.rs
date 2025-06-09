@@ -277,14 +277,14 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .map(|e| e.item.attributes.get("dynamic_type").is_some())
                     .unwrap_or(false)
                 {
-                    format!("Union[types.{name}, str]")
+                    format!("Union[baml_client.types.{name}, str]")
                 } else {
-                    format!("types.{name}")
+                    format!("baml_client.types.{name}")
                 }
             }
             FieldType::Literal(value) => to_python_literal(value),
-            FieldType::RecursiveTypeAlias(name) => format!("types.{name}"),
-            FieldType::Class(name) => format!("types.{name}"),
+            FieldType::RecursiveTypeAlias(name) => format!("baml_client.types.{name}"),
+            FieldType::Class(name) => format!("baml_client.types.{name}"),
             FieldType::List(inner) => format!("List[{}]", inner.to_type_ref(ir)),
             FieldType::Map(key, value) => {
                 format!("Dict[{}, {}]", key.to_type_ref(ir), value.to_type_ref(ir))
@@ -330,9 +330,9 @@ impl ToTypeReferenceInClientDefinition for FieldType {
         let with_state = metadata.1.state;
         let constraints = metadata.0;
         let module_prefix = if is_partial_type {
-            "partial_types."
+            "baml_client.partial_types."
         } else {
-            "types."
+            "baml_client.types."
         };
 
         let base_rep = match &base_type {
@@ -347,9 +347,9 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     // wrap primitives in `Optional` when generating partial types,
                     // although we should probably only do this when `!needed`.
                     if false {
-                        format!("Union[types.{name}, str]")
+                        format!("Union[baml_client.types.{name}, str]")
                     } else {
-                        format!("Optional[Union[types.{name}, str]]")
+                        format!("Optional[Union[baml_client.types.{name}, str]]")
                     }
                 } else {
                     // Note: The `false` here preserves potentially bugged codegen
@@ -357,9 +357,9 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     // wrap primitives in `Optional` when generating partial types,
                     // although we should probably only do this when `!needed`.
                     if false {
-                        format!("types.{name}")
+                        format!("baml_client.types.{name}")
                     } else {
-                        format!("Optional[types.{name}]")
+                        format!("Optional[baml_client.types.{name}]")
                     }
                 }
             }
@@ -372,9 +372,9 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             }
             FieldType::RecursiveTypeAlias(name) => {
                 if needed {
-                    format!("types.{name}")
+                    format!("baml_client.types.{name}")
                 } else {
-                    format!("Optional[types.{name}]")
+                    format!("Optional[baml_client.types.{name}]")
                 }
             }
             FieldType::Literal(value) => {
