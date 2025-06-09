@@ -14,7 +14,7 @@
 # pylint: disable=unused-import,line-too-long
 # fmt: off
 
-"""Private internal Baml namespace."""
+"""Private internal Baml namespace and utilities."""
 
 import os
 from typing import TypedDict, Dict, Optional, Union, List
@@ -36,7 +36,7 @@ class BamlCallOptions(TypedDict, total=False):
 
 
 class BamlCallOptionsModApi(TypedDict, total=False):
-  """Additional parameters modular API calls (doesn't take a collector)."""
+  """Additional parameters for modular API calls (doesn't take a collector)."""
   tb: NotRequired[type_builder.TypeBuilder]
   client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
   env: NotRequired[Dict[str, Optional[str]]]
@@ -56,5 +56,4 @@ __all__ = [
   "types",
   "partial_types",
   "type_builder",
-  "parser",
 ]
