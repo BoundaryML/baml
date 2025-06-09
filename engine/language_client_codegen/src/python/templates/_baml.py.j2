@@ -1,9 +1,30 @@
 
 """Private internal Baml namespace."""
 
+from typing import TypedDict, Dict, Optional, Union, List
+from typing_extensions import NotRequired
+
+import baml_py
+
 from . import types
 from . import partial_types
 from . import type_builder
+
+
+class BamlCallOptions(TypedDict, total=False):
+  """Additional parameters for Baml function calls."""
+  tb: NotRequired[type_builder.TypeBuilder]
+  client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
+  collector: NotRequired[Union[baml_py.baml_py.Collector, List[baml_py.baml_py.Collector]]]
+  env: NotRequired[Dict[str, Optional[str]]]
+
+
+class BamlCallOptionsModApi(TypedDict, total=False):
+  """Additional parameters modular API calls (doesn't take a collector)."""
+  tb: NotRequired[type_builder.TypeBuilder]
+  client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
+  env: NotRequired[Dict[str, Optional[str]]]
+
 
 __all__ = [
   "types",

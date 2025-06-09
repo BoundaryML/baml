@@ -23,11 +23,6 @@ from . import _baml
 from .types import Checked, Check
 
 
-class BamlCallOptions(TypedDict, total=False):
-    tb: NotRequired[_baml.type_builder.TypeBuilder]
-    client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
-    env: NotRequired[Dict[str, Optional[str]]]
-
 def env_vars_to_dict(overrides: Dict[str, Optional[str]]) -> Dict[str, str]:
     base = os.environ.copy()
     for k, v in overrides.items():
@@ -49,7 +44,7 @@ class LlmResponseParser:
     def AaaSamOutputFormat(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.Recipe:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -78,7 +73,7 @@ class LlmResponseParser:
     def AliasThatPointsToRecursiveType(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.LinkedListAliasNode:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -107,7 +102,7 @@ class LlmResponseParser:
     def AliasWithMultipleAttrs(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Checked[int, Literal["gt_ten"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -136,7 +131,7 @@ class LlmResponseParser:
     def AliasedInputClass(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -165,7 +160,7 @@ class LlmResponseParser:
     def AliasedInputClass2(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -194,7 +189,7 @@ class LlmResponseParser:
     def AliasedInputClassNested(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -223,7 +218,7 @@ class LlmResponseParser:
     def AliasedInputEnum(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -252,7 +247,7 @@ class LlmResponseParser:
     def AliasedInputList(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -281,7 +276,7 @@ class LlmResponseParser:
     def AllowedOptionals(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.OptionalListAndMap:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -310,7 +305,7 @@ class LlmResponseParser:
     def AssertFn(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> int:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -339,7 +334,7 @@ class LlmResponseParser:
     def AudioInput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -368,7 +363,7 @@ class LlmResponseParser:
     def AudioInputOpenai(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -397,7 +392,7 @@ class LlmResponseParser:
     def BuildLinkedList(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.LinkedList:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -426,7 +421,7 @@ class LlmResponseParser:
     def BuildTree(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.Tree:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -455,7 +450,7 @@ class LlmResponseParser:
     def ClassThatPointsToRecursiveClassThroughAlias(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.ClassToRecAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -484,7 +479,7 @@ class LlmResponseParser:
     def ClassifyDynEnumTwo(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Union[_baml.types.DynEnumTwo, str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -513,7 +508,7 @@ class LlmResponseParser:
     def ClassifyMessage(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.Category:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -542,7 +537,7 @@ class LlmResponseParser:
     def ClassifyMessage2(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.Category:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -571,7 +566,7 @@ class LlmResponseParser:
     def ClassifyMessage3(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.Category:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -600,7 +595,7 @@ class LlmResponseParser:
     def Completion(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -629,7 +624,7 @@ class LlmResponseParser:
     def CustomTask(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Union[_baml.types.BookOrder, _baml.types.FlightConfirmation, _baml.types.GroceryReceipt]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -658,7 +653,7 @@ class LlmResponseParser:
     def DescribeImage(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -687,7 +682,7 @@ class LlmResponseParser:
     def DescribeImage2(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -716,7 +711,7 @@ class LlmResponseParser:
     def DescribeImage3(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -745,7 +740,7 @@ class LlmResponseParser:
     def DescribeImage4(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -774,7 +769,7 @@ class LlmResponseParser:
     def DescribeMedia1599(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -803,7 +798,7 @@ class LlmResponseParser:
     def DifferentiateUnions(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Union[_baml.types.OriginalA, _baml.types.OriginalB]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -832,7 +827,7 @@ class LlmResponseParser:
     def DummyOutputFunction(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.DummyOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -861,7 +856,7 @@ class LlmResponseParser:
     def DynamicFunc(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.DynamicClassTwo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -890,7 +885,7 @@ class LlmResponseParser:
     def DynamicInputOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.DynInputOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -919,7 +914,7 @@ class LlmResponseParser:
     def DynamicListInputOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[_baml.types.DynInputOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -948,7 +943,7 @@ class LlmResponseParser:
     def ExpectFailure(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -977,7 +972,7 @@ class LlmResponseParser:
     def ExtractContactInfo(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.ContactInfo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1006,7 +1001,7 @@ class LlmResponseParser:
     def ExtractEntities(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.DynamicSchema:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1035,7 +1030,7 @@ class LlmResponseParser:
     def ExtractHobby(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[Union[_baml.types.Hobby, str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1064,7 +1059,7 @@ class LlmResponseParser:
     def ExtractNames(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1093,7 +1088,7 @@ class LlmResponseParser:
     def ExtractPeople(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[_baml.types.Person]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1122,7 +1117,7 @@ class LlmResponseParser:
     def ExtractReceiptInfo(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.ReceiptInfo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1151,7 +1146,7 @@ class LlmResponseParser:
     def ExtractResume(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.Resume:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1180,7 +1175,7 @@ class LlmResponseParser:
     def ExtractResume2(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.Resume:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1209,7 +1204,7 @@ class LlmResponseParser:
     def FnClassOptionalOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[_baml.types.ClassOptionalOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1238,7 +1233,7 @@ class LlmResponseParser:
     def FnClassOptionalOutput2(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[_baml.types.ClassOptionalOutput2]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1267,7 +1262,7 @@ class LlmResponseParser:
     def FnEnumListOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[_baml.types.EnumOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1296,7 +1291,7 @@ class LlmResponseParser:
     def FnEnumOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.EnumOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1325,7 +1320,7 @@ class LlmResponseParser:
     def FnLiteralClassInputOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.LiteralClassHello:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1354,7 +1349,7 @@ class LlmResponseParser:
     def FnLiteralUnionClassInputOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Union[_baml.types.LiteralClassOne, _baml.types.LiteralClassTwo]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1383,7 +1378,7 @@ class LlmResponseParser:
     def FnNamedArgsSingleStringOptional(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1412,7 +1407,7 @@ class LlmResponseParser:
     def FnOutputBool(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> bool:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1441,7 +1436,7 @@ class LlmResponseParser:
     def FnOutputClass(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.TestOutputClass:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1470,7 +1465,7 @@ class LlmResponseParser:
     def FnOutputClassList(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[_baml.types.TestOutputClass]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1499,7 +1494,7 @@ class LlmResponseParser:
     def FnOutputClassNested(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.TestClassNested:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1528,7 +1523,7 @@ class LlmResponseParser:
     def FnOutputClassWithEnum(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.TestClassWithEnum:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1557,7 +1552,7 @@ class LlmResponseParser:
     def FnOutputInt(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> int:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1586,7 +1581,7 @@ class LlmResponseParser:
     def FnOutputLiteralBool(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Literal[False]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1615,7 +1610,7 @@ class LlmResponseParser:
     def FnOutputLiteralInt(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Literal[5]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1644,7 +1639,7 @@ class LlmResponseParser:
     def FnOutputLiteralString(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Literal["example output"]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1673,7 +1668,7 @@ class LlmResponseParser:
     def FnOutputStringList(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1702,7 +1697,7 @@ class LlmResponseParser:
     def FnTestAliasedEnumOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.TestEnum:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1731,7 +1726,7 @@ class LlmResponseParser:
     def FnTestClassAlias(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.TestClassAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1760,7 +1755,7 @@ class LlmResponseParser:
     def FnTestNamedArgsSingleEnum(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1789,7 +1784,7 @@ class LlmResponseParser:
     def GetDataType(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.RaysData:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1818,7 +1813,7 @@ class LlmResponseParser:
     def GetOrderInfo(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.OrderInfo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1847,7 +1842,7 @@ class LlmResponseParser:
     def GetQuery(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.SearchParams:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1876,7 +1871,7 @@ class LlmResponseParser:
     def InOutEnumMapKey(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Dict[_baml.types.MapKey, str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1905,7 +1900,7 @@ class LlmResponseParser:
     def InOutLiteralStringUnionMapKey(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1934,7 +1929,7 @@ class LlmResponseParser:
     def InOutSingleLiteralStringMapKey(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Dict[Literal["key"], str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1963,7 +1958,7 @@ class LlmResponseParser:
     def JsonTypeAliasCycle(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.JsonValue:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1992,7 +1987,7 @@ class LlmResponseParser:
     def LLMEcho(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2021,7 +2016,7 @@ class LlmResponseParser:
     def LiteralUnionsTest(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Union[Literal[1], Literal[True], Literal["string output"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2050,7 +2045,7 @@ class LlmResponseParser:
     def MakeBlockConstraint(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Checked[_baml.types.BlockConstraint, Literal["cross_field"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2079,7 +2074,7 @@ class LlmResponseParser:
     def MakeClassWithBlockDone(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.ClassWithBlockDone:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2108,7 +2103,7 @@ class LlmResponseParser:
     def MakeClassWithExternalDone(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.ClassWithoutDone:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2137,7 +2132,7 @@ class LlmResponseParser:
     def MakeNestedBlockConstraint(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.NestedBlockConstraint:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2166,7 +2161,7 @@ class LlmResponseParser:
     def MakeSemanticContainer(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.SemanticContainer:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2195,7 +2190,7 @@ class LlmResponseParser:
     def MapAlias(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Dict[str, List[str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2224,7 +2219,7 @@ class LlmResponseParser:
     def MergeAliasAttributes(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.MergeAttrs:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2253,7 +2248,7 @@ class LlmResponseParser:
     def MyFunc(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.DynamicOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2282,7 +2277,7 @@ class LlmResponseParser:
     def NestedAlias(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2311,7 +2306,7 @@ class LlmResponseParser:
     def NullLiteralClassHello(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.ClassForNullLiteral:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2340,7 +2335,7 @@ class LlmResponseParser:
     def OpenAIWithAnthropicResponseHello(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2369,7 +2364,7 @@ class LlmResponseParser:
     def OptionalTest_Function(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[Optional[_baml.types.OptionalTest_ReturnType]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2398,7 +2393,7 @@ class LlmResponseParser:
     def PredictAge(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.FooAny:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2427,7 +2422,7 @@ class LlmResponseParser:
     def PredictAgeBare(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Checked[int, Literal["too_big"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2456,7 +2451,7 @@ class LlmResponseParser:
     def PrimitiveAlias(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Union[int, str, bool, float]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2485,7 +2480,7 @@ class LlmResponseParser:
     def PromptTestClaude(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2514,7 +2509,7 @@ class LlmResponseParser:
     def PromptTestClaudeChat(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2543,7 +2538,7 @@ class LlmResponseParser:
     def PromptTestClaudeChatNoSystem(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2572,7 +2567,7 @@ class LlmResponseParser:
     def PromptTestOpenAI(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2601,7 +2596,7 @@ class LlmResponseParser:
     def PromptTestOpenAIChat(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2630,7 +2625,7 @@ class LlmResponseParser:
     def PromptTestOpenAIChatNoSystem(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2659,7 +2654,7 @@ class LlmResponseParser:
     def PromptTestStreaming(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2688,7 +2683,7 @@ class LlmResponseParser:
     def RecursiveAliasCycle(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.RecAliasOne:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2717,7 +2712,7 @@ class LlmResponseParser:
     def RecursiveClassWithAliasIndirection(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.NodeWithAliasIndirection:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2746,7 +2741,7 @@ class LlmResponseParser:
     def RecursiveUnionTest(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.RecursiveUnion:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2775,7 +2770,7 @@ class LlmResponseParser:
     def ReturnAliasWithMergedAttributes(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Checked[int, Literal["gt_ten"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2804,7 +2799,7 @@ class LlmResponseParser:
     def ReturnFailingAssert(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> int:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2833,7 +2828,7 @@ class LlmResponseParser:
     def ReturnJsonEntry(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.JsonTemplate:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2862,7 +2857,7 @@ class LlmResponseParser:
     def ReturnMalformedConstraints(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.MalformedConstraints:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2891,7 +2886,7 @@ class LlmResponseParser:
     def SchemaDescriptions(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.Schema:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2920,7 +2915,7 @@ class LlmResponseParser:
     def SimpleRecursiveListAlias(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.RecursiveListAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2949,7 +2944,7 @@ class LlmResponseParser:
     def SimpleRecursiveMapAlias(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.RecursiveMapAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2978,7 +2973,7 @@ class LlmResponseParser:
     def StreamBigNumbers(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.BigNumbers:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3007,7 +3002,7 @@ class LlmResponseParser:
     def StreamFailingAssertion(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.TwoStoriesOneTitle:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3036,7 +3031,7 @@ class LlmResponseParser:
     def StreamFailingCheck(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.TwoStoriesOneTitleCheck:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3065,7 +3060,7 @@ class LlmResponseParser:
     def StreamOneBigNumber(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> int:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3094,7 +3089,7 @@ class LlmResponseParser:
     def StreamUnionIntegers(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[Union[int, str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3123,7 +3118,7 @@ class LlmResponseParser:
     def StreamingCompoundNumbers(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.CompoundBigNumbers:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3152,7 +3147,7 @@ class LlmResponseParser:
     def StructureDocument1559(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.Document1559:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3181,7 +3176,7 @@ class LlmResponseParser:
     def TakeRecAliasDep(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.RecursiveAliasDependency:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3210,7 +3205,7 @@ class LlmResponseParser:
     def TellStory(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3239,7 +3234,7 @@ class LlmResponseParser:
     def TestAnthropic(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3268,7 +3263,7 @@ class LlmResponseParser:
     def TestAnthropicShorthand(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3297,7 +3292,7 @@ class LlmResponseParser:
     def TestAws(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3326,7 +3321,7 @@ class LlmResponseParser:
     def TestAwsClaude37(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3355,7 +3350,7 @@ class LlmResponseParser:
     def TestAwsInferenceProfile(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3384,7 +3379,7 @@ class LlmResponseParser:
     def TestAwsInvalidAccessKey(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3413,7 +3408,7 @@ class LlmResponseParser:
     def TestAwsInvalidProfile(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3442,7 +3437,7 @@ class LlmResponseParser:
     def TestAwsInvalidRegion(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3471,7 +3466,7 @@ class LlmResponseParser:
     def TestAwsInvalidSessionToken(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3500,7 +3495,7 @@ class LlmResponseParser:
     def TestAzure(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3529,7 +3524,7 @@ class LlmResponseParser:
     def TestAzureFailure(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3558,7 +3553,7 @@ class LlmResponseParser:
     def TestAzureO1NoMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3587,7 +3582,7 @@ class LlmResponseParser:
     def TestAzureO1WithMaxCompletionTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3616,7 +3611,7 @@ class LlmResponseParser:
     def TestAzureO1WithMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3645,7 +3640,7 @@ class LlmResponseParser:
     def TestAzureO3NoMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3674,7 +3669,7 @@ class LlmResponseParser:
     def TestAzureO3WithMaxCompletionTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3703,7 +3698,7 @@ class LlmResponseParser:
     def TestAzureWithMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3732,7 +3727,7 @@ class LlmResponseParser:
     def TestCaching(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3761,7 +3756,7 @@ class LlmResponseParser:
     def TestFallbackClient(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3790,7 +3785,7 @@ class LlmResponseParser:
     def TestFallbackStrategy(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3819,7 +3814,7 @@ class LlmResponseParser:
     def TestFallbackToShorthand(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3848,7 +3843,7 @@ class LlmResponseParser:
     def TestFnNamedArgsSingleBool(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3877,7 +3872,7 @@ class LlmResponseParser:
     def TestFnNamedArgsSingleClass(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3906,7 +3901,7 @@ class LlmResponseParser:
     def TestFnNamedArgsSingleEnumList(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3935,7 +3930,7 @@ class LlmResponseParser:
     def TestFnNamedArgsSingleFloat(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3964,7 +3959,7 @@ class LlmResponseParser:
     def TestFnNamedArgsSingleInt(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3993,7 +3988,7 @@ class LlmResponseParser:
     def TestFnNamedArgsSingleMapStringToClass(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Dict[str, _baml.types.StringToClassEntry]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4022,7 +4017,7 @@ class LlmResponseParser:
     def TestFnNamedArgsSingleMapStringToMap(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Dict[str, Dict[str, str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4051,7 +4046,7 @@ class LlmResponseParser:
     def TestFnNamedArgsSingleMapStringToString(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Dict[str, str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4080,7 +4075,7 @@ class LlmResponseParser:
     def TestFnNamedArgsSingleString(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4109,7 +4104,7 @@ class LlmResponseParser:
     def TestFnNamedArgsSingleStringArray(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4138,7 +4133,7 @@ class LlmResponseParser:
     def TestFnNamedArgsSingleStringList(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4167,7 +4162,7 @@ class LlmResponseParser:
     def TestGemini(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4196,7 +4191,7 @@ class LlmResponseParser:
     def TestGeminiOpenAiGeneric(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4225,7 +4220,7 @@ class LlmResponseParser:
     def TestGeminiSystem(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4254,7 +4249,7 @@ class LlmResponseParser:
     def TestGeminiSystemAsChat(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4283,7 +4278,7 @@ class LlmResponseParser:
     def TestGroq(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4312,7 +4307,7 @@ class LlmResponseParser:
     def TestImageInput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4341,7 +4336,7 @@ class LlmResponseParser:
     def TestImageInputAnthropic(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4370,7 +4365,7 @@ class LlmResponseParser:
     def TestImageListInput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4399,7 +4394,7 @@ class LlmResponseParser:
     def TestMemory(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.TestMemoryOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4428,7 +4423,7 @@ class LlmResponseParser:
     def TestMulticlassNamedArgs(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4457,7 +4452,7 @@ class LlmResponseParser:
     def TestNamedArgsLiteralBool(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4486,7 +4481,7 @@ class LlmResponseParser:
     def TestNamedArgsLiteralInt(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4515,7 +4510,7 @@ class LlmResponseParser:
     def TestNamedArgsLiteralString(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4544,7 +4539,7 @@ class LlmResponseParser:
     def TestOllama(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4573,7 +4568,7 @@ class LlmResponseParser:
     def TestOllamaHaiku(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.Haiku:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4602,7 +4597,7 @@ class LlmResponseParser:
     def TestOpenAI(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4631,7 +4626,7 @@ class LlmResponseParser:
     def TestOpenAIDummyClient(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4660,7 +4655,7 @@ class LlmResponseParser:
     def TestOpenAIGPT4oMini(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4689,7 +4684,7 @@ class LlmResponseParser:
     def TestOpenAILegacyProvider(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4718,7 +4713,7 @@ class LlmResponseParser:
     def TestOpenAIO1NoMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4747,7 +4742,7 @@ class LlmResponseParser:
     def TestOpenAIO1WithMaxCompletionTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4776,7 +4771,7 @@ class LlmResponseParser:
     def TestOpenAIO1WithMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4805,7 +4800,7 @@ class LlmResponseParser:
     def TestOpenAIShorthand(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4834,7 +4829,7 @@ class LlmResponseParser:
     def TestOpenAIWithFinishReasonError(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4863,7 +4858,7 @@ class LlmResponseParser:
     def TestOpenAIWithMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4892,7 +4887,7 @@ class LlmResponseParser:
     def TestOpenAIWithNullMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4921,7 +4916,7 @@ class LlmResponseParser:
     def TestOpenRouterMistralSmall3_1_24b(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4950,7 +4945,7 @@ class LlmResponseParser:
     def TestRetryConstant(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4979,7 +4974,7 @@ class LlmResponseParser:
     def TestRetryExponential(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5008,7 +5003,7 @@ class LlmResponseParser:
     def TestRoundRobinStrategy(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5037,7 +5032,7 @@ class LlmResponseParser:
     def TestSingleFallbackClient(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5066,7 +5061,7 @@ class LlmResponseParser:
     def TestThinking(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.CustomStory:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5095,7 +5090,7 @@ class LlmResponseParser:
     def TestUniverseQuestion(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.UniverseQuestion:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5124,7 +5119,7 @@ class LlmResponseParser:
     def TestVertex(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5153,7 +5148,7 @@ class LlmResponseParser:
     def TestVertexClaude(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5182,7 +5177,7 @@ class LlmResponseParser:
     def TestVertexWithSystemInstructions(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5211,7 +5206,7 @@ class LlmResponseParser:
     def UnionTest_Function(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.UnionTest_ReturnType:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5240,7 +5235,7 @@ class LlmResponseParser:
     def UseBlockConstraint(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> int:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5269,7 +5264,7 @@ class LlmResponseParser:
     def UseMaintainFieldOrder(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.MaintainFieldOrder:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5298,7 +5293,7 @@ class LlmResponseParser:
     def UseMalformedConstraints(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> int:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5327,7 +5322,7 @@ class LlmResponseParser:
     def UseNestedBlockConstraint(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> int:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5356,7 +5351,7 @@ class LlmResponseParser:
     def EchoWorkflow(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> str:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5396,7 +5391,7 @@ class LlmStreamParser:
     def AaaSamOutputFormat(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.Recipe:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5425,7 +5420,7 @@ class LlmStreamParser:
     def AliasThatPointsToRecursiveType(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.LinkedListAliasNode:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5454,7 +5449,7 @@ class LlmStreamParser:
     def AliasWithMultipleAttrs(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Checked[Optional[int], Literal["gt_ten"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5483,7 +5478,7 @@ class LlmStreamParser:
     def AliasedInputClass(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5512,7 +5507,7 @@ class LlmStreamParser:
     def AliasedInputClass2(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5541,7 +5536,7 @@ class LlmStreamParser:
     def AliasedInputClassNested(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5570,7 +5565,7 @@ class LlmStreamParser:
     def AliasedInputEnum(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5599,7 +5594,7 @@ class LlmStreamParser:
     def AliasedInputList(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5628,7 +5623,7 @@ class LlmStreamParser:
     def AllowedOptionals(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.OptionalListAndMap:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5657,7 +5652,7 @@ class LlmStreamParser:
     def AssertFn(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[int]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5686,7 +5681,7 @@ class LlmStreamParser:
     def AudioInput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5715,7 +5710,7 @@ class LlmStreamParser:
     def AudioInputOpenai(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5744,7 +5739,7 @@ class LlmStreamParser:
     def BuildLinkedList(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.LinkedList:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5773,7 +5768,7 @@ class LlmStreamParser:
     def BuildTree(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.Tree:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5802,7 +5797,7 @@ class LlmStreamParser:
     def ClassThatPointsToRecursiveClassThroughAlias(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.ClassToRecAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5831,7 +5826,7 @@ class LlmStreamParser:
     def ClassifyDynEnumTwo(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[Union[_baml.types.DynEnumTwo, str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5860,7 +5855,7 @@ class LlmStreamParser:
     def ClassifyMessage(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[_baml.types.Category]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5889,7 +5884,7 @@ class LlmStreamParser:
     def ClassifyMessage2(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[_baml.types.Category]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5918,7 +5913,7 @@ class LlmStreamParser:
     def ClassifyMessage3(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[_baml.types.Category]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5947,7 +5942,7 @@ class LlmStreamParser:
     def Completion(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5976,7 +5971,7 @@ class LlmStreamParser:
     def CustomTask(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[Union[_baml.partial_types.BookOrder, _baml.partial_types.FlightConfirmation, _baml.partial_types.GroceryReceipt]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6005,7 +6000,7 @@ class LlmStreamParser:
     def DescribeImage(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6034,7 +6029,7 @@ class LlmStreamParser:
     def DescribeImage2(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6063,7 +6058,7 @@ class LlmStreamParser:
     def DescribeImage3(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6092,7 +6087,7 @@ class LlmStreamParser:
     def DescribeImage4(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6121,7 +6116,7 @@ class LlmStreamParser:
     def DescribeMedia1599(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6150,7 +6145,7 @@ class LlmStreamParser:
     def DifferentiateUnions(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[Union[_baml.partial_types.OriginalA, _baml.partial_types.OriginalB]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6179,7 +6174,7 @@ class LlmStreamParser:
     def DummyOutputFunction(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.DummyOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6208,7 +6203,7 @@ class LlmStreamParser:
     def DynamicFunc(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.DynamicClassTwo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6237,7 +6232,7 @@ class LlmStreamParser:
     def DynamicInputOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.DynInputOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6266,7 +6261,7 @@ class LlmStreamParser:
     def DynamicListInputOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[_baml.partial_types.DynInputOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6295,7 +6290,7 @@ class LlmStreamParser:
     def ExpectFailure(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6324,7 +6319,7 @@ class LlmStreamParser:
     def ExtractContactInfo(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.ContactInfo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6353,7 +6348,7 @@ class LlmStreamParser:
     def ExtractEntities(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.DynamicSchema:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6382,7 +6377,7 @@ class LlmStreamParser:
     def ExtractHobby(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[Optional[Union[_baml.types.Hobby, str]]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6411,7 +6406,7 @@ class LlmStreamParser:
     def ExtractNames(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[Optional[str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6440,7 +6435,7 @@ class LlmStreamParser:
     def ExtractPeople(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[_baml.partial_types.Person]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6469,7 +6464,7 @@ class LlmStreamParser:
     def ExtractReceiptInfo(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.ReceiptInfo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6498,7 +6493,7 @@ class LlmStreamParser:
     def ExtractResume(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.Resume:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6527,7 +6522,7 @@ class LlmStreamParser:
     def ExtractResume2(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.Resume:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6556,7 +6551,7 @@ class LlmStreamParser:
     def FnClassOptionalOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[_baml.partial_types.ClassOptionalOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6585,7 +6580,7 @@ class LlmStreamParser:
     def FnClassOptionalOutput2(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[_baml.partial_types.ClassOptionalOutput2]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6614,7 +6609,7 @@ class LlmStreamParser:
     def FnEnumListOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[Optional[_baml.types.EnumOutput]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6643,7 +6638,7 @@ class LlmStreamParser:
     def FnEnumOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[_baml.types.EnumOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6672,7 +6667,7 @@ class LlmStreamParser:
     def FnLiteralClassInputOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.LiteralClassHello:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6701,7 +6696,7 @@ class LlmStreamParser:
     def FnLiteralUnionClassInputOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[Union[_baml.partial_types.LiteralClassOne, _baml.partial_types.LiteralClassTwo]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6730,7 +6725,7 @@ class LlmStreamParser:
     def FnNamedArgsSingleStringOptional(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6759,7 +6754,7 @@ class LlmStreamParser:
     def FnOutputBool(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[bool]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6788,7 +6783,7 @@ class LlmStreamParser:
     def FnOutputClass(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.TestOutputClass:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6817,7 +6812,7 @@ class LlmStreamParser:
     def FnOutputClassList(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[_baml.partial_types.TestOutputClass]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6846,7 +6841,7 @@ class LlmStreamParser:
     def FnOutputClassNested(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.TestClassNested:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6875,7 +6870,7 @@ class LlmStreamParser:
     def FnOutputClassWithEnum(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.TestClassWithEnum:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6904,7 +6899,7 @@ class LlmStreamParser:
     def FnOutputInt(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[int]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6933,7 +6928,7 @@ class LlmStreamParser:
     def FnOutputLiteralBool(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[Literal[False]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6962,7 +6957,7 @@ class LlmStreamParser:
     def FnOutputLiteralInt(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[Literal[5]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6991,7 +6986,7 @@ class LlmStreamParser:
     def FnOutputLiteralString(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[Literal["example output"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7020,7 +7015,7 @@ class LlmStreamParser:
     def FnOutputStringList(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[Optional[str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7049,7 +7044,7 @@ class LlmStreamParser:
     def FnTestAliasedEnumOutput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[_baml.types.TestEnum]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7078,7 +7073,7 @@ class LlmStreamParser:
     def FnTestClassAlias(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.TestClassAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7107,7 +7102,7 @@ class LlmStreamParser:
     def FnTestNamedArgsSingleEnum(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7136,7 +7131,7 @@ class LlmStreamParser:
     def GetDataType(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.RaysData:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7165,7 +7160,7 @@ class LlmStreamParser:
     def GetOrderInfo(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.OrderInfo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7194,7 +7189,7 @@ class LlmStreamParser:
     def GetQuery(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.SearchParams:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7223,7 +7218,7 @@ class LlmStreamParser:
     def InOutEnumMapKey(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Dict[_baml.types.MapKey, Optional[str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7252,7 +7247,7 @@ class LlmStreamParser:
     def InOutLiteralStringUnionMapKey(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], Optional[str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7281,7 +7276,7 @@ class LlmStreamParser:
     def InOutSingleLiteralStringMapKey(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Dict[Literal["key"], Optional[str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7310,7 +7305,7 @@ class LlmStreamParser:
     def JsonTypeAliasCycle(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.JsonValue:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7339,7 +7334,7 @@ class LlmStreamParser:
     def LLMEcho(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7368,7 +7363,7 @@ class LlmStreamParser:
     def LiteralUnionsTest(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[Union[Optional[Literal[1]], Optional[Literal[True]], Optional[Literal["string output"]]]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7397,7 +7392,7 @@ class LlmStreamParser:
     def MakeBlockConstraint(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Checked[_baml.partial_types.BlockConstraint, Literal["cross_field"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7426,7 +7421,7 @@ class LlmStreamParser:
     def MakeClassWithBlockDone(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.ClassWithBlockDone:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7455,7 +7450,7 @@ class LlmStreamParser:
     def MakeClassWithExternalDone(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.ClassWithoutDone:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7484,7 +7479,7 @@ class LlmStreamParser:
     def MakeNestedBlockConstraint(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.NestedBlockConstraint:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7513,7 +7508,7 @@ class LlmStreamParser:
     def MakeSemanticContainer(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.SemanticContainer:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7542,7 +7537,7 @@ class LlmStreamParser:
     def MapAlias(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Dict[str, List[Optional[str]]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7571,7 +7566,7 @@ class LlmStreamParser:
     def MergeAliasAttributes(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.MergeAttrs:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7600,7 +7595,7 @@ class LlmStreamParser:
     def MyFunc(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.DynamicOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7629,7 +7624,7 @@ class LlmStreamParser:
     def NestedAlias(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[Union[Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]], List[Optional[str]], Dict[str, List[Optional[str]]]]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7658,7 +7653,7 @@ class LlmStreamParser:
     def NullLiteralClassHello(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.ClassForNullLiteral:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7687,7 +7682,7 @@ class LlmStreamParser:
     def OpenAIWithAnthropicResponseHello(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7716,7 +7711,7 @@ class LlmStreamParser:
     def OptionalTest_Function(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[Optional[_baml.partial_types.OptionalTest_ReturnType]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7745,7 +7740,7 @@ class LlmStreamParser:
     def PredictAge(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.FooAny:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7774,7 +7769,7 @@ class LlmStreamParser:
     def PredictAgeBare(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Checked[Optional[int], Literal["too_big"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7803,7 +7798,7 @@ class LlmStreamParser:
     def PrimitiveAlias(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[Union[Optional[int], Optional[str], Optional[bool], Optional[float]]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7832,7 +7827,7 @@ class LlmStreamParser:
     def PromptTestClaude(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7861,7 +7856,7 @@ class LlmStreamParser:
     def PromptTestClaudeChat(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7890,7 +7885,7 @@ class LlmStreamParser:
     def PromptTestClaudeChatNoSystem(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7919,7 +7914,7 @@ class LlmStreamParser:
     def PromptTestOpenAI(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7948,7 +7943,7 @@ class LlmStreamParser:
     def PromptTestOpenAIChat(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7977,7 +7972,7 @@ class LlmStreamParser:
     def PromptTestOpenAIChatNoSystem(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8006,7 +8001,7 @@ class LlmStreamParser:
     def PromptTestStreaming(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8035,7 +8030,7 @@ class LlmStreamParser:
     def RecursiveAliasCycle(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.RecAliasOne:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8064,7 +8059,7 @@ class LlmStreamParser:
     def RecursiveClassWithAliasIndirection(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.NodeWithAliasIndirection:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8093,7 +8088,7 @@ class LlmStreamParser:
     def RecursiveUnionTest(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.RecursiveUnion:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8122,7 +8117,7 @@ class LlmStreamParser:
     def ReturnAliasWithMergedAttributes(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Checked[Optional[int], Literal["gt_ten"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8151,7 +8146,7 @@ class LlmStreamParser:
     def ReturnFailingAssert(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[int]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8180,7 +8175,7 @@ class LlmStreamParser:
     def ReturnJsonEntry(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.JsonTemplate:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8209,7 +8204,7 @@ class LlmStreamParser:
     def ReturnMalformedConstraints(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.MalformedConstraints:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8238,7 +8233,7 @@ class LlmStreamParser:
     def SchemaDescriptions(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.Schema:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8267,7 +8262,7 @@ class LlmStreamParser:
     def SimpleRecursiveListAlias(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.RecursiveListAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8296,7 +8291,7 @@ class LlmStreamParser:
     def SimpleRecursiveMapAlias(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.types.RecursiveMapAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8325,7 +8320,7 @@ class LlmStreamParser:
     def StreamBigNumbers(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.BigNumbers:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8354,7 +8349,7 @@ class LlmStreamParser:
     def StreamFailingAssertion(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.TwoStoriesOneTitle:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8383,7 +8378,7 @@ class LlmStreamParser:
     def StreamFailingCheck(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.TwoStoriesOneTitleCheck:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8412,7 +8407,7 @@ class LlmStreamParser:
     def StreamOneBigNumber(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[int]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8441,7 +8436,7 @@ class LlmStreamParser:
     def StreamUnionIntegers(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[Optional[Union[Optional[int], Optional[str]]]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8470,7 +8465,7 @@ class LlmStreamParser:
     def StreamingCompoundNumbers(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.CompoundBigNumbers:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8499,7 +8494,7 @@ class LlmStreamParser:
     def StructureDocument1559(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.Document1559:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8528,7 +8523,7 @@ class LlmStreamParser:
     def TakeRecAliasDep(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.RecursiveAliasDependency:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8557,7 +8552,7 @@ class LlmStreamParser:
     def TellStory(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8586,7 +8581,7 @@ class LlmStreamParser:
     def TestAnthropic(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8615,7 +8610,7 @@ class LlmStreamParser:
     def TestAnthropicShorthand(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8644,7 +8639,7 @@ class LlmStreamParser:
     def TestAws(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8673,7 +8668,7 @@ class LlmStreamParser:
     def TestAwsClaude37(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8702,7 +8697,7 @@ class LlmStreamParser:
     def TestAwsInferenceProfile(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8731,7 +8726,7 @@ class LlmStreamParser:
     def TestAwsInvalidAccessKey(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8760,7 +8755,7 @@ class LlmStreamParser:
     def TestAwsInvalidProfile(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8789,7 +8784,7 @@ class LlmStreamParser:
     def TestAwsInvalidRegion(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8818,7 +8813,7 @@ class LlmStreamParser:
     def TestAwsInvalidSessionToken(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8847,7 +8842,7 @@ class LlmStreamParser:
     def TestAzure(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8876,7 +8871,7 @@ class LlmStreamParser:
     def TestAzureFailure(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8905,7 +8900,7 @@ class LlmStreamParser:
     def TestAzureO1NoMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8934,7 +8929,7 @@ class LlmStreamParser:
     def TestAzureO1WithMaxCompletionTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8963,7 +8958,7 @@ class LlmStreamParser:
     def TestAzureO1WithMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8992,7 +8987,7 @@ class LlmStreamParser:
     def TestAzureO3NoMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9021,7 +9016,7 @@ class LlmStreamParser:
     def TestAzureO3WithMaxCompletionTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9050,7 +9045,7 @@ class LlmStreamParser:
     def TestAzureWithMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9079,7 +9074,7 @@ class LlmStreamParser:
     def TestCaching(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9108,7 +9103,7 @@ class LlmStreamParser:
     def TestFallbackClient(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9137,7 +9132,7 @@ class LlmStreamParser:
     def TestFallbackStrategy(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9166,7 +9161,7 @@ class LlmStreamParser:
     def TestFallbackToShorthand(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9195,7 +9190,7 @@ class LlmStreamParser:
     def TestFnNamedArgsSingleBool(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9224,7 +9219,7 @@ class LlmStreamParser:
     def TestFnNamedArgsSingleClass(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9253,7 +9248,7 @@ class LlmStreamParser:
     def TestFnNamedArgsSingleEnumList(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9282,7 +9277,7 @@ class LlmStreamParser:
     def TestFnNamedArgsSingleFloat(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9311,7 +9306,7 @@ class LlmStreamParser:
     def TestFnNamedArgsSingleInt(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9340,7 +9335,7 @@ class LlmStreamParser:
     def TestFnNamedArgsSingleMapStringToClass(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Dict[str, _baml.partial_types.StringToClassEntry]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9369,7 +9364,7 @@ class LlmStreamParser:
     def TestFnNamedArgsSingleMapStringToMap(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Dict[str, Dict[str, Optional[str]]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9398,7 +9393,7 @@ class LlmStreamParser:
     def TestFnNamedArgsSingleMapStringToString(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Dict[str, Optional[str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9427,7 +9422,7 @@ class LlmStreamParser:
     def TestFnNamedArgsSingleString(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9456,7 +9451,7 @@ class LlmStreamParser:
     def TestFnNamedArgsSingleStringArray(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9485,7 +9480,7 @@ class LlmStreamParser:
     def TestFnNamedArgsSingleStringList(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> List[Optional[str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9514,7 +9509,7 @@ class LlmStreamParser:
     def TestGemini(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9543,7 +9538,7 @@ class LlmStreamParser:
     def TestGeminiOpenAiGeneric(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9572,7 +9567,7 @@ class LlmStreamParser:
     def TestGeminiSystem(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9601,7 +9596,7 @@ class LlmStreamParser:
     def TestGeminiSystemAsChat(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9630,7 +9625,7 @@ class LlmStreamParser:
     def TestGroq(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9659,7 +9654,7 @@ class LlmStreamParser:
     def TestImageInput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9688,7 +9683,7 @@ class LlmStreamParser:
     def TestImageInputAnthropic(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9717,7 +9712,7 @@ class LlmStreamParser:
     def TestImageListInput(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9746,7 +9741,7 @@ class LlmStreamParser:
     def TestMemory(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.TestMemoryOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9775,7 +9770,7 @@ class LlmStreamParser:
     def TestMulticlassNamedArgs(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9804,7 +9799,7 @@ class LlmStreamParser:
     def TestNamedArgsLiteralBool(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9833,7 +9828,7 @@ class LlmStreamParser:
     def TestNamedArgsLiteralInt(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9862,7 +9857,7 @@ class LlmStreamParser:
     def TestNamedArgsLiteralString(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9891,7 +9886,7 @@ class LlmStreamParser:
     def TestOllama(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9920,7 +9915,7 @@ class LlmStreamParser:
     def TestOllamaHaiku(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.Haiku:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9949,7 +9944,7 @@ class LlmStreamParser:
     def TestOpenAI(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9978,7 +9973,7 @@ class LlmStreamParser:
     def TestOpenAIDummyClient(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10007,7 +10002,7 @@ class LlmStreamParser:
     def TestOpenAIGPT4oMini(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10036,7 +10031,7 @@ class LlmStreamParser:
     def TestOpenAILegacyProvider(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10065,7 +10060,7 @@ class LlmStreamParser:
     def TestOpenAIO1NoMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10094,7 +10089,7 @@ class LlmStreamParser:
     def TestOpenAIO1WithMaxCompletionTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10123,7 +10118,7 @@ class LlmStreamParser:
     def TestOpenAIO1WithMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10152,7 +10147,7 @@ class LlmStreamParser:
     def TestOpenAIShorthand(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10181,7 +10176,7 @@ class LlmStreamParser:
     def TestOpenAIWithFinishReasonError(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10210,7 +10205,7 @@ class LlmStreamParser:
     def TestOpenAIWithMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10239,7 +10234,7 @@ class LlmStreamParser:
     def TestOpenAIWithNullMaxTokens(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10268,7 +10263,7 @@ class LlmStreamParser:
     def TestOpenRouterMistralSmall3_1_24b(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10297,7 +10292,7 @@ class LlmStreamParser:
     def TestRetryConstant(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10326,7 +10321,7 @@ class LlmStreamParser:
     def TestRetryExponential(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10355,7 +10350,7 @@ class LlmStreamParser:
     def TestRoundRobinStrategy(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10384,7 +10379,7 @@ class LlmStreamParser:
     def TestSingleFallbackClient(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10413,7 +10408,7 @@ class LlmStreamParser:
     def TestThinking(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.CustomStory:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10442,7 +10437,7 @@ class LlmStreamParser:
     def TestUniverseQuestion(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.UniverseQuestion:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10471,7 +10466,7 @@ class LlmStreamParser:
     def TestVertex(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10500,7 +10495,7 @@ class LlmStreamParser:
     def TestVertexClaude(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10529,7 +10524,7 @@ class LlmStreamParser:
     def TestVertexWithSystemInstructions(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10558,7 +10553,7 @@ class LlmStreamParser:
     def UnionTest_Function(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.UnionTest_ReturnType:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10587,7 +10582,7 @@ class LlmStreamParser:
     def UseBlockConstraint(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[int]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10616,7 +10611,7 @@ class LlmStreamParser:
     def UseMaintainFieldOrder(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> _baml.partial_types.MaintainFieldOrder:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10645,7 +10640,7 @@ class LlmStreamParser:
     def UseMalformedConstraints(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[int]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10674,7 +10669,7 @@ class LlmStreamParser:
     def UseNestedBlockConstraint(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[int]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -10703,7 +10698,7 @@ class LlmStreamParser:
     def EchoWorkflow(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> Optional[str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:

@@ -23,11 +23,6 @@ from . import _baml
 from .types import Checked, Check
 
 
-class BamlCallOptions(TypedDict, total=False):
-    tb: NotRequired[_baml.type_builder.TypeBuilder]
-    client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
-    env: NotRequired[Dict[str, Optional[str]]]
-
 def env_vars_to_dict(overrides: Dict[str, Optional[str]]) -> Dict[str, str]:
     base = os.environ.copy()
     for k, v in overrides.items():
@@ -49,7 +44,7 @@ class AsyncHttpRequest:
     async def AaaSamOutputFormat(
         self,
         recipe: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -74,7 +69,7 @@ class AsyncHttpRequest:
     async def AliasThatPointsToRecursiveType(
         self,
         data: _baml.types.LinkedListAliasNode,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -99,7 +94,7 @@ class AsyncHttpRequest:
     async def AliasWithMultipleAttrs(
         self,
         money: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -124,7 +119,7 @@ class AsyncHttpRequest:
     async def AliasedInputClass(
         self,
         input: _baml.types.InputClass,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -149,7 +144,7 @@ class AsyncHttpRequest:
     async def AliasedInputClass2(
         self,
         input: _baml.types.InputClass,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -174,7 +169,7 @@ class AsyncHttpRequest:
     async def AliasedInputClassNested(
         self,
         input: _baml.types.InputClassNested,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -199,7 +194,7 @@ class AsyncHttpRequest:
     async def AliasedInputEnum(
         self,
         input: _baml.types.AliasedEnum,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -224,7 +219,7 @@ class AsyncHttpRequest:
     async def AliasedInputList(
         self,
         input: List[_baml.types.AliasedEnum],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -249,7 +244,7 @@ class AsyncHttpRequest:
     async def AllowedOptionals(
         self,
         optionals: _baml.types.OptionalListAndMap,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -274,7 +269,7 @@ class AsyncHttpRequest:
     async def AssertFn(
         self,
         a: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -299,7 +294,7 @@ class AsyncHttpRequest:
     async def AudioInput(
         self,
         aud: baml_py.Audio,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -324,7 +319,7 @@ class AsyncHttpRequest:
     async def AudioInputOpenai(
         self,
         aud: baml_py.Audio,prompt: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -350,7 +345,7 @@ class AsyncHttpRequest:
     async def BuildLinkedList(
         self,
         input: List[int],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -375,7 +370,7 @@ class AsyncHttpRequest:
     async def BuildTree(
         self,
         input: _baml.types.BinaryNode,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -400,7 +395,7 @@ class AsyncHttpRequest:
     async def ClassThatPointsToRecursiveClassThroughAlias(
         self,
         cls: _baml.types.ClassToRecAlias,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -425,7 +420,7 @@ class AsyncHttpRequest:
     async def ClassifyDynEnumTwo(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -450,7 +445,7 @@ class AsyncHttpRequest:
     async def ClassifyMessage(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -475,7 +470,7 @@ class AsyncHttpRequest:
     async def ClassifyMessage2(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -500,7 +495,7 @@ class AsyncHttpRequest:
     async def ClassifyMessage3(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -525,7 +520,7 @@ class AsyncHttpRequest:
     async def Completion(
         self,
         prefix: str,suffix: str,language: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -552,7 +547,7 @@ class AsyncHttpRequest:
     async def CustomTask(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -577,7 +572,7 @@ class AsyncHttpRequest:
     async def DescribeImage(
         self,
         img: baml_py.Image,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -602,7 +597,7 @@ class AsyncHttpRequest:
     async def DescribeImage2(
         self,
         classWithImage: _baml.types.ClassWithImage,img2: baml_py.Image,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -628,7 +623,7 @@ class AsyncHttpRequest:
     async def DescribeImage3(
         self,
         classWithImage: _baml.types.ClassWithImage,img2: baml_py.Image,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -654,7 +649,7 @@ class AsyncHttpRequest:
     async def DescribeImage4(
         self,
         classWithImage: _baml.types.ClassWithImage,img2: baml_py.Image,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -680,7 +675,7 @@ class AsyncHttpRequest:
     async def DescribeMedia1599(
         self,
         img: baml_py.Image,client_sector: str,client_name: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -707,7 +702,7 @@ class AsyncHttpRequest:
     async def DifferentiateUnions(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -731,7 +726,7 @@ class AsyncHttpRequest:
     async def DummyOutputFunction(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -756,7 +751,7 @@ class AsyncHttpRequest:
     async def DynamicFunc(
         self,
         input: _baml.types.DynamicClassOne,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -781,7 +776,7 @@ class AsyncHttpRequest:
     async def DynamicInputOutput(
         self,
         input: _baml.types.DynInputOutput,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -806,7 +801,7 @@ class AsyncHttpRequest:
     async def DynamicListInputOutput(
         self,
         input: List[_baml.types.DynInputOutput],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -831,7 +826,7 @@ class AsyncHttpRequest:
     async def ExpectFailure(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -855,7 +850,7 @@ class AsyncHttpRequest:
     async def ExtractContactInfo(
         self,
         document: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -880,7 +875,7 @@ class AsyncHttpRequest:
     async def ExtractEntities(
         self,
         text: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -905,7 +900,7 @@ class AsyncHttpRequest:
     async def ExtractHobby(
         self,
         text: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -930,7 +925,7 @@ class AsyncHttpRequest:
     async def ExtractNames(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -955,7 +950,7 @@ class AsyncHttpRequest:
     async def ExtractPeople(
         self,
         text: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -980,7 +975,7 @@ class AsyncHttpRequest:
     async def ExtractReceiptInfo(
         self,
         email: str,reason: Union[Literal["curiosity"], Literal["personal_finance"]],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1006,7 +1001,7 @@ class AsyncHttpRequest:
     async def ExtractResume(
         self,
         resume: str,img: Optional[baml_py.Image],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1032,7 +1027,7 @@ class AsyncHttpRequest:
     async def ExtractResume2(
         self,
         resume: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1057,7 +1052,7 @@ class AsyncHttpRequest:
     async def FnClassOptionalOutput(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1082,7 +1077,7 @@ class AsyncHttpRequest:
     async def FnClassOptionalOutput2(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1107,7 +1102,7 @@ class AsyncHttpRequest:
     async def FnEnumListOutput(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1132,7 +1127,7 @@ class AsyncHttpRequest:
     async def FnEnumOutput(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1157,7 +1152,7 @@ class AsyncHttpRequest:
     async def FnLiteralClassInputOutput(
         self,
         input: _baml.types.LiteralClassHello,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1182,7 +1177,7 @@ class AsyncHttpRequest:
     async def FnLiteralUnionClassInputOutput(
         self,
         input: Union[_baml.types.LiteralClassOne, _baml.types.LiteralClassTwo],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1207,7 +1202,7 @@ class AsyncHttpRequest:
     async def FnNamedArgsSingleStringOptional(
         self,
         myString: Optional[str],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1232,7 +1227,7 @@ class AsyncHttpRequest:
     async def FnOutputBool(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1257,7 +1252,7 @@ class AsyncHttpRequest:
     async def FnOutputClass(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1282,7 +1277,7 @@ class AsyncHttpRequest:
     async def FnOutputClassList(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1307,7 +1302,7 @@ class AsyncHttpRequest:
     async def FnOutputClassNested(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1332,7 +1327,7 @@ class AsyncHttpRequest:
     async def FnOutputClassWithEnum(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1357,7 +1352,7 @@ class AsyncHttpRequest:
     async def FnOutputInt(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1382,7 +1377,7 @@ class AsyncHttpRequest:
     async def FnOutputLiteralBool(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1407,7 +1402,7 @@ class AsyncHttpRequest:
     async def FnOutputLiteralInt(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1432,7 +1427,7 @@ class AsyncHttpRequest:
     async def FnOutputLiteralString(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1457,7 +1452,7 @@ class AsyncHttpRequest:
     async def FnOutputStringList(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1482,7 +1477,7 @@ class AsyncHttpRequest:
     async def FnTestAliasedEnumOutput(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1507,7 +1502,7 @@ class AsyncHttpRequest:
     async def FnTestClassAlias(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1532,7 +1527,7 @@ class AsyncHttpRequest:
     async def FnTestNamedArgsSingleEnum(
         self,
         myArg: _baml.types.NamedArgsSingleEnum,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1557,7 +1552,7 @@ class AsyncHttpRequest:
     async def GetDataType(
         self,
         text: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1582,7 +1577,7 @@ class AsyncHttpRequest:
     async def GetOrderInfo(
         self,
         email: _baml.types.Email,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1607,7 +1602,7 @@ class AsyncHttpRequest:
     async def GetQuery(
         self,
         query: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1632,7 +1627,7 @@ class AsyncHttpRequest:
     async def InOutEnumMapKey(
         self,
         i1: Dict[_baml.types.MapKey, str],i2: Dict[_baml.types.MapKey, str],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1658,7 +1653,7 @@ class AsyncHttpRequest:
     async def InOutLiteralStringUnionMapKey(
         self,
         i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1684,7 +1679,7 @@ class AsyncHttpRequest:
     async def InOutSingleLiteralStringMapKey(
         self,
         m: Dict[Literal["key"], str],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1709,7 +1704,7 @@ class AsyncHttpRequest:
     async def JsonTypeAliasCycle(
         self,
         input: _baml.types.JsonValue,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1734,7 +1729,7 @@ class AsyncHttpRequest:
     async def LLMEcho(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1759,7 +1754,7 @@ class AsyncHttpRequest:
     async def LiteralUnionsTest(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1784,7 +1779,7 @@ class AsyncHttpRequest:
     async def MakeBlockConstraint(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1808,7 +1803,7 @@ class AsyncHttpRequest:
     async def MakeClassWithBlockDone(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1832,7 +1827,7 @@ class AsyncHttpRequest:
     async def MakeClassWithExternalDone(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1856,7 +1851,7 @@ class AsyncHttpRequest:
     async def MakeNestedBlockConstraint(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1880,7 +1875,7 @@ class AsyncHttpRequest:
     async def MakeSemanticContainer(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1904,7 +1899,7 @@ class AsyncHttpRequest:
     async def MapAlias(
         self,
         m: Dict[str, List[str]],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1929,7 +1924,7 @@ class AsyncHttpRequest:
     async def MergeAliasAttributes(
         self,
         money: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1954,7 +1949,7 @@ class AsyncHttpRequest:
     async def MyFunc(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -1979,7 +1974,7 @@ class AsyncHttpRequest:
     async def NestedAlias(
         self,
         c: Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2004,7 +1999,7 @@ class AsyncHttpRequest:
     async def NullLiteralClassHello(
         self,
         s: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2029,7 +2024,7 @@ class AsyncHttpRequest:
     async def OpenAIWithAnthropicResponseHello(
         self,
         s: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2054,7 +2049,7 @@ class AsyncHttpRequest:
     async def OptionalTest_Function(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2079,7 +2074,7 @@ class AsyncHttpRequest:
     async def PredictAge(
         self,
         name: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2104,7 +2099,7 @@ class AsyncHttpRequest:
     async def PredictAgeBare(
         self,
         inp: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2129,7 +2124,7 @@ class AsyncHttpRequest:
     async def PrimitiveAlias(
         self,
         p: Union[int, str, bool, float],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2154,7 +2149,7 @@ class AsyncHttpRequest:
     async def PromptTestClaude(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2179,7 +2174,7 @@ class AsyncHttpRequest:
     async def PromptTestClaudeChat(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2204,7 +2199,7 @@ class AsyncHttpRequest:
     async def PromptTestClaudeChatNoSystem(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2229,7 +2224,7 @@ class AsyncHttpRequest:
     async def PromptTestOpenAI(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2254,7 +2249,7 @@ class AsyncHttpRequest:
     async def PromptTestOpenAIChat(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2279,7 +2274,7 @@ class AsyncHttpRequest:
     async def PromptTestOpenAIChatNoSystem(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2304,7 +2299,7 @@ class AsyncHttpRequest:
     async def PromptTestStreaming(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2329,7 +2324,7 @@ class AsyncHttpRequest:
     async def RecursiveAliasCycle(
         self,
         input: _baml.types.RecAliasOne,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2354,7 +2349,7 @@ class AsyncHttpRequest:
     async def RecursiveClassWithAliasIndirection(
         self,
         cls: _baml.types.NodeWithAliasIndirection,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2379,7 +2374,7 @@ class AsyncHttpRequest:
     async def RecursiveUnionTest(
         self,
         input: _baml.types.RecursiveUnion,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2404,7 +2399,7 @@ class AsyncHttpRequest:
     async def ReturnAliasWithMergedAttributes(
         self,
         money: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2429,7 +2424,7 @@ class AsyncHttpRequest:
     async def ReturnFailingAssert(
         self,
         inp: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2454,7 +2449,7 @@ class AsyncHttpRequest:
     async def ReturnJsonEntry(
         self,
         s: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2479,7 +2474,7 @@ class AsyncHttpRequest:
     async def ReturnMalformedConstraints(
         self,
         a: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2504,7 +2499,7 @@ class AsyncHttpRequest:
     async def SchemaDescriptions(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2529,7 +2524,7 @@ class AsyncHttpRequest:
     async def SimpleRecursiveListAlias(
         self,
         input: _baml.types.RecursiveListAlias,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2554,7 +2549,7 @@ class AsyncHttpRequest:
     async def SimpleRecursiveMapAlias(
         self,
         input: _baml.types.RecursiveMapAlias,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2579,7 +2574,7 @@ class AsyncHttpRequest:
     async def StreamBigNumbers(
         self,
         digits: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2604,7 +2599,7 @@ class AsyncHttpRequest:
     async def StreamFailingAssertion(
         self,
         theme: str,length: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2630,7 +2625,7 @@ class AsyncHttpRequest:
     async def StreamFailingCheck(
         self,
         theme: str,length: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2656,7 +2651,7 @@ class AsyncHttpRequest:
     async def StreamOneBigNumber(
         self,
         digits: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2681,7 +2676,7 @@ class AsyncHttpRequest:
     async def StreamUnionIntegers(
         self,
         digits: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2706,7 +2701,7 @@ class AsyncHttpRequest:
     async def StreamingCompoundNumbers(
         self,
         digits: int,yapping: bool,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2732,7 +2727,7 @@ class AsyncHttpRequest:
     async def StructureDocument1559(
         self,
         document_txt: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2757,7 +2752,7 @@ class AsyncHttpRequest:
     async def TakeRecAliasDep(
         self,
         input: _baml.types.RecursiveAliasDependency,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2782,7 +2777,7 @@ class AsyncHttpRequest:
     async def TellStory(
         self,
         story: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2807,7 +2802,7 @@ class AsyncHttpRequest:
     async def TestAnthropic(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2832,7 +2827,7 @@ class AsyncHttpRequest:
     async def TestAnthropicShorthand(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2857,7 +2852,7 @@ class AsyncHttpRequest:
     async def TestAws(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2882,7 +2877,7 @@ class AsyncHttpRequest:
     async def TestAwsClaude37(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2907,7 +2902,7 @@ class AsyncHttpRequest:
     async def TestAwsInferenceProfile(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2932,7 +2927,7 @@ class AsyncHttpRequest:
     async def TestAwsInvalidAccessKey(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2957,7 +2952,7 @@ class AsyncHttpRequest:
     async def TestAwsInvalidProfile(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -2982,7 +2977,7 @@ class AsyncHttpRequest:
     async def TestAwsInvalidRegion(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3007,7 +3002,7 @@ class AsyncHttpRequest:
     async def TestAwsInvalidSessionToken(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3032,7 +3027,7 @@ class AsyncHttpRequest:
     async def TestAzure(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3057,7 +3052,7 @@ class AsyncHttpRequest:
     async def TestAzureFailure(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3082,7 +3077,7 @@ class AsyncHttpRequest:
     async def TestAzureO1NoMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3107,7 +3102,7 @@ class AsyncHttpRequest:
     async def TestAzureO1WithMaxCompletionTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3132,7 +3127,7 @@ class AsyncHttpRequest:
     async def TestAzureO1WithMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3157,7 +3152,7 @@ class AsyncHttpRequest:
     async def TestAzureO3NoMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3182,7 +3177,7 @@ class AsyncHttpRequest:
     async def TestAzureO3WithMaxCompletionTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3207,7 +3202,7 @@ class AsyncHttpRequest:
     async def TestAzureWithMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3232,7 +3227,7 @@ class AsyncHttpRequest:
     async def TestCaching(
         self,
         input: str,not_cached: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3258,7 +3253,7 @@ class AsyncHttpRequest:
     async def TestFallbackClient(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3282,7 +3277,7 @@ class AsyncHttpRequest:
     async def TestFallbackStrategy(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3307,7 +3302,7 @@ class AsyncHttpRequest:
     async def TestFallbackToShorthand(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3332,7 +3327,7 @@ class AsyncHttpRequest:
     async def TestFnNamedArgsSingleBool(
         self,
         myBool: bool,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3357,7 +3352,7 @@ class AsyncHttpRequest:
     async def TestFnNamedArgsSingleClass(
         self,
         myArg: _baml.types.NamedArgsSingleClass,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3382,7 +3377,7 @@ class AsyncHttpRequest:
     async def TestFnNamedArgsSingleEnumList(
         self,
         myArg: List[_baml.types.NamedArgsSingleEnumList],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3407,7 +3402,7 @@ class AsyncHttpRequest:
     async def TestFnNamedArgsSingleFloat(
         self,
         myFloat: float,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3432,7 +3427,7 @@ class AsyncHttpRequest:
     async def TestFnNamedArgsSingleInt(
         self,
         myInt: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3457,7 +3452,7 @@ class AsyncHttpRequest:
     async def TestFnNamedArgsSingleMapStringToClass(
         self,
         myMap: Dict[str, _baml.types.StringToClassEntry],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3482,7 +3477,7 @@ class AsyncHttpRequest:
     async def TestFnNamedArgsSingleMapStringToMap(
         self,
         myMap: Dict[str, Dict[str, str]],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3507,7 +3502,7 @@ class AsyncHttpRequest:
     async def TestFnNamedArgsSingleMapStringToString(
         self,
         myMap: Dict[str, str],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3532,7 +3527,7 @@ class AsyncHttpRequest:
     async def TestFnNamedArgsSingleString(
         self,
         myString: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3557,7 +3552,7 @@ class AsyncHttpRequest:
     async def TestFnNamedArgsSingleStringArray(
         self,
         myStringArray: List[str],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3582,7 +3577,7 @@ class AsyncHttpRequest:
     async def TestFnNamedArgsSingleStringList(
         self,
         myArg: List[str],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3607,7 +3602,7 @@ class AsyncHttpRequest:
     async def TestGemini(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3632,7 +3627,7 @@ class AsyncHttpRequest:
     async def TestGeminiOpenAiGeneric(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3656,7 +3651,7 @@ class AsyncHttpRequest:
     async def TestGeminiSystem(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3681,7 +3676,7 @@ class AsyncHttpRequest:
     async def TestGeminiSystemAsChat(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3706,7 +3701,7 @@ class AsyncHttpRequest:
     async def TestGroq(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3731,7 +3726,7 @@ class AsyncHttpRequest:
     async def TestImageInput(
         self,
         img: baml_py.Image,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3756,7 +3751,7 @@ class AsyncHttpRequest:
     async def TestImageInputAnthropic(
         self,
         img: baml_py.Image,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3781,7 +3776,7 @@ class AsyncHttpRequest:
     async def TestImageListInput(
         self,
         imgs: List[baml_py.Image],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3806,7 +3801,7 @@ class AsyncHttpRequest:
     async def TestMemory(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3831,7 +3826,7 @@ class AsyncHttpRequest:
     async def TestMulticlassNamedArgs(
         self,
         myArg: _baml.types.NamedArgsSingleClass,myArg2: _baml.types.NamedArgsSingleClass,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3857,7 +3852,7 @@ class AsyncHttpRequest:
     async def TestNamedArgsLiteralBool(
         self,
         myBool: Literal[True],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3882,7 +3877,7 @@ class AsyncHttpRequest:
     async def TestNamedArgsLiteralInt(
         self,
         myInt: Literal[1],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3907,7 +3902,7 @@ class AsyncHttpRequest:
     async def TestNamedArgsLiteralString(
         self,
         myString: Literal["My String"],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3932,7 +3927,7 @@ class AsyncHttpRequest:
     async def TestOllama(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3957,7 +3952,7 @@ class AsyncHttpRequest:
     async def TestOllamaHaiku(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -3982,7 +3977,7 @@ class AsyncHttpRequest:
     async def TestOpenAI(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4007,7 +4002,7 @@ class AsyncHttpRequest:
     async def TestOpenAIDummyClient(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4032,7 +4027,7 @@ class AsyncHttpRequest:
     async def TestOpenAIGPT4oMini(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4057,7 +4052,7 @@ class AsyncHttpRequest:
     async def TestOpenAILegacyProvider(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4082,7 +4077,7 @@ class AsyncHttpRequest:
     async def TestOpenAIO1NoMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4107,7 +4102,7 @@ class AsyncHttpRequest:
     async def TestOpenAIO1WithMaxCompletionTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4132,7 +4127,7 @@ class AsyncHttpRequest:
     async def TestOpenAIO1WithMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4157,7 +4152,7 @@ class AsyncHttpRequest:
     async def TestOpenAIShorthand(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4182,7 +4177,7 @@ class AsyncHttpRequest:
     async def TestOpenAIWithFinishReasonError(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4207,7 +4202,7 @@ class AsyncHttpRequest:
     async def TestOpenAIWithMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4232,7 +4227,7 @@ class AsyncHttpRequest:
     async def TestOpenAIWithNullMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4257,7 +4252,7 @@ class AsyncHttpRequest:
     async def TestOpenRouterMistralSmall3_1_24b(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4282,7 +4277,7 @@ class AsyncHttpRequest:
     async def TestRetryConstant(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4306,7 +4301,7 @@ class AsyncHttpRequest:
     async def TestRetryExponential(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4330,7 +4325,7 @@ class AsyncHttpRequest:
     async def TestRoundRobinStrategy(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4355,7 +4350,7 @@ class AsyncHttpRequest:
     async def TestSingleFallbackClient(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4379,7 +4374,7 @@ class AsyncHttpRequest:
     async def TestThinking(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4404,7 +4399,7 @@ class AsyncHttpRequest:
     async def TestUniverseQuestion(
         self,
         question: _baml.types.UniverseQuestionInput,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4429,7 +4424,7 @@ class AsyncHttpRequest:
     async def TestVertex(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4454,7 +4449,7 @@ class AsyncHttpRequest:
     async def TestVertexClaude(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4479,7 +4474,7 @@ class AsyncHttpRequest:
     async def TestVertexWithSystemInstructions(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4503,7 +4498,7 @@ class AsyncHttpRequest:
     async def UnionTest_Function(
         self,
         input: Union[str, bool],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4528,7 +4523,7 @@ class AsyncHttpRequest:
     async def UseBlockConstraint(
         self,
         inp: _baml.types.BlockConstraintForParam,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4553,7 +4548,7 @@ class AsyncHttpRequest:
     async def UseMaintainFieldOrder(
         self,
         input: _baml.types.MaintainFieldOrder,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4578,7 +4573,7 @@ class AsyncHttpRequest:
     async def UseMalformedConstraints(
         self,
         a: _baml.types.MalformedConstraints2,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4603,7 +4598,7 @@ class AsyncHttpRequest:
     async def UseNestedBlockConstraint(
         self,
         inp: _baml.types.NestedBlockConstraintForParam,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4628,7 +4623,7 @@ class AsyncHttpRequest:
     async def EchoWorkflow(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4663,7 +4658,7 @@ class AsyncHttpStreamRequest:
     async def AaaSamOutputFormat(
         self,
         recipe: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4688,7 +4683,7 @@ class AsyncHttpStreamRequest:
     async def AliasThatPointsToRecursiveType(
         self,
         data: _baml.types.LinkedListAliasNode,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4713,7 +4708,7 @@ class AsyncHttpStreamRequest:
     async def AliasWithMultipleAttrs(
         self,
         money: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4738,7 +4733,7 @@ class AsyncHttpStreamRequest:
     async def AliasedInputClass(
         self,
         input: _baml.types.InputClass,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4763,7 +4758,7 @@ class AsyncHttpStreamRequest:
     async def AliasedInputClass2(
         self,
         input: _baml.types.InputClass,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4788,7 +4783,7 @@ class AsyncHttpStreamRequest:
     async def AliasedInputClassNested(
         self,
         input: _baml.types.InputClassNested,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4813,7 +4808,7 @@ class AsyncHttpStreamRequest:
     async def AliasedInputEnum(
         self,
         input: _baml.types.AliasedEnum,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4838,7 +4833,7 @@ class AsyncHttpStreamRequest:
     async def AliasedInputList(
         self,
         input: List[_baml.types.AliasedEnum],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4863,7 +4858,7 @@ class AsyncHttpStreamRequest:
     async def AllowedOptionals(
         self,
         optionals: _baml.types.OptionalListAndMap,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4888,7 +4883,7 @@ class AsyncHttpStreamRequest:
     async def AssertFn(
         self,
         a: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4913,7 +4908,7 @@ class AsyncHttpStreamRequest:
     async def AudioInput(
         self,
         aud: baml_py.Audio,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4938,7 +4933,7 @@ class AsyncHttpStreamRequest:
     async def AudioInputOpenai(
         self,
         aud: baml_py.Audio,prompt: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4964,7 +4959,7 @@ class AsyncHttpStreamRequest:
     async def BuildLinkedList(
         self,
         input: List[int],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -4989,7 +4984,7 @@ class AsyncHttpStreamRequest:
     async def BuildTree(
         self,
         input: _baml.types.BinaryNode,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5014,7 +5009,7 @@ class AsyncHttpStreamRequest:
     async def ClassThatPointsToRecursiveClassThroughAlias(
         self,
         cls: _baml.types.ClassToRecAlias,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5039,7 +5034,7 @@ class AsyncHttpStreamRequest:
     async def ClassifyDynEnumTwo(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5064,7 +5059,7 @@ class AsyncHttpStreamRequest:
     async def ClassifyMessage(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5089,7 +5084,7 @@ class AsyncHttpStreamRequest:
     async def ClassifyMessage2(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5114,7 +5109,7 @@ class AsyncHttpStreamRequest:
     async def ClassifyMessage3(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5139,7 +5134,7 @@ class AsyncHttpStreamRequest:
     async def Completion(
         self,
         prefix: str,suffix: str,language: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5166,7 +5161,7 @@ class AsyncHttpStreamRequest:
     async def CustomTask(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5191,7 +5186,7 @@ class AsyncHttpStreamRequest:
     async def DescribeImage(
         self,
         img: baml_py.Image,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5216,7 +5211,7 @@ class AsyncHttpStreamRequest:
     async def DescribeImage2(
         self,
         classWithImage: _baml.types.ClassWithImage,img2: baml_py.Image,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5242,7 +5237,7 @@ class AsyncHttpStreamRequest:
     async def DescribeImage3(
         self,
         classWithImage: _baml.types.ClassWithImage,img2: baml_py.Image,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5268,7 +5263,7 @@ class AsyncHttpStreamRequest:
     async def DescribeImage4(
         self,
         classWithImage: _baml.types.ClassWithImage,img2: baml_py.Image,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5294,7 +5289,7 @@ class AsyncHttpStreamRequest:
     async def DescribeMedia1599(
         self,
         img: baml_py.Image,client_sector: str,client_name: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5321,7 +5316,7 @@ class AsyncHttpStreamRequest:
     async def DifferentiateUnions(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5345,7 +5340,7 @@ class AsyncHttpStreamRequest:
     async def DummyOutputFunction(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5370,7 +5365,7 @@ class AsyncHttpStreamRequest:
     async def DynamicFunc(
         self,
         input: _baml.types.DynamicClassOne,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5395,7 +5390,7 @@ class AsyncHttpStreamRequest:
     async def DynamicInputOutput(
         self,
         input: _baml.types.DynInputOutput,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5420,7 +5415,7 @@ class AsyncHttpStreamRequest:
     async def DynamicListInputOutput(
         self,
         input: List[_baml.types.DynInputOutput],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5445,7 +5440,7 @@ class AsyncHttpStreamRequest:
     async def ExpectFailure(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5469,7 +5464,7 @@ class AsyncHttpStreamRequest:
     async def ExtractContactInfo(
         self,
         document: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5494,7 +5489,7 @@ class AsyncHttpStreamRequest:
     async def ExtractEntities(
         self,
         text: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5519,7 +5514,7 @@ class AsyncHttpStreamRequest:
     async def ExtractHobby(
         self,
         text: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5544,7 +5539,7 @@ class AsyncHttpStreamRequest:
     async def ExtractNames(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5569,7 +5564,7 @@ class AsyncHttpStreamRequest:
     async def ExtractPeople(
         self,
         text: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5594,7 +5589,7 @@ class AsyncHttpStreamRequest:
     async def ExtractReceiptInfo(
         self,
         email: str,reason: Union[Literal["curiosity"], Literal["personal_finance"]],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5620,7 +5615,7 @@ class AsyncHttpStreamRequest:
     async def ExtractResume(
         self,
         resume: str,img: Optional[baml_py.Image],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5646,7 +5641,7 @@ class AsyncHttpStreamRequest:
     async def ExtractResume2(
         self,
         resume: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5671,7 +5666,7 @@ class AsyncHttpStreamRequest:
     async def FnClassOptionalOutput(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5696,7 +5691,7 @@ class AsyncHttpStreamRequest:
     async def FnClassOptionalOutput2(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5721,7 +5716,7 @@ class AsyncHttpStreamRequest:
     async def FnEnumListOutput(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5746,7 +5741,7 @@ class AsyncHttpStreamRequest:
     async def FnEnumOutput(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5771,7 +5766,7 @@ class AsyncHttpStreamRequest:
     async def FnLiteralClassInputOutput(
         self,
         input: _baml.types.LiteralClassHello,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5796,7 +5791,7 @@ class AsyncHttpStreamRequest:
     async def FnLiteralUnionClassInputOutput(
         self,
         input: Union[_baml.types.LiteralClassOne, _baml.types.LiteralClassTwo],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5821,7 +5816,7 @@ class AsyncHttpStreamRequest:
     async def FnNamedArgsSingleStringOptional(
         self,
         myString: Optional[str],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5846,7 +5841,7 @@ class AsyncHttpStreamRequest:
     async def FnOutputBool(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5871,7 +5866,7 @@ class AsyncHttpStreamRequest:
     async def FnOutputClass(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5896,7 +5891,7 @@ class AsyncHttpStreamRequest:
     async def FnOutputClassList(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5921,7 +5916,7 @@ class AsyncHttpStreamRequest:
     async def FnOutputClassNested(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5946,7 +5941,7 @@ class AsyncHttpStreamRequest:
     async def FnOutputClassWithEnum(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5971,7 +5966,7 @@ class AsyncHttpStreamRequest:
     async def FnOutputInt(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -5996,7 +5991,7 @@ class AsyncHttpStreamRequest:
     async def FnOutputLiteralBool(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6021,7 +6016,7 @@ class AsyncHttpStreamRequest:
     async def FnOutputLiteralInt(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6046,7 +6041,7 @@ class AsyncHttpStreamRequest:
     async def FnOutputLiteralString(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6071,7 +6066,7 @@ class AsyncHttpStreamRequest:
     async def FnOutputStringList(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6096,7 +6091,7 @@ class AsyncHttpStreamRequest:
     async def FnTestAliasedEnumOutput(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6121,7 +6116,7 @@ class AsyncHttpStreamRequest:
     async def FnTestClassAlias(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6146,7 +6141,7 @@ class AsyncHttpStreamRequest:
     async def FnTestNamedArgsSingleEnum(
         self,
         myArg: _baml.types.NamedArgsSingleEnum,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6171,7 +6166,7 @@ class AsyncHttpStreamRequest:
     async def GetDataType(
         self,
         text: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6196,7 +6191,7 @@ class AsyncHttpStreamRequest:
     async def GetOrderInfo(
         self,
         email: _baml.types.Email,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6221,7 +6216,7 @@ class AsyncHttpStreamRequest:
     async def GetQuery(
         self,
         query: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6246,7 +6241,7 @@ class AsyncHttpStreamRequest:
     async def InOutEnumMapKey(
         self,
         i1: Dict[_baml.types.MapKey, str],i2: Dict[_baml.types.MapKey, str],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6272,7 +6267,7 @@ class AsyncHttpStreamRequest:
     async def InOutLiteralStringUnionMapKey(
         self,
         i1: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],i2: Dict[Union[Literal["one"], Literal["two"], Union[Literal["three"], Literal["four"]]], str],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6298,7 +6293,7 @@ class AsyncHttpStreamRequest:
     async def InOutSingleLiteralStringMapKey(
         self,
         m: Dict[Literal["key"], str],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6323,7 +6318,7 @@ class AsyncHttpStreamRequest:
     async def JsonTypeAliasCycle(
         self,
         input: _baml.types.JsonValue,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6348,7 +6343,7 @@ class AsyncHttpStreamRequest:
     async def LLMEcho(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6373,7 +6368,7 @@ class AsyncHttpStreamRequest:
     async def LiteralUnionsTest(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6398,7 +6393,7 @@ class AsyncHttpStreamRequest:
     async def MakeBlockConstraint(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6422,7 +6417,7 @@ class AsyncHttpStreamRequest:
     async def MakeClassWithBlockDone(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6446,7 +6441,7 @@ class AsyncHttpStreamRequest:
     async def MakeClassWithExternalDone(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6470,7 +6465,7 @@ class AsyncHttpStreamRequest:
     async def MakeNestedBlockConstraint(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6494,7 +6489,7 @@ class AsyncHttpStreamRequest:
     async def MakeSemanticContainer(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6518,7 +6513,7 @@ class AsyncHttpStreamRequest:
     async def MapAlias(
         self,
         m: Dict[str, List[str]],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6543,7 +6538,7 @@ class AsyncHttpStreamRequest:
     async def MergeAliasAttributes(
         self,
         money: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6568,7 +6563,7 @@ class AsyncHttpStreamRequest:
     async def MyFunc(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6593,7 +6588,7 @@ class AsyncHttpStreamRequest:
     async def NestedAlias(
         self,
         c: Union[Union[int, str, bool, float], List[str], Dict[str, List[str]]],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6618,7 +6613,7 @@ class AsyncHttpStreamRequest:
     async def NullLiteralClassHello(
         self,
         s: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6643,7 +6638,7 @@ class AsyncHttpStreamRequest:
     async def OpenAIWithAnthropicResponseHello(
         self,
         s: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6668,7 +6663,7 @@ class AsyncHttpStreamRequest:
     async def OptionalTest_Function(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6693,7 +6688,7 @@ class AsyncHttpStreamRequest:
     async def PredictAge(
         self,
         name: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6718,7 +6713,7 @@ class AsyncHttpStreamRequest:
     async def PredictAgeBare(
         self,
         inp: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6743,7 +6738,7 @@ class AsyncHttpStreamRequest:
     async def PrimitiveAlias(
         self,
         p: Union[int, str, bool, float],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6768,7 +6763,7 @@ class AsyncHttpStreamRequest:
     async def PromptTestClaude(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6793,7 +6788,7 @@ class AsyncHttpStreamRequest:
     async def PromptTestClaudeChat(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6818,7 +6813,7 @@ class AsyncHttpStreamRequest:
     async def PromptTestClaudeChatNoSystem(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6843,7 +6838,7 @@ class AsyncHttpStreamRequest:
     async def PromptTestOpenAI(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6868,7 +6863,7 @@ class AsyncHttpStreamRequest:
     async def PromptTestOpenAIChat(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6893,7 +6888,7 @@ class AsyncHttpStreamRequest:
     async def PromptTestOpenAIChatNoSystem(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6918,7 +6913,7 @@ class AsyncHttpStreamRequest:
     async def PromptTestStreaming(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6943,7 +6938,7 @@ class AsyncHttpStreamRequest:
     async def RecursiveAliasCycle(
         self,
         input: _baml.types.RecAliasOne,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6968,7 +6963,7 @@ class AsyncHttpStreamRequest:
     async def RecursiveClassWithAliasIndirection(
         self,
         cls: _baml.types.NodeWithAliasIndirection,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -6993,7 +6988,7 @@ class AsyncHttpStreamRequest:
     async def RecursiveUnionTest(
         self,
         input: _baml.types.RecursiveUnion,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7018,7 +7013,7 @@ class AsyncHttpStreamRequest:
     async def ReturnAliasWithMergedAttributes(
         self,
         money: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7043,7 +7038,7 @@ class AsyncHttpStreamRequest:
     async def ReturnFailingAssert(
         self,
         inp: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7068,7 +7063,7 @@ class AsyncHttpStreamRequest:
     async def ReturnJsonEntry(
         self,
         s: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7093,7 +7088,7 @@ class AsyncHttpStreamRequest:
     async def ReturnMalformedConstraints(
         self,
         a: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7118,7 +7113,7 @@ class AsyncHttpStreamRequest:
     async def SchemaDescriptions(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7143,7 +7138,7 @@ class AsyncHttpStreamRequest:
     async def SimpleRecursiveListAlias(
         self,
         input: _baml.types.RecursiveListAlias,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7168,7 +7163,7 @@ class AsyncHttpStreamRequest:
     async def SimpleRecursiveMapAlias(
         self,
         input: _baml.types.RecursiveMapAlias,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7193,7 +7188,7 @@ class AsyncHttpStreamRequest:
     async def StreamBigNumbers(
         self,
         digits: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7218,7 +7213,7 @@ class AsyncHttpStreamRequest:
     async def StreamFailingAssertion(
         self,
         theme: str,length: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7244,7 +7239,7 @@ class AsyncHttpStreamRequest:
     async def StreamFailingCheck(
         self,
         theme: str,length: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7270,7 +7265,7 @@ class AsyncHttpStreamRequest:
     async def StreamOneBigNumber(
         self,
         digits: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7295,7 +7290,7 @@ class AsyncHttpStreamRequest:
     async def StreamUnionIntegers(
         self,
         digits: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7320,7 +7315,7 @@ class AsyncHttpStreamRequest:
     async def StreamingCompoundNumbers(
         self,
         digits: int,yapping: bool,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7346,7 +7341,7 @@ class AsyncHttpStreamRequest:
     async def StructureDocument1559(
         self,
         document_txt: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7371,7 +7366,7 @@ class AsyncHttpStreamRequest:
     async def TakeRecAliasDep(
         self,
         input: _baml.types.RecursiveAliasDependency,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7396,7 +7391,7 @@ class AsyncHttpStreamRequest:
     async def TellStory(
         self,
         story: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7421,7 +7416,7 @@ class AsyncHttpStreamRequest:
     async def TestAnthropic(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7446,7 +7441,7 @@ class AsyncHttpStreamRequest:
     async def TestAnthropicShorthand(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7471,7 +7466,7 @@ class AsyncHttpStreamRequest:
     async def TestAws(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7496,7 +7491,7 @@ class AsyncHttpStreamRequest:
     async def TestAwsClaude37(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7521,7 +7516,7 @@ class AsyncHttpStreamRequest:
     async def TestAwsInferenceProfile(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7546,7 +7541,7 @@ class AsyncHttpStreamRequest:
     async def TestAwsInvalidAccessKey(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7571,7 +7566,7 @@ class AsyncHttpStreamRequest:
     async def TestAwsInvalidProfile(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7596,7 +7591,7 @@ class AsyncHttpStreamRequest:
     async def TestAwsInvalidRegion(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7621,7 +7616,7 @@ class AsyncHttpStreamRequest:
     async def TestAwsInvalidSessionToken(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7646,7 +7641,7 @@ class AsyncHttpStreamRequest:
     async def TestAzure(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7671,7 +7666,7 @@ class AsyncHttpStreamRequest:
     async def TestAzureFailure(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7696,7 +7691,7 @@ class AsyncHttpStreamRequest:
     async def TestAzureO1NoMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7721,7 +7716,7 @@ class AsyncHttpStreamRequest:
     async def TestAzureO1WithMaxCompletionTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7746,7 +7741,7 @@ class AsyncHttpStreamRequest:
     async def TestAzureO1WithMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7771,7 +7766,7 @@ class AsyncHttpStreamRequest:
     async def TestAzureO3NoMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7796,7 +7791,7 @@ class AsyncHttpStreamRequest:
     async def TestAzureO3WithMaxCompletionTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7821,7 +7816,7 @@ class AsyncHttpStreamRequest:
     async def TestAzureWithMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7846,7 +7841,7 @@ class AsyncHttpStreamRequest:
     async def TestCaching(
         self,
         input: str,not_cached: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7872,7 +7867,7 @@ class AsyncHttpStreamRequest:
     async def TestFallbackClient(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7896,7 +7891,7 @@ class AsyncHttpStreamRequest:
     async def TestFallbackStrategy(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7921,7 +7916,7 @@ class AsyncHttpStreamRequest:
     async def TestFallbackToShorthand(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7946,7 +7941,7 @@ class AsyncHttpStreamRequest:
     async def TestFnNamedArgsSingleBool(
         self,
         myBool: bool,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7971,7 +7966,7 @@ class AsyncHttpStreamRequest:
     async def TestFnNamedArgsSingleClass(
         self,
         myArg: _baml.types.NamedArgsSingleClass,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -7996,7 +7991,7 @@ class AsyncHttpStreamRequest:
     async def TestFnNamedArgsSingleEnumList(
         self,
         myArg: List[_baml.types.NamedArgsSingleEnumList],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8021,7 +8016,7 @@ class AsyncHttpStreamRequest:
     async def TestFnNamedArgsSingleFloat(
         self,
         myFloat: float,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8046,7 +8041,7 @@ class AsyncHttpStreamRequest:
     async def TestFnNamedArgsSingleInt(
         self,
         myInt: int,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8071,7 +8066,7 @@ class AsyncHttpStreamRequest:
     async def TestFnNamedArgsSingleMapStringToClass(
         self,
         myMap: Dict[str, _baml.types.StringToClassEntry],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8096,7 +8091,7 @@ class AsyncHttpStreamRequest:
     async def TestFnNamedArgsSingleMapStringToMap(
         self,
         myMap: Dict[str, Dict[str, str]],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8121,7 +8116,7 @@ class AsyncHttpStreamRequest:
     async def TestFnNamedArgsSingleMapStringToString(
         self,
         myMap: Dict[str, str],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8146,7 +8141,7 @@ class AsyncHttpStreamRequest:
     async def TestFnNamedArgsSingleString(
         self,
         myString: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8171,7 +8166,7 @@ class AsyncHttpStreamRequest:
     async def TestFnNamedArgsSingleStringArray(
         self,
         myStringArray: List[str],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8196,7 +8191,7 @@ class AsyncHttpStreamRequest:
     async def TestFnNamedArgsSingleStringList(
         self,
         myArg: List[str],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8221,7 +8216,7 @@ class AsyncHttpStreamRequest:
     async def TestGemini(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8246,7 +8241,7 @@ class AsyncHttpStreamRequest:
     async def TestGeminiOpenAiGeneric(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8270,7 +8265,7 @@ class AsyncHttpStreamRequest:
     async def TestGeminiSystem(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8295,7 +8290,7 @@ class AsyncHttpStreamRequest:
     async def TestGeminiSystemAsChat(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8320,7 +8315,7 @@ class AsyncHttpStreamRequest:
     async def TestGroq(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8345,7 +8340,7 @@ class AsyncHttpStreamRequest:
     async def TestImageInput(
         self,
         img: baml_py.Image,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8370,7 +8365,7 @@ class AsyncHttpStreamRequest:
     async def TestImageInputAnthropic(
         self,
         img: baml_py.Image,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8395,7 +8390,7 @@ class AsyncHttpStreamRequest:
     async def TestImageListInput(
         self,
         imgs: List[baml_py.Image],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8420,7 +8415,7 @@ class AsyncHttpStreamRequest:
     async def TestMemory(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8445,7 +8440,7 @@ class AsyncHttpStreamRequest:
     async def TestMulticlassNamedArgs(
         self,
         myArg: _baml.types.NamedArgsSingleClass,myArg2: _baml.types.NamedArgsSingleClass,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8471,7 +8466,7 @@ class AsyncHttpStreamRequest:
     async def TestNamedArgsLiteralBool(
         self,
         myBool: Literal[True],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8496,7 +8491,7 @@ class AsyncHttpStreamRequest:
     async def TestNamedArgsLiteralInt(
         self,
         myInt: Literal[1],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8521,7 +8516,7 @@ class AsyncHttpStreamRequest:
     async def TestNamedArgsLiteralString(
         self,
         myString: Literal["My String"],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8546,7 +8541,7 @@ class AsyncHttpStreamRequest:
     async def TestOllama(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8571,7 +8566,7 @@ class AsyncHttpStreamRequest:
     async def TestOllamaHaiku(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8596,7 +8591,7 @@ class AsyncHttpStreamRequest:
     async def TestOpenAI(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8621,7 +8616,7 @@ class AsyncHttpStreamRequest:
     async def TestOpenAIDummyClient(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8646,7 +8641,7 @@ class AsyncHttpStreamRequest:
     async def TestOpenAIGPT4oMini(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8671,7 +8666,7 @@ class AsyncHttpStreamRequest:
     async def TestOpenAILegacyProvider(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8696,7 +8691,7 @@ class AsyncHttpStreamRequest:
     async def TestOpenAIO1NoMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8721,7 +8716,7 @@ class AsyncHttpStreamRequest:
     async def TestOpenAIO1WithMaxCompletionTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8746,7 +8741,7 @@ class AsyncHttpStreamRequest:
     async def TestOpenAIO1WithMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8771,7 +8766,7 @@ class AsyncHttpStreamRequest:
     async def TestOpenAIShorthand(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8796,7 +8791,7 @@ class AsyncHttpStreamRequest:
     async def TestOpenAIWithFinishReasonError(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8821,7 +8816,7 @@ class AsyncHttpStreamRequest:
     async def TestOpenAIWithMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8846,7 +8841,7 @@ class AsyncHttpStreamRequest:
     async def TestOpenAIWithNullMaxTokens(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8871,7 +8866,7 @@ class AsyncHttpStreamRequest:
     async def TestOpenRouterMistralSmall3_1_24b(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8896,7 +8891,7 @@ class AsyncHttpStreamRequest:
     async def TestRetryConstant(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8920,7 +8915,7 @@ class AsyncHttpStreamRequest:
     async def TestRetryExponential(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8944,7 +8939,7 @@ class AsyncHttpStreamRequest:
     async def TestRoundRobinStrategy(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8969,7 +8964,7 @@ class AsyncHttpStreamRequest:
     async def TestSingleFallbackClient(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -8993,7 +8988,7 @@ class AsyncHttpStreamRequest:
     async def TestThinking(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9018,7 +9013,7 @@ class AsyncHttpStreamRequest:
     async def TestUniverseQuestion(
         self,
         question: _baml.types.UniverseQuestionInput,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9043,7 +9038,7 @@ class AsyncHttpStreamRequest:
     async def TestVertex(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9068,7 +9063,7 @@ class AsyncHttpStreamRequest:
     async def TestVertexClaude(
         self,
         input: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9093,7 +9088,7 @@ class AsyncHttpStreamRequest:
     async def TestVertexWithSystemInstructions(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9117,7 +9112,7 @@ class AsyncHttpStreamRequest:
     async def UnionTest_Function(
         self,
         input: Union[str, bool],
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9142,7 +9137,7 @@ class AsyncHttpStreamRequest:
     async def UseBlockConstraint(
         self,
         inp: _baml.types.BlockConstraintForParam,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9167,7 +9162,7 @@ class AsyncHttpStreamRequest:
     async def UseMaintainFieldOrder(
         self,
         input: _baml.types.MaintainFieldOrder,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9192,7 +9187,7 @@ class AsyncHttpStreamRequest:
     async def UseMalformedConstraints(
         self,
         a: _baml.types.MalformedConstraints2,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9217,7 +9212,7 @@ class AsyncHttpStreamRequest:
     async def UseNestedBlockConstraint(
         self,
         inp: _baml.types.NestedBlockConstraintForParam,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -9242,7 +9237,7 @@ class AsyncHttpStreamRequest:
     async def EchoWorkflow(
         self,
         
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:

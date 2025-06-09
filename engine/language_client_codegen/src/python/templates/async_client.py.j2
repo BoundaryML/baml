@@ -14,13 +14,6 @@ from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, D
 OutputType = TypeVar('OutputType')
 
 
-# Define the TypedDict with optional parameters having default values
-class BamlCallOptions(TypedDict, total=False):
-    tb: NotRequired[_baml.type_builder.TypeBuilder]
-    client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
-    collector: NotRequired[Union[baml_py.baml_py.Collector, List[baml_py.baml_py.Collector]]]
-    env: NotRequired[Dict[str, Optional[str]]]
-
 def env_vars_to_dict(overrides: Dict[str, Optional[str]]) -> Dict[str, str]:
     base = os.environ.copy()
     for k, v in overrides.items():
@@ -39,9 +32,9 @@ class BamlAsyncClient:
     __http_stream_request: "AsyncHttpStreamRequest"
     __llm_response_parser: LlmResponseParser
     __llm_stream_parser: LlmStreamParser
-    __baml_options: BamlCallOptions
+    __baml_options: _baml.BamlCallOptions
 
-    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager, baml_options: Optional[BamlCallOptions] = None):
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager, baml_options: Optional[_baml.BamlCallOptions] = None):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
       self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager, baml_options)
@@ -102,9 +95,9 @@ class BamlAsyncClient:
         {% for (name, type, default_value) in fn.args -%}
         {{name}}: {{type}}{% if let Some(d) = default_value %} = {{d}}{% endif %},
         {%- endfor %}
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptions = {},
     ) -> {{fn.return_type}}:
-      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+      options: _baml.BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -135,8 +128,8 @@ class BamlAsyncClient:
 class BamlStreamClient:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
-    __baml_options: BamlCallOptions
-    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager, baml_options: Optional[BamlCallOptions] = None):
+    __baml_options: _baml.BamlCallOptions
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager, baml_options: Optional[_baml.BamlCallOptions] = None):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
       self.__baml_options = baml_options or {}
@@ -147,9 +140,9 @@ class BamlStreamClient:
         {% for (name, type, default_value) in fn.args -%}
         {{name}}: {{type}}{% if let Some(d) = default_value %} = {{d}}{% endif %},
         {%- endfor %}
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptions = {},
     ) -> baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}]:
-      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+      options: _baml.BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
