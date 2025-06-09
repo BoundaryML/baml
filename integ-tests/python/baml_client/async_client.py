@@ -33,8 +33,8 @@ class BamlAsyncClient:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
-    __http_request: "AsyncHttpRequest"
-    __http_stream_request: "AsyncHttpStreamRequest"
+    __http_request: AsyncHttpRequest
+    __http_stream_request: AsyncHttpStreamRequest
     __llm_response_parser: LlmResponseParser
     __llm_stream_parser: LlmStreamParser
     __baml_options: _baml.BamlCallOptions

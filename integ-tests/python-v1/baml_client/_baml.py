@@ -56,4 +56,5 @@ __all__ = [
   "types",
   "partial_types",
   "type_builder",
+  "parser",
 ]

@@ -23,9 +23,9 @@ from pydantic import BaseModel, ValidationError, create_model
 
 from . import _baml
 from .types import Checked, Check
-from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
-from .sync_request import HttpRequest, HttpStreamRequest
 from .parser import LlmResponseParser, LlmStreamParser
+from .sync_request import HttpRequest, HttpStreamRequest
+from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
 
 OutputType = TypeVar('OutputType')
 
@@ -34,9 +34,10 @@ class BamlSyncClient:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
-    __http_request: "HttpRequest"
-    __http_stream_request: "HttpStreamRequest"
+    __http_request: HttpRequest
+    __http_stream_request: HttpStreamRequest
     __llm_response_parser: LlmResponseParser
+    __llm_stream_parser: LlmStreamParser
     __baml_options: _baml.BamlCallOptions
 
     def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager, baml_options: Optional[_baml.BamlCallOptions] = None):
