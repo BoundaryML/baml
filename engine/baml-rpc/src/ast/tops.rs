@@ -114,7 +114,7 @@ pub struct ASTId<'a> {
     pub raw_src_ids: Vec<(Cow<'a, str>, Cow<'a, str>)>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct SourceCode {
     pub file_name: String,

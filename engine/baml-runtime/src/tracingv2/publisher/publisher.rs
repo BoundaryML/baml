@@ -1,11 +1,11 @@
 use anyhow::{Context, Result};
 use baml_rpc::ast::tops::{FunctionDefinition, SourceCode, AST};
-use baml_rpc::CreateBamlSrcUploadRequest;
 use baml_rpc::TypeDefinition;
 use baml_rpc::TypeReference;
 use baml_rpc::{
-    ApiEndpoint, CreateBamlSrcUpload, CreateTraceEventUploadUrl, CreateTraceEventUploadUrlRequest,
-    CreateTraceEventUploadUrlResponse, S3UploadMetadata, TraceEventBatch,
+    ApiEndpoint, BamlSrcUploadPayload, CheckBamlSrcUpload, CheckBamlSrcUploadRequest,
+    CreateTraceEventUploadUrl, CreateTraceEventUploadUrlRequest, CreateTraceEventUploadUrlResponse,
+    S3UploadMetadata, TraceEventBatch,
 };
 use baml_rpc::{NamedType, TypeDefinitionSource};
 use baml_types::FieldType;
@@ -444,28 +444,87 @@ impl TracePublisher {
             })
             .collect();
 
-        let ast = std::sync::Arc::new(AST {
+        let ast_obj = std::sync::Arc::new(AST {
             functions,
             types,
-            source_code,
+            // TODO: optimize this by not cloning the source code
+            source_code: source_code.clone(),
         });
+
+        // Calculate hash of the entire BAML source
+        let mut hasher = DefaultHasher::new();
+        for source in &source_code {
+            source.file_name.hash(&mut hasher);
+            source.content.hash(&mut hasher);
+        }
+        // TODO: separate this into an AST hash and a source code hash.
+        // Also hash the AST to ensure we re-upload if the parsed structure changes
+        // let ast_string = serde_json::to_string(&*ast_obj).unwrap_or_default();
+        // ast_string.hash(&mut hasher);
+        let baml_src_hash = format!("{:x}", hasher.finish());
+
+        tracing::info!(
+            "Checking if BAML source upload is needed (hash: {})",
+            baml_src_hash
+        );
+
+        // Check if we should upload
+        let check_response = match lookup
+            .api_request::<CheckBamlSrcUpload>(CheckBamlSrcUploadRequest { baml_src_hash })
+            .await
+        {
+            Ok(response) => response,
+            Err(e) => {
+                tracing::error!("Failed to check BAML source upload status: {}", e);
+                return Err(e.into());
+            }
+        };
+
+        if !check_response.should_upload {
+            tracing::info!("BAML source already uploaded, skipping");
+            return Ok(());
+        }
 
         tracing::info!("Uploading BAML source");
 
-        match lookup
-            .api_request::<CreateBamlSrcUpload>(CreateBamlSrcUploadRequest { ast })
+        let upload_url = check_response
+            .upload_url
+            .ok_or_else(|| anyhow::anyhow!("No upload URL provided when should_upload is true"))?;
+
+        let upload_metadata = check_response.upload_metadata.ok_or_else(|| {
+            anyhow::anyhow!("No upload metadata provided when should_upload is true")
+        })?;
+
+        // Create the upload payload
+        let payload = BamlSrcUploadPayload {
+            source: source_code,
+            ast: ast_obj,
+        };
+
+        // Upload to S3
+        lookup
+            .client
+            .put(upload_url)
+            .json(&payload)
+            .headers({
+                let mut headers = reqwest::header::HeaderMap::new();
+                for (key, value) in upload_metadata.to_map() {
+                    let header_name = format!("x-amz-meta-{}", key);
+                    if let (Ok(name), Ok(val)) = (
+                        reqwest::header::HeaderName::from_bytes(header_name.as_bytes()),
+                        reqwest::header::HeaderValue::from_str(&value),
+                    ) {
+                        headers.insert(name, val);
+                    }
+                }
+                headers
+            })
+            .send()
             .await
-        {
-            Ok(response) => {
-                log::debug!("Successfully uploaded BAML source");
-                log::info!("BAML source uploaded:");
-                Ok(())
-            }
-            Err(e) => {
-                log::debug!("Failed to upload baml src: {}", e);
-                return Err(e.into());
-            }
-        }
+            .context("Failed to upload BAML source to S3")?;
+
+        tracing::info!("Successfully uploaded BAML source");
+        Ok(())
     }
 
     async fn process_batch(&self, batch: Vec<Arc<TraceEventWithMeta>>) {
