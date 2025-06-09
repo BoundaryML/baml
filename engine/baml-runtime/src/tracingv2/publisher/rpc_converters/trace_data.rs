@@ -245,6 +245,7 @@ impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
         lookup: &(impl TypeLookup + ?Sized),
     ) -> baml_rpc::runtime_api::IntermediateData<'a> {
         baml_rpc::runtime_api::IntermediateData::LLMResponse {
+            client_stack: self.client_stack.clone(),
             model: self.model.clone(),
             finish_reason: self.finish_reason.clone(),
             usage: self.usage.as_ref().map(|u| u.into_rpc_event(lookup)),

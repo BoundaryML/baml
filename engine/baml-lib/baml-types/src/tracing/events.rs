@@ -397,6 +397,11 @@ pub struct LoggedLLMResponse {
     /// Since LLM requests could be made in parallel, we need to match the response to the request.
     pub request_id: HttpRequestId,
 
+    // List of the client stack used by the LLM function to get the response, e.g. if a roundrobin
+    // client "MyRoundrobin" wraps a fallback client "MyFallback" wraps an openai client "MyOpenai"
+    // then the client stack would be ["MyRoundrobin", "MyFallback", "MyOpenai"]
+    pub client_stack: Vec<String>,
+
     /// If available, fully qualified model name. None in failure cases or unknown state.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
@@ -425,9 +430,11 @@ impl LoggedLLMResponse {
         finish_reason: Option<String>,
         usage: LLMUsage,
         raw_text_output: String,
+        client_stack: Vec<String>,
     ) -> Self {
         Self {
             request_id,
+            client_stack,
             model: Some(model),
             finish_reason,
             usage: Some(usage),
@@ -441,9 +448,11 @@ impl LoggedLLMResponse {
         error_message: String,
         model: Option<String>,
         finish_reason: Option<String>,
+        client_stack: Vec<String>,
     ) -> Self {
         Self {
             request_id,
+            client_stack,
             model,
             finish_reason,
             usage: None,
