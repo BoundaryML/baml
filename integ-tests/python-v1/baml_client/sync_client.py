@@ -23,7 +23,6 @@ from pydantic import BaseModel, ValidationError, create_model
 
 from . import _baml
 from .types import Checked, Check
-from .type_builder import TypeBuilder
 from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
 from .sync_request import HttpRequest, HttpStreamRequest
 from .parser import LlmResponseParser, LlmStreamParser
@@ -33,7 +32,7 @@ OutputType = TypeVar('OutputType')
 
 # Define the TypedDict with optional parameters having default values
 class BamlCallOptions(TypedDict, total=False):
-    tb: NotRequired[TypeBuilder]
+    tb: NotRequired[_baml.type_builder.TypeBuilder]
     client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
     collector: NotRequired[Union[baml_py.baml_py.Collector, List[baml_py.baml_py.Collector]]]
     env: NotRequired[Dict[str, Optional[str]]]
@@ -88,7 +87,7 @@ class BamlSyncClient:
 
     def with_options(
       self,
-      tb: Optional[TypeBuilder] = None,
+      tb: Optional[_baml.type_builder.TypeBuilder] = None,
       client_registry: Optional[baml_py.baml_py.ClientRegistry] = None,
       collector: Optional[Union[baml_py.baml_py.Collector, List[baml_py.baml_py.Collector]]] = None,
       env: Optional[Dict[str, str]] = None,

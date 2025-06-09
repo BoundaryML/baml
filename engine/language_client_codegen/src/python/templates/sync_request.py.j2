@@ -5,11 +5,10 @@ import baml_py
 
 from . import _baml
 from .types import Checked, Check
-from .type_builder import TypeBuilder
 
 
 class BamlCallOptions(TypedDict, total=False):
-    tb: NotRequired[TypeBuilder]
+    tb: NotRequired[_baml.type_builder.TypeBuilder]
     client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
     env: NotRequired[Dict[str, Optional[str]]]
 

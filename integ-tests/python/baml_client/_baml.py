@@ -18,8 +18,10 @@
 
 from . import types
 from . import partial_types
+from . import type_builder
 
 __all__ = [
   "types",
   "partial_types",
+  "type_builder",
 ]
