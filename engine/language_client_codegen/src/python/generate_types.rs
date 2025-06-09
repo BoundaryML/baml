@@ -312,11 +312,7 @@ trait ToTypeReferenceInTypeDefinition {
 impl ToTypeReferenceInTypeDefinition for FieldType {
     // TODO: use_module_prefix boolean blindness. Replace with str?
     fn to_type_ref(&self, ir: &IntermediateRepr, use_module_prefix: bool) -> String {
-        let module_prefix = if use_module_prefix {
-            "_baml.types."
-        } else {
-            ""
-        };
+        let module_prefix = if use_module_prefix { "types." } else { "" };
         match self {
             FieldType::Enum(name) => {
                 if ir
