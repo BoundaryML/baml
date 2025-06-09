@@ -21,7 +21,7 @@ class BamlCallOptions(TypedDict, total=False):
 
 
 class BamlCallOptionsModApi(TypedDict, total=False):
-  """Additional parameters modular API calls (doesn't take a collector)."""
+  """Additional parameters for modular API calls (doesn't take a collector)."""
   tb: NotRequired[type_builder.TypeBuilder]
   client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
   env: NotRequired[Dict[str, Optional[str]]]
