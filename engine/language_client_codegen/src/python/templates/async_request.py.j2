@@ -8,15 +8,6 @@ from . import _baml
 from .types import Checked, Check
 
 
-def env_vars_to_dict(overrides: Dict[str, Optional[str]]) -> Dict[str, str]:
-    base = os.environ.copy()
-    for k, v in overrides.items():
-        if v is not None:
-            base[k] = v
-        else:
-            base.pop(k, None)
-    return base
-
 class AsyncHttpRequest:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
@@ -39,7 +30,7 @@ class AsyncHttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return await self.__runtime.build_request(
         "{{fn.name}}",
@@ -79,7 +70,7 @@ class AsyncHttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return await self.__runtime.build_request(
         "{{fn.name}}",

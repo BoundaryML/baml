@@ -30,15 +30,6 @@ from .parser import LlmResponseParser, LlmStreamParser
 OutputType = TypeVar('OutputType')
 
 
-def env_vars_to_dict(overrides: Dict[str, Optional[str]]) -> Dict[str, str]:
-    base = os.environ.copy()
-    for k, v in overrides.items():
-        if v is not None:
-            base[k] = v
-        else:
-            base.pop(k, None)
-    return base
-
 class BamlSyncClient:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
@@ -117,7 +108,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "AaaSamOutputFormat",
         {
@@ -145,7 +136,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "AliasThatPointsToRecursiveType",
         {
@@ -173,7 +164,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "AliasWithMultipleAttrs",
         {
@@ -201,7 +192,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "AliasedInputClass",
         {
@@ -229,7 +220,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "AliasedInputClass2",
         {
@@ -257,7 +248,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "AliasedInputClassNested",
         {
@@ -285,7 +276,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "AliasedInputEnum",
         {
@@ -313,7 +304,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "AliasedInputList",
         {
@@ -341,7 +332,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "AllowedOptionals",
         {
@@ -369,7 +360,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "AssertFn",
         {
@@ -397,7 +388,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "AudioInput",
         {
@@ -425,7 +416,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "AudioInputOpenai",
         {
@@ -453,7 +444,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "BuildLinkedList",
         {
@@ -481,7 +472,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "BuildTree",
         {
@@ -509,7 +500,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ClassThatPointsToRecursiveClassThroughAlias",
         {
@@ -537,7 +528,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ClassifyDynEnumTwo",
         {
@@ -565,7 +556,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ClassifyMessage",
         {
@@ -593,7 +584,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ClassifyMessage2",
         {
@@ -621,7 +612,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ClassifyMessage3",
         {
@@ -649,7 +640,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "Completion",
         {
@@ -677,7 +668,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "CustomTask",
         {
@@ -705,7 +696,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "DescribeImage",
         {
@@ -733,7 +724,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "DescribeImage2",
         {
@@ -761,7 +752,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "DescribeImage3",
         {
@@ -789,7 +780,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "DescribeImage4",
         {
@@ -817,7 +808,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "DescribeMedia1599",
         {
@@ -845,7 +836,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "DifferentiateUnions",
         {
@@ -873,7 +864,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "DummyOutputFunction",
         {
@@ -901,7 +892,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "DynamicFunc",
         {
@@ -929,7 +920,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "DynamicInputOutput",
         {
@@ -957,7 +948,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "DynamicListInputOutput",
         {
@@ -985,7 +976,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ExpectFailure",
         {
@@ -1013,7 +1004,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ExtractContactInfo",
         {
@@ -1041,7 +1032,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ExtractEntities",
         {
@@ -1069,7 +1060,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ExtractHobby",
         {
@@ -1097,7 +1088,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ExtractNames",
         {
@@ -1125,7 +1116,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ExtractPeople",
         {
@@ -1153,7 +1144,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ExtractReceiptInfo",
         {
@@ -1181,7 +1172,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ExtractResume",
         {
@@ -1209,7 +1200,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ExtractResume2",
         {
@@ -1237,7 +1228,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnClassOptionalOutput",
         {
@@ -1265,7 +1256,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnClassOptionalOutput2",
         {
@@ -1293,7 +1284,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnEnumListOutput",
         {
@@ -1321,7 +1312,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnEnumOutput",
         {
@@ -1349,7 +1340,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnLiteralClassInputOutput",
         {
@@ -1377,7 +1368,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnLiteralUnionClassInputOutput",
         {
@@ -1405,7 +1396,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnNamedArgsSingleStringOptional",
         {
@@ -1433,7 +1424,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnOutputBool",
         {
@@ -1461,7 +1452,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnOutputClass",
         {
@@ -1489,7 +1480,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnOutputClassList",
         {
@@ -1517,7 +1508,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnOutputClassNested",
         {
@@ -1545,7 +1536,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnOutputClassWithEnum",
         {
@@ -1573,7 +1564,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnOutputInt",
         {
@@ -1601,7 +1592,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnOutputLiteralBool",
         {
@@ -1629,7 +1620,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnOutputLiteralInt",
         {
@@ -1657,7 +1648,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnOutputLiteralString",
         {
@@ -1685,7 +1676,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnOutputStringList",
         {
@@ -1713,7 +1704,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnTestAliasedEnumOutput",
         {
@@ -1741,7 +1732,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnTestClassAlias",
         {
@@ -1769,7 +1760,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "FnTestNamedArgsSingleEnum",
         {
@@ -1797,7 +1788,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "GetDataType",
         {
@@ -1825,7 +1816,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "GetOrderInfo",
         {
@@ -1853,7 +1844,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "GetQuery",
         {
@@ -1881,7 +1872,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "InOutEnumMapKey",
         {
@@ -1909,7 +1900,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "InOutLiteralStringUnionMapKey",
         {
@@ -1937,7 +1928,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "InOutSingleLiteralStringMapKey",
         {
@@ -1965,7 +1956,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "JsonTypeAliasCycle",
         {
@@ -1993,7 +1984,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "LLMEcho",
         {
@@ -2021,7 +2012,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "LiteralUnionsTest",
         {
@@ -2049,7 +2040,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "MakeBlockConstraint",
         {
@@ -2077,7 +2068,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "MakeClassWithBlockDone",
         {
@@ -2105,7 +2096,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "MakeClassWithExternalDone",
         {
@@ -2133,7 +2124,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "MakeNestedBlockConstraint",
         {
@@ -2161,7 +2152,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "MakeSemanticContainer",
         {
@@ -2189,7 +2180,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "MapAlias",
         {
@@ -2217,7 +2208,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "MergeAliasAttributes",
         {
@@ -2245,7 +2236,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "MyFunc",
         {
@@ -2273,7 +2264,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "NestedAlias",
         {
@@ -2301,7 +2292,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "NullLiteralClassHello",
         {
@@ -2329,7 +2320,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "OpenAIWithAnthropicResponseHello",
         {
@@ -2357,7 +2348,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "OptionalTest_Function",
         {
@@ -2385,7 +2376,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "PredictAge",
         {
@@ -2413,7 +2404,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "PredictAgeBare",
         {
@@ -2441,7 +2432,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "PrimitiveAlias",
         {
@@ -2469,7 +2460,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "PromptTestClaude",
         {
@@ -2497,7 +2488,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "PromptTestClaudeChat",
         {
@@ -2525,7 +2516,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "PromptTestClaudeChatNoSystem",
         {
@@ -2553,7 +2544,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "PromptTestOpenAI",
         {
@@ -2581,7 +2572,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "PromptTestOpenAIChat",
         {
@@ -2609,7 +2600,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "PromptTestOpenAIChatNoSystem",
         {
@@ -2637,7 +2628,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "PromptTestStreaming",
         {
@@ -2665,7 +2656,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "RecursiveAliasCycle",
         {
@@ -2693,7 +2684,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "RecursiveClassWithAliasIndirection",
         {
@@ -2721,7 +2712,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "RecursiveUnionTest",
         {
@@ -2749,7 +2740,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ReturnAliasWithMergedAttributes",
         {
@@ -2777,7 +2768,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ReturnFailingAssert",
         {
@@ -2805,7 +2796,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ReturnJsonEntry",
         {
@@ -2833,7 +2824,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "ReturnMalformedConstraints",
         {
@@ -2861,7 +2852,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "SchemaDescriptions",
         {
@@ -2889,7 +2880,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "SimpleRecursiveListAlias",
         {
@@ -2917,7 +2908,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "SimpleRecursiveMapAlias",
         {
@@ -2945,7 +2936,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "StreamBigNumbers",
         {
@@ -2973,7 +2964,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "StreamFailingAssertion",
         {
@@ -3001,7 +2992,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "StreamFailingCheck",
         {
@@ -3029,7 +3020,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "StreamOneBigNumber",
         {
@@ -3057,7 +3048,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "StreamUnionIntegers",
         {
@@ -3085,7 +3076,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "StreamingCompoundNumbers",
         {
@@ -3113,7 +3104,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "StructureDocument1559",
         {
@@ -3141,7 +3132,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TakeRecAliasDep",
         {
@@ -3169,7 +3160,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TellStory",
         {
@@ -3197,7 +3188,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAnthropic",
         {
@@ -3225,7 +3216,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAnthropicShorthand",
         {
@@ -3253,7 +3244,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAws",
         {
@@ -3281,7 +3272,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAwsClaude37",
         {
@@ -3309,7 +3300,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAwsInferenceProfile",
         {
@@ -3337,7 +3328,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAwsInvalidAccessKey",
         {
@@ -3365,7 +3356,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAwsInvalidProfile",
         {
@@ -3393,7 +3384,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAwsInvalidRegion",
         {
@@ -3421,7 +3412,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAwsInvalidSessionToken",
         {
@@ -3449,7 +3440,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAzure",
         {
@@ -3477,7 +3468,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAzureFailure",
         {
@@ -3505,7 +3496,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAzureO1NoMaxTokens",
         {
@@ -3533,7 +3524,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAzureO1WithMaxCompletionTokens",
         {
@@ -3561,7 +3552,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAzureO1WithMaxTokens",
         {
@@ -3589,7 +3580,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAzureO3NoMaxTokens",
         {
@@ -3617,7 +3608,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAzureO3WithMaxCompletionTokens",
         {
@@ -3645,7 +3636,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestAzureWithMaxTokens",
         {
@@ -3673,7 +3664,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestCaching",
         {
@@ -3701,7 +3692,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestFallbackClient",
         {
@@ -3729,7 +3720,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestFallbackStrategy",
         {
@@ -3757,7 +3748,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestFallbackToShorthand",
         {
@@ -3785,7 +3776,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleBool",
         {
@@ -3813,7 +3804,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleClass",
         {
@@ -3841,7 +3832,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleEnumList",
         {
@@ -3869,7 +3860,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleFloat",
         {
@@ -3897,7 +3888,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleInt",
         {
@@ -3925,7 +3916,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleMapStringToClass",
         {
@@ -3953,7 +3944,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleMapStringToMap",
         {
@@ -3981,7 +3972,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleMapStringToString",
         {
@@ -4009,7 +4000,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleString",
         {
@@ -4037,7 +4028,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleStringArray",
         {
@@ -4065,7 +4056,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestFnNamedArgsSingleStringList",
         {
@@ -4093,7 +4084,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestGemini",
         {
@@ -4121,7 +4112,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestGeminiOpenAiGeneric",
         {
@@ -4149,7 +4140,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestGeminiSystem",
         {
@@ -4177,7 +4168,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestGeminiSystemAsChat",
         {
@@ -4205,7 +4196,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestGroq",
         {
@@ -4233,7 +4224,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestImageInput",
         {
@@ -4261,7 +4252,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestImageInputAnthropic",
         {
@@ -4289,7 +4280,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestImageListInput",
         {
@@ -4317,7 +4308,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestMemory",
         {
@@ -4345,7 +4336,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestMulticlassNamedArgs",
         {
@@ -4373,7 +4364,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestNamedArgsLiteralBool",
         {
@@ -4401,7 +4392,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestNamedArgsLiteralInt",
         {
@@ -4429,7 +4420,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestNamedArgsLiteralString",
         {
@@ -4457,7 +4448,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestOllama",
         {
@@ -4485,7 +4476,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestOllamaHaiku",
         {
@@ -4513,7 +4504,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestOpenAI",
         {
@@ -4541,7 +4532,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestOpenAIDummyClient",
         {
@@ -4569,7 +4560,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestOpenAIGPT4oMini",
         {
@@ -4597,7 +4588,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestOpenAILegacyProvider",
         {
@@ -4625,7 +4616,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestOpenAIO1NoMaxTokens",
         {
@@ -4653,7 +4644,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestOpenAIO1WithMaxCompletionTokens",
         {
@@ -4681,7 +4672,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestOpenAIO1WithMaxTokens",
         {
@@ -4709,7 +4700,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestOpenAIShorthand",
         {
@@ -4737,7 +4728,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestOpenAIWithFinishReasonError",
         {
@@ -4765,7 +4756,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestOpenAIWithMaxTokens",
         {
@@ -4793,7 +4784,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestOpenAIWithNullMaxTokens",
         {
@@ -4821,7 +4812,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestOpenRouterMistralSmall3_1_24b",
         {
@@ -4849,7 +4840,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestRetryConstant",
         {
@@ -4877,7 +4868,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestRetryExponential",
         {
@@ -4905,7 +4896,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestRoundRobinStrategy",
         {
@@ -4933,7 +4924,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestSingleFallbackClient",
         {
@@ -4961,7 +4952,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestThinking",
         {
@@ -4989,7 +4980,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestUniverseQuestion",
         {
@@ -5017,7 +5008,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestVertex",
         {
@@ -5045,7 +5036,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestVertexClaude",
         {
@@ -5073,7 +5064,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "TestVertexWithSystemInstructions",
         {
@@ -5101,7 +5092,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "UnionTest_Function",
         {
@@ -5129,7 +5120,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "UseBlockConstraint",
         {
@@ -5157,7 +5148,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "UseMaintainFieldOrder",
         {
@@ -5185,7 +5176,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "UseMalformedConstraints",
         {
@@ -5213,7 +5204,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "UseNestedBlockConstraint",
         {
@@ -5241,7 +5232,7 @@ class BamlSyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.call_function_sync(
         "EchoWorkflow",
         {
@@ -5282,7 +5273,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "AaaSamOutputFormat",
         {
@@ -5317,7 +5308,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "AliasThatPointsToRecursiveType",
         {
@@ -5352,7 +5343,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "AliasWithMultipleAttrs",
         {
@@ -5387,7 +5378,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "AliasedInputClass",
         {
@@ -5422,7 +5413,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "AliasedInputClass2",
         {
@@ -5457,7 +5448,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "AliasedInputClassNested",
         {
@@ -5492,7 +5483,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "AliasedInputEnum",
         {
@@ -5527,7 +5518,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "AliasedInputList",
         {
@@ -5562,7 +5553,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "AllowedOptionals",
         {
@@ -5597,7 +5588,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "AssertFn",
         {
@@ -5632,7 +5623,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "AudioInput",
         {
@@ -5667,7 +5658,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "AudioInputOpenai",
         {
@@ -5703,7 +5694,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "BuildLinkedList",
         {
@@ -5738,7 +5729,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "BuildTree",
         {
@@ -5773,7 +5764,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ClassThatPointsToRecursiveClassThroughAlias",
         {
@@ -5808,7 +5799,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ClassifyDynEnumTwo",
         {
@@ -5843,7 +5834,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ClassifyMessage",
         {
@@ -5878,7 +5869,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ClassifyMessage2",
         {
@@ -5913,7 +5904,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ClassifyMessage3",
         {
@@ -5948,7 +5939,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "Completion",
         {
@@ -5985,7 +5976,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "CustomTask",
         {
@@ -6020,7 +6011,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "DescribeImage",
         {
@@ -6055,7 +6046,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "DescribeImage2",
         {
@@ -6091,7 +6082,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "DescribeImage3",
         {
@@ -6127,7 +6118,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "DescribeImage4",
         {
@@ -6163,7 +6154,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "DescribeMedia1599",
         {
@@ -6200,7 +6191,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "DifferentiateUnions",
         {
@@ -6234,7 +6225,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "DummyOutputFunction",
         {
@@ -6269,7 +6260,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "DynamicFunc",
         {
@@ -6304,7 +6295,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "DynamicInputOutput",
         {
@@ -6339,7 +6330,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "DynamicListInputOutput",
         {
@@ -6374,7 +6365,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ExpectFailure",
         {
@@ -6408,7 +6399,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ExtractContactInfo",
         {
@@ -6443,7 +6434,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ExtractEntities",
         {
@@ -6478,7 +6469,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ExtractHobby",
         {
@@ -6513,7 +6504,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ExtractNames",
         {
@@ -6548,7 +6539,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ExtractPeople",
         {
@@ -6583,7 +6574,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ExtractReceiptInfo",
         {
@@ -6619,7 +6610,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ExtractResume",
         {
@@ -6655,7 +6646,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ExtractResume2",
         {
@@ -6690,7 +6681,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnClassOptionalOutput",
         {
@@ -6725,7 +6716,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnClassOptionalOutput2",
         {
@@ -6760,7 +6751,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnEnumListOutput",
         {
@@ -6795,7 +6786,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnEnumOutput",
         {
@@ -6830,7 +6821,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnLiteralClassInputOutput",
         {
@@ -6865,7 +6856,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnLiteralUnionClassInputOutput",
         {
@@ -6900,7 +6891,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnNamedArgsSingleStringOptional",
         {
@@ -6935,7 +6926,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnOutputBool",
         {
@@ -6970,7 +6961,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnOutputClass",
         {
@@ -7005,7 +6996,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnOutputClassList",
         {
@@ -7040,7 +7031,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnOutputClassNested",
         {
@@ -7075,7 +7066,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnOutputClassWithEnum",
         {
@@ -7110,7 +7101,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnOutputInt",
         {
@@ -7145,7 +7136,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnOutputLiteralBool",
         {
@@ -7180,7 +7171,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnOutputLiteralInt",
         {
@@ -7215,7 +7206,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnOutputLiteralString",
         {
@@ -7250,7 +7241,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnOutputStringList",
         {
@@ -7285,7 +7276,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnTestAliasedEnumOutput",
         {
@@ -7320,7 +7311,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnTestClassAlias",
         {
@@ -7355,7 +7346,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "FnTestNamedArgsSingleEnum",
         {
@@ -7390,7 +7381,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "GetDataType",
         {
@@ -7425,7 +7416,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "GetOrderInfo",
         {
@@ -7460,7 +7451,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "GetQuery",
         {
@@ -7495,7 +7486,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "InOutEnumMapKey",
         {
@@ -7531,7 +7522,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "InOutLiteralStringUnionMapKey",
         {
@@ -7567,7 +7558,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "InOutSingleLiteralStringMapKey",
         {
@@ -7602,7 +7593,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "JsonTypeAliasCycle",
         {
@@ -7637,7 +7628,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "LLMEcho",
         {
@@ -7672,7 +7663,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "LiteralUnionsTest",
         {
@@ -7707,7 +7698,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "MakeBlockConstraint",
         {
@@ -7741,7 +7732,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "MakeClassWithBlockDone",
         {
@@ -7775,7 +7766,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "MakeClassWithExternalDone",
         {
@@ -7809,7 +7800,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "MakeNestedBlockConstraint",
         {
@@ -7843,7 +7834,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "MakeSemanticContainer",
         {
@@ -7877,7 +7868,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "MapAlias",
         {
@@ -7912,7 +7903,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "MergeAliasAttributes",
         {
@@ -7947,7 +7938,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "MyFunc",
         {
@@ -7982,7 +7973,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "NestedAlias",
         {
@@ -8017,7 +8008,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "NullLiteralClassHello",
         {
@@ -8052,7 +8043,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "OpenAIWithAnthropicResponseHello",
         {
@@ -8087,7 +8078,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "OptionalTest_Function",
         {
@@ -8122,7 +8113,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "PredictAge",
         {
@@ -8157,7 +8148,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "PredictAgeBare",
         {
@@ -8192,7 +8183,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "PrimitiveAlias",
         {
@@ -8227,7 +8218,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "PromptTestClaude",
         {
@@ -8262,7 +8253,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "PromptTestClaudeChat",
         {
@@ -8297,7 +8288,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "PromptTestClaudeChatNoSystem",
         {
@@ -8332,7 +8323,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "PromptTestOpenAI",
         {
@@ -8367,7 +8358,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "PromptTestOpenAIChat",
         {
@@ -8402,7 +8393,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "PromptTestOpenAIChatNoSystem",
         {
@@ -8437,7 +8428,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "PromptTestStreaming",
         {
@@ -8472,7 +8463,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "RecursiveAliasCycle",
         {
@@ -8507,7 +8498,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "RecursiveClassWithAliasIndirection",
         {
@@ -8542,7 +8533,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "RecursiveUnionTest",
         {
@@ -8577,7 +8568,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ReturnAliasWithMergedAttributes",
         {
@@ -8612,7 +8603,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ReturnFailingAssert",
         {
@@ -8647,7 +8638,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ReturnJsonEntry",
         {
@@ -8682,7 +8673,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "ReturnMalformedConstraints",
         {
@@ -8717,7 +8708,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "SchemaDescriptions",
         {
@@ -8752,7 +8743,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "SimpleRecursiveListAlias",
         {
@@ -8787,7 +8778,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "SimpleRecursiveMapAlias",
         {
@@ -8822,7 +8813,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "StreamBigNumbers",
         {
@@ -8857,7 +8848,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "StreamFailingAssertion",
         {
@@ -8893,7 +8884,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "StreamFailingCheck",
         {
@@ -8929,7 +8920,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "StreamOneBigNumber",
         {
@@ -8964,7 +8955,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "StreamUnionIntegers",
         {
@@ -8999,7 +8990,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "StreamingCompoundNumbers",
         {
@@ -9035,7 +9026,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "StructureDocument1559",
         {
@@ -9070,7 +9061,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TakeRecAliasDep",
         {
@@ -9105,7 +9096,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TellStory",
         {
@@ -9140,7 +9131,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAnthropic",
         {
@@ -9175,7 +9166,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAnthropicShorthand",
         {
@@ -9210,7 +9201,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAws",
         {
@@ -9245,7 +9236,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAwsClaude37",
         {
@@ -9280,7 +9271,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAwsInferenceProfile",
         {
@@ -9315,7 +9306,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAwsInvalidAccessKey",
         {
@@ -9350,7 +9341,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAwsInvalidProfile",
         {
@@ -9385,7 +9376,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAwsInvalidRegion",
         {
@@ -9420,7 +9411,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAwsInvalidSessionToken",
         {
@@ -9455,7 +9446,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAzure",
         {
@@ -9490,7 +9481,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAzureFailure",
         {
@@ -9525,7 +9516,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAzureO1NoMaxTokens",
         {
@@ -9560,7 +9551,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAzureO1WithMaxCompletionTokens",
         {
@@ -9595,7 +9586,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAzureO1WithMaxTokens",
         {
@@ -9630,7 +9621,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAzureO3NoMaxTokens",
         {
@@ -9665,7 +9656,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAzureO3WithMaxCompletionTokens",
         {
@@ -9700,7 +9691,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestAzureWithMaxTokens",
         {
@@ -9735,7 +9726,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestCaching",
         {
@@ -9771,7 +9762,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestFallbackClient",
         {
@@ -9805,7 +9796,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestFallbackStrategy",
         {
@@ -9840,7 +9831,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestFallbackToShorthand",
         {
@@ -9875,7 +9866,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleBool",
         {
@@ -9910,7 +9901,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleClass",
         {
@@ -9945,7 +9936,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleEnumList",
         {
@@ -9980,7 +9971,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleFloat",
         {
@@ -10015,7 +10006,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleInt",
         {
@@ -10050,7 +10041,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleMapStringToClass",
         {
@@ -10085,7 +10076,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleMapStringToMap",
         {
@@ -10120,7 +10111,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleMapStringToString",
         {
@@ -10155,7 +10146,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleString",
         {
@@ -10190,7 +10181,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleStringArray",
         {
@@ -10225,7 +10216,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestFnNamedArgsSingleStringList",
         {
@@ -10260,7 +10251,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestGemini",
         {
@@ -10295,7 +10286,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestGeminiOpenAiGeneric",
         {
@@ -10329,7 +10320,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestGeminiSystem",
         {
@@ -10364,7 +10355,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestGeminiSystemAsChat",
         {
@@ -10399,7 +10390,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestGroq",
         {
@@ -10434,7 +10425,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestImageInput",
         {
@@ -10469,7 +10460,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestImageInputAnthropic",
         {
@@ -10504,7 +10495,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestImageListInput",
         {
@@ -10539,7 +10530,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestMemory",
         {
@@ -10574,7 +10565,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestMulticlassNamedArgs",
         {
@@ -10610,7 +10601,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestNamedArgsLiteralBool",
         {
@@ -10645,7 +10636,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestNamedArgsLiteralInt",
         {
@@ -10680,7 +10671,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestNamedArgsLiteralString",
         {
@@ -10715,7 +10706,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestOllama",
         {
@@ -10750,7 +10741,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestOllamaHaiku",
         {
@@ -10785,7 +10776,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestOpenAI",
         {
@@ -10820,7 +10811,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIDummyClient",
         {
@@ -10855,7 +10846,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIGPT4oMini",
         {
@@ -10890,7 +10881,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestOpenAILegacyProvider",
         {
@@ -10925,7 +10916,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIO1NoMaxTokens",
         {
@@ -10960,7 +10951,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIO1WithMaxCompletionTokens",
         {
@@ -10995,7 +10986,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIO1WithMaxTokens",
         {
@@ -11030,7 +11021,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIShorthand",
         {
@@ -11065,7 +11056,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIWithFinishReasonError",
         {
@@ -11100,7 +11091,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIWithMaxTokens",
         {
@@ -11135,7 +11126,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestOpenAIWithNullMaxTokens",
         {
@@ -11170,7 +11161,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestOpenRouterMistralSmall3_1_24b",
         {
@@ -11205,7 +11196,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestRetryConstant",
         {
@@ -11239,7 +11230,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestRetryExponential",
         {
@@ -11273,7 +11264,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestRoundRobinStrategy",
         {
@@ -11308,7 +11299,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestSingleFallbackClient",
         {
@@ -11342,7 +11333,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestThinking",
         {
@@ -11377,7 +11368,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestUniverseQuestion",
         {
@@ -11412,7 +11403,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestVertex",
         {
@@ -11447,7 +11438,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestVertexClaude",
         {
@@ -11482,7 +11473,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "TestVertexWithSystemInstructions",
         {
@@ -11516,7 +11507,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "UnionTest_Function",
         {
@@ -11551,7 +11542,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "UseBlockConstraint",
         {
@@ -11586,7 +11577,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "UseMaintainFieldOrder",
         {
@@ -11621,7 +11612,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "UseMalformedConstraints",
         {
@@ -11656,7 +11647,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "UseNestedBlockConstraint",
         {
@@ -11691,7 +11682,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function_sync(
         "EchoWorkflow",
         {

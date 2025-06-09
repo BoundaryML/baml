@@ -22,15 +22,6 @@ from . import _baml
 from .types import Checked, Check
 
 
-def env_vars_to_dict(overrides: Dict[str, Optional[str]]) -> Dict[str, str]:
-    base = os.environ.copy()
-    for k, v in overrides.items():
-        if v is not None:
-            base[k] = v
-        else:
-            base.pop(k, None)
-    return base
-
 class HttpRequest:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
@@ -51,7 +42,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AaaSamOutputFormat",
@@ -76,7 +67,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AliasThatPointsToRecursiveType",
@@ -101,7 +92,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AliasWithMultipleAttrs",
@@ -126,7 +117,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AliasedInputClass",
@@ -151,7 +142,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AliasedInputClass2",
@@ -176,7 +167,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AliasedInputClassNested",
@@ -201,7 +192,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AliasedInputEnum",
@@ -226,7 +217,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AliasedInputList",
@@ -251,7 +242,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AllowedOptionals",
@@ -276,7 +267,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AssertFn",
@@ -301,7 +292,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AudioInput",
@@ -326,7 +317,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AudioInputOpenai",
@@ -351,7 +342,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "BuildLinkedList",
@@ -376,7 +367,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "BuildTree",
@@ -401,7 +392,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ClassThatPointsToRecursiveClassThroughAlias",
@@ -426,7 +417,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ClassifyDynEnumTwo",
@@ -451,7 +442,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ClassifyMessage",
@@ -476,7 +467,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ClassifyMessage2",
@@ -501,7 +492,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ClassifyMessage3",
@@ -526,7 +517,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "Completion",
@@ -551,7 +542,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "CustomTask",
@@ -576,7 +567,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DescribeImage",
@@ -601,7 +592,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DescribeImage2",
@@ -626,7 +617,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DescribeImage3",
@@ -651,7 +642,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DescribeImage4",
@@ -676,7 +667,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DescribeMedia1599",
@@ -701,7 +692,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DifferentiateUnions",
@@ -726,7 +717,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DummyOutputFunction",
@@ -751,7 +742,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DynamicFunc",
@@ -776,7 +767,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DynamicInputOutput",
@@ -801,7 +792,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DynamicListInputOutput",
@@ -826,7 +817,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExpectFailure",
@@ -851,7 +842,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractContactInfo",
@@ -876,7 +867,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractEntities",
@@ -901,7 +892,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractHobby",
@@ -926,7 +917,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractNames",
@@ -951,7 +942,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractPeople",
@@ -976,7 +967,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractReceiptInfo",
@@ -1001,7 +992,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractResume",
@@ -1026,7 +1017,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractResume2",
@@ -1051,7 +1042,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnClassOptionalOutput",
@@ -1076,7 +1067,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnClassOptionalOutput2",
@@ -1101,7 +1092,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnEnumListOutput",
@@ -1126,7 +1117,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnEnumOutput",
@@ -1151,7 +1142,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnLiteralClassInputOutput",
@@ -1176,7 +1167,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnLiteralUnionClassInputOutput",
@@ -1201,7 +1192,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnNamedArgsSingleStringOptional",
@@ -1226,7 +1217,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputBool",
@@ -1251,7 +1242,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputClass",
@@ -1276,7 +1267,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputClassList",
@@ -1301,7 +1292,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputClassNested",
@@ -1326,7 +1317,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputClassWithEnum",
@@ -1351,7 +1342,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputInt",
@@ -1376,7 +1367,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputLiteralBool",
@@ -1401,7 +1392,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputLiteralInt",
@@ -1426,7 +1417,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputLiteralString",
@@ -1451,7 +1442,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputStringList",
@@ -1476,7 +1467,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnTestAliasedEnumOutput",
@@ -1501,7 +1492,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnTestClassAlias",
@@ -1526,7 +1517,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnTestNamedArgsSingleEnum",
@@ -1551,7 +1542,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "GetDataType",
@@ -1576,7 +1567,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "GetOrderInfo",
@@ -1601,7 +1592,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "GetQuery",
@@ -1626,7 +1617,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "InOutEnumMapKey",
@@ -1651,7 +1642,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "InOutLiteralStringUnionMapKey",
@@ -1676,7 +1667,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "InOutSingleLiteralStringMapKey",
@@ -1701,7 +1692,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "JsonTypeAliasCycle",
@@ -1726,7 +1717,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "LLMEcho",
@@ -1751,7 +1742,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "LiteralUnionsTest",
@@ -1776,7 +1767,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MakeBlockConstraint",
@@ -1801,7 +1792,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MakeClassWithBlockDone",
@@ -1826,7 +1817,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MakeClassWithExternalDone",
@@ -1851,7 +1842,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MakeNestedBlockConstraint",
@@ -1876,7 +1867,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MakeSemanticContainer",
@@ -1901,7 +1892,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MapAlias",
@@ -1926,7 +1917,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MergeAliasAttributes",
@@ -1951,7 +1942,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MyFunc",
@@ -1976,7 +1967,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "NestedAlias",
@@ -2001,7 +1992,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "NullLiteralClassHello",
@@ -2026,7 +2017,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "OpenAIWithAnthropicResponseHello",
@@ -2051,7 +2042,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "OptionalTest_Function",
@@ -2076,7 +2067,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PredictAge",
@@ -2101,7 +2092,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PredictAgeBare",
@@ -2126,7 +2117,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PrimitiveAlias",
@@ -2151,7 +2142,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PromptTestClaude",
@@ -2176,7 +2167,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PromptTestClaudeChat",
@@ -2201,7 +2192,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PromptTestClaudeChatNoSystem",
@@ -2226,7 +2217,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PromptTestOpenAI",
@@ -2251,7 +2242,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PromptTestOpenAIChat",
@@ -2276,7 +2267,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PromptTestOpenAIChatNoSystem",
@@ -2301,7 +2292,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PromptTestStreaming",
@@ -2326,7 +2317,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "RecursiveAliasCycle",
@@ -2351,7 +2342,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "RecursiveClassWithAliasIndirection",
@@ -2376,7 +2367,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "RecursiveUnionTest",
@@ -2401,7 +2392,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ReturnAliasWithMergedAttributes",
@@ -2426,7 +2417,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ReturnFailingAssert",
@@ -2451,7 +2442,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ReturnJsonEntry",
@@ -2476,7 +2467,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ReturnMalformedConstraints",
@@ -2501,7 +2492,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "SchemaDescriptions",
@@ -2526,7 +2517,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "SimpleRecursiveListAlias",
@@ -2551,7 +2542,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "SimpleRecursiveMapAlias",
@@ -2576,7 +2567,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "StreamBigNumbers",
@@ -2601,7 +2592,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "StreamFailingAssertion",
@@ -2626,7 +2617,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "StreamFailingCheck",
@@ -2651,7 +2642,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "StreamOneBigNumber",
@@ -2676,7 +2667,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "StreamUnionIntegers",
@@ -2701,7 +2692,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "StreamingCompoundNumbers",
@@ -2726,7 +2717,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "StructureDocument1559",
@@ -2751,7 +2742,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TakeRecAliasDep",
@@ -2776,7 +2767,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TellStory",
@@ -2801,7 +2792,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAnthropic",
@@ -2826,7 +2817,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAnthropicShorthand",
@@ -2851,7 +2842,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAws",
@@ -2876,7 +2867,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAwsClaude37",
@@ -2901,7 +2892,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAwsInferenceProfile",
@@ -2926,7 +2917,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAwsInvalidAccessKey",
@@ -2951,7 +2942,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAwsInvalidProfile",
@@ -2976,7 +2967,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAwsInvalidRegion",
@@ -3001,7 +2992,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAwsInvalidSessionToken",
@@ -3026,7 +3017,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzure",
@@ -3051,7 +3042,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzureFailure",
@@ -3076,7 +3067,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzureO1NoMaxTokens",
@@ -3101,7 +3092,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzureO1WithMaxCompletionTokens",
@@ -3126,7 +3117,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzureO1WithMaxTokens",
@@ -3151,7 +3142,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzureO3NoMaxTokens",
@@ -3176,7 +3167,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzureO3WithMaxCompletionTokens",
@@ -3201,7 +3192,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzureWithMaxTokens",
@@ -3226,7 +3217,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestCaching",
@@ -3251,7 +3242,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFallbackClient",
@@ -3276,7 +3267,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFallbackStrategy",
@@ -3301,7 +3292,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFallbackToShorthand",
@@ -3326,7 +3317,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleBool",
@@ -3351,7 +3342,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleClass",
@@ -3376,7 +3367,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleEnumList",
@@ -3401,7 +3392,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleFloat",
@@ -3426,7 +3417,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleInt",
@@ -3451,7 +3442,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleMapStringToClass",
@@ -3476,7 +3467,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleMapStringToMap",
@@ -3501,7 +3492,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleMapStringToString",
@@ -3526,7 +3517,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleString",
@@ -3551,7 +3542,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleStringArray",
@@ -3576,7 +3567,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleStringList",
@@ -3601,7 +3592,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestGemini",
@@ -3626,7 +3617,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestGeminiOpenAiGeneric",
@@ -3651,7 +3642,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestGeminiSystem",
@@ -3676,7 +3667,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestGeminiSystemAsChat",
@@ -3701,7 +3692,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestGroq",
@@ -3726,7 +3717,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestImageInput",
@@ -3751,7 +3742,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestImageInputAnthropic",
@@ -3776,7 +3767,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestImageListInput",
@@ -3801,7 +3792,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestMemory",
@@ -3826,7 +3817,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestMulticlassNamedArgs",
@@ -3851,7 +3842,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestNamedArgsLiteralBool",
@@ -3876,7 +3867,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestNamedArgsLiteralInt",
@@ -3901,7 +3892,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestNamedArgsLiteralString",
@@ -3926,7 +3917,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOllama",
@@ -3951,7 +3942,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOllamaHaiku",
@@ -3976,7 +3967,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAI",
@@ -4001,7 +3992,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIDummyClient",
@@ -4026,7 +4017,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIGPT4oMini",
@@ -4051,7 +4042,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAILegacyProvider",
@@ -4076,7 +4067,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIO1NoMaxTokens",
@@ -4101,7 +4092,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIO1WithMaxCompletionTokens",
@@ -4126,7 +4117,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIO1WithMaxTokens",
@@ -4151,7 +4142,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIShorthand",
@@ -4176,7 +4167,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIWithFinishReasonError",
@@ -4201,7 +4192,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIWithMaxTokens",
@@ -4226,7 +4217,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIWithNullMaxTokens",
@@ -4251,7 +4242,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenRouterMistralSmall3_1_24b",
@@ -4276,7 +4267,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestRetryConstant",
@@ -4301,7 +4292,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestRetryExponential",
@@ -4326,7 +4317,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestRoundRobinStrategy",
@@ -4351,7 +4342,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestSingleFallbackClient",
@@ -4376,7 +4367,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestThinking",
@@ -4401,7 +4392,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestUniverseQuestion",
@@ -4426,7 +4417,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestVertex",
@@ -4451,7 +4442,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestVertexClaude",
@@ -4476,7 +4467,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestVertexWithSystemInstructions",
@@ -4501,7 +4492,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "UnionTest_Function",
@@ -4526,7 +4517,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "UseBlockConstraint",
@@ -4551,7 +4542,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "UseMaintainFieldOrder",
@@ -4576,7 +4567,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "UseMalformedConstraints",
@@ -4601,7 +4592,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "UseNestedBlockConstraint",
@@ -4626,7 +4617,7 @@ class HttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "EchoWorkflow",
@@ -4662,7 +4653,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AaaSamOutputFormat",
@@ -4687,7 +4678,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AliasThatPointsToRecursiveType",
@@ -4712,7 +4703,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AliasWithMultipleAttrs",
@@ -4737,7 +4728,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AliasedInputClass",
@@ -4762,7 +4753,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AliasedInputClass2",
@@ -4787,7 +4778,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AliasedInputClassNested",
@@ -4812,7 +4803,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AliasedInputEnum",
@@ -4837,7 +4828,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AliasedInputList",
@@ -4862,7 +4853,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AllowedOptionals",
@@ -4887,7 +4878,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AssertFn",
@@ -4912,7 +4903,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AudioInput",
@@ -4937,7 +4928,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "AudioInputOpenai",
@@ -4962,7 +4953,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "BuildLinkedList",
@@ -4987,7 +4978,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "BuildTree",
@@ -5012,7 +5003,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ClassThatPointsToRecursiveClassThroughAlias",
@@ -5037,7 +5028,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ClassifyDynEnumTwo",
@@ -5062,7 +5053,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ClassifyMessage",
@@ -5087,7 +5078,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ClassifyMessage2",
@@ -5112,7 +5103,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ClassifyMessage3",
@@ -5137,7 +5128,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "Completion",
@@ -5162,7 +5153,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "CustomTask",
@@ -5187,7 +5178,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DescribeImage",
@@ -5212,7 +5203,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DescribeImage2",
@@ -5237,7 +5228,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DescribeImage3",
@@ -5262,7 +5253,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DescribeImage4",
@@ -5287,7 +5278,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DescribeMedia1599",
@@ -5312,7 +5303,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DifferentiateUnions",
@@ -5337,7 +5328,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DummyOutputFunction",
@@ -5362,7 +5353,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DynamicFunc",
@@ -5387,7 +5378,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DynamicInputOutput",
@@ -5412,7 +5403,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "DynamicListInputOutput",
@@ -5437,7 +5428,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExpectFailure",
@@ -5462,7 +5453,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractContactInfo",
@@ -5487,7 +5478,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractEntities",
@@ -5512,7 +5503,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractHobby",
@@ -5537,7 +5528,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractNames",
@@ -5562,7 +5553,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractPeople",
@@ -5587,7 +5578,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractReceiptInfo",
@@ -5612,7 +5603,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractResume",
@@ -5637,7 +5628,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ExtractResume2",
@@ -5662,7 +5653,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnClassOptionalOutput",
@@ -5687,7 +5678,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnClassOptionalOutput2",
@@ -5712,7 +5703,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnEnumListOutput",
@@ -5737,7 +5728,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnEnumOutput",
@@ -5762,7 +5753,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnLiteralClassInputOutput",
@@ -5787,7 +5778,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnLiteralUnionClassInputOutput",
@@ -5812,7 +5803,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnNamedArgsSingleStringOptional",
@@ -5837,7 +5828,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputBool",
@@ -5862,7 +5853,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputClass",
@@ -5887,7 +5878,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputClassList",
@@ -5912,7 +5903,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputClassNested",
@@ -5937,7 +5928,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputClassWithEnum",
@@ -5962,7 +5953,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputInt",
@@ -5987,7 +5978,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputLiteralBool",
@@ -6012,7 +6003,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputLiteralInt",
@@ -6037,7 +6028,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputLiteralString",
@@ -6062,7 +6053,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnOutputStringList",
@@ -6087,7 +6078,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnTestAliasedEnumOutput",
@@ -6112,7 +6103,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnTestClassAlias",
@@ -6137,7 +6128,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "FnTestNamedArgsSingleEnum",
@@ -6162,7 +6153,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "GetDataType",
@@ -6187,7 +6178,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "GetOrderInfo",
@@ -6212,7 +6203,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "GetQuery",
@@ -6237,7 +6228,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "InOutEnumMapKey",
@@ -6262,7 +6253,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "InOutLiteralStringUnionMapKey",
@@ -6287,7 +6278,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "InOutSingleLiteralStringMapKey",
@@ -6312,7 +6303,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "JsonTypeAliasCycle",
@@ -6337,7 +6328,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "LLMEcho",
@@ -6362,7 +6353,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "LiteralUnionsTest",
@@ -6387,7 +6378,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MakeBlockConstraint",
@@ -6412,7 +6403,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MakeClassWithBlockDone",
@@ -6437,7 +6428,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MakeClassWithExternalDone",
@@ -6462,7 +6453,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MakeNestedBlockConstraint",
@@ -6487,7 +6478,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MakeSemanticContainer",
@@ -6512,7 +6503,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MapAlias",
@@ -6537,7 +6528,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MergeAliasAttributes",
@@ -6562,7 +6553,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "MyFunc",
@@ -6587,7 +6578,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "NestedAlias",
@@ -6612,7 +6603,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "NullLiteralClassHello",
@@ -6637,7 +6628,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "OpenAIWithAnthropicResponseHello",
@@ -6662,7 +6653,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "OptionalTest_Function",
@@ -6687,7 +6678,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PredictAge",
@@ -6712,7 +6703,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PredictAgeBare",
@@ -6737,7 +6728,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PrimitiveAlias",
@@ -6762,7 +6753,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PromptTestClaude",
@@ -6787,7 +6778,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PromptTestClaudeChat",
@@ -6812,7 +6803,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PromptTestClaudeChatNoSystem",
@@ -6837,7 +6828,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PromptTestOpenAI",
@@ -6862,7 +6853,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PromptTestOpenAIChat",
@@ -6887,7 +6878,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PromptTestOpenAIChatNoSystem",
@@ -6912,7 +6903,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "PromptTestStreaming",
@@ -6937,7 +6928,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "RecursiveAliasCycle",
@@ -6962,7 +6953,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "RecursiveClassWithAliasIndirection",
@@ -6987,7 +6978,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "RecursiveUnionTest",
@@ -7012,7 +7003,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ReturnAliasWithMergedAttributes",
@@ -7037,7 +7028,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ReturnFailingAssert",
@@ -7062,7 +7053,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ReturnJsonEntry",
@@ -7087,7 +7078,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "ReturnMalformedConstraints",
@@ -7112,7 +7103,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "SchemaDescriptions",
@@ -7137,7 +7128,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "SimpleRecursiveListAlias",
@@ -7162,7 +7153,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "SimpleRecursiveMapAlias",
@@ -7187,7 +7178,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "StreamBigNumbers",
@@ -7212,7 +7203,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "StreamFailingAssertion",
@@ -7237,7 +7228,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "StreamFailingCheck",
@@ -7262,7 +7253,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "StreamOneBigNumber",
@@ -7287,7 +7278,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "StreamUnionIntegers",
@@ -7312,7 +7303,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "StreamingCompoundNumbers",
@@ -7337,7 +7328,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "StructureDocument1559",
@@ -7362,7 +7353,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TakeRecAliasDep",
@@ -7387,7 +7378,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TellStory",
@@ -7412,7 +7403,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAnthropic",
@@ -7437,7 +7428,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAnthropicShorthand",
@@ -7462,7 +7453,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAws",
@@ -7487,7 +7478,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAwsClaude37",
@@ -7512,7 +7503,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAwsInferenceProfile",
@@ -7537,7 +7528,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAwsInvalidAccessKey",
@@ -7562,7 +7553,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAwsInvalidProfile",
@@ -7587,7 +7578,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAwsInvalidRegion",
@@ -7612,7 +7603,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAwsInvalidSessionToken",
@@ -7637,7 +7628,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzure",
@@ -7662,7 +7653,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzureFailure",
@@ -7687,7 +7678,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzureO1NoMaxTokens",
@@ -7712,7 +7703,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzureO1WithMaxCompletionTokens",
@@ -7737,7 +7728,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzureO1WithMaxTokens",
@@ -7762,7 +7753,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzureO3NoMaxTokens",
@@ -7787,7 +7778,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzureO3WithMaxCompletionTokens",
@@ -7812,7 +7803,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestAzureWithMaxTokens",
@@ -7837,7 +7828,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestCaching",
@@ -7862,7 +7853,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFallbackClient",
@@ -7887,7 +7878,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFallbackStrategy",
@@ -7912,7 +7903,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFallbackToShorthand",
@@ -7937,7 +7928,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleBool",
@@ -7962,7 +7953,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleClass",
@@ -7987,7 +7978,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleEnumList",
@@ -8012,7 +8003,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleFloat",
@@ -8037,7 +8028,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleInt",
@@ -8062,7 +8053,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleMapStringToClass",
@@ -8087,7 +8078,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleMapStringToMap",
@@ -8112,7 +8103,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleMapStringToString",
@@ -8137,7 +8128,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleString",
@@ -8162,7 +8153,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleStringArray",
@@ -8187,7 +8178,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestFnNamedArgsSingleStringList",
@@ -8212,7 +8203,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestGemini",
@@ -8237,7 +8228,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestGeminiOpenAiGeneric",
@@ -8262,7 +8253,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestGeminiSystem",
@@ -8287,7 +8278,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestGeminiSystemAsChat",
@@ -8312,7 +8303,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestGroq",
@@ -8337,7 +8328,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestImageInput",
@@ -8362,7 +8353,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestImageInputAnthropic",
@@ -8387,7 +8378,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestImageListInput",
@@ -8412,7 +8403,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestMemory",
@@ -8437,7 +8428,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestMulticlassNamedArgs",
@@ -8462,7 +8453,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestNamedArgsLiteralBool",
@@ -8487,7 +8478,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestNamedArgsLiteralInt",
@@ -8512,7 +8503,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestNamedArgsLiteralString",
@@ -8537,7 +8528,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOllama",
@@ -8562,7 +8553,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOllamaHaiku",
@@ -8587,7 +8578,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAI",
@@ -8612,7 +8603,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIDummyClient",
@@ -8637,7 +8628,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIGPT4oMini",
@@ -8662,7 +8653,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAILegacyProvider",
@@ -8687,7 +8678,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIO1NoMaxTokens",
@@ -8712,7 +8703,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIO1WithMaxCompletionTokens",
@@ -8737,7 +8728,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIO1WithMaxTokens",
@@ -8762,7 +8753,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIShorthand",
@@ -8787,7 +8778,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIWithFinishReasonError",
@@ -8812,7 +8803,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIWithMaxTokens",
@@ -8837,7 +8828,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenAIWithNullMaxTokens",
@@ -8862,7 +8853,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestOpenRouterMistralSmall3_1_24b",
@@ -8887,7 +8878,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestRetryConstant",
@@ -8912,7 +8903,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestRetryExponential",
@@ -8937,7 +8928,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestRoundRobinStrategy",
@@ -8962,7 +8953,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestSingleFallbackClient",
@@ -8987,7 +8978,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestThinking",
@@ -9012,7 +9003,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestUniverseQuestion",
@@ -9037,7 +9028,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestVertex",
@@ -9062,7 +9053,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestVertexClaude",
@@ -9087,7 +9078,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "TestVertexWithSystemInstructions",
@@ -9112,7 +9103,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "UnionTest_Function",
@@ -9137,7 +9128,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "UseBlockConstraint",
@@ -9162,7 +9153,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "UseMaintainFieldOrder",
@@ -9187,7 +9178,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "UseMalformedConstraints",
@@ -9212,7 +9203,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "UseNestedBlockConstraint",
@@ -9237,7 +9228,7 @@ class HttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return self.__runtime.build_request_sync(
         "EchoWorkflow",
