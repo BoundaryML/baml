@@ -18,6 +18,10 @@ use self::python_language_features::{PythonLanguageFeatures, ToPython};
 use crate::{dir_writer::FileCollector, field_type_attributes};
 
 #[derive(askama::Template)]
+#[template(path = "_baml.py.j2", escape = "none")]
+struct BamlNamespace {}
+
+#[derive(askama::Template)]
 #[template(path = "config.py.j2", escape = "none")]
 struct PythonConfig {}
 
@@ -127,6 +131,7 @@ pub(crate) fn generate(
         .add_template::<generate_types::PythonStreamTypes>("partial_types.py", (ir, generator))?;
     collector.add_template::<generate_types::PythonTypes>("types.py", (ir, generator))?;
     collector.add_template::<generate_types::TypeBuilder>("type_builder.py", (ir, generator))?;
+    collector.add_template::<BamlNamespace>("_baml.py", (ir, generator))?;
     collector.add_template::<AsyncPythonClient>("async_client.py", (ir, generator))?;
     collector.add_template::<SyncPythonClient>("sync_client.py", (ir, generator))?;
     collector.add_template::<PythonGlobals>("globals.py", (ir, generator))?;
@@ -146,6 +151,14 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for PythonConfig 
 
     fn try_from(_: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
         Ok(PythonConfig {})
+    }
+}
+
+impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for BamlNamespace {
+    type Error = anyhow::Error;
+
+    fn try_from(_: (&'_ IntermediateRepr, &'_ crate::GeneratorArgs)) -> Result<Self> {
+        Ok(BamlNamespace {})
     }
 }
 
@@ -277,14 +290,14 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .map(|e| e.item.attributes.get("dynamic_type").is_some())
                     .unwrap_or(false)
                 {
-                    format!("Union[baml_client.types.{name}, str]")
+                    format!("Union[_baml.types.{name}, str]")
                 } else {
-                    format!("baml_client.types.{name}")
+                    format!("_baml.types.{name}")
                 }
             }
             FieldType::Literal(value) => to_python_literal(value),
-            FieldType::RecursiveTypeAlias(name) => format!("baml_client.types.{name}"),
-            FieldType::Class(name) => format!("baml_client.types.{name}"),
+            FieldType::RecursiveTypeAlias(name) => format!("_baml.types.{name}"),
+            FieldType::Class(name) => format!("_baml.types.{name}"),
             FieldType::List(inner) => format!("List[{}]", inner.to_type_ref(ir)),
             FieldType::Map(key, value) => {
                 format!("Dict[{}, {}]", key.to_type_ref(ir), value.to_type_ref(ir))
@@ -330,9 +343,9 @@ impl ToTypeReferenceInClientDefinition for FieldType {
         let with_state = metadata.1.state;
         let constraints = metadata.0;
         let module_prefix = if is_partial_type {
-            "baml_client.partial_types."
+            "_baml.partial_types."
         } else {
-            "baml_client.types."
+            "_baml.types."
         };
 
         let base_rep = match &base_type {
@@ -347,9 +360,9 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     // wrap primitives in `Optional` when generating partial types,
                     // although we should probably only do this when `!needed`.
                     if false {
-                        format!("Union[baml_client.types.{name}, str]")
+                        format!("Union[_baml.types.{name}, str]")
                     } else {
-                        format!("Optional[Union[baml_client.types.{name}, str]]")
+                        format!("Optional[Union[_baml.types.{name}, str]]")
                     }
                 } else {
                     // Note: The `false` here preserves potentially bugged codegen
@@ -357,9 +370,9 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     // wrap primitives in `Optional` when generating partial types,
                     // although we should probably only do this when `!needed`.
                     if false {
-                        format!("baml_client.types.{name}")
+                        format!("_baml.types.{name}")
                     } else {
-                        format!("Optional[baml_client.types.{name}]")
+                        format!("Optional[_baml.types.{name}]")
                     }
                 }
             }
@@ -372,9 +385,9 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             }
             FieldType::RecursiveTypeAlias(name) => {
                 if needed {
-                    format!("baml_client.types.{name}")
+                    format!("_baml.types.{name}")
                 } else {
-                    format!("Optional[baml_client.types.{name}]")
+                    format!("Optional[_baml.types.{name}]")
                 }
             }
             FieldType::Literal(value) => {

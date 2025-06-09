@@ -19,7 +19,7 @@ import os
 
 import baml_py
 
-from .. import baml_client
+from . import _baml
 from .types import Checked, Check
 from .type_builder import TypeBuilder
 
@@ -51,7 +51,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.Recipe:
+    ) -> _baml.types.Recipe:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -64,9 +64,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "AaaSamOutputFormat",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -74,13 +74,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.Recipe, parsed)
+      return cast(_baml.types.Recipe, parsed)
     
     def AliasThatPointsToRecursiveType(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.LinkedListAliasNode:
+    ) -> _baml.types.LinkedListAliasNode:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -93,9 +93,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "AliasThatPointsToRecursiveType",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -103,7 +103,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.LinkedListAliasNode, parsed)
+      return cast(_baml.types.LinkedListAliasNode, parsed)
     
     def AliasWithMultipleAttrs(
         self,
@@ -122,9 +122,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "AliasWithMultipleAttrs",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -151,9 +151,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputClass",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -180,9 +180,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputClass2",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -209,9 +209,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputClassNested",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -238,9 +238,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputEnum",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -267,9 +267,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputList",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -283,7 +283,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.OptionalListAndMap:
+    ) -> _baml.types.OptionalListAndMap:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -296,9 +296,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "AllowedOptionals",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -306,7 +306,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.OptionalListAndMap, parsed)
+      return cast(_baml.types.OptionalListAndMap, parsed)
     
     def AssertFn(
         self,
@@ -325,9 +325,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "AssertFn",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -354,9 +354,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "AudioInput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -383,9 +383,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "AudioInputOpenai",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -399,7 +399,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.LinkedList:
+    ) -> _baml.types.LinkedList:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -412,9 +412,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "BuildLinkedList",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -422,13 +422,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.LinkedList, parsed)
+      return cast(_baml.types.LinkedList, parsed)
     
     def BuildTree(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.Tree:
+    ) -> _baml.types.Tree:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -441,9 +441,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "BuildTree",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -451,13 +451,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.Tree, parsed)
+      return cast(_baml.types.Tree, parsed)
     
     def ClassThatPointsToRecursiveClassThroughAlias(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.ClassToRecAlias:
+    ) -> _baml.types.ClassToRecAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -470,9 +470,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ClassThatPointsToRecursiveClassThroughAlias",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -480,13 +480,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.ClassToRecAlias, parsed)
+      return cast(_baml.types.ClassToRecAlias, parsed)
     
     def ClassifyDynEnumTwo(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Union[baml_client.types.DynEnumTwo, str]:
+    ) -> Union[_baml.types.DynEnumTwo, str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -499,9 +499,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ClassifyDynEnumTwo",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -509,13 +509,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(Union[baml_client.types.DynEnumTwo, str], parsed)
+      return cast(Union[_baml.types.DynEnumTwo, str], parsed)
     
     def ClassifyMessage(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.Category:
+    ) -> _baml.types.Category:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -528,9 +528,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ClassifyMessage",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -538,13 +538,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.Category, parsed)
+      return cast(_baml.types.Category, parsed)
     
     def ClassifyMessage2(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.Category:
+    ) -> _baml.types.Category:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -557,9 +557,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ClassifyMessage2",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -567,13 +567,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.Category, parsed)
+      return cast(_baml.types.Category, parsed)
     
     def ClassifyMessage3(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.Category:
+    ) -> _baml.types.Category:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -586,9 +586,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ClassifyMessage3",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -596,7 +596,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.Category, parsed)
+      return cast(_baml.types.Category, parsed)
     
     def Completion(
         self,
@@ -615,9 +615,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "Completion",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -631,7 +631,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Union[baml_client.types.BookOrder, baml_client.types.FlightConfirmation, baml_client.types.GroceryReceipt]:
+    ) -> Union[_baml.types.BookOrder, _baml.types.FlightConfirmation, _baml.types.GroceryReceipt]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -644,9 +644,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "CustomTask",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -654,7 +654,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(Union[baml_client.types.BookOrder, baml_client.types.FlightConfirmation, baml_client.types.GroceryReceipt], parsed)
+      return cast(Union[_baml.types.BookOrder, _baml.types.FlightConfirmation, _baml.types.GroceryReceipt], parsed)
     
     def DescribeImage(
         self,
@@ -673,9 +673,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -702,9 +702,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage2",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -731,9 +731,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage3",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -760,9 +760,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage4",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -789,9 +789,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "DescribeMedia1599",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -805,7 +805,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Union[baml_client.types.OriginalA, baml_client.types.OriginalB]:
+    ) -> Union[_baml.types.OriginalA, _baml.types.OriginalB]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -818,9 +818,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "DifferentiateUnions",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -828,13 +828,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(Union[baml_client.types.OriginalA, baml_client.types.OriginalB], parsed)
+      return cast(Union[_baml.types.OriginalA, _baml.types.OriginalB], parsed)
     
     def DummyOutputFunction(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.DummyOutput:
+    ) -> _baml.types.DummyOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -847,9 +847,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "DummyOutputFunction",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -857,13 +857,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.DummyOutput, parsed)
+      return cast(_baml.types.DummyOutput, parsed)
     
     def DynamicFunc(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.DynamicClassTwo:
+    ) -> _baml.types.DynamicClassTwo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -876,9 +876,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "DynamicFunc",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -886,13 +886,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.DynamicClassTwo, parsed)
+      return cast(_baml.types.DynamicClassTwo, parsed)
     
     def DynamicInputOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.DynInputOutput:
+    ) -> _baml.types.DynInputOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -905,9 +905,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "DynamicInputOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -915,13 +915,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.DynInputOutput, parsed)
+      return cast(_baml.types.DynInputOutput, parsed)
     
     def DynamicListInputOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[baml_client.types.DynInputOutput]:
+    ) -> List[_baml.types.DynInputOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -934,9 +934,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "DynamicListInputOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -944,7 +944,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(List[baml_client.types.DynInputOutput], parsed)
+      return cast(List[_baml.types.DynInputOutput], parsed)
     
     def ExpectFailure(
         self,
@@ -963,9 +963,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ExpectFailure",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -979,7 +979,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.ContactInfo:
+    ) -> _baml.types.ContactInfo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -992,9 +992,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractContactInfo",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1002,13 +1002,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.ContactInfo, parsed)
+      return cast(_baml.types.ContactInfo, parsed)
     
     def ExtractEntities(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.DynamicSchema:
+    ) -> _baml.types.DynamicSchema:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1021,9 +1021,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractEntities",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1031,13 +1031,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.DynamicSchema, parsed)
+      return cast(_baml.types.DynamicSchema, parsed)
     
     def ExtractHobby(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[Union[baml_client.types.Hobby, str]]:
+    ) -> List[Union[_baml.types.Hobby, str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1050,9 +1050,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractHobby",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1060,7 +1060,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(List[Union[baml_client.types.Hobby, str]], parsed)
+      return cast(List[Union[_baml.types.Hobby, str]], parsed)
     
     def ExtractNames(
         self,
@@ -1079,9 +1079,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractNames",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1095,7 +1095,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[baml_client.types.Person]:
+    ) -> List[_baml.types.Person]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1108,9 +1108,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractPeople",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1118,13 +1118,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(List[baml_client.types.Person], parsed)
+      return cast(List[_baml.types.Person], parsed)
     
     def ExtractReceiptInfo(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.ReceiptInfo:
+    ) -> _baml.types.ReceiptInfo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1137,9 +1137,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractReceiptInfo",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1147,13 +1147,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.ReceiptInfo, parsed)
+      return cast(_baml.types.ReceiptInfo, parsed)
     
     def ExtractResume(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.Resume:
+    ) -> _baml.types.Resume:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1166,9 +1166,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractResume",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1176,13 +1176,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.Resume, parsed)
+      return cast(_baml.types.Resume, parsed)
     
     def ExtractResume2(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.Resume:
+    ) -> _baml.types.Resume:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1195,9 +1195,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractResume2",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1205,13 +1205,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.Resume, parsed)
+      return cast(_baml.types.Resume, parsed)
     
     def FnClassOptionalOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[baml_client.types.ClassOptionalOutput]:
+    ) -> Optional[_baml.types.ClassOptionalOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1224,9 +1224,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnClassOptionalOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1234,13 +1234,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(Optional[baml_client.types.ClassOptionalOutput], parsed)
+      return cast(Optional[_baml.types.ClassOptionalOutput], parsed)
     
     def FnClassOptionalOutput2(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[baml_client.types.ClassOptionalOutput2]:
+    ) -> Optional[_baml.types.ClassOptionalOutput2]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1253,9 +1253,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnClassOptionalOutput2",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1263,13 +1263,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(Optional[baml_client.types.ClassOptionalOutput2], parsed)
+      return cast(Optional[_baml.types.ClassOptionalOutput2], parsed)
     
     def FnEnumListOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[baml_client.types.EnumOutput]:
+    ) -> List[_baml.types.EnumOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1282,9 +1282,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnEnumListOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1292,13 +1292,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(List[baml_client.types.EnumOutput], parsed)
+      return cast(List[_baml.types.EnumOutput], parsed)
     
     def FnEnumOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.EnumOutput:
+    ) -> _baml.types.EnumOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1311,9 +1311,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnEnumOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1321,13 +1321,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.EnumOutput, parsed)
+      return cast(_baml.types.EnumOutput, parsed)
     
     def FnLiteralClassInputOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.LiteralClassHello:
+    ) -> _baml.types.LiteralClassHello:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1340,9 +1340,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnLiteralClassInputOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1350,13 +1350,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.LiteralClassHello, parsed)
+      return cast(_baml.types.LiteralClassHello, parsed)
     
     def FnLiteralUnionClassInputOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Union[baml_client.types.LiteralClassOne, baml_client.types.LiteralClassTwo]:
+    ) -> Union[_baml.types.LiteralClassOne, _baml.types.LiteralClassTwo]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1369,9 +1369,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnLiteralUnionClassInputOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1379,7 +1379,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(Union[baml_client.types.LiteralClassOne, baml_client.types.LiteralClassTwo], parsed)
+      return cast(Union[_baml.types.LiteralClassOne, _baml.types.LiteralClassTwo], parsed)
     
     def FnNamedArgsSingleStringOptional(
         self,
@@ -1398,9 +1398,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnNamedArgsSingleStringOptional",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1427,9 +1427,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputBool",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1443,7 +1443,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.TestOutputClass:
+    ) -> _baml.types.TestOutputClass:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1456,9 +1456,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClass",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1466,13 +1466,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.TestOutputClass, parsed)
+      return cast(_baml.types.TestOutputClass, parsed)
     
     def FnOutputClassList(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[baml_client.types.TestOutputClass]:
+    ) -> List[_baml.types.TestOutputClass]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1485,9 +1485,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClassList",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1495,13 +1495,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(List[baml_client.types.TestOutputClass], parsed)
+      return cast(List[_baml.types.TestOutputClass], parsed)
     
     def FnOutputClassNested(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.TestClassNested:
+    ) -> _baml.types.TestClassNested:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1514,9 +1514,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClassNested",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1524,13 +1524,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.TestClassNested, parsed)
+      return cast(_baml.types.TestClassNested, parsed)
     
     def FnOutputClassWithEnum(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.TestClassWithEnum:
+    ) -> _baml.types.TestClassWithEnum:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1543,9 +1543,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClassWithEnum",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1553,7 +1553,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.TestClassWithEnum, parsed)
+      return cast(_baml.types.TestClassWithEnum, parsed)
     
     def FnOutputInt(
         self,
@@ -1572,9 +1572,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputInt",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1601,9 +1601,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputLiteralBool",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1630,9 +1630,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputLiteralInt",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1659,9 +1659,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputLiteralString",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1688,9 +1688,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputStringList",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1704,7 +1704,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.TestEnum:
+    ) -> _baml.types.TestEnum:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1717,9 +1717,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnTestAliasedEnumOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1727,13 +1727,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.TestEnum, parsed)
+      return cast(_baml.types.TestEnum, parsed)
     
     def FnTestClassAlias(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.TestClassAlias:
+    ) -> _baml.types.TestClassAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1746,9 +1746,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnTestClassAlias",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1756,7 +1756,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.TestClassAlias, parsed)
+      return cast(_baml.types.TestClassAlias, parsed)
     
     def FnTestNamedArgsSingleEnum(
         self,
@@ -1775,9 +1775,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "FnTestNamedArgsSingleEnum",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1791,7 +1791,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.RaysData:
+    ) -> _baml.types.RaysData:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1804,9 +1804,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "GetDataType",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1814,13 +1814,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.RaysData, parsed)
+      return cast(_baml.types.RaysData, parsed)
     
     def GetOrderInfo(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.OrderInfo:
+    ) -> _baml.types.OrderInfo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1833,9 +1833,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "GetOrderInfo",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1843,13 +1843,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.OrderInfo, parsed)
+      return cast(_baml.types.OrderInfo, parsed)
     
     def GetQuery(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.SearchParams:
+    ) -> _baml.types.SearchParams:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1862,9 +1862,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "GetQuery",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1872,13 +1872,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.SearchParams, parsed)
+      return cast(_baml.types.SearchParams, parsed)
     
     def InOutEnumMapKey(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[baml_client.types.MapKey, str]:
+    ) -> Dict[_baml.types.MapKey, str]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1891,9 +1891,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "InOutEnumMapKey",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1901,7 +1901,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(Dict[baml_client.types.MapKey, str], parsed)
+      return cast(Dict[_baml.types.MapKey, str], parsed)
     
     def InOutLiteralStringUnionMapKey(
         self,
@@ -1920,9 +1920,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "InOutLiteralStringUnionMapKey",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1949,9 +1949,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "InOutSingleLiteralStringMapKey",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1965,7 +1965,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.JsonValue:
+    ) -> _baml.types.JsonValue:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -1978,9 +1978,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "JsonTypeAliasCycle",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -1988,7 +1988,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.JsonValue, parsed)
+      return cast(_baml.types.JsonValue, parsed)
     
     def LLMEcho(
         self,
@@ -2007,9 +2007,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "LLMEcho",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2036,9 +2036,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "LiteralUnionsTest",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2052,7 +2052,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Checked[baml_client.types.BlockConstraint, Literal["cross_field"]]:
+    ) -> Checked[_baml.types.BlockConstraint, Literal["cross_field"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2065,9 +2065,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "MakeBlockConstraint",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2075,13 +2075,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(Checked[baml_client.types.BlockConstraint, Literal["cross_field"]], parsed)
+      return cast(Checked[_baml.types.BlockConstraint, Literal["cross_field"]], parsed)
     
     def MakeClassWithBlockDone(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.ClassWithBlockDone:
+    ) -> _baml.types.ClassWithBlockDone:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2094,9 +2094,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "MakeClassWithBlockDone",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2104,13 +2104,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.ClassWithBlockDone, parsed)
+      return cast(_baml.types.ClassWithBlockDone, parsed)
     
     def MakeClassWithExternalDone(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.ClassWithoutDone:
+    ) -> _baml.types.ClassWithoutDone:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2123,9 +2123,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "MakeClassWithExternalDone",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2133,13 +2133,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.ClassWithoutDone, parsed)
+      return cast(_baml.types.ClassWithoutDone, parsed)
     
     def MakeNestedBlockConstraint(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.NestedBlockConstraint:
+    ) -> _baml.types.NestedBlockConstraint:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2152,9 +2152,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "MakeNestedBlockConstraint",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2162,13 +2162,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.NestedBlockConstraint, parsed)
+      return cast(_baml.types.NestedBlockConstraint, parsed)
     
     def MakeSemanticContainer(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.SemanticContainer:
+    ) -> _baml.types.SemanticContainer:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2181,9 +2181,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "MakeSemanticContainer",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2191,7 +2191,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.SemanticContainer, parsed)
+      return cast(_baml.types.SemanticContainer, parsed)
     
     def MapAlias(
         self,
@@ -2210,9 +2210,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "MapAlias",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2226,7 +2226,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.MergeAttrs:
+    ) -> _baml.types.MergeAttrs:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2239,9 +2239,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "MergeAliasAttributes",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2249,13 +2249,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.MergeAttrs, parsed)
+      return cast(_baml.types.MergeAttrs, parsed)
     
     def MyFunc(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.DynamicOutput:
+    ) -> _baml.types.DynamicOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2268,9 +2268,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "MyFunc",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2278,7 +2278,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.DynamicOutput, parsed)
+      return cast(_baml.types.DynamicOutput, parsed)
     
     def NestedAlias(
         self,
@@ -2297,9 +2297,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "NestedAlias",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2313,7 +2313,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.ClassForNullLiteral:
+    ) -> _baml.types.ClassForNullLiteral:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2326,9 +2326,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "NullLiteralClassHello",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2336,7 +2336,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.ClassForNullLiteral, parsed)
+      return cast(_baml.types.ClassForNullLiteral, parsed)
     
     def OpenAIWithAnthropicResponseHello(
         self,
@@ -2355,9 +2355,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "OpenAIWithAnthropicResponseHello",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2371,7 +2371,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[Optional[baml_client.types.OptionalTest_ReturnType]]:
+    ) -> List[Optional[_baml.types.OptionalTest_ReturnType]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2384,9 +2384,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "OptionalTest_Function",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2394,13 +2394,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(List[Optional[baml_client.types.OptionalTest_ReturnType]], parsed)
+      return cast(List[Optional[_baml.types.OptionalTest_ReturnType]], parsed)
     
     def PredictAge(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.FooAny:
+    ) -> _baml.types.FooAny:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2413,9 +2413,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "PredictAge",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2423,7 +2423,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.FooAny, parsed)
+      return cast(_baml.types.FooAny, parsed)
     
     def PredictAgeBare(
         self,
@@ -2442,9 +2442,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "PredictAgeBare",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2471,9 +2471,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "PrimitiveAlias",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2500,9 +2500,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "PromptTestClaude",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2529,9 +2529,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "PromptTestClaudeChat",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2558,9 +2558,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "PromptTestClaudeChatNoSystem",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2587,9 +2587,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "PromptTestOpenAI",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2616,9 +2616,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "PromptTestOpenAIChat",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2645,9 +2645,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "PromptTestOpenAIChatNoSystem",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2674,9 +2674,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "PromptTestStreaming",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2690,7 +2690,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.RecAliasOne:
+    ) -> _baml.types.RecAliasOne:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2703,9 +2703,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "RecursiveAliasCycle",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2713,13 +2713,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.RecAliasOne, parsed)
+      return cast(_baml.types.RecAliasOne, parsed)
     
     def RecursiveClassWithAliasIndirection(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.NodeWithAliasIndirection:
+    ) -> _baml.types.NodeWithAliasIndirection:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2732,9 +2732,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "RecursiveClassWithAliasIndirection",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2742,13 +2742,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.NodeWithAliasIndirection, parsed)
+      return cast(_baml.types.NodeWithAliasIndirection, parsed)
     
     def RecursiveUnionTest(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.RecursiveUnion:
+    ) -> _baml.types.RecursiveUnion:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2761,9 +2761,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "RecursiveUnionTest",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2771,7 +2771,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.RecursiveUnion, parsed)
+      return cast(_baml.types.RecursiveUnion, parsed)
     
     def ReturnAliasWithMergedAttributes(
         self,
@@ -2790,9 +2790,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ReturnAliasWithMergedAttributes",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2819,9 +2819,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ReturnFailingAssert",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2835,7 +2835,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.JsonTemplate:
+    ) -> _baml.types.JsonTemplate:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2848,9 +2848,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ReturnJsonEntry",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2858,13 +2858,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.JsonTemplate, parsed)
+      return cast(_baml.types.JsonTemplate, parsed)
     
     def ReturnMalformedConstraints(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.MalformedConstraints:
+    ) -> _baml.types.MalformedConstraints:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2877,9 +2877,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "ReturnMalformedConstraints",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2887,13 +2887,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.MalformedConstraints, parsed)
+      return cast(_baml.types.MalformedConstraints, parsed)
     
     def SchemaDescriptions(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.Schema:
+    ) -> _baml.types.Schema:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2906,9 +2906,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "SchemaDescriptions",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2916,13 +2916,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.Schema, parsed)
+      return cast(_baml.types.Schema, parsed)
     
     def SimpleRecursiveListAlias(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.RecursiveListAlias:
+    ) -> _baml.types.RecursiveListAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2935,9 +2935,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "SimpleRecursiveListAlias",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2945,13 +2945,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.RecursiveListAlias, parsed)
+      return cast(_baml.types.RecursiveListAlias, parsed)
     
     def SimpleRecursiveMapAlias(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.RecursiveMapAlias:
+    ) -> _baml.types.RecursiveMapAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2964,9 +2964,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "SimpleRecursiveMapAlias",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -2974,13 +2974,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.RecursiveMapAlias, parsed)
+      return cast(_baml.types.RecursiveMapAlias, parsed)
     
     def StreamBigNumbers(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.BigNumbers:
+    ) -> _baml.types.BigNumbers:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -2993,9 +2993,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "StreamBigNumbers",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3003,13 +3003,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.BigNumbers, parsed)
+      return cast(_baml.types.BigNumbers, parsed)
     
     def StreamFailingAssertion(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.TwoStoriesOneTitle:
+    ) -> _baml.types.TwoStoriesOneTitle:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3022,9 +3022,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "StreamFailingAssertion",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3032,13 +3032,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.TwoStoriesOneTitle, parsed)
+      return cast(_baml.types.TwoStoriesOneTitle, parsed)
     
     def StreamFailingCheck(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.TwoStoriesOneTitleCheck:
+    ) -> _baml.types.TwoStoriesOneTitleCheck:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3051,9 +3051,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "StreamFailingCheck",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3061,7 +3061,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.TwoStoriesOneTitleCheck, parsed)
+      return cast(_baml.types.TwoStoriesOneTitleCheck, parsed)
     
     def StreamOneBigNumber(
         self,
@@ -3080,9 +3080,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "StreamOneBigNumber",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3109,9 +3109,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "StreamUnionIntegers",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3125,7 +3125,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.CompoundBigNumbers:
+    ) -> _baml.types.CompoundBigNumbers:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3138,9 +3138,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "StreamingCompoundNumbers",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3148,13 +3148,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.CompoundBigNumbers, parsed)
+      return cast(_baml.types.CompoundBigNumbers, parsed)
     
     def StructureDocument1559(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.Document1559:
+    ) -> _baml.types.Document1559:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3167,9 +3167,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "StructureDocument1559",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3177,13 +3177,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.Document1559, parsed)
+      return cast(_baml.types.Document1559, parsed)
     
     def TakeRecAliasDep(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.RecursiveAliasDependency:
+    ) -> _baml.types.RecursiveAliasDependency:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -3196,9 +3196,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TakeRecAliasDep",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3206,7 +3206,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.RecursiveAliasDependency, parsed)
+      return cast(_baml.types.RecursiveAliasDependency, parsed)
     
     def TellStory(
         self,
@@ -3225,9 +3225,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TellStory",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3254,9 +3254,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAnthropic",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3283,9 +3283,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAnthropicShorthand",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3312,9 +3312,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAws",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3341,9 +3341,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAwsClaude37",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3370,9 +3370,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInferenceProfile",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3399,9 +3399,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidAccessKey",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3428,9 +3428,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidProfile",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3457,9 +3457,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidRegion",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3486,9 +3486,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidSessionToken",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3515,9 +3515,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzure",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3544,9 +3544,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzureFailure",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3573,9 +3573,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO1NoMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3602,9 +3602,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO1WithMaxCompletionTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3631,9 +3631,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO1WithMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3660,9 +3660,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO3NoMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3689,9 +3689,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO3WithMaxCompletionTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3718,9 +3718,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzureWithMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3747,9 +3747,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestCaching",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3776,9 +3776,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFallbackClient",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3805,9 +3805,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFallbackStrategy",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3834,9 +3834,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFallbackToShorthand",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3863,9 +3863,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleBool",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3892,9 +3892,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleClass",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3921,9 +3921,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleEnumList",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3950,9 +3950,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleFloat",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3979,9 +3979,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleInt",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -3995,7 +3995,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, baml_client.types.StringToClassEntry]:
+    ) -> Dict[str, _baml.types.StringToClassEntry]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4008,9 +4008,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleMapStringToClass",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4018,7 +4018,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(Dict[str, baml_client.types.StringToClassEntry], parsed)
+      return cast(Dict[str, _baml.types.StringToClassEntry], parsed)
     
     def TestFnNamedArgsSingleMapStringToMap(
         self,
@@ -4037,9 +4037,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleMapStringToMap",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4066,9 +4066,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleMapStringToString",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4095,9 +4095,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleString",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4124,9 +4124,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleStringArray",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4153,9 +4153,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleStringList",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4182,9 +4182,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestGemini",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4211,9 +4211,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestGeminiOpenAiGeneric",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4240,9 +4240,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestGeminiSystem",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4269,9 +4269,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestGeminiSystemAsChat",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4298,9 +4298,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestGroq",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4327,9 +4327,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestImageInput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4356,9 +4356,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestImageInputAnthropic",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4385,9 +4385,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestImageListInput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4401,7 +4401,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.TestMemoryOutput:
+    ) -> _baml.types.TestMemoryOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4414,9 +4414,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestMemory",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4424,7 +4424,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.TestMemoryOutput, parsed)
+      return cast(_baml.types.TestMemoryOutput, parsed)
     
     def TestMulticlassNamedArgs(
         self,
@@ -4443,9 +4443,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestMulticlassNamedArgs",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4472,9 +4472,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestNamedArgsLiteralBool",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4501,9 +4501,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestNamedArgsLiteralInt",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4530,9 +4530,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestNamedArgsLiteralString",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4559,9 +4559,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOllama",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4575,7 +4575,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.Haiku:
+    ) -> _baml.types.Haiku:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -4588,9 +4588,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOllamaHaiku",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4598,7 +4598,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.Haiku, parsed)
+      return cast(_baml.types.Haiku, parsed)
     
     def TestOpenAI(
         self,
@@ -4617,9 +4617,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAI",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4646,9 +4646,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIDummyClient",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4675,9 +4675,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIGPT4oMini",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4704,9 +4704,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAILegacyProvider",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4733,9 +4733,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIO1NoMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4762,9 +4762,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIO1WithMaxCompletionTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4791,9 +4791,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIO1WithMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4820,9 +4820,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIShorthand",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4849,9 +4849,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIWithFinishReasonError",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4878,9 +4878,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIWithMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4907,9 +4907,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIWithNullMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4936,9 +4936,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenRouterMistralSmall3_1_24b",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4965,9 +4965,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestRetryConstant",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -4994,9 +4994,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestRetryExponential",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -5023,9 +5023,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestRoundRobinStrategy",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -5052,9 +5052,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestSingleFallbackClient",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -5068,7 +5068,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.CustomStory:
+    ) -> _baml.types.CustomStory:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5081,9 +5081,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestThinking",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -5091,13 +5091,13 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.CustomStory, parsed)
+      return cast(_baml.types.CustomStory, parsed)
     
     def TestUniverseQuestion(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.UniverseQuestion:
+    ) -> _baml.types.UniverseQuestion:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5110,9 +5110,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestUniverseQuestion",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -5120,7 +5120,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.UniverseQuestion, parsed)
+      return cast(_baml.types.UniverseQuestion, parsed)
     
     def TestVertex(
         self,
@@ -5139,9 +5139,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestVertex",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -5168,9 +5168,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestVertexClaude",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -5197,9 +5197,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "TestVertexWithSystemInstructions",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -5213,7 +5213,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.UnionTest_ReturnType:
+    ) -> _baml.types.UnionTest_ReturnType:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5226,9 +5226,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "UnionTest_Function",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -5236,7 +5236,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.UnionTest_ReturnType, parsed)
+      return cast(_baml.types.UnionTest_ReturnType, parsed)
     
     def UseBlockConstraint(
         self,
@@ -5255,9 +5255,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "UseBlockConstraint",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -5271,7 +5271,7 @@ class LlmResponseParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.MaintainFieldOrder:
+    ) -> _baml.types.MaintainFieldOrder:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5284,9 +5284,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "UseMaintainFieldOrder",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -5294,7 +5294,7 @@ class LlmResponseParser:
         env,
       )
 
-      return cast(baml_client.types.MaintainFieldOrder, parsed)
+      return cast(_baml.types.MaintainFieldOrder, parsed)
     
     def UseMalformedConstraints(
         self,
@@ -5313,9 +5313,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "UseMalformedConstraints",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -5342,9 +5342,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "UseNestedBlockConstraint",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -5371,9 +5371,9 @@ class LlmResponseParser:
       parsed = self.__runtime.parse_llm_response(
         "EchoWorkflow",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -5398,7 +5398,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.Recipe:
+    ) -> _baml.partial_types.Recipe:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5411,9 +5411,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "AaaSamOutputFormat",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5421,13 +5421,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.Recipe, parsed)
+      return cast(_baml.partial_types.Recipe, parsed)
     
     def AliasThatPointsToRecursiveType(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.LinkedListAliasNode:
+    ) -> _baml.partial_types.LinkedListAliasNode:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5440,9 +5440,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "AliasThatPointsToRecursiveType",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5450,7 +5450,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.LinkedListAliasNode, parsed)
+      return cast(_baml.partial_types.LinkedListAliasNode, parsed)
     
     def AliasWithMultipleAttrs(
         self,
@@ -5469,9 +5469,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "AliasWithMultipleAttrs",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5498,9 +5498,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputClass",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5527,9 +5527,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputClass2",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5556,9 +5556,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputClassNested",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5585,9 +5585,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputEnum",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5614,9 +5614,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "AliasedInputList",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5630,7 +5630,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.OptionalListAndMap:
+    ) -> _baml.partial_types.OptionalListAndMap:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5643,9 +5643,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "AllowedOptionals",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5653,7 +5653,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.OptionalListAndMap, parsed)
+      return cast(_baml.partial_types.OptionalListAndMap, parsed)
     
     def AssertFn(
         self,
@@ -5672,9 +5672,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "AssertFn",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5701,9 +5701,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "AudioInput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5730,9 +5730,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "AudioInputOpenai",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5746,7 +5746,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.LinkedList:
+    ) -> _baml.partial_types.LinkedList:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5759,9 +5759,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "BuildLinkedList",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5769,13 +5769,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.LinkedList, parsed)
+      return cast(_baml.partial_types.LinkedList, parsed)
     
     def BuildTree(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.Tree:
+    ) -> _baml.partial_types.Tree:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5788,9 +5788,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "BuildTree",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5798,13 +5798,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.Tree, parsed)
+      return cast(_baml.partial_types.Tree, parsed)
     
     def ClassThatPointsToRecursiveClassThroughAlias(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.ClassToRecAlias:
+    ) -> _baml.partial_types.ClassToRecAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5817,9 +5817,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ClassThatPointsToRecursiveClassThroughAlias",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5827,13 +5827,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.ClassToRecAlias, parsed)
+      return cast(_baml.partial_types.ClassToRecAlias, parsed)
     
     def ClassifyDynEnumTwo(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[Union[baml_client.types.DynEnumTwo, str]]:
+    ) -> Optional[Union[_baml.types.DynEnumTwo, str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5846,9 +5846,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ClassifyDynEnumTwo",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5856,13 +5856,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(Optional[Union[baml_client.types.DynEnumTwo, str]], parsed)
+      return cast(Optional[Union[_baml.types.DynEnumTwo, str]], parsed)
     
     def ClassifyMessage(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[baml_client.types.Category]:
+    ) -> Optional[_baml.types.Category]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5875,9 +5875,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ClassifyMessage",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5885,13 +5885,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(Optional[baml_client.types.Category], parsed)
+      return cast(Optional[_baml.types.Category], parsed)
     
     def ClassifyMessage2(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[baml_client.types.Category]:
+    ) -> Optional[_baml.types.Category]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5904,9 +5904,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ClassifyMessage2",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5914,13 +5914,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(Optional[baml_client.types.Category], parsed)
+      return cast(Optional[_baml.types.Category], parsed)
     
     def ClassifyMessage3(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[baml_client.types.Category]:
+    ) -> Optional[_baml.types.Category]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5933,9 +5933,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ClassifyMessage3",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5943,7 +5943,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(Optional[baml_client.types.Category], parsed)
+      return cast(Optional[_baml.types.Category], parsed)
     
     def Completion(
         self,
@@ -5962,9 +5962,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "Completion",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -5978,7 +5978,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[Union[baml_client.partial_types.BookOrder, baml_client.partial_types.FlightConfirmation, baml_client.partial_types.GroceryReceipt]]:
+    ) -> Optional[Union[_baml.partial_types.BookOrder, _baml.partial_types.FlightConfirmation, _baml.partial_types.GroceryReceipt]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -5991,9 +5991,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "CustomTask",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6001,7 +6001,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(Optional[Union[baml_client.partial_types.BookOrder, baml_client.partial_types.FlightConfirmation, baml_client.partial_types.GroceryReceipt]], parsed)
+      return cast(Optional[Union[_baml.partial_types.BookOrder, _baml.partial_types.FlightConfirmation, _baml.partial_types.GroceryReceipt]], parsed)
     
     def DescribeImage(
         self,
@@ -6020,9 +6020,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6049,9 +6049,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage2",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6078,9 +6078,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage3",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6107,9 +6107,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "DescribeImage4",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6136,9 +6136,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "DescribeMedia1599",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6152,7 +6152,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[Union[baml_client.partial_types.OriginalA, baml_client.partial_types.OriginalB]]:
+    ) -> Optional[Union[_baml.partial_types.OriginalA, _baml.partial_types.OriginalB]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6165,9 +6165,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "DifferentiateUnions",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6175,13 +6175,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(Optional[Union[baml_client.partial_types.OriginalA, baml_client.partial_types.OriginalB]], parsed)
+      return cast(Optional[Union[_baml.partial_types.OriginalA, _baml.partial_types.OriginalB]], parsed)
     
     def DummyOutputFunction(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.DummyOutput:
+    ) -> _baml.partial_types.DummyOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6194,9 +6194,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "DummyOutputFunction",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6204,13 +6204,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.DummyOutput, parsed)
+      return cast(_baml.partial_types.DummyOutput, parsed)
     
     def DynamicFunc(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.DynamicClassTwo:
+    ) -> _baml.partial_types.DynamicClassTwo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6223,9 +6223,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "DynamicFunc",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6233,13 +6233,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.DynamicClassTwo, parsed)
+      return cast(_baml.partial_types.DynamicClassTwo, parsed)
     
     def DynamicInputOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.DynInputOutput:
+    ) -> _baml.partial_types.DynInputOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6252,9 +6252,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "DynamicInputOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6262,13 +6262,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.DynInputOutput, parsed)
+      return cast(_baml.partial_types.DynInputOutput, parsed)
     
     def DynamicListInputOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[baml_client.partial_types.DynInputOutput]:
+    ) -> List[_baml.partial_types.DynInputOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6281,9 +6281,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "DynamicListInputOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6291,7 +6291,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(List[baml_client.partial_types.DynInputOutput], parsed)
+      return cast(List[_baml.partial_types.DynInputOutput], parsed)
     
     def ExpectFailure(
         self,
@@ -6310,9 +6310,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ExpectFailure",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6326,7 +6326,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.ContactInfo:
+    ) -> _baml.partial_types.ContactInfo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6339,9 +6339,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractContactInfo",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6349,13 +6349,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.ContactInfo, parsed)
+      return cast(_baml.partial_types.ContactInfo, parsed)
     
     def ExtractEntities(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.DynamicSchema:
+    ) -> _baml.partial_types.DynamicSchema:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6368,9 +6368,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractEntities",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6378,13 +6378,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.DynamicSchema, parsed)
+      return cast(_baml.partial_types.DynamicSchema, parsed)
     
     def ExtractHobby(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[Optional[Union[baml_client.types.Hobby, str]]]:
+    ) -> List[Optional[Union[_baml.types.Hobby, str]]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6397,9 +6397,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractHobby",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6407,7 +6407,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(List[Optional[Union[baml_client.types.Hobby, str]]], parsed)
+      return cast(List[Optional[Union[_baml.types.Hobby, str]]], parsed)
     
     def ExtractNames(
         self,
@@ -6426,9 +6426,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractNames",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6442,7 +6442,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[baml_client.partial_types.Person]:
+    ) -> List[_baml.partial_types.Person]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6455,9 +6455,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractPeople",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6465,13 +6465,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(List[baml_client.partial_types.Person], parsed)
+      return cast(List[_baml.partial_types.Person], parsed)
     
     def ExtractReceiptInfo(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.ReceiptInfo:
+    ) -> _baml.partial_types.ReceiptInfo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6484,9 +6484,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractReceiptInfo",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6494,13 +6494,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.ReceiptInfo, parsed)
+      return cast(_baml.partial_types.ReceiptInfo, parsed)
     
     def ExtractResume(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.Resume:
+    ) -> _baml.partial_types.Resume:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6513,9 +6513,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractResume",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6523,13 +6523,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.Resume, parsed)
+      return cast(_baml.partial_types.Resume, parsed)
     
     def ExtractResume2(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.Resume:
+    ) -> _baml.partial_types.Resume:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6542,9 +6542,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ExtractResume2",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6552,13 +6552,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.Resume, parsed)
+      return cast(_baml.partial_types.Resume, parsed)
     
     def FnClassOptionalOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[baml_client.partial_types.ClassOptionalOutput]:
+    ) -> Optional[_baml.partial_types.ClassOptionalOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6571,9 +6571,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnClassOptionalOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6581,13 +6581,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(Optional[baml_client.partial_types.ClassOptionalOutput], parsed)
+      return cast(Optional[_baml.partial_types.ClassOptionalOutput], parsed)
     
     def FnClassOptionalOutput2(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[baml_client.partial_types.ClassOptionalOutput2]:
+    ) -> Optional[_baml.partial_types.ClassOptionalOutput2]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6600,9 +6600,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnClassOptionalOutput2",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6610,13 +6610,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(Optional[baml_client.partial_types.ClassOptionalOutput2], parsed)
+      return cast(Optional[_baml.partial_types.ClassOptionalOutput2], parsed)
     
     def FnEnumListOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[Optional[baml_client.types.EnumOutput]]:
+    ) -> List[Optional[_baml.types.EnumOutput]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6629,9 +6629,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnEnumListOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6639,13 +6639,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(List[Optional[baml_client.types.EnumOutput]], parsed)
+      return cast(List[Optional[_baml.types.EnumOutput]], parsed)
     
     def FnEnumOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[baml_client.types.EnumOutput]:
+    ) -> Optional[_baml.types.EnumOutput]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6658,9 +6658,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnEnumOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6668,13 +6668,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(Optional[baml_client.types.EnumOutput], parsed)
+      return cast(Optional[_baml.types.EnumOutput], parsed)
     
     def FnLiteralClassInputOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.LiteralClassHello:
+    ) -> _baml.partial_types.LiteralClassHello:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6687,9 +6687,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnLiteralClassInputOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6697,13 +6697,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.LiteralClassHello, parsed)
+      return cast(_baml.partial_types.LiteralClassHello, parsed)
     
     def FnLiteralUnionClassInputOutput(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[Union[baml_client.partial_types.LiteralClassOne, baml_client.partial_types.LiteralClassTwo]]:
+    ) -> Optional[Union[_baml.partial_types.LiteralClassOne, _baml.partial_types.LiteralClassTwo]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6716,9 +6716,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnLiteralUnionClassInputOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6726,7 +6726,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(Optional[Union[baml_client.partial_types.LiteralClassOne, baml_client.partial_types.LiteralClassTwo]], parsed)
+      return cast(Optional[Union[_baml.partial_types.LiteralClassOne, _baml.partial_types.LiteralClassTwo]], parsed)
     
     def FnNamedArgsSingleStringOptional(
         self,
@@ -6745,9 +6745,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnNamedArgsSingleStringOptional",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6774,9 +6774,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputBool",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6790,7 +6790,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.TestOutputClass:
+    ) -> _baml.partial_types.TestOutputClass:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6803,9 +6803,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClass",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6813,13 +6813,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.TestOutputClass, parsed)
+      return cast(_baml.partial_types.TestOutputClass, parsed)
     
     def FnOutputClassList(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[baml_client.partial_types.TestOutputClass]:
+    ) -> List[_baml.partial_types.TestOutputClass]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6832,9 +6832,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClassList",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6842,13 +6842,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(List[baml_client.partial_types.TestOutputClass], parsed)
+      return cast(List[_baml.partial_types.TestOutputClass], parsed)
     
     def FnOutputClassNested(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.TestClassNested:
+    ) -> _baml.partial_types.TestClassNested:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6861,9 +6861,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClassNested",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6871,13 +6871,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.TestClassNested, parsed)
+      return cast(_baml.partial_types.TestClassNested, parsed)
     
     def FnOutputClassWithEnum(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.TestClassWithEnum:
+    ) -> _baml.partial_types.TestClassWithEnum:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -6890,9 +6890,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputClassWithEnum",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6900,7 +6900,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.TestClassWithEnum, parsed)
+      return cast(_baml.partial_types.TestClassWithEnum, parsed)
     
     def FnOutputInt(
         self,
@@ -6919,9 +6919,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputInt",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6948,9 +6948,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputLiteralBool",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -6977,9 +6977,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputLiteralInt",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7006,9 +7006,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputLiteralString",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7035,9 +7035,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnOutputStringList",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7051,7 +7051,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Optional[baml_client.types.TestEnum]:
+    ) -> Optional[_baml.types.TestEnum]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7064,9 +7064,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnTestAliasedEnumOutput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7074,13 +7074,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(Optional[baml_client.types.TestEnum], parsed)
+      return cast(Optional[_baml.types.TestEnum], parsed)
     
     def FnTestClassAlias(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.TestClassAlias:
+    ) -> _baml.partial_types.TestClassAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7093,9 +7093,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnTestClassAlias",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7103,7 +7103,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.TestClassAlias, parsed)
+      return cast(_baml.partial_types.TestClassAlias, parsed)
     
     def FnTestNamedArgsSingleEnum(
         self,
@@ -7122,9 +7122,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "FnTestNamedArgsSingleEnum",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7138,7 +7138,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.RaysData:
+    ) -> _baml.partial_types.RaysData:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7151,9 +7151,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "GetDataType",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7161,13 +7161,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.RaysData, parsed)
+      return cast(_baml.partial_types.RaysData, parsed)
     
     def GetOrderInfo(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.OrderInfo:
+    ) -> _baml.partial_types.OrderInfo:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7180,9 +7180,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "GetOrderInfo",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7190,13 +7190,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.OrderInfo, parsed)
+      return cast(_baml.partial_types.OrderInfo, parsed)
     
     def GetQuery(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.SearchParams:
+    ) -> _baml.partial_types.SearchParams:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7209,9 +7209,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "GetQuery",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7219,13 +7219,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.SearchParams, parsed)
+      return cast(_baml.partial_types.SearchParams, parsed)
     
     def InOutEnumMapKey(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[baml_client.types.MapKey, Optional[str]]:
+    ) -> Dict[_baml.types.MapKey, Optional[str]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7238,9 +7238,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "InOutEnumMapKey",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7248,7 +7248,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(Dict[baml_client.types.MapKey, Optional[str]], parsed)
+      return cast(Dict[_baml.types.MapKey, Optional[str]], parsed)
     
     def InOutLiteralStringUnionMapKey(
         self,
@@ -7267,9 +7267,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "InOutLiteralStringUnionMapKey",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7296,9 +7296,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "InOutSingleLiteralStringMapKey",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7312,7 +7312,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.JsonValue:
+    ) -> _baml.types.JsonValue:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7325,9 +7325,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "JsonTypeAliasCycle",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7335,7 +7335,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.types.JsonValue, parsed)
+      return cast(_baml.types.JsonValue, parsed)
     
     def LLMEcho(
         self,
@@ -7354,9 +7354,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "LLMEcho",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7383,9 +7383,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "LiteralUnionsTest",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7399,7 +7399,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Checked[baml_client.partial_types.BlockConstraint, Literal["cross_field"]]:
+    ) -> Checked[_baml.partial_types.BlockConstraint, Literal["cross_field"]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7412,9 +7412,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "MakeBlockConstraint",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7422,13 +7422,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(Checked[baml_client.partial_types.BlockConstraint, Literal["cross_field"]], parsed)
+      return cast(Checked[_baml.partial_types.BlockConstraint, Literal["cross_field"]], parsed)
     
     def MakeClassWithBlockDone(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.ClassWithBlockDone:
+    ) -> _baml.types.ClassWithBlockDone:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7441,9 +7441,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "MakeClassWithBlockDone",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7451,13 +7451,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.types.ClassWithBlockDone, parsed)
+      return cast(_baml.types.ClassWithBlockDone, parsed)
     
     def MakeClassWithExternalDone(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.ClassWithoutDone:
+    ) -> _baml.types.ClassWithoutDone:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7470,9 +7470,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "MakeClassWithExternalDone",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7480,13 +7480,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.types.ClassWithoutDone, parsed)
+      return cast(_baml.types.ClassWithoutDone, parsed)
     
     def MakeNestedBlockConstraint(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.NestedBlockConstraint:
+    ) -> _baml.partial_types.NestedBlockConstraint:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7499,9 +7499,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "MakeNestedBlockConstraint",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7509,13 +7509,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.NestedBlockConstraint, parsed)
+      return cast(_baml.partial_types.NestedBlockConstraint, parsed)
     
     def MakeSemanticContainer(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.SemanticContainer:
+    ) -> _baml.partial_types.SemanticContainer:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7528,9 +7528,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "MakeSemanticContainer",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7538,7 +7538,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.SemanticContainer, parsed)
+      return cast(_baml.partial_types.SemanticContainer, parsed)
     
     def MapAlias(
         self,
@@ -7557,9 +7557,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "MapAlias",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7573,7 +7573,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.MergeAttrs:
+    ) -> _baml.partial_types.MergeAttrs:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7586,9 +7586,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "MergeAliasAttributes",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7596,13 +7596,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.MergeAttrs, parsed)
+      return cast(_baml.partial_types.MergeAttrs, parsed)
     
     def MyFunc(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.DynamicOutput:
+    ) -> _baml.partial_types.DynamicOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7615,9 +7615,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "MyFunc",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7625,7 +7625,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.DynamicOutput, parsed)
+      return cast(_baml.partial_types.DynamicOutput, parsed)
     
     def NestedAlias(
         self,
@@ -7644,9 +7644,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "NestedAlias",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7660,7 +7660,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.ClassForNullLiteral:
+    ) -> _baml.partial_types.ClassForNullLiteral:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7673,9 +7673,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "NullLiteralClassHello",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7683,7 +7683,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.ClassForNullLiteral, parsed)
+      return cast(_baml.partial_types.ClassForNullLiteral, parsed)
     
     def OpenAIWithAnthropicResponseHello(
         self,
@@ -7702,9 +7702,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "OpenAIWithAnthropicResponseHello",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7718,7 +7718,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> List[Optional[baml_client.partial_types.OptionalTest_ReturnType]]:
+    ) -> List[Optional[_baml.partial_types.OptionalTest_ReturnType]]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7731,9 +7731,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "OptionalTest_Function",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7741,13 +7741,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(List[Optional[baml_client.partial_types.OptionalTest_ReturnType]], parsed)
+      return cast(List[Optional[_baml.partial_types.OptionalTest_ReturnType]], parsed)
     
     def PredictAge(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.FooAny:
+    ) -> _baml.partial_types.FooAny:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -7760,9 +7760,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "PredictAge",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7770,7 +7770,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.FooAny, parsed)
+      return cast(_baml.partial_types.FooAny, parsed)
     
     def PredictAgeBare(
         self,
@@ -7789,9 +7789,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "PredictAgeBare",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7818,9 +7818,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "PrimitiveAlias",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7847,9 +7847,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "PromptTestClaude",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7876,9 +7876,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "PromptTestClaudeChat",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7905,9 +7905,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "PromptTestClaudeChatNoSystem",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7934,9 +7934,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "PromptTestOpenAI",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7963,9 +7963,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "PromptTestOpenAIChat",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -7992,9 +7992,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "PromptTestOpenAIChatNoSystem",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8021,9 +8021,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "PromptTestStreaming",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8037,7 +8037,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.RecAliasOne:
+    ) -> _baml.types.RecAliasOne:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8050,9 +8050,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "RecursiveAliasCycle",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8060,13 +8060,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.types.RecAliasOne, parsed)
+      return cast(_baml.types.RecAliasOne, parsed)
     
     def RecursiveClassWithAliasIndirection(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.NodeWithAliasIndirection:
+    ) -> _baml.partial_types.NodeWithAliasIndirection:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8079,9 +8079,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "RecursiveClassWithAliasIndirection",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8089,13 +8089,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.NodeWithAliasIndirection, parsed)
+      return cast(_baml.partial_types.NodeWithAliasIndirection, parsed)
     
     def RecursiveUnionTest(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.RecursiveUnion:
+    ) -> _baml.types.RecursiveUnion:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8108,9 +8108,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "RecursiveUnionTest",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8118,7 +8118,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.types.RecursiveUnion, parsed)
+      return cast(_baml.types.RecursiveUnion, parsed)
     
     def ReturnAliasWithMergedAttributes(
         self,
@@ -8137,9 +8137,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ReturnAliasWithMergedAttributes",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8166,9 +8166,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ReturnFailingAssert",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8182,7 +8182,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.JsonTemplate:
+    ) -> _baml.types.JsonTemplate:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8195,9 +8195,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ReturnJsonEntry",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8205,13 +8205,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.types.JsonTemplate, parsed)
+      return cast(_baml.types.JsonTemplate, parsed)
     
     def ReturnMalformedConstraints(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.MalformedConstraints:
+    ) -> _baml.partial_types.MalformedConstraints:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8224,9 +8224,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "ReturnMalformedConstraints",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8234,13 +8234,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.MalformedConstraints, parsed)
+      return cast(_baml.partial_types.MalformedConstraints, parsed)
     
     def SchemaDescriptions(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.Schema:
+    ) -> _baml.partial_types.Schema:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8253,9 +8253,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "SchemaDescriptions",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8263,13 +8263,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.Schema, parsed)
+      return cast(_baml.partial_types.Schema, parsed)
     
     def SimpleRecursiveListAlias(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.RecursiveListAlias:
+    ) -> _baml.types.RecursiveListAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8282,9 +8282,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "SimpleRecursiveListAlias",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8292,13 +8292,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.types.RecursiveListAlias, parsed)
+      return cast(_baml.types.RecursiveListAlias, parsed)
     
     def SimpleRecursiveMapAlias(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.types.RecursiveMapAlias:
+    ) -> _baml.types.RecursiveMapAlias:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8311,9 +8311,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "SimpleRecursiveMapAlias",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8321,13 +8321,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.types.RecursiveMapAlias, parsed)
+      return cast(_baml.types.RecursiveMapAlias, parsed)
     
     def StreamBigNumbers(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.BigNumbers:
+    ) -> _baml.partial_types.BigNumbers:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8340,9 +8340,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "StreamBigNumbers",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8350,13 +8350,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.BigNumbers, parsed)
+      return cast(_baml.partial_types.BigNumbers, parsed)
     
     def StreamFailingAssertion(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.TwoStoriesOneTitle:
+    ) -> _baml.partial_types.TwoStoriesOneTitle:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8369,9 +8369,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "StreamFailingAssertion",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8379,13 +8379,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.TwoStoriesOneTitle, parsed)
+      return cast(_baml.partial_types.TwoStoriesOneTitle, parsed)
     
     def StreamFailingCheck(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.TwoStoriesOneTitleCheck:
+    ) -> _baml.partial_types.TwoStoriesOneTitleCheck:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8398,9 +8398,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "StreamFailingCheck",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8408,7 +8408,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.TwoStoriesOneTitleCheck, parsed)
+      return cast(_baml.partial_types.TwoStoriesOneTitleCheck, parsed)
     
     def StreamOneBigNumber(
         self,
@@ -8427,9 +8427,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "StreamOneBigNumber",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8456,9 +8456,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "StreamUnionIntegers",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8472,7 +8472,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.CompoundBigNumbers:
+    ) -> _baml.partial_types.CompoundBigNumbers:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8485,9 +8485,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "StreamingCompoundNumbers",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8495,13 +8495,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.CompoundBigNumbers, parsed)
+      return cast(_baml.partial_types.CompoundBigNumbers, parsed)
     
     def StructureDocument1559(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.Document1559:
+    ) -> _baml.partial_types.Document1559:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8514,9 +8514,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "StructureDocument1559",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8524,13 +8524,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.Document1559, parsed)
+      return cast(_baml.partial_types.Document1559, parsed)
     
     def TakeRecAliasDep(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.RecursiveAliasDependency:
+    ) -> _baml.partial_types.RecursiveAliasDependency:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -8543,9 +8543,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TakeRecAliasDep",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8553,7 +8553,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.RecursiveAliasDependency, parsed)
+      return cast(_baml.partial_types.RecursiveAliasDependency, parsed)
     
     def TellStory(
         self,
@@ -8572,9 +8572,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TellStory",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8601,9 +8601,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAnthropic",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8630,9 +8630,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAnthropicShorthand",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8659,9 +8659,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAws",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8688,9 +8688,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAwsClaude37",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8717,9 +8717,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInferenceProfile",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8746,9 +8746,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidAccessKey",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8775,9 +8775,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidProfile",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8804,9 +8804,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidRegion",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8833,9 +8833,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAwsInvalidSessionToken",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8862,9 +8862,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzure",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8891,9 +8891,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzureFailure",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8920,9 +8920,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO1NoMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8949,9 +8949,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO1WithMaxCompletionTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -8978,9 +8978,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO1WithMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9007,9 +9007,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO3NoMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9036,9 +9036,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzureO3WithMaxCompletionTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9065,9 +9065,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestAzureWithMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9094,9 +9094,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestCaching",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9123,9 +9123,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFallbackClient",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9152,9 +9152,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFallbackStrategy",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9181,9 +9181,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFallbackToShorthand",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9210,9 +9210,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleBool",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9239,9 +9239,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleClass",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9268,9 +9268,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleEnumList",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9297,9 +9297,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleFloat",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9326,9 +9326,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleInt",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9342,7 +9342,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> Dict[str, baml_client.partial_types.StringToClassEntry]:
+    ) -> Dict[str, _baml.partial_types.StringToClassEntry]:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9355,9 +9355,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleMapStringToClass",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9365,7 +9365,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(Dict[str, baml_client.partial_types.StringToClassEntry], parsed)
+      return cast(Dict[str, _baml.partial_types.StringToClassEntry], parsed)
     
     def TestFnNamedArgsSingleMapStringToMap(
         self,
@@ -9384,9 +9384,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleMapStringToMap",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9413,9 +9413,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleMapStringToString",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9442,9 +9442,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleString",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9471,9 +9471,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleStringArray",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9500,9 +9500,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestFnNamedArgsSingleStringList",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9529,9 +9529,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestGemini",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9558,9 +9558,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestGeminiOpenAiGeneric",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9587,9 +9587,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestGeminiSystem",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9616,9 +9616,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestGeminiSystemAsChat",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9645,9 +9645,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestGroq",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9674,9 +9674,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestImageInput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9703,9 +9703,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestImageInputAnthropic",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9732,9 +9732,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestImageListInput",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9748,7 +9748,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.TestMemoryOutput:
+    ) -> _baml.partial_types.TestMemoryOutput:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9761,9 +9761,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestMemory",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9771,7 +9771,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.TestMemoryOutput, parsed)
+      return cast(_baml.partial_types.TestMemoryOutput, parsed)
     
     def TestMulticlassNamedArgs(
         self,
@@ -9790,9 +9790,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestMulticlassNamedArgs",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9819,9 +9819,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestNamedArgsLiteralBool",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9848,9 +9848,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestNamedArgsLiteralInt",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9877,9 +9877,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestNamedArgsLiteralString",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9906,9 +9906,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOllama",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9922,7 +9922,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.Haiku:
+    ) -> _baml.partial_types.Haiku:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -9935,9 +9935,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOllamaHaiku",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9945,7 +9945,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.Haiku, parsed)
+      return cast(_baml.partial_types.Haiku, parsed)
     
     def TestOpenAI(
         self,
@@ -9964,9 +9964,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAI",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -9993,9 +9993,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIDummyClient",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10022,9 +10022,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIGPT4oMini",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10051,9 +10051,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAILegacyProvider",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10080,9 +10080,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIO1NoMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10109,9 +10109,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIO1WithMaxCompletionTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10138,9 +10138,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIO1WithMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10167,9 +10167,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIShorthand",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10196,9 +10196,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIWithFinishReasonError",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10225,9 +10225,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIWithMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10254,9 +10254,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIWithNullMaxTokens",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10283,9 +10283,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestOpenRouterMistralSmall3_1_24b",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10312,9 +10312,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestRetryConstant",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10341,9 +10341,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestRetryExponential",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10370,9 +10370,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestRoundRobinStrategy",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10399,9 +10399,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestSingleFallbackClient",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10415,7 +10415,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.CustomStory:
+    ) -> _baml.partial_types.CustomStory:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10428,9 +10428,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestThinking",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10438,13 +10438,13 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.CustomStory, parsed)
+      return cast(_baml.partial_types.CustomStory, parsed)
     
     def TestUniverseQuestion(
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.UniverseQuestion:
+    ) -> _baml.partial_types.UniverseQuestion:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10457,9 +10457,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestUniverseQuestion",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10467,7 +10467,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.UniverseQuestion, parsed)
+      return cast(_baml.partial_types.UniverseQuestion, parsed)
     
     def TestVertex(
         self,
@@ -10486,9 +10486,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestVertex",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10515,9 +10515,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestVertexClaude",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10544,9 +10544,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "TestVertexWithSystemInstructions",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10560,7 +10560,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.UnionTest_ReturnType:
+    ) -> _baml.partial_types.UnionTest_ReturnType:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10573,9 +10573,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "UnionTest_Function",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10583,7 +10583,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.UnionTest_ReturnType, parsed)
+      return cast(_baml.partial_types.UnionTest_ReturnType, parsed)
     
     def UseBlockConstraint(
         self,
@@ -10602,9 +10602,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "UseBlockConstraint",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10618,7 +10618,7 @@ class LlmStreamParser:
         self,
         llm_response: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_client.partial_types.MaintainFieldOrder:
+    ) -> _baml.partial_types.MaintainFieldOrder:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -10631,9 +10631,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "UseMaintainFieldOrder",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10641,7 +10641,7 @@ class LlmStreamParser:
         env,
       )
 
-      return cast(baml_client.partial_types.MaintainFieldOrder, parsed)
+      return cast(_baml.partial_types.MaintainFieldOrder, parsed)
     
     def UseMalformedConstraints(
         self,
@@ -10660,9 +10660,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "UseMalformedConstraints",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10689,9 +10689,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "UseNestedBlockConstraint",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
@@ -10718,9 +10718,9 @@ class LlmStreamParser:
       parsed = self.__runtime.parse_llm_response(
         "EchoWorkflow",
         llm_response,
-        baml_client.types,
-        baml_client.types,
-        baml_client.partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
