@@ -448,7 +448,12 @@ impl TracePublisher {
 
         // Calculate hash of the entire BAML source
         let mut hasher = DefaultHasher::new();
-        for source in &source_code {
+
+        // Sort source files by filename for deterministic hashing
+        let mut sorted_source_code = source_code.clone();
+        sorted_source_code.sort_by(|a, b| a.file_name.cmp(&b.file_name));
+
+        for source in &sorted_source_code {
             source.file_name.hash(&mut hasher);
             source.content.hash(&mut hasher);
         }
