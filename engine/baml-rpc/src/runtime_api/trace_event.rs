@@ -62,6 +62,7 @@ pub enum TraceData<'a> {
         args: Vec<(String, BamlValue<'a>)>,
         tags: TraceTags,
         function_type: FunctionType,
+        is_stream: bool,
         /// Only sent for BAML defined functions
         baml_function_content: Option<BamlFunctionStart>,
     },

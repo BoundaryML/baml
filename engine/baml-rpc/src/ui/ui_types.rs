@@ -95,6 +95,7 @@ pub struct UiFunctionCall {
     pub function_call_id: FunctionCallId,
     pub function_name: String,
     pub function_type: FunctionType,
+    pub is_stream: Option<bool>,
     #[ts(optional)]
     pub function_id: Option<UiFunctionIdString>,
 

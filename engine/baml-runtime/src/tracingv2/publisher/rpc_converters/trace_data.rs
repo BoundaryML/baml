@@ -19,6 +19,7 @@ impl<'a, T: HasFieldType> IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
                 .iter()
                 .map(|(k, v)| (k.clone(), v.into_rpc_event(lookup)))
                 .collect(),
+            is_stream: self.is_stream,
             tags: self
                 .options
                 .tags

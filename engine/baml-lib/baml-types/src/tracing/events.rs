@@ -60,11 +60,13 @@ impl<'a, T: HasFieldType> TraceEvent<'a, T> {
         args: Vec<(String, BamlValueWithMeta<T>)>,
         options: EvaluationContext,
         function_type: FunctionType,
+        is_stream: bool,
     ) -> Self {
         Self::from_existing_call(
             call_stack,
             TraceData::FunctionStart(FunctionStart {
                 name: function_name,
+                is_stream,
                 args,
                 options,
                 function_type,
@@ -180,6 +182,7 @@ pub enum FunctionType {
 pub struct FunctionStart<T: HasFieldType> {
     pub name: String,
     pub function_type: FunctionType,
+    pub is_stream: bool,
     pub args: Vec<(String, BamlValueWithMeta<T>)>,
     pub options: EvaluationContext,
 }

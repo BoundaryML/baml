@@ -9,10 +9,15 @@ use serde_json::json;
 use std::{collections::HashMap, sync::Arc};
 
 use crate::{
-    client_registry::ClientRegistry, internal::{
+    client_registry::ClientRegistry,
+    internal::{
         llm_client::orchestrator::{orchestrate_stream, OrchestratorNodeIterator},
         prompt_renderer::PromptRenderer,
-    }, tracing::BamlTracer, tracingv2::storage::storage::{Collector, BAML_TRACER}, type_builder::TypeBuilder, FunctionResult, IntoBamlError, PreparedFunctionArgs, RuntimeContextManager
+    },
+    tracing::BamlTracer,
+    tracingv2::storage::storage::{Collector, BAML_TRACER},
+    type_builder::TypeBuilder,
+    FunctionResult, IntoBamlError, PreparedFunctionArgs, RuntimeContextManager,
 };
 
 /// Wrapper that holds a stream of responses from a BAML function call.
@@ -94,6 +99,7 @@ impl FunctionResultStream {
             &self.function_name,
             ctx,
             &self.prepared_func.value,
+            true,
             true,
             (!self.collectors.is_empty()).then(|| self.collectors.clone()),
         );

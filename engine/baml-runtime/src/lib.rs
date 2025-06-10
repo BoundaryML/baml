@@ -428,6 +428,7 @@ impl BamlRuntime {
                 ctx,
                 &Default::default(),
                 true,
+                true, // tests always stream which is why there's an on_event
                 collector.as_ref().map(|c| vec![c.clone()]),
             );
 
@@ -693,7 +694,7 @@ impl BamlRuntime {
         let call = self
             .tracer_wrapper
             .get_or_create_tracer(&env_vars)
-            .start_call(&function_name, ctx, params, true, collectors);
+            .start_call(&function_name, ctx, params, true, false, collectors);
         let curr_call_id = call.curr_call_id();
 
         let fake_syntax_span = Span::fake();
@@ -727,14 +728,13 @@ impl BamlRuntime {
                             match &result {
                                 Ok(result) => match result.result_with_constraints_content() {
                                     Ok(value) => Ok(value.0.map_meta(|f| f.3.clone())),
-                                    Err(e) => { Err((&e).into_baml_error()) }
-                                    // None => Err(baml_types::tracing::errors::BamlError::Base {
-                                    //     message: format!(
-                                    //         "No parsed result found for function: {}",
-                                    //         function_name
-                                    //     )
-                                    //     .into(),
-                                    // }),
+                                    Err(e) => Err((&e).into_baml_error()), // None => Err(baml_types::tracing::errors::BamlError::Base {
+                                                                           //     message: format!(
+                                                                           //         "No parsed result found for function: {}",
+                                                                           //         function_name
+                                                                           //     )
+                                                                           //     .into(),
+                                                                           // }),
                                 },
                                 Err(e) => Err(e.into_baml_error()),
                             },
@@ -1177,7 +1177,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
     ) -> TracingCall {
         self.tracer_wrapper
             .get_or_create_tracer(env_vars)
-            .start_call(function_name, ctx, params, false, None)
+            .start_call(function_name, ctx, params, false, false, None)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1352,7 +1352,7 @@ async fn expr_eval_result(
         Ok(expr_fn) => {
             log::trace!("Calling function: {}", function_name);
             let collectors = collector.as_ref().map(|c| vec![c.clone()]);
-            let call = tracer.start_call(&function_name, mgr, params, true, collectors);
+            let call = tracer.start_call(&function_name, mgr, params, true, false, collectors);
 
             let ctx = mgr.create_ctx(tb, cb, env_vars, call.new_call_id_stack.clone())?;
             let env = EvalEnv {

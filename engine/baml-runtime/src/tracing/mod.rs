@@ -403,6 +403,7 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         params: &BamlMap<String, BamlValue>,
         is_baml_function: bool,
+        is_stream: bool,
         collectors: Option<Vec<Arc<Collector>>>,
     ) -> TracingCall {
         self.trace_stats.guard().start();
@@ -462,6 +463,7 @@ impl BamlTracer {
             } else {
                 FunctionType::Native
             },
+            is_stream,
         );
         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
