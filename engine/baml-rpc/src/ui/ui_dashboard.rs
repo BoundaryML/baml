@@ -1,5 +1,6 @@
 use crate::base::EpochMsTimestamp;
 use crate::rpc::ApiEndpoint;
+use baml_ids::ProjectId;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -118,6 +119,8 @@ pub struct ChartDefinition {
 #[ts(export)]
 pub struct GetDashboardDataRequest {
     pub charts: Vec<ChartDefinition>,
+    #[ts(type = "string")]
+    pub project_id: ProjectId,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]

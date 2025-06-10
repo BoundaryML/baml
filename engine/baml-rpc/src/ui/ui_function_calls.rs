@@ -309,7 +309,7 @@ pub struct ListFunctionCallsRequest {
     #[ts(optional)]
     pub status: Option<FilterExpression<FunctionCallStatus>>,
     #[ts(optional)]
-    pub tag_filters: Option<Vec<TagFilter>>,
+    pub tags: Option<Vec<TagFilter>>,
     #[ts(optional)]
     pub error_filters: Option<Vec<TagFilter>>,
     #[ts(optional)]
@@ -334,7 +334,7 @@ impl Default for ListFunctionCallsRequest {
             start_time: None,
             end_time: None,
             status: None,
-            tag_filters: None,
+            tags: None,
             error_filters: None,
             streamed: None,
             relative_time: None,
