@@ -409,12 +409,12 @@ impl BamlTracer {
         let (call_id, call_stack, last_tags, global_tags) = ctx.enter(function_name);
 
         log::trace!(" Entering call {:#?} in {:?}", call_id, function_name);
-        log::info!(
-            "function_name: {:?}, call_stack: {:#?}, call_id: {:?}",
-            function_name,
-            call_stack,
-            call_id
-        );
+        // log::info!(
+        //     "function_name: {:?}, call_stack: {:#?}, call_id: {:?}",
+        //     function_name,
+        //     call_stack,
+        //     call_id
+        // );
         let call = TracingCall {
             call_id,
             new_call_id_stack: call_stack.clone(),
@@ -517,12 +517,12 @@ impl BamlTracer {
                 ctx
             );
         };
-        log::info!(
-            "Finishing call: {:#?} call_id: {}\nevent chain {:?}",
-            call,
-            call_id,
-            event_chain
-        );
+        // log::info!(
+        //     "Finishing call: {:#?} call_id: {}\nevent chain {:?}",
+        //     call,
+        //     call_id,
+        //     event_chain
+        // );
 
         if call.call_id != call_id {
             anyhow::bail!("Call ID mismatch: {} != {}", call.call_id, call_id);

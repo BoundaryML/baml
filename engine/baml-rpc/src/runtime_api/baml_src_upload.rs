@@ -31,7 +31,7 @@ impl ApiEndpoint for CheckBamlSrcUpload {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-pub struct BamlSrcUploadPayload {
+pub struct BamlSrcUploadS3File {
     pub source: Vec<SourceCode>,
     pub ast: Arc<AST>,
 }

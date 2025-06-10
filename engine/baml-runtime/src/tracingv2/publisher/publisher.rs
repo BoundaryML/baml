@@ -3,7 +3,7 @@ use baml_rpc::ast::tops::{FunctionDefinition, SourceCode, AST};
 use baml_rpc::TypeDefinition;
 use baml_rpc::TypeReference;
 use baml_rpc::{
-    ApiEndpoint, BamlSrcUploadPayload, CheckBamlSrcUpload, CheckBamlSrcUploadRequest,
+    ApiEndpoint, BamlSrcUploadS3File, CheckBamlSrcUpload, CheckBamlSrcUploadRequest,
     CreateTraceEventUploadUrl, CreateTraceEventUploadUrlRequest, CreateTraceEventUploadUrlResponse,
     S3UploadMetadata, TraceEventBatch,
 };
@@ -84,9 +84,6 @@ struct RuntimeAST {
 impl RuntimeAST {
     #[allow(dead_code)]
     pub fn base_url(&self) -> String {
-        // const SAM_API_URL: &str = "https://abe8c5ez29.execute-api.us-east-1.amazonaws.com";
-        // const CHRIS_API_URL: &str = "https://o2em3sulde.execute-api.us-east-1.amazonaws.com";
-        // return SAM_API_URL.to_string();
         self.ast
             .env_var("BOUNDARY_API_URL")
             .cloned()
@@ -95,8 +92,6 @@ impl RuntimeAST {
 
     #[allow(dead_code)]
     pub fn api_key(&self) -> Option<String> {
-        // const CHRIS_API_KEY: &str = "7fc9adc617ed731ba6048daffe0e0de2ec168283624d07a94c2ed520183ea3f722633aa2a5eee9109098254e294f995e";
-        // return CHRIS_API_KEY.to_string();
         self.ast.env_var("BOUNDARY_API_KEY").cloned()
     }
 
@@ -479,6 +474,7 @@ impl TracePublisher {
                 return Err(e.into());
             }
         };
+        tracing::info!("check_response={:?}", check_response);
 
         if !check_response.should_upload {
             tracing::info!("BAML source already uploaded, skipping");
@@ -496,7 +492,7 @@ impl TracePublisher {
         })?;
 
         // Create the upload payload
-        let payload = BamlSrcUploadPayload {
+        let payload = BamlSrcUploadS3File {
             source: source_code,
             ast: ast_obj,
         };
@@ -626,7 +622,7 @@ impl TracePublisher {
     ///   2. Append the JSON to a file (using async file I/O on macOS).
     ///   3. Post the JSON to an HTTP API with up to 3 retries.
     async fn process_batch_impl(&self, batch: Vec<Arc<TraceEventWithMeta>>) -> Result<()> {
-        log::info!("Processing {:#?}", batch);
+        // log::info!("Processing {:#?}", batch);
         // Assemble the upload request structure.
         let trace_event_batch = TraceEventBatch {
             events: batch

@@ -158,7 +158,7 @@ impl RuntimeContextManager {
             .map(|(.., call_id)| call_id.clone())
             .collect::<Vec<_>>();
 
-        log::info!("Entering with: {:#?}", ctx);
+        // log::info!("Entering with: {:#?}", ctx);
         let mut last_tags = last_tags;
         for (k, v) in self.global_tags.lock().unwrap().iter() {
             last_tags.entry(k.clone()).or_insert_with(|| v.clone());
