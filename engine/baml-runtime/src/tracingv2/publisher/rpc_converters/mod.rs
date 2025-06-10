@@ -15,6 +15,7 @@ pub mod types;
 pub trait TypeLookup {
     fn type_lookup(&self, name: &str) -> Option<Arc<BamlTypeId>>;
     fn function_lookup(&self, name: &str) -> Option<Arc<BamlFunctionId>>;
+    fn baml_src_hash(&self) -> Option<String>;
 }
 
 pub(crate) trait IntoRpcEvent<'a, RpcOutputType> {

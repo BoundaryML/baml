@@ -55,6 +55,9 @@ impl<'a, T: HasFieldType> IntoRpcEvent<'a, Option<baml_rpc::runtime_api::BamlFun
             match lookup.function_lookup(&self.name).map(|id| {
                 baml_rpc::runtime_api::BamlFunctionStart {
                     function_id: id,
+                    baml_src_hash: lookup
+                        .baml_src_hash()
+                        .unwrap_or_else(|| "unknown_hash".to_string()),
                     eval_context: self.options.into_rpc_event(lookup),
                 }
             }) {

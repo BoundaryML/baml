@@ -404,6 +404,7 @@ impl BamlTracer {
         params: &BamlMap<String, BamlValue>,
         is_baml_function: bool,
         is_stream: bool,
+        // baml_src_hash: Option<String>,
         collectors: Option<Vec<Arc<Collector>>>,
     ) -> TracingCall {
         self.trace_stats.guard().start();

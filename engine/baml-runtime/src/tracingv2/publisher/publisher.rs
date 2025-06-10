@@ -160,6 +160,10 @@ impl TypeLookup for RuntimeAST {
     fn function_lookup(&self, name: &str) -> Option<Arc<baml_rpc::ast::tops::BamlFunctionId>> {
         self.ast.function_lookup(name)
     }
+
+    fn baml_src_hash(&self) -> Option<String> {
+        self.ast.baml_src_hash()
+    }
 }
 
 pub fn start_publisher(
@@ -277,6 +281,10 @@ impl TracePublisher {
                     }
 
                     match message {
+                        // we expect this to happen first as it sets the 'lookup' object, which is the current runtime for those incoming messages.
+                        // All the rest of the messages are guaranteed (99% certainty) to be part of that same
+                        // runtime. We can then inject metadata created by the Runtime object into all future messages,
+                        // We do this in the into_rpc_event() for example, to create the "RPC" equivalent object, but with some additional metadata.
                         PublisherMessage::UpdateRuntime(lookup) => {
                             self.process_baml_src_upload(&lookup).await;
                             self.lookup = lookup;
@@ -286,6 +294,7 @@ impl TracePublisher {
                             if buffer.len() >= self.batch_size {
                                 self.process_batch(std::mem::take(&mut buffer)).await;
                             }
+
                         },
                         PublisherMessage::Flush(flush_ack) => {
                             // Flush the current buffer if it has any pending events.
@@ -447,21 +456,7 @@ impl TracePublisher {
         });
 
         // Calculate hash of the entire BAML source
-        let mut hasher = DefaultHasher::new();
-
-        // Sort source files by filename for deterministic hashing
-        let mut sorted_source_code = source_code.clone();
-        sorted_source_code.sort_by(|a, b| a.file_name.cmp(&b.file_name));
-
-        for source in &sorted_source_code {
-            source.file_name.hash(&mut hasher);
-            source.content.hash(&mut hasher);
-        }
-        // TODO: separate this into an AST hash and a source code hash.
-        // Also hash the AST to ensure we re-upload if the parsed structure changes
-        // let ast_string = serde_json::to_string(&*ast_obj).unwrap_or_default();
-        // ast_string.hash(&mut hasher);
-        let baml_src_hash = format!("{:x}", hasher.finish());
+        let baml_src_hash = ast.baml_src_hash().unwrap_or_default();
 
         tracing::info!(
             "Checking if BAML source upload is needed (hash: {})",
@@ -632,6 +627,8 @@ impl TracePublisher {
                 .map(|e| to_rpc_event(e, self.lookup.as_ref()))
                 .collect(),
         };
+
+        // log::info!("trace_event_batch={:#?}", trace_event_batch);
 
         // tracing::info!(
         //     message = "Trying to upload trace events",

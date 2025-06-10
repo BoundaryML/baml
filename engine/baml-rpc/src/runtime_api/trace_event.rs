@@ -76,6 +76,7 @@ pub enum TraceData<'a> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BamlFunctionStart {
     pub function_id: std::sync::Arc<BamlFunctionId>,
+    pub baml_src_hash: String,
     pub eval_context: EvaluationContext,
 }
 
