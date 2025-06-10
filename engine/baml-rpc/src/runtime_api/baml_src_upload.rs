@@ -2,11 +2,7 @@ use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{
-    ast::tops::{SourceCode, AST},
-    rpc::ApiEndpoint,
-    s3::S3UploadMetadata,
-};
+use crate::{ast::tops::AST, rpc::ApiEndpoint, s3::S3UploadMetadata};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CheckBamlSrcUploadRequest {
@@ -32,6 +28,5 @@ impl ApiEndpoint for CheckBamlSrcUpload {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BamlSrcUploadS3File {
-    pub source: Vec<SourceCode>,
     pub ast: Arc<AST>,
 }

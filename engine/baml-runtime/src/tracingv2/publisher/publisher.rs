@@ -497,10 +497,7 @@ impl TracePublisher {
         })?;
 
         // Create the upload payload
-        let payload = BamlSrcUploadS3File {
-            source: source_code,
-            ast: ast_obj,
-        };
+        let payload = BamlSrcUploadS3File { ast: ast_obj };
 
         // Upload to S3
         lookup
