@@ -808,6 +808,18 @@ impl OutputFormatContent {
             }
         }
 
+        // Top level hoisted enums will just use their name instead of the
+        // entire schema which should already be hoisted.
+        let target_is_hoisted_enum = if let FieldType::Enum(enum_name) = &self.target {
+            render_ctx.hoisted_enums.contains(enum_name)
+        } else {
+            false
+        };
+
+        if target_is_hoisted_enum {
+            message = None;
+        }
+
         let mut class_definitions = Vec::new();
         let mut type_alias_definitions = Vec::new();
 
@@ -839,14 +851,28 @@ impl OutputFormatContent {
 
         let enum_definitions = Vec::from_iter(render_ctx.hoisted_enums.into_iter().map(|e| {
             let enm = self.enums.get(&e).expect("Enum not found"); // TODO: Jinja Err
-            self.enum_to_string(enm, &options)
+            let enum_str = self.enum_to_string(enm, &options);
+
+            // If this is the target enum, prepend the prefix
+            if target_is_hoisted_enum && e == enm.name.real_name() {
+                if let Some(p) = &prefix {
+                    format!("{p}{enum_str}")
+                } else {
+                    enum_str
+                }
+            } else {
+                enum_str
+            }
         }));
 
         let mut output = String::new();
 
         if !enum_definitions.is_empty() {
             output.push_str(&enum_definitions.join("\n\n"));
-            output.push_str("\n\n");
+            // Only add double newline if target enum doesn't already include prefix
+            if !target_is_hoisted_enum {
+                output.push_str("\n\n");
+            }
         }
 
         if !class_definitions.is_empty() {
@@ -860,7 +886,10 @@ impl OutputFormatContent {
         }
 
         if let Some(p) = prefix {
-            output.push_str(&p);
+            // Only add prefix if it hasn't already been included in a hoisted target enum
+            if !target_is_hoisted_enum {
+                output.push_str(&p);
+            }
         }
 
         if let Some(m) = message {
@@ -3134,6 +3163,129 @@ Ret {
 
 Answer in JSON using this schema: Ret"#
             ))
+        );
+    }
+
+    #[test]
+    fn render_enum_with_descriptions() {
+        // This test reproduces the bug where enums with descriptions
+        // would be rendered twice - once as hoisted enum and once as target
+        let enums = vec![Enum {
+            name: Name::new("EnumOutput".to_string()),
+            values: vec![
+                (
+                    Name::new("ONE".to_string()),
+                    Some("The first enum.".to_string()),
+                ),
+                (
+                    Name::new_with_alias("TWO".to_string(), Some("two".to_string())),
+                    Some("The second enum.".to_string()),
+                ),
+                (
+                    Name::new_with_alias("THREE".to_string(), Some("hi".to_string())),
+                    Some("three".to_string()),
+                ),
+            ],
+            constraints: Vec::new(),
+        }];
+
+        let content = OutputFormatContent::target(FieldType::Enum("EnumOutput".to_string()))
+            .enums(enums)
+            .build();
+
+        // Use null prefix to avoid any additional text
+        let options = RenderOptions::new(
+            Some(None), // prefix = null
+            None,       // or_splitter
+            None,       // enum_value_prefix
+            None,       // always_hoist_enums
+            None,       // map_style
+            None,       // hoisted_class_prefix
+            None,       // hoist_classes
+        );
+
+        let rendered = content.render(options).unwrap().unwrap();
+
+        // After the fix, it should appear once without any prefix since prefix=null:
+        // EnumOutput\\n----\\n- ONE: The first enum.\\n- two: The second enum.\\n- hi: three
+
+        let enum_definition_count = rendered.matches("EnumOutput\n----").count();
+        assert_eq!(
+            enum_definition_count, 1,
+            "Enum definition should only appear once, but found: {}",
+            enum_definition_count
+        );
+
+        // Verify the complete expected output (no prefix since it's set to null)
+        assert_eq!(
+            rendered,
+            r"EnumOutput
+----
+- ONE: The first enum.
+- two: The second enum.
+- hi: three"
+        );
+    }
+
+    #[test]
+    fn render_enum_with_descriptions_default_prefix() {
+        // This test verifies that when prefix is not set (uses default),
+        // the default prefix appears before the hoisted enum definition
+        let enums = vec![Enum {
+            name: Name::new_with_alias("EnumOutput".to_string(), Some("VALUE_ENUM".to_string())),
+            values: vec![
+                (
+                    Name::new("ONE".to_string()),
+                    Some("The first enum.".to_string()),
+                ),
+                (
+                    Name::new_with_alias("TWO".to_string(), Some("two".to_string())),
+                    Some("The second enum.".to_string()),
+                ),
+                (
+                    Name::new_with_alias("THREE".to_string(), Some("hi".to_string())),
+                    Some("three".to_string()),
+                ),
+            ],
+            constraints: Vec::new(),
+        }];
+
+        let content = OutputFormatContent::target(FieldType::Enum("EnumOutput".to_string()))
+            .enums(enums)
+            .build();
+
+        // Use default options (prefix not explicitly set)
+        let options = RenderOptions::default();
+        let rendered = content.render(options).unwrap().unwrap();
+
+        // Should have default prefix "Answer with any of the categories:" before enum
+        let enum_definition_count = rendered.matches("VALUE_ENUM\n----").count();
+        assert_eq!(
+            enum_definition_count, 1,
+            "Enum definition should only appear once, but found: {}",
+            enum_definition_count
+        );
+
+        // Verify default prefix appears before enum
+        assert!(
+            rendered.contains(
+                r"Answer with any of the categories:
+VALUE_ENUM
+----"
+            ),
+            "Default prefix should appear before enum definition, but got: {}",
+            rendered
+        );
+
+        // Verify the complete expected output
+        assert_eq!(
+            rendered,
+            r"Answer with any of the categories:
+VALUE_ENUM
+----
+- ONE: The first enum.
+- two: The second enum.
+- hi: three"
         );
     }
 }
