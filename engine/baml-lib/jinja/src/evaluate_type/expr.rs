@@ -1,6 +1,5 @@
-use std::collections::HashMap;
-
 use baml_types::LiteralValue;
+use indexmap::IndexMap;
 use minijinja::machinery::ast;
 use std::str::FromStr;
 
@@ -19,7 +18,7 @@ fn parse_as_function_call(
     match t {
         Type::FunctionRef(name) => {
             let mut positional_args = Vec::new();
-            let mut kwargs = HashMap::new();
+            let mut kwargs = IndexMap::new();
             for arg in &expr.args {
                 match arg {
                     ast::Expr::Kwargs(kkwargs) => {

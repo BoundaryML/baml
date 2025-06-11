@@ -20,6 +20,7 @@ describe('Tracing Tests', () => {
     })
   })
 
+  // You may want to run this one serially
   describe('Async Tracing', () => {
     it('supports tracing async', async () => {
       const nestedDummyFn = async (myArg: string): Promise<string> => {

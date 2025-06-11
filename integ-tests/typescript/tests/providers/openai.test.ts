@@ -38,7 +38,7 @@ describe('OpenAI Provider', () => {
   })
 
   describe('Streaming', () => {
-    it.only('should support OpenAI shorthand streaming', async () => {
+    it('should support OpenAI shorthand streaming', async () => {
       const res = await b.stream.TestOpenAIShorthand('Dr. Pepper').getFinalResponse()
       expect(res.length).toBeGreaterThan(0)
     })

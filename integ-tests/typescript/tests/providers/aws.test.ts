@@ -22,7 +22,7 @@ describe('AWS Provider', () => {
     }).rejects.toThrow('DispatchFailure')
   })
 
-  test.skip('should handle invalid AWS profile gracefully', async () => {
+  it('should handle invalid AWS profile gracefully', async () => {
     const response = b.TestAwsInvalidProfile('Write a nice short story about Dr. Pepper')
 
     await expect(response).rejects.toMatchObject({
@@ -202,7 +202,7 @@ describe('AWS Provider', () => {
       })
     })
 
-    it.only('should support AWS profile configuration', async () => {
+    it('should support AWS profile configuration', async () => {
       const cr = new ClientRegistry()
       cr.addLlmClient('DynamicAWSClient', 'aws-bedrock', {
         model_id: 'meta.llama3-8b-instruct-v1:0',
@@ -345,7 +345,7 @@ describe('AWS Provider', () => {
       })
     })
 
-    it.only('should throw error when using invalid profile', async () => {
+    it('should throw error when using invalid profile', async () => {
       // Clear any existing profile
       const cr = new ClientRegistry()
       cr.addLlmClient('DynamicAWSClient', 'aws-bedrock', {

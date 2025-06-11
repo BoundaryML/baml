@@ -433,7 +433,7 @@ impl BamlTracer {
                 .iter()
                 .map(|(k, v)| {
                     let field_type = infer_type(v).unwrap_or_else(|| {
-                        log::warn!("Failed to infer FieldType for BamlValue in tracing. Defaulting to Null.");
+                        log::debug!("Failed to infer FieldType for BamlValue in tracing. Defaulting to Null.");
                         baml_types::FieldType::Primitive(baml_types::TypeValue::Null)
                     });
                     (

@@ -1243,7 +1243,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
         #[cfg(not(target_arch = "wasm32"))]
         {
             if let Err(e) = self.async_runtime.block_on(flush()) {
-                baml_log::error!("Failed to flush: {}", e);
+                baml_log::debug!("Failed to flush: {}", e);
             }
         }
         #[cfg(target_arch = "wasm32")]

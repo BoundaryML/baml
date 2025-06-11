@@ -5,7 +5,7 @@ use baml_types::{
 use core::result::Result;
 use std::path::PathBuf;
 
-use crate::ir::IntermediateRepr;
+use crate::ir::{ir_helpers::infer_type, IntermediateRepr};
 
 use super::{scope_diagnostics::ScopeStack, IRHelper, IRHelperExtended};
 use crate::ir::jinja_helpers::evaluate_predicate;
@@ -233,13 +233,31 @@ impl ArgCoercer {
                 BamlValue::Class(_, obj) | BamlValue::Map(obj) => match ir.find_class(name) {
                     Ok(c) => {
                         let mut fields = BamlMap::new();
+                        let is_dynamic = c.item.attributes.dynamic();
 
-                        for f in c.walk_fields() {
-                            if let Some(v) = obj.get(f.name()) {
-                                if let Ok(v) = self.coerce_arg(ir, f.r#type(), v, scope) {
-                                    fields.insert(f.name().to_string(), v);
+                        // Process fields in the order they appear in the input object to preserve ordering
+                        for (key, value) in obj {
+                            // Check if this is a known class field first
+                            if let Some(field) = c.walk_fields().find(|f| f.name() == key) {
+                                if let Ok(v) = self.coerce_arg(ir, field.r#type(), value, scope) {
+                                    fields.insert(key.clone(), v);
                                 }
-                            } else if !f.r#type().is_optional() {
+                            } else if is_dynamic {
+                                // Handle dynamic field
+                                let inferred_type = infer_type(value);
+                                if let Some(inferred_type) = inferred_type {
+                                    if let Ok(coerced_value) =
+                                        self.coerce_arg(ir, &inferred_type, value, scope)
+                                    {
+                                        fields.insert(key.clone(), coerced_value);
+                                    }
+                                }
+                            }
+                        }
+
+                        // Check for missing required fields
+                        for f in c.walk_fields() {
+                            if !fields.contains_key(f.name()) && !f.r#type().is_optional() {
                                 scope.push_error(format!(
                                     "Missing required field `{}` for class {}",
                                     f.name(),
@@ -247,15 +265,6 @@ impl ArgCoercer {
                                 ));
                             }
                         }
-                        // TODO: restore dynamic fields
-                        // let is_dynamic = c.item.attributes.dynamic();
-                        // if is_dynamic {
-                        //     for (key, value) in obj {
-                        //         if !fields.contains_key(key) {
-                        //             fields.insert(key.clone(), value.clone());
-                        //         }
-                        //     }
-                        // }
 
                         Ok(BamlValueWithMeta::Class(
                             name.to_string(),
