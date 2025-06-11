@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 
-use minijinja::{value::StructObject, ErrorKind};
+use minijinja::{value::{Object, ObjectRepr, Enumerator}, ErrorKind};
 use serde::Serialize;
 use serde_json::json;
+use std::sync::Arc;
 
 use crate::{
     callable_jinja::CallableJinja,
@@ -52,9 +53,13 @@ impl std::fmt::Display for RenderContext {
     }
 }
 
-impl StructObject for RenderContext {
-    fn get_field(&self, name: &str) -> Option<minijinja::Value> {
-        match name {
+impl Object for RenderContext {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Map
+    }
+
+    fn get_value(self: &Arc<Self>, key: &minijinja::Value) -> Option<minijinja::Value> {
+        match key.as_str()? {
             "client" => Some(minijinja::Value::from_object(self.client.clone())),
             "output_format" => Some(minijinja::Value::from_safe_string(
                 self.output_format
@@ -65,44 +70,40 @@ impl StructObject for RenderContext {
         }
     }
 
-    fn static_fields(&self) -> Option<&'static [&'static str]> {
-        Some(&["client", "output_format", "env"])
-    }
-}
-
-impl StructObject for RenderContext_Client {
-    fn get_field(&self, name: &str) -> Option<minijinja::Value> {
-        match name {
-            "name" => Some(minijinja::Value::from(self.name.clone())),
-            "provider" => Some(minijinja::Value::from(self.provider.clone())),
-            _ => None,
-        }
-    }
-}
-
-impl minijinja::value::Object for RenderContext {
-    fn kind(&self) -> minijinja::value::ObjectKind<'_> {
-        minijinja::value::ObjectKind::Struct(self)
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        Enumerator::Str(&["client", "output_format", "env"])
     }
 
     fn call_method(
-        &self,
+        self: &Arc<Self>,
         state: &minijinja::State,
-        name: &str,
+        method: &str,
         args: &[minijinja::Value],
     ) -> Result<minijinja::Value, minijinja::Error> {
-        match name {
-            "output_format" => self.output_format.call_method(name, state, args),
+        match method {
+            "output_format" => self.output_format.call_method(method, state, args),
             _ => Err(minijinja::Error::new(
                 ErrorKind::UnknownMethod,
-                format!("RenderContext has no method named '{}'", name),
+                format!("RenderContext has no method named '{}'", method),
             )),
         }
     }
 }
 
-impl minijinja::value::Object for RenderContext_Client {
-    fn kind(&self) -> minijinja::value::ObjectKind<'_> {
-        minijinja::value::ObjectKind::Struct(self)
+impl Object for RenderContext_Client {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Map
+    }
+
+    fn get_value(self: &Arc<Self>, key: &minijinja::Value) -> Option<minijinja::Value> {
+        match key.as_str()? {
+            "name" => Some(minijinja::Value::from(self.name.clone())),
+            "provider" => Some(minijinja::Value::from(self.provider.clone())),
+            _ => None,
+        }
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        Enumerator::Str(&["name", "provider"])
     }
 }

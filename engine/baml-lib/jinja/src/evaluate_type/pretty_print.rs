@@ -1,4 +1,13 @@
-use minijinja::machinery::ast::{self, Expr};
+use minijinja::machinery::ast::{self, Expr, CallArg};
+
+fn pretty_print_call_arg(arg: &CallArg) -> String {
+    match arg {
+        CallArg::Pos(expr) => pretty_print(expr),
+        CallArg::Kwarg(key, expr) => format!("{}={}", key, pretty_print(expr)),
+        CallArg::PosSplat(expr) => format!("*{}", pretty_print(expr)),
+        CallArg::KwargSplat(expr) => format!("**{}", pretty_print(expr)),
+    }
+}
 
 pub(super) fn pretty_print(expr: &Expr) -> String {
     match expr {
@@ -73,7 +82,7 @@ pub(super) fn pretty_print(expr: &Expr) -> String {
                         "({})",
                         expr.args
                             .iter()
-                            .map(pretty_print)
+                            .map(pretty_print_call_arg)
                             .collect::<Vec<_>>()
                             .join(",")
                     ),
@@ -91,7 +100,7 @@ pub(super) fn pretty_print(expr: &Expr) -> String {
                         "({})",
                         expr.args
                             .iter()
-                            .map(pretty_print)
+                            .map(pretty_print_call_arg)
                             .collect::<Vec<_>>()
                             .join(",")
                     ),
@@ -114,7 +123,7 @@ pub(super) fn pretty_print(expr: &Expr) -> String {
                 pretty_print(&expr.expr),
                 expr.args
                     .iter()
-                    .map(pretty_print)
+                    .map(pretty_print_call_arg)
                     .collect::<Vec<_>>()
                     .join(",")
             )
@@ -136,16 +145,6 @@ pub(super) fn pretty_print(expr: &Expr) -> String {
                     .iter()
                     .zip(expr.values.iter())
                     .map(|(k, v)| format!("{}:{}", pretty_print(k), pretty_print(v)))
-                    .collect::<Vec<_>>()
-                    .join(",")
-            )
-        }
-        Expr::Kwargs(expr) => {
-            format!(
-                "{{{}}}",
-                expr.pairs
-                    .iter()
-                    .map(|(k, v)| format!("{}={}", k, pretty_print(v)))
                     .collect::<Vec<_>>()
                     .join(",")
             )

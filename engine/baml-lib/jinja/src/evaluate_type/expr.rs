@@ -21,15 +21,17 @@ fn parse_as_function_call(
             let mut kwargs = IndexMap::new();
             for arg in &expr.args {
                 match arg {
-                    ast::Expr::Kwargs(kkwargs) => {
-                        for (k, v) in &kkwargs.pairs {
-                            let t = tracker_visit_expr(v, state, types);
-                            kwargs.insert(*k, t);
-                        }
-                    }
-                    _ => {
-                        let t = tracker_visit_expr(arg, state, types);
+                    ast::CallArg::Pos(expr) => {
+                        let t = tracker_visit_expr(expr, state, types);
                         positional_args.push(t);
+                    }
+                    ast::CallArg::Kwarg(key, expr) => {
+                        let t = tracker_visit_expr(expr, state, types);
+                        kwargs.insert(*key, t);
+                    }
+                    ast::CallArg::PosSplat(_) | ast::CallArg::KwargSplat(_) => {
+                        // For now, we'll handle splats as unknown
+                        positional_args.push(Type::Unknown);
                     }
                 }
             }
@@ -374,7 +376,6 @@ fn tracker_visit_expr(
             );
             Type::Map(Box::new(keys), Box::new(values))
         }
-        ast::Expr::Kwargs(_) => Type::Unknown,
     }
 }
 
@@ -388,37 +389,40 @@ fn infer_const_type(v: &minijinja::value::Value) -> Type {
         },
         minijinja::value::ValueKind::String => Type::Literal(LiteralValue::String(v.to_string())),
         minijinja::value::ValueKind::Seq => {
-            let list = v.as_seq().unwrap();
-            match list.item_count() {
-                0 => Type::List(Box::new(Type::Unknown)),
-                _ => {
-                    let inner = list
-                        .iter()
-                        .map(|x| infer_const_type(&x))
-                        .fold(None, |acc, x| match acc {
-                            None => Some(x),
-                            Some(Type::Union(acc)) => {
-                                let t = Type::Union(acc);
-                                if x.is_subtype_of(&t) {
-                                    Some(t)
-                                } else if let Type::Union(mut acc) = t {
-                                    acc.push(x);
-                                    Some(Type::Union(acc))
-                                } else {
-                                    unreachable!("minijinja")
+            match v.len() {
+                Some(0) => Type::List(Box::new(Type::Unknown)),
+                Some(_) => {
+                    if let Ok(iter) = v.try_iter() {
+                        let inner = iter
+                            .map(|x| infer_const_type(&x))
+                            .fold(None, |acc, x| match acc {
+                                None => Some(x),
+                                Some(Type::Union(acc)) => {
+                                    let t = Type::Union(acc);
+                                    if x.is_subtype_of(&t) {
+                                        Some(t)
+                                    } else if let Type::Union(mut acc) = t {
+                                        acc.push(x);
+                                        Some(Type::Union(acc))
+                                    } else {
+                                        unreachable!("minijinja")
+                                    }
                                 }
-                            }
-                            Some(acc) => {
-                                if x.is_subtype_of(&acc) {
-                                    Some(acc)
-                                } else {
-                                    Some(Type::Union(vec![acc, x]))
+                                Some(acc) => {
+                                    if x.is_subtype_of(&acc) {
+                                        Some(acc)
+                                    } else {
+                                        Some(Type::Union(vec![acc, x]))
+                                    }
                                 }
-                            }
-                        })
-                        .unwrap();
-                    Type::List(Box::new(inner))
+                            })
+                            .unwrap_or(Type::Unknown);
+                        Type::List(Box::new(inner))
+                    } else {
+                        Type::List(Box::new(Type::Unknown))
+                    }
                 }
+                None => Type::List(Box::new(Type::Unknown)),
             }
         }
         minijinja::value::ValueKind::Map => Type::Unknown,
@@ -428,6 +432,10 @@ fn infer_const_type(v: &minijinja::value::Value) -> Type {
             Err(_) => Type::Number,
         },
         minijinja::value::ValueKind::Bytes => Type::Undefined,
+        minijinja::value::ValueKind::Iterable => Type::Unknown,
+        minijinja::value::ValueKind::Plain => Type::Unknown,
+        minijinja::value::ValueKind::Invalid => Type::Unknown,
+        _ => Type::Unknown,
     }
 }
 

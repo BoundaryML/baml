@@ -1,5 +1,6 @@
 use crate::{BamlMedia, BamlValue};
 use std::fmt;
+use std::sync::Arc;
 
 /// A wrapper around a jinja expression. The inner `String` should not contain
 /// the interpolation brackets `{{ }}`; it should be a bare expression like
@@ -77,7 +78,7 @@ impl std::fmt::Debug for MinijinjaBamlMedia {
 
 impl minijinja::value::Object for MinijinjaBamlMedia {
     fn call(
-        &self,
+        self: &Arc<Self>,
         _state: &minijinja::State<'_, '_>,
         args: &[minijinja::value::Value],
     ) -> Result<minijinja::value::Value, minijinja::Error> {

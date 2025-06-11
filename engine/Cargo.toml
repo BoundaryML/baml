@@ -74,7 +74,7 @@ baml-lsp-types = { path = "baml-lsp-types" }
 jsonish = { path = "baml-lib/jsonish" }
 log = "0.4.20"
 # TODO: disable imports, etc
-minijinja = { version = "1.0.16", default-features = false, features = [
+minijinja = { version = "2.10.2", default-features = false, features = [
   "macros",
   "builtins",
   "debug",

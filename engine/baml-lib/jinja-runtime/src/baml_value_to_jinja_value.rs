@@ -4,7 +4,7 @@ use baml_types::EvaluationContext;
 use indexmap::IndexMap;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_core::ir::IRHelper;
-use minijinja::value::intern;
+use minijinja::value::{intern, Object, ObjectRepr, Enumerator};
 
 use crate::{BamlMedia, BamlValue};
 
@@ -128,7 +128,7 @@ impl std::fmt::Debug for MinijinjaBamlMedia {
 
 impl minijinja::value::Object for MinijinjaBamlMedia {
     fn call(
-        &self,
+        self: &Arc<Self>,
         _state: &minijinja::State<'_, '_>,
         args: &[minijinja::value::Value],
     ) -> Result<minijinja::value::Value, minijinja::Error> {
@@ -158,19 +158,17 @@ impl std::fmt::Debug for MinijinjaBamlEnum {
     }
 }
 
-impl minijinja::value::Object for MinijinjaBamlEnum {
-    fn kind(&self) -> minijinja::value::ObjectKind<'_> {
-        minijinja::value::ObjectKind::Struct(self)
+impl Object for MinijinjaBamlEnum {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Map
     }
-}
 
-impl minijinja::value::StructObject for MinijinjaBamlEnum {
-    fn get_field(&self, _name: &str) -> Option<minijinja::Value> {
+    fn get_value(self: &Arc<Self>, _key: &minijinja::Value) -> Option<minijinja::Value> {
         None
     }
 
-    fn static_fields(&self) -> Option<&'static [&'static str]> {
-        None
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        Enumerator::Empty
     }
 }
 
@@ -181,26 +179,6 @@ impl PartialEq for MinijinjaBamlEnum {
 }
 
 // Classes
-
-impl minijinja::value::Object for MinijinjaBamlClass {
-    fn kind(&self) -> minijinja::value::ObjectKind<'_> {
-        minijinja::value::ObjectKind::Struct(self)
-    }
-}
-
-impl minijinja::value::StructObject for MinijinjaBamlClass {
-    fn get_field(&self, name: &str) -> Option<minijinja::Value> {
-        self.class.get(name).cloned()
-    }
-
-    fn static_fields(&self) -> Option<&'static [&'static str]> {
-        None
-    }
-
-    fn fields(&self) -> Vec<Arc<str>> {
-        self.class.keys().into_iter().map(|k| intern(k)).collect()
-    }
-}
 
 struct MinijinjaBamlClass {
     class: IndexMap<String, minijinja::Value>,
@@ -222,5 +200,21 @@ impl std::fmt::Display for MinijinjaBamlClass {
 impl std::fmt::Debug for MinijinjaBamlClass {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
+    }
+}
+
+impl Object for MinijinjaBamlClass {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Map
+    }
+
+    fn get_value(self: &Arc<Self>, key: &minijinja::Value) -> Option<minijinja::Value> {
+        let name = key.as_str()?;
+        self.class.get(name).cloned()
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        let keys: Vec<minijinja::Value> = self.class.keys().map(|k| minijinja::Value::from(k.as_str())).collect();
+        Enumerator::Values(keys)
     }
 }
