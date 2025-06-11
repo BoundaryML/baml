@@ -4,7 +4,7 @@ use baml_types::EvaluationContext;
 use indexmap::IndexMap;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_core::ir::IRHelper;
-use minijinja::value::{intern, Object, ObjectRepr, Enumerator};
+use minijinja::value::{Object, ObjectRepr, Enumerator};
 
 use crate::{BamlMedia, BamlValue};
 

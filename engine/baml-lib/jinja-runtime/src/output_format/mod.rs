@@ -41,7 +41,7 @@ impl std::fmt::Display for OutputFormat {
 // TODO: do this but for a class. Use the display method to render the alias.
 impl minijinja::value::Object for OutputFormat {
     fn call(
-        &self,
+        self: &std::sync::Arc<Self>,
         _state: &minijinja::State<'_, '_>,
         args: &[minijinja::value::Value],
     ) -> Result<minijinja::value::Value, minijinja::Error> {
@@ -209,7 +209,7 @@ impl minijinja::value::Object for OutputFormat {
         }
     }
     fn call_method(
-        &self,
+        self: &std::sync::Arc<Self>,
         _state: &minijinja::State<'_, '_>,
         name: &str,
         _args: &[minijinja::value::Value],
