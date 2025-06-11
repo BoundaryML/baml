@@ -357,3 +357,30 @@ and also `dynamic` blocks that act as modifiers for dynamic classes or enums.
   msallowfullscreen
 ></iframe>
 </div>
+
+## Command Line Testing
+
+While the VSCode playground is excellent for interactive development and debugging, you can also run your tests from the command line using the BAML CLI:
+
+```bash
+# Run all tests
+baml test
+
+# Run tests for a specific function
+baml test -i "ClassifyMessage::"
+
+# Run tests in parallel with custom concurrency
+baml test --parallel 5
+
+# List available tests without running them
+baml test --list
+```
+
+The CLI test runner is particularly useful for:
+
+- **CI/CD pipelines** - Automated testing in continuous integration
+- **Batch testing** - Running large test suites with parallel execution
+- **Regression testing** - Validating changes across your entire test suite
+- **Production validation** - Testing deployed functions with real API keys
+
+See the [CLI Test Reference](/ref/baml-cli/test) for complete documentation of all available options, filtering capabilities, and output formats.
