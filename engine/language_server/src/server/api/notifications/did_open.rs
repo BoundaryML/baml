@@ -56,6 +56,11 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
             .to_file_path()
             .internal_error_msg(&format!("Could not convert URL '{}' to file path", url))?;
 
+        // Check for potential directory moves before getting or creating project
+        if let Err(e) = session.handle_potential_directory_moves() {
+            tracing::error!("Failed to handle potential directory moves: {}", e);
+        }
+
         let project = session.get_or_create_project(&file_path);
         if project.is_none() {
             tracing::error!("Failed to get or create project for path: {:?}", file_path);

@@ -36,6 +36,11 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
 
+        // Check for potential directory moves before getting or creating project
+        if let Err(e) = session.handle_potential_directory_moves() {
+            tracing::error!("Failed to handle potential directory moves: {}", e);
+        }
+
         // Get or create the project using the unified method
         let project = session.get_or_create_project(&path);
         if project.is_none() {

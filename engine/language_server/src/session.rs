@@ -119,6 +119,153 @@ impl Session {
         }
     }
 
+    /// Handles the case where a baml_src directory has been moved by updating
+    /// the project mapping and remapping document controllers.
+    fn handle_directory_move(&self, old_path: &Path, new_path: &Path) -> anyhow::Result<()> {
+        tracing::info!(
+            "Handling directory move from {:?} to {:?}",
+            old_path,
+            new_path
+        );
+
+        let mut projects = self.baml_src_projects.lock().unwrap();
+        let mut index = self.index.lock().unwrap();
+
+        // Find and remove the old project
+        if let Some(project) = projects.remove(old_path) {
+            // Update the project's root path
+            project.lock().unwrap().baml_project.root_dir_name = new_path.to_path_buf();
+
+            // Collect all document keys that need to be remapped
+            let old_document_keys: Vec<DocumentKey> = index.documents.keys().cloned().collect();
+            let mut documents_to_remap = Vec::new();
+
+            for old_key in old_document_keys {
+                // Check if this document key belongs to the moved project
+                if old_key.path().starts_with(old_path) {
+                    if let Some(controller) = index.documents.remove(&old_key) {
+                        // Create new document key with updated root path
+                        let relative_path = old_key
+                            .path()
+                            .strip_prefix(old_path)
+                            .unwrap_or(old_key.path());
+                        let new_absolute_path = new_path.join(relative_path);
+                        let new_key = DocumentKey::from_path(new_path, &new_absolute_path)?;
+                        documents_to_remap.push((new_key, controller));
+                    }
+                }
+            }
+
+            // Re-insert the documents with new keys
+            for (new_key, controller) in documents_to_remap {
+                index.documents.insert(new_key, controller);
+            }
+
+            // Insert the project with the new path
+            projects.insert(new_path.to_path_buf(), project);
+
+            tracing::info!(
+                "Successfully moved project from {:?} to {:?}",
+                old_path,
+                new_path
+            );
+        }
+
+        Ok(())
+    }
+
+    /// Detects if any projects have been moved and handles the moves.
+    /// This is called when we receive file system notifications.
+    pub fn handle_potential_directory_moves(&self) -> anyhow::Result<()> {
+        let projects = self.baml_src_projects.lock().unwrap();
+        let mut moves_to_handle = Vec::new();
+
+        // Check for projects that no longer exist at their recorded paths
+        for (recorded_path, project) in projects.iter() {
+            if !recorded_path.exists() {
+                // Try to find where this project might have moved
+                let project_guard = project.lock().unwrap();
+                let expected_name = recorded_path.file_name();
+                drop(project_guard);
+
+                if let Some(name) = expected_name {
+                    // Search for directories with the same name that might be the moved project
+                    // This is a simple heuristic - in practice, you might want to be more sophisticated
+                    if let Some(parent) = recorded_path.parent() {
+                        if let Ok(entries) = std::fs::read_dir(parent) {
+                            for entry in entries.flatten() {
+                                let path = entry.path();
+                                if path.is_dir()
+                                    && path.file_name() == Some(name)
+                                    && path != *recorded_path
+                                {
+                                    // Found a potential match
+                                    moves_to_handle.push((recorded_path.clone(), path));
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Drop the lock before handling moves to avoid deadlock
+        drop(projects);
+
+        // Handle each detected move
+        for (old_path, new_path) in moves_to_handle {
+            self.handle_directory_move(&old_path, &new_path)?;
+        }
+
+        Ok(())
+    }
+
+    /// Attempts to recover from a document controller not found error by checking
+    /// if a project move might have occurred for the specific file being accessed.
+    pub fn try_recover_from_missing_document(&self, url: &lsp_types::Url) -> anyhow::Result<bool> {
+        let file_path = url
+            .to_file_path()
+            .map_err(|_| anyhow::anyhow!("Could not convert URL to file path: {}", url))?;
+
+        // Try to find the baml_src directory for this file
+        if let Some(baml_src) = find_top_level_parent(&file_path) {
+            let projects = self.baml_src_projects.lock().unwrap();
+
+            // Check if we have a project for this exact path
+            if projects.contains_key(&baml_src) {
+                return Ok(false); // Project exists, no recovery needed
+            }
+
+            // Look for a project that might have been moved here
+            let baml_src_name = baml_src.file_name();
+            let mut old_path_to_move = None;
+
+            for (existing_path, _project) in projects.iter() {
+                if existing_path.file_name() == baml_src_name && !existing_path.exists() {
+                    // Found a project that seems to have been moved
+                    old_path_to_move = Some(existing_path.clone());
+                    break;
+                }
+            }
+
+            drop(projects); // Release lock before calling handle_directory_move
+
+            if let Some(old_path) = old_path_to_move {
+                tracing::info!(
+                    "Attempting recovery: moving project from {:?} to {:?}",
+                    old_path,
+                    baml_src
+                );
+
+                self.handle_directory_move(&old_path, &baml_src)?;
+                return Ok(true); // Recovery attempted
+            }
+        }
+
+        Ok(false) // No recovery possible
+    }
+
     /// Gets or creates a project for the given path.
     ///
     /// This is the primary method for working with projects, replacing the multiple
@@ -135,11 +282,43 @@ impl Session {
         let baml_src = find_top_level_parent(path.as_ref())?;
 
         // Lock once and perform all operations within this scope
-        let mut projects = self.baml_src_projects.lock().unwrap();
+        let projects = self.baml_src_projects.lock().unwrap();
 
         // If project exists, return it
         if let Some(project) = projects.get(&baml_src) {
             return Some(project.clone());
+        }
+
+        // Check if there's a project with a different path but same directory name
+        // This can happen when directories are moved
+        let baml_src_name = baml_src.file_name()?;
+        let mut old_path_to_move = None;
+
+        for (existing_path, _existing_project) in projects.iter() {
+            if existing_path.file_name() == Some(baml_src_name)
+                && !existing_path.exists()
+                && baml_src.exists()
+            {
+                // Found a project that seems to have been moved
+                old_path_to_move = Some(existing_path.clone());
+                break;
+            }
+        }
+
+        if let Some(old_path) = old_path_to_move {
+            // Drop the projects lock before calling handle_directory_move to avoid deadlock
+            drop(projects);
+
+            if let Err(e) = self.handle_directory_move(&old_path, &baml_src) {
+                tracing::error!("Failed to handle directory move: {}", e);
+            } else {
+                // Re-acquire the lock and return the moved project
+                let projects = self.baml_src_projects.lock().unwrap();
+                return projects.get(&baml_src).cloned();
+            }
+        } else {
+            // No move needed, release the lock for project creation
+            drop(projects);
         }
 
         // Create a new project if needed
@@ -152,6 +331,7 @@ impl Session {
         })));
 
         // Insert and return the new project
+        let mut projects = self.baml_src_projects.lock().unwrap();
         projects.insert(baml_src, new_project.clone());
         Some(new_project)
     }
@@ -311,7 +491,51 @@ impl Session {
         let start_time = Instant::now();
         let doc_contents = {
             let mut index = self.index.lock().unwrap();
-            index.update_text_document(key, content_changes, new_version, position_encoding)?;
+
+            // First attempt to update the document
+            let update_result = index.update_text_document(
+                key,
+                content_changes.clone(),
+                new_version,
+                position_encoding,
+            );
+
+            // If the update failed because document controller wasn't found, try to recover
+            if let Err(ref e) = update_result {
+                if e.to_string().contains("Document controller not available") {
+                    // Try to recover from the missing document
+                    let url = key.url();
+                    drop(index); // Release the lock before attempting recovery
+
+                    tracing::info!(
+                        "Attempting to recover from missing document controller for: {}",
+                        url
+                    );
+
+                    if let Ok(true) = self.try_recover_from_missing_document(&url) {
+                        // Recovery was attempted, try the update again
+                        let mut index = self.index.lock().unwrap();
+                        index.update_text_document(
+                            key,
+                            content_changes,
+                            new_version,
+                            position_encoding,
+                        )?;
+                    } else {
+                        // Recovery failed or wasn't possible, return the original error
+                        return update_result;
+                    }
+                } else {
+                    // Different error, return it as-is
+                    return update_result;
+                }
+            } else {
+                // Update succeeded on first try
+                update_result?;
+            }
+
+            // Re-acquire index lock to get document contents
+            let index = self.index.lock().unwrap();
 
             let doc_controller = index
                 .documents

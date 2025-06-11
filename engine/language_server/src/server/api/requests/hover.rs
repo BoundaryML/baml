@@ -26,6 +26,12 @@ impl SyncRequestHandler for Hover {
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;
+
+        // Check for potential directory moves before getting project
+        if let Err(e) = session.handle_potential_directory_moves() {
+            tracing::error!("Failed to handle potential directory moves: {}", e);
+        }
+
         let project = session
             .get_or_create_project(&path)
             .expect("Ensured that a project db exists");

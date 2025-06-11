@@ -47,6 +47,11 @@ impl super::SyncNotificationHandler for DidChangeWatchedFiles {
             changes: filtered_changes,
         };
 
+        // Check for potential directory moves before reloading
+        if let Err(e) = session.handle_potential_directory_moves() {
+            tracing::error!("Failed to handle potential directory moves: {}", e);
+        }
+
         session.reload(Some(notifier.clone())).internal_error()?;
 
         let change_file_paths: Vec<Url> = params
