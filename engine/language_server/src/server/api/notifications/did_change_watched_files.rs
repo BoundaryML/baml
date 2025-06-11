@@ -21,6 +21,14 @@ impl super::SyncNotificationHandler for DidChangeWatchedFiles {
         params: types::DidChangeWatchedFilesParams,
     ) -> Result<()> {
         tracing::info!("#### DidChangeWatchedFiles {:?}", params.changes);
+        if !params
+            .changes
+            .iter()
+            .any(|change| change.uri.to_string().contains("baml_src"))
+        {
+            return Ok(());
+        }
+
         // Filter out CHANGED events - only process CREATED and DELETED
         let filtered_changes: Vec<_> = params
             .changes
