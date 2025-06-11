@@ -20,7 +20,7 @@ use crate::edit::{DocumentKey, DocumentVersion};
 use crate::{PositionEncoding, TextDocument};
 
 pub(crate) use self::capabilities::ResolvedClientCapabilities;
-pub use self::index::DocumentQuery;
+pub use self::index::{DocumentError, DocumentQuery};
 pub(crate) use self::settings::AllSettings;
 pub use self::settings::BamlSettings;
 pub use self::settings::ClientSettings;
@@ -501,8 +501,8 @@ impl Session {
             );
 
             // If the update failed because document controller wasn't found, try to recover
-            if let Err(ref e) = update_result {
-                if e.to_string().contains("Document controller not available") {
+            match update_result {
+                Err(ref doc_error) if doc_error.is_controller_not_available() => {
                     // Try to recover from the missing document
                     let url = key.url();
                     drop(index); // Release the lock before attempting recovery
@@ -515,23 +515,26 @@ impl Session {
                     if let Ok(true) = self.try_recover_from_missing_document(&url) {
                         // Recovery was attempted, try the update again
                         let mut index = self.index.lock().unwrap();
-                        index.update_text_document(
-                            key,
-                            content_changes,
-                            new_version,
-                            position_encoding,
-                        )?;
+                        index
+                            .update_text_document(
+                                key,
+                                content_changes,
+                                new_version,
+                                position_encoding,
+                            )
+                            .map_err(|e| anyhow::anyhow!(e))?;
                     } else {
                         // Recovery failed or wasn't possible, return the original error
-                        return update_result;
+                        return Err(anyhow::anyhow!(update_result.unwrap_err()));
                     }
-                } else {
-                    // Different error, return it as-is
-                    return update_result;
                 }
-            } else {
-                // Update succeeded on first try
-                update_result?;
+                Err(e) => {
+                    // Different error, return it as-is
+                    return Err(anyhow::anyhow!(e));
+                }
+                Ok(()) => {
+                    // Update succeeded on first try
+                }
             }
 
             // Re-acquire index lock to get document contents
@@ -588,7 +591,7 @@ impl Session {
     /// Calling this multiple times for the same document is a logic error.
     pub(crate) fn close_document(&self, key: &DocumentKey) -> anyhow::Result<()> {
         let mut index = self.index.lock().unwrap();
-        index.close_document(key)?;
+        index.close_document(key).map_err(|e| anyhow::anyhow!(e))?;
         Ok(())
     }
 

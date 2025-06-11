@@ -11,6 +11,31 @@ use crate::{
 
 use super::ClientSettings;
 
+/// Errors that can occur when working with document controllers
+#[derive(Debug, thiserror::Error)]
+pub enum DocumentError {
+    #[error("Document controller not available for document: {document_key}")]
+    ControllerNotAvailable { document_key: DocumentKey },
+
+    #[error("Document at {document_key} is not a text document")]
+    NotTextDocument { document_key: DocumentKey },
+
+    #[error("Document {document_key} does not exist")]
+    DocumentNotFound { document_key: DocumentKey },
+
+    #[error("Failed to apply changes to document {document_key}: {reason}")]
+    ChangeApplicationFailed {
+        document_key: DocumentKey,
+        reason: String,
+    },
+}
+
+impl DocumentError {
+    pub fn is_controller_not_available(&self) -> bool {
+        matches!(self, DocumentError::ControllerNotAvailable { .. })
+    }
+}
+
 /// Stores and tracks all open documents in a session, along with their associated settings.
 #[derive(Default, Debug)]
 pub struct Index {
@@ -41,10 +66,12 @@ impl Index {
         content_changes: Vec<lsp_types::TextDocumentContentChangeEvent>,
         new_version: DocumentVersion,
         encoding: PositionEncoding,
-    ) -> anyhow::Result<()> {
+    ) -> Result<(), DocumentError> {
         let controller = self.document_controller_for_key(key)?;
         let Some(document) = controller.as_text_mut() else {
-            anyhow::bail!("Text document URI does not point to a text document");
+            return Err(DocumentError::NotTextDocument {
+                document_key: key.clone(),
+            });
         };
 
         if content_changes.is_empty() {
@@ -76,13 +103,11 @@ impl Index {
             .insert(document_key, DocumentController::new_text(document));
     }
 
-    pub fn close_document(&mut self, document_key: &DocumentKey) -> anyhow::Result<()> {
-        // let Some(url) = self.url_for_key(key).cloned() else {
-        //     anyhow::bail!("Tried to close unavailable document `{key}`");
-        // };
-
+    pub fn close_document(&mut self, document_key: &DocumentKey) -> Result<(), DocumentError> {
         let Some(_) = self.documents.remove(&document_key) else {
-            anyhow::bail!("tried to close document that didn't exist at {}", document_key)
+            return Err(DocumentError::DocumentNotFound {
+                document_key: document_key.clone(),
+            });
         };
         Ok(())
     }
@@ -90,9 +115,11 @@ impl Index {
     pub fn document_controller_for_key(
         &mut self,
         document_key: &DocumentKey,
-    ) -> anyhow::Result<&mut DocumentController> {
+    ) -> Result<&mut DocumentController, DocumentError> {
         let Some(controller) = self.documents.get_mut(&document_key) else {
-            anyhow::bail!("Document controller not available at `{}`", document_key);
+            return Err(DocumentError::ControllerNotAvailable {
+                document_key: document_key.clone(),
+            });
         };
         Ok(controller)
     }
@@ -176,7 +203,7 @@ impl DocumentQuery {
         }
     }
 
-    pub (crate) fn file_document_key(&self) -> &DocumentKey {
+    pub(crate) fn file_document_key(&self) -> &DocumentKey {
         match self {
             Self::Text { document_key, .. } => document_key,
         }
