@@ -3,22 +3,22 @@ The `test` command runs BAML function tests defined in your BAML files. It provi
 ## Usage
 
 ```
-baml test [OPTIONS]
+baml-cli test [OPTIONS]
 ```
 
 ## Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--from <PATH>` | Path to the `baml_src` directory | `./baml_src` |
-| `--list` | Only list selected tests without running them | `false` |
+| Option                    | Description                                                      | Default       |
+| ------------------------- | ---------------------------------------------------------------- | ------------- |
+| `--from <PATH>`           | Path to the `baml_src` directory                                 | `./baml_src`  |
+| `--list`                  | Only list selected tests without running them                    | `false`       |
 | `-i, --include <PATTERN>` | Include specific functions or tests (can be used multiple times) | Run all tests |
-| `-x, --exclude <PATTERN>` | Exclude specific functions or tests (can be used multiple times) | None |
-| `--parallel <NUM>` | Number of tests to run in parallel | `10` |
-| `--pass-if-no-tests` | Pass if no tests are selected | `false` |
-| `--require-human-eval` | Fail if any tests need human evaluation | `true` |
-| `--dotenv` | Load environment variables from .env file | `true` |
-| `--dotenv-path <PATH>` | Path to custom .env file | None |
+| `-x, --exclude <PATTERN>` | Exclude specific functions or tests (can be used multiple times) | None          |
+| `--parallel <NUM>`        | Number of tests to run in parallel                               | `10`          |
+| `--pass-if-no-tests`      | Pass if no tests are selected                                    | `false`       |
+| `--require-human-eval`    | Fail if any tests need human evaluation                          | `true`        |
+| `--dotenv`                | Load environment variables from .env file                        | `true`        |
+| `--dotenv-path <PATH>`    | Path to custom .env file                                         | None          |
 
 ## Description
 
@@ -46,28 +46,28 @@ The `--include` and `--exclude` options support powerful pattern matching:
 
 ```bash
 # Run all tests
-baml test
+baml-cli test
 
 # List all available tests
-baml test --list
+baml-cli test --list
 
 # Run tests for a specific function
-baml test -i "ExtractResume::"
+baml-cli test -i "ExtractResume::"
 
 # Run a specific test
-baml test -i "ExtractResume::TestBasicResume"
+baml-cli test -i "ExtractResume::TestBasicResume"
 
 # Run all tests matching a pattern
-baml test -i "Extract*::"
+baml-cli test -i "Extract*::"
 
 # Run tests with multiple include patterns
-baml test -i "Extract*::" -i "Classify*::"
+baml-cli test -i "Extract*::" -i "Classify*::"
 
 # Exclude specific tests
-baml test -x "ExtractResume::TestComplexResume"
+baml-cli test -x "ExtractResume::TestComplexResume"
 
 # Combine include and exclude (exclude takes precedence)
-baml test -i "Extract*::" -x "*::TestSlow*"
+baml-cli test -i "Extract*::" -x "*::TestSlow*"
 ```
 
 ## Parallel Execution
@@ -76,13 +76,13 @@ Control the number of tests running simultaneously:
 
 ```bash
 # Run tests with default parallelism (10)
-baml test
+baml-cli test
 
 # Run tests sequentially
-baml test --parallel 1
+baml-cli test --parallel 1
 
 # Run with high parallelism
-baml test --parallel 20
+baml-cli test --parallel 20
 ```
 
 ## Environment Variables
@@ -91,33 +91,33 @@ The test command automatically loads environment variables:
 
 ```bash
 # Use default .env file loading
-baml test
+baml-cli test
 
 # Disable .env file loading
-baml test --no-dotenv
+baml-cli test --no-dotenv
 
 # Use custom .env file
-baml test --dotenv-path .env.test
+baml-cli test --dotenv-path .env.test
 ```
 
 Environment variables can also be set directly:
 
 ```bash
 # Set API keys for testing
-OPENAI_API_KEY=... ANTHROPIC_API_KEY=... baml test
+OPENAI_API_KEY=... ANTHROPIC_API_KEY=... baml-cli test
 ```
 
 ## Exit Codes
 
 The `test` command returns different exit codes based on results:
 
-| Exit Code | Meaning |
-|-----------|---------|
-| `0` | All tests passed |
-| `1` | Test failures occurred |
-| `2` | Tests require human evaluation |
-| `3` | Test execution was cancelled |
-| `4` | No tests were found to run |
+| Exit Code | Meaning                        |
+| --------- | ------------------------------ |
+| `0`       | All tests passed               |
+| `1`       | Test failures occurred         |
+| `2`       | Tests require human evaluation |
+| `3`       | Test execution was cancelled   |
+| `4`       | No tests were found to run     |
 
 ## Examples
 
@@ -125,49 +125,49 @@ The `test` command returns different exit codes based on results:
 
 ```bash
 # Run all tests in the project
-baml test
+baml-cli test
 
 # Run tests from a specific directory
-baml test --from /path/to/my/baml_src
+baml-cli test --from /path/to/my/baml_src
 ```
 
 ### Development Workflow
 
 ```bash
 # Run tests for a function you're developing
-baml test -i "MyNewFunction::"
+baml-cli test -i "MyNewFunction::"
 
 # Run specific test while debugging
-baml test -i "MyFunction::TestEdgeCase"
+baml-cli test -i "MyFunction::TestEdgeCase"
 
 # List tests to see what's available
-baml test --list -i "Extract*::"
+baml-cli test --list -i "Extract*::"
 ```
 
 ### CI/CD Integration
 
 ```bash
 # Fail fast on first assertion failure
-baml test --require-human-eval
+baml-cli test --require-human-eval
 
 # Allow tests that need human evaluation to pass
-baml test --no-require-human-eval
+baml-cli test --no-require-human-eval
 
 # Run with controlled parallelism for CI
-baml test --parallel 5
+baml-cli test --parallel 5
 ```
 
 ### Test Discovery
 
 ```bash
 # See all available tests
-baml test --list
+baml-cli test --list
 
 # See tests for specific functions
-baml test --list -i "ClassifyMessage::"
+baml-cli test --list -i "ClassifyMessage::"
 
 # See what tests would run with filters
-baml test --list -i "Extract*::" -x "*::TestSlow*"
+baml-cli test --list -i "Extract*::" -x "*::TestSlow*"
 ```
 
 ## Test Definition
@@ -190,39 +190,8 @@ test TestBasicResume {
 }
 ```
 
-## Output
-
-The command provides detailed output including:
-
-- Test discovery and filtering results
-- Individual test results with timing
-- Assertion failures with detailed error messages
-- Summary statistics
-- Human evaluation requirements
-
-Example output:
-```
-Found 5 tests
-Running tests with 10 parallel workers
-✓ ExtractResume::TestBasicResume (234ms)
-✓ ExtractResume::TestComplexResume (456ms)
-✗ ClassifyMessage::TestSpam (123ms)
-  Assertion failed: this == "Spam"
-  Got: "NotSpam"
-
-Tests: 2 passed, 1 failed, 5 total
-Time: 456ms
-```
-
 ## Related Commands
 
 - [`baml dev`](./dev) - Development server with hot reload for interactive testing
 - [`baml serve`](./serve) - Production server for HTTP API testing
 - [`baml generate`](./generate) - Generate client code before running tests
-
-## Notes
-
-- Tests require a valid BAML runtime configuration
-- LLM API keys must be available via environment variables
-- Test execution order is not guaranteed when running in parallel
-- Some tests may require human evaluation and will be marked accordingly
