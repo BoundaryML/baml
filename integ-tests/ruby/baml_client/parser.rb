@@ -33,12 +33,12 @@ module Baml
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::Recipe)
     }
     def AaaSamOutputFormat(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -50,19 +50,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::LinkedListAliasNode)
     }
     def AliasThatPointsToRecursiveType(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -74,19 +73,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Checked[Integer])
     }
     def AliasWithMultipleAttrs(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -98,19 +96,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def AliasedInputClass(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -122,19 +119,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def AliasedInputClass2(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -146,19 +142,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def AliasedInputClassNested(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -170,19 +165,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def AliasedInputEnum(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -194,19 +188,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def AliasedInputList(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -218,19 +211,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::OptionalListAndMap)
     }
     def AllowedOptionals(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -242,19 +234,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Integer)
     }
     def AssertFn(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -266,19 +257,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def AudioInput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -290,19 +280,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def AudioInputOpenai(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -314,19 +303,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::LinkedList)
     }
     def BuildLinkedList(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -338,19 +326,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::Tree)
     }
     def BuildTree(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -362,19 +349,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::ClassToRecAlias)
     }
     def ClassThatPointsToRecursiveClassThroughAlias(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -386,19 +372,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.any(Baml::Types::DynEnumTwo, String))
     }
     def ClassifyDynEnumTwo(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -410,19 +395,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.any(Baml::Types::Category, String))
     }
     def ClassifyMessage(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -434,19 +418,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.any(Baml::Types::Category, String))
     }
     def ClassifyMessage2(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -458,19 +441,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.any(Baml::Types::Category, String))
     }
     def ClassifyMessage3(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -482,19 +464,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def Completion(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -506,19 +487,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.any(Baml::Types::BookOrder, Baml::Types::FlightConfirmation, Baml::Types::GroceryReceipt))
     }
     def CustomTask(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -530,19 +510,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def DescribeImage(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -554,19 +533,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def DescribeImage2(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -578,19 +556,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def DescribeImage3(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -602,19 +579,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def DescribeImage4(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -626,19 +602,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def DescribeMedia1599(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -650,19 +625,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.any(Baml::Types::OriginalA, Baml::Types::OriginalB))
     }
     def DifferentiateUnions(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -674,19 +648,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::DummyOutput)
     }
     def DummyOutputFunction(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -698,19 +671,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::DynamicClassTwo)
     }
     def DynamicFunc(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -722,19 +694,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::DynInputOutput)
     }
     def DynamicInputOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -746,19 +717,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[Baml::Types::DynInputOutput])
     }
     def DynamicListInputOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -770,19 +740,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def ExpectFailure(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -794,19 +763,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::ContactInfo)
     }
     def ExtractContactInfo(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -818,19 +786,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::DynamicSchema)
     }
     def ExtractEntities(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -842,19 +809,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[T.any(Baml::Types::Hobby, String)])
     }
     def ExtractHobby(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -866,19 +832,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[String])
     }
     def ExtractNames(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -890,19 +855,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[Baml::Types::Person])
     }
     def ExtractPeople(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -914,19 +878,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::ReceiptInfo)
     }
     def ExtractReceiptInfo(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -938,19 +901,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::Resume)
     }
     def ExtractResume(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -962,19 +924,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::Resume)
     }
     def ExtractResume2(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -986,19 +947,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::Types::ClassOptionalOutput))
     }
     def FnClassOptionalOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1010,19 +970,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::Types::ClassOptionalOutput2))
     }
     def FnClassOptionalOutput2(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1034,19 +993,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[T.any(Baml::Types::EnumOutput, String)])
     }
     def FnEnumListOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1058,19 +1016,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.any(Baml::Types::EnumOutput, String))
     }
     def FnEnumOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1082,19 +1039,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::LiteralClassHello)
     }
     def FnLiteralClassInputOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1106,19 +1062,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.any(Baml::Types::LiteralClassOne, Baml::Types::LiteralClassTwo))
     }
     def FnLiteralUnionClassInputOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1130,19 +1085,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def FnNamedArgsSingleStringOptional(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1154,19 +1108,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Boolean)
     }
     def FnOutputBool(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1178,19 +1131,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::TestOutputClass)
     }
     def FnOutputClass(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1202,19 +1154,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[Baml::Types::TestOutputClass])
     }
     def FnOutputClassList(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1226,19 +1177,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::TestClassNested)
     }
     def FnOutputClassNested(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1250,19 +1200,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::TestClassWithEnum)
     }
     def FnOutputClassWithEnum(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1274,19 +1223,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Integer)
     }
     def FnOutputInt(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1298,19 +1246,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Boolean)
     }
     def FnOutputLiteralBool(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1322,19 +1269,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Integer)
     }
     def FnOutputLiteralInt(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1346,19 +1292,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def FnOutputLiteralString(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1370,19 +1315,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[String])
     }
     def FnOutputStringList(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1394,19 +1338,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.any(Baml::Types::TestEnum, String))
     }
     def FnTestAliasedEnumOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1418,19 +1361,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::TestClassAlias)
     }
     def FnTestClassAlias(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1442,19 +1384,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def FnTestNamedArgsSingleEnum(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1466,19 +1407,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::RaysData)
     }
     def GetDataType(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1490,19 +1430,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::OrderInfo)
     }
     def GetOrderInfo(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1514,19 +1453,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::SearchParams)
     }
     def GetQuery(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1538,19 +1476,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, String])
     }
     def InOutEnumMapKey(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1562,19 +1499,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, String])
     }
     def InOutLiteralStringUnionMapKey(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1586,19 +1522,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, String])
     }
     def InOutSingleLiteralStringMapKey(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1610,19 +1545,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.anything)
     }
     def JsonTypeAliasCycle(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1634,19 +1568,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def LLMEcho(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1658,19 +1591,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.any(Integer, T::Boolean, String))
     }
     def LiteralUnionsTest(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1682,19 +1614,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Checked[Baml::Types::BlockConstraint])
     }
     def MakeBlockConstraint(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1706,19 +1637,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::ClassWithBlockDone)
     }
     def MakeClassWithBlockDone(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1730,19 +1660,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::ClassWithoutDone)
     }
     def MakeClassWithExternalDone(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1754,19 +1683,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::NestedBlockConstraint)
     }
     def MakeNestedBlockConstraint(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1778,19 +1706,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::SemanticContainer)
     }
     def MakeSemanticContainer(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1802,19 +1729,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, T::Array[String]])
     }
     def MapAlias(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1826,19 +1752,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::MergeAttrs)
     }
     def MergeAliasAttributes(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1850,19 +1775,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::DynamicOutput)
     }
     def MyFunc(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1874,19 +1798,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.any(T.any(Integer, String, T::Boolean, Float), T::Array[String], T::Hash[String, T::Array[String]]))
     }
     def NestedAlias(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1898,19 +1821,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::ClassForNullLiteral)
     }
     def NullLiteralClassHello(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1922,19 +1844,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def OpenAIWithAnthropicResponseHello(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1946,19 +1867,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[T.nilable(Baml::Types::OptionalTest_ReturnType)])
     }
     def OptionalTest_Function(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1970,19 +1890,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::FooAny)
     }
     def PredictAge(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -1994,19 +1913,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Checked[Integer])
     }
     def PredictAgeBare(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2018,19 +1936,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.any(Integer, String, T::Boolean, Float))
     }
     def PrimitiveAlias(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2042,19 +1959,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def PromptTestClaude(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2066,19 +1982,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def PromptTestClaudeChat(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2090,19 +2005,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def PromptTestClaudeChatNoSystem(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2114,19 +2028,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def PromptTestOpenAI(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2138,19 +2051,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def PromptTestOpenAIChat(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2162,19 +2074,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def PromptTestOpenAIChatNoSystem(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2186,19 +2097,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def PromptTestStreaming(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2210,19 +2120,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.anything)
     }
     def RecursiveAliasCycle(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2234,19 +2143,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::NodeWithAliasIndirection)
     }
     def RecursiveClassWithAliasIndirection(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2258,19 +2166,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.anything)
     }
     def RecursiveUnionTest(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2282,19 +2189,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Checked[Integer])
     }
     def ReturnAliasWithMergedAttributes(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2306,19 +2212,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Integer)
     }
     def ReturnFailingAssert(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2330,19 +2235,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.anything)
     }
     def ReturnJsonEntry(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2354,19 +2258,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::MalformedConstraints)
     }
     def ReturnMalformedConstraints(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2378,19 +2281,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::Schema)
     }
     def SchemaDescriptions(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2402,19 +2304,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.anything)
     }
     def SimpleRecursiveListAlias(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2426,19 +2327,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.anything)
     }
     def SimpleRecursiveMapAlias(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2450,19 +2350,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::BigNumbers)
     }
     def StreamBigNumbers(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2474,19 +2373,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::TwoStoriesOneTitle)
     }
     def StreamFailingAssertion(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2498,19 +2396,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::TwoStoriesOneTitleCheck)
     }
     def StreamFailingCheck(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2522,19 +2419,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Integer)
     }
     def StreamOneBigNumber(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2546,19 +2442,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[T.any(Integer, String)])
     }
     def StreamUnionIntegers(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2570,19 +2465,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::CompoundBigNumbers)
     }
     def StreamingCompoundNumbers(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2594,19 +2488,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::Document1559)
     }
     def StructureDocument1559(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2618,19 +2511,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::RecursiveAliasDependency)
     }
     def TakeRecAliasDep(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2642,19 +2534,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TellStory(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2666,19 +2557,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAnthropic(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2690,19 +2580,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAnthropicShorthand(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2714,19 +2603,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAws(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2738,19 +2626,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAwsClaude37(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2762,19 +2649,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAwsInferenceProfile(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2786,19 +2672,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAwsInvalidAccessKey(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2810,19 +2695,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAwsInvalidProfile(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2834,19 +2718,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAwsInvalidRegion(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2858,19 +2741,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAwsInvalidSessionToken(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2882,19 +2764,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAzure(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2906,19 +2787,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAzureFailure(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2930,19 +2810,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAzureO1NoMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2954,19 +2833,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAzureO1WithMaxCompletionTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -2978,19 +2856,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAzureO1WithMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3002,19 +2879,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAzureO3NoMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3026,19 +2902,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAzureO3WithMaxCompletionTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3050,19 +2925,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestAzureWithMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3074,19 +2948,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestCaching(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3098,19 +2971,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFallbackClient(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3122,19 +2994,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFallbackStrategy(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3146,19 +3017,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFallbackToShorthand(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3170,19 +3040,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFnNamedArgsSingleBool(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3194,19 +3063,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFnNamedArgsSingleClass(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3218,19 +3086,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFnNamedArgsSingleEnumList(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3242,19 +3109,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFnNamedArgsSingleFloat(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3266,19 +3132,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFnNamedArgsSingleInt(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3290,19 +3155,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, Baml::Types::StringToClassEntry])
     }
     def TestFnNamedArgsSingleMapStringToClass(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3314,19 +3178,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, T::Hash[String, String]])
     }
     def TestFnNamedArgsSingleMapStringToMap(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3338,19 +3201,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, String])
     }
     def TestFnNamedArgsSingleMapStringToString(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3362,19 +3224,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFnNamedArgsSingleString(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3386,19 +3247,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestFnNamedArgsSingleStringArray(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3410,19 +3270,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[String])
     }
     def TestFnNamedArgsSingleStringList(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3434,19 +3293,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestGemini(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3458,19 +3316,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestGeminiOpenAiGeneric(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3482,19 +3339,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestGeminiSystem(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3506,19 +3362,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestGeminiSystemAsChat(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3530,19 +3385,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestGroq(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3554,19 +3408,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestImageInput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3578,19 +3431,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestImageInputAnthropic(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3602,19 +3454,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestImageListInput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3626,19 +3477,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::TestMemoryOutput)
     }
     def TestMemory(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3650,19 +3500,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestMulticlassNamedArgs(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3674,19 +3523,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestNamedArgsLiteralBool(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3698,19 +3546,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestNamedArgsLiteralInt(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3722,19 +3569,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestNamedArgsLiteralString(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3746,19 +3592,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestOllama(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3770,19 +3615,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::Haiku)
     }
     def TestOllamaHaiku(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3794,19 +3638,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestOpenAI(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3818,19 +3661,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestOpenAIDummyClient(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3842,19 +3684,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestOpenAIGPT4oMini(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3866,19 +3707,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestOpenAILegacyProvider(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3890,19 +3730,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestOpenAIO1NoMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3914,19 +3753,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestOpenAIO1WithMaxCompletionTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3938,19 +3776,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestOpenAIO1WithMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3962,19 +3799,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestOpenAIShorthand(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -3986,19 +3822,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestOpenAIWithFinishReasonError(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4010,19 +3845,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestOpenAIWithMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4034,19 +3868,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestOpenAIWithNullMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4058,19 +3891,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestOpenRouterMistralSmall3_1_24b(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4082,19 +3914,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestRetryConstant(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4106,19 +3937,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestRetryExponential(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4130,19 +3960,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestRoundRobinStrategy(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4154,19 +3983,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestSingleFallbackClient(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4178,19 +4006,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::CustomStory)
     }
     def TestThinking(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4202,19 +4029,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::UniverseQuestion)
     }
     def TestUniverseQuestion(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4226,19 +4052,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestVertex(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4250,19 +4075,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestVertexClaude(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4274,19 +4098,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(String)
     }
     def TestVertexWithSystemInstructions(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4298,19 +4121,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::UnionTest_ReturnType)
     }
     def UnionTest_Function(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4322,19 +4144,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Integer)
     }
     def UseBlockConstraint(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4346,19 +4167,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Baml::Types::MaintainFieldOrder)
     }
     def UseMaintainFieldOrder(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4370,19 +4190,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Integer)
     }
     def UseMalformedConstraints(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4394,19 +4213,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(Integer)
     }
     def UseNestedBlockConstraint(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4418,7 +4236,6 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
@@ -4437,12 +4254,12 @@ module Baml
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::Recipe))
     }
     def AaaSamOutputFormat(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4454,19 +4271,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::LinkedListAliasNode))
     }
     def AliasThatPointsToRecursiveType(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4478,19 +4294,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::Checked[Integer]))
     }
     def AliasWithMultipleAttrs(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4502,19 +4317,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def AliasedInputClass(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4526,19 +4340,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def AliasedInputClass2(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4550,19 +4363,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def AliasedInputClassNested(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4574,19 +4386,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def AliasedInputEnum(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4598,19 +4409,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def AliasedInputList(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4622,19 +4432,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::OptionalListAndMap))
     }
     def AllowedOptionals(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4646,19 +4455,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Integer))
     }
     def AssertFn(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4670,19 +4478,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def AudioInput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4694,19 +4501,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def AudioInputOpenai(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4718,19 +4524,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::LinkedList))
     }
     def BuildLinkedList(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4742,19 +4547,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::Tree))
     }
     def BuildTree(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4766,19 +4570,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::ClassToRecAlias))
     }
     def ClassThatPointsToRecursiveClassThroughAlias(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4790,19 +4593,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::Types::DynEnumTwo))
     }
     def ClassifyDynEnumTwo(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4814,19 +4616,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::Types::Category))
     }
     def ClassifyMessage(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4838,19 +4639,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::Types::Category))
     }
     def ClassifyMessage2(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4862,19 +4662,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::Types::Category))
     }
     def ClassifyMessage3(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4886,19 +4685,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def Completion(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4910,19 +4708,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(T.any(T.nilable(Baml::PartialTypes::BookOrder), T.nilable(Baml::PartialTypes::FlightConfirmation), T.nilable(Baml::PartialTypes::GroceryReceipt))))
     }
     def CustomTask(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4934,19 +4731,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def DescribeImage(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4958,19 +4754,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def DescribeImage2(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -4982,19 +4777,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def DescribeImage3(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5006,19 +4800,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def DescribeImage4(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5030,19 +4823,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def DescribeMedia1599(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5054,19 +4846,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(T.any(T.nilable(Baml::PartialTypes::OriginalA), T.nilable(Baml::PartialTypes::OriginalB))))
     }
     def DifferentiateUnions(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5078,19 +4869,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::DummyOutput))
     }
     def DummyOutputFunction(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5102,19 +4892,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::DynamicClassTwo))
     }
     def DynamicFunc(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5126,19 +4915,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::DynInputOutput))
     }
     def DynamicInputOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5150,19 +4938,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[T.nilable(Baml::PartialTypes::DynInputOutput)])
     }
     def DynamicListInputOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5174,19 +4961,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def ExpectFailure(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5198,19 +4984,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::ContactInfo))
     }
     def ExtractContactInfo(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5222,19 +5007,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::DynamicSchema))
     }
     def ExtractEntities(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5246,19 +5030,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[T.nilable(Baml::Types::Hobby)])
     }
     def ExtractHobby(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5270,19 +5053,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[T.nilable(String)])
     }
     def ExtractNames(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5294,19 +5076,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[T.nilable(Baml::PartialTypes::Person)])
     }
     def ExtractPeople(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5318,19 +5099,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::ReceiptInfo))
     }
     def ExtractReceiptInfo(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5342,19 +5122,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::Resume))
     }
     def ExtractResume(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5366,19 +5145,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::Resume))
     }
     def ExtractResume2(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5390,19 +5168,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::ClassOptionalOutput))
     }
     def FnClassOptionalOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5414,19 +5191,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::ClassOptionalOutput2))
     }
     def FnClassOptionalOutput2(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5438,19 +5214,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[T.nilable(Baml::Types::EnumOutput)])
     }
     def FnEnumListOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5462,19 +5237,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::Types::EnumOutput))
     }
     def FnEnumOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5486,19 +5260,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::LiteralClassHello))
     }
     def FnLiteralClassInputOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5510,19 +5283,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(T.any(T.nilable(Baml::PartialTypes::LiteralClassOne), T.nilable(Baml::PartialTypes::LiteralClassTwo))))
     }
     def FnLiteralUnionClassInputOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5534,19 +5306,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def FnNamedArgsSingleStringOptional(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5558,19 +5329,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(T::Boolean))
     }
     def FnOutputBool(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5582,19 +5352,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::TestOutputClass))
     }
     def FnOutputClass(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5606,19 +5375,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[T.nilable(Baml::PartialTypes::TestOutputClass)])
     }
     def FnOutputClassList(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5630,19 +5398,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::TestClassNested))
     }
     def FnOutputClassNested(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5654,19 +5421,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::TestClassWithEnum))
     }
     def FnOutputClassWithEnum(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5678,19 +5444,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Integer))
     }
     def FnOutputInt(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5702,19 +5467,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(T::Boolean))
     }
     def FnOutputLiteralBool(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5726,19 +5490,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Integer))
     }
     def FnOutputLiteralInt(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5750,19 +5513,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def FnOutputLiteralString(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5774,19 +5536,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[T.nilable(String)])
     }
     def FnOutputStringList(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5798,19 +5559,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::Types::TestEnum))
     }
     def FnTestAliasedEnumOutput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5822,19 +5582,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::TestClassAlias))
     }
     def FnTestClassAlias(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5846,19 +5605,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def FnTestNamedArgsSingleEnum(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5870,19 +5628,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::RaysData))
     }
     def GetDataType(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5894,19 +5651,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::OrderInfo))
     }
     def GetOrderInfo(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5918,19 +5674,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::SearchParams))
     }
     def GetQuery(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5942,19 +5697,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, T.nilable(String)])
     }
     def InOutEnumMapKey(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5966,19 +5720,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, T.nilable(String)])
     }
     def InOutLiteralStringUnionMapKey(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -5990,19 +5743,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, T.nilable(String)])
     }
     def InOutSingleLiteralStringMapKey(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6014,19 +5766,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.anything)
     }
     def JsonTypeAliasCycle(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6038,19 +5789,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def LLMEcho(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6062,19 +5812,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(T.any(T.nilable(Integer), T.nilable(T::Boolean), T.nilable(String))))
     }
     def LiteralUnionsTest(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6086,19 +5835,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::BlockConstraint))
     }
     def MakeBlockConstraint(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6110,19 +5858,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::ClassWithBlockDone))
     }
     def MakeClassWithBlockDone(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6134,19 +5881,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::ClassWithoutDone))
     }
     def MakeClassWithExternalDone(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6158,19 +5904,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::NestedBlockConstraint))
     }
     def MakeNestedBlockConstraint(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6182,19 +5927,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::SemanticContainer))
     }
     def MakeSemanticContainer(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6206,19 +5950,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, T::Array[T.nilable(String)]])
     }
     def MapAlias(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6230,19 +5973,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::MergeAttrs))
     }
     def MergeAliasAttributes(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6254,19 +5996,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::DynamicOutput))
     }
     def MyFunc(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6278,19 +6019,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(T.any(T.nilable(T.any(T.nilable(Integer), T.nilable(String), T.nilable(T::Boolean), T.nilable(Float))), T::Array[T.nilable(String)], T::Hash[String, T::Array[T.nilable(String)]])))
     }
     def NestedAlias(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6302,19 +6042,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::ClassForNullLiteral))
     }
     def NullLiteralClassHello(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6326,19 +6065,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def OpenAIWithAnthropicResponseHello(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6350,19 +6088,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[T.nilable(Baml::PartialTypes::OptionalTest_ReturnType)])
     }
     def OptionalTest_Function(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6374,19 +6111,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::FooAny))
     }
     def PredictAge(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6398,19 +6134,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::Checked[Integer]))
     }
     def PredictAgeBare(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6422,19 +6157,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(T.any(T.nilable(Integer), T.nilable(String), T.nilable(T::Boolean), T.nilable(Float))))
     }
     def PrimitiveAlias(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6446,19 +6180,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def PromptTestClaude(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6470,19 +6203,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def PromptTestClaudeChat(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6494,19 +6226,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def PromptTestClaudeChatNoSystem(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6518,19 +6249,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def PromptTestOpenAI(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6542,19 +6272,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def PromptTestOpenAIChat(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6566,19 +6295,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def PromptTestOpenAIChatNoSystem(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6590,19 +6318,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def PromptTestStreaming(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6614,19 +6341,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.anything)
     }
     def RecursiveAliasCycle(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6638,19 +6364,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::NodeWithAliasIndirection))
     }
     def RecursiveClassWithAliasIndirection(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6662,19 +6387,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.anything)
     }
     def RecursiveUnionTest(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6686,19 +6410,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::Checked[Integer]))
     }
     def ReturnAliasWithMergedAttributes(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6710,19 +6433,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Integer))
     }
     def ReturnFailingAssert(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6734,19 +6456,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.anything)
     }
     def ReturnJsonEntry(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6758,19 +6479,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::MalformedConstraints))
     }
     def ReturnMalformedConstraints(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6782,19 +6502,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::Schema))
     }
     def SchemaDescriptions(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6806,19 +6525,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.anything)
     }
     def SimpleRecursiveListAlias(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6830,19 +6548,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.anything)
     }
     def SimpleRecursiveMapAlias(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6854,19 +6571,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::BigNumbers))
     }
     def StreamBigNumbers(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6878,19 +6594,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::TwoStoriesOneTitle))
     }
     def StreamFailingAssertion(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6902,19 +6617,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::TwoStoriesOneTitleCheck))
     }
     def StreamFailingCheck(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6926,19 +6640,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Integer))
     }
     def StreamOneBigNumber(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6950,19 +6663,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[T.nilable(T.any(T.nilable(Integer), T.nilable(String)))])
     }
     def StreamUnionIntegers(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6974,19 +6686,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::CompoundBigNumbers))
     }
     def StreamingCompoundNumbers(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -6998,19 +6709,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::Document1559))
     }
     def StructureDocument1559(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7022,19 +6732,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::RecursiveAliasDependency))
     }
     def TakeRecAliasDep(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7046,19 +6755,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TellStory(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7070,19 +6778,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAnthropic(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7094,19 +6801,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAnthropicShorthand(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7118,19 +6824,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAws(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7142,19 +6847,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAwsClaude37(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7166,19 +6870,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAwsInferenceProfile(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7190,19 +6893,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAwsInvalidAccessKey(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7214,19 +6916,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAwsInvalidProfile(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7238,19 +6939,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAwsInvalidRegion(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7262,19 +6962,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAwsInvalidSessionToken(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7286,19 +6985,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAzure(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7310,19 +7008,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAzureFailure(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7334,19 +7031,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAzureO1NoMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7358,19 +7054,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAzureO1WithMaxCompletionTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7382,19 +7077,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAzureO1WithMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7406,19 +7100,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAzureO3NoMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7430,19 +7123,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAzureO3WithMaxCompletionTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7454,19 +7146,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestAzureWithMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7478,19 +7169,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestCaching(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7502,19 +7192,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestFallbackClient(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7526,19 +7215,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestFallbackStrategy(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7550,19 +7238,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestFallbackToShorthand(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7574,19 +7261,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestFnNamedArgsSingleBool(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7598,19 +7284,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestFnNamedArgsSingleClass(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7622,19 +7307,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestFnNamedArgsSingleEnumList(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7646,19 +7330,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestFnNamedArgsSingleFloat(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7670,19 +7353,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestFnNamedArgsSingleInt(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7694,19 +7376,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, T.nilable(Baml::PartialTypes::StringToClassEntry)])
     }
     def TestFnNamedArgsSingleMapStringToClass(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7718,19 +7399,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, T::Hash[String, T.nilable(String)]])
     }
     def TestFnNamedArgsSingleMapStringToMap(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7742,19 +7422,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Hash[String, T.nilable(String)])
     }
     def TestFnNamedArgsSingleMapStringToString(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7766,19 +7445,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestFnNamedArgsSingleString(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7790,19 +7468,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestFnNamedArgsSingleStringArray(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7814,19 +7491,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T::Array[T.nilable(String)])
     }
     def TestFnNamedArgsSingleStringList(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7838,19 +7514,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestGemini(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7862,19 +7537,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestGeminiOpenAiGeneric(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7886,19 +7560,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestGeminiSystem(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7910,19 +7583,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestGeminiSystemAsChat(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7934,19 +7606,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestGroq(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7958,19 +7629,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestImageInput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -7982,19 +7652,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestImageInputAnthropic(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8006,19 +7675,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestImageListInput(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8030,19 +7698,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::TestMemoryOutput))
     }
     def TestMemory(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8054,19 +7721,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestMulticlassNamedArgs(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8078,19 +7744,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestNamedArgsLiteralBool(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8102,19 +7767,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestNamedArgsLiteralInt(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8126,19 +7790,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestNamedArgsLiteralString(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8150,19 +7813,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestOllama(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8174,19 +7836,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::Haiku))
     }
     def TestOllamaHaiku(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8198,19 +7859,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestOpenAI(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8222,19 +7882,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestOpenAIDummyClient(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8246,19 +7905,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestOpenAIGPT4oMini(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8270,19 +7928,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestOpenAILegacyProvider(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8294,19 +7951,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestOpenAIO1NoMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8318,19 +7974,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestOpenAIO1WithMaxCompletionTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8342,19 +7997,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestOpenAIO1WithMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8366,19 +8020,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestOpenAIShorthand(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8390,19 +8043,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestOpenAIWithFinishReasonError(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8414,19 +8066,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestOpenAIWithMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8438,19 +8089,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestOpenAIWithNullMaxTokens(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8462,19 +8112,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestOpenRouterMistralSmall3_1_24b(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8486,19 +8135,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestRetryConstant(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8510,19 +8158,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestRetryExponential(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8534,19 +8181,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestRoundRobinStrategy(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8558,19 +8204,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestSingleFallbackClient(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8582,19 +8227,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::CustomStory))
     }
     def TestThinking(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8606,19 +8250,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::UniverseQuestion))
     }
     def TestUniverseQuestion(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8630,19 +8273,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestVertex(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8654,19 +8296,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestVertexClaude(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8678,19 +8319,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(String))
     }
     def TestVertexWithSystemInstructions(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8702,19 +8342,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::UnionTest_ReturnType))
     }
     def UnionTest_Function(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8726,19 +8365,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Integer))
     }
     def UseBlockConstraint(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8750,19 +8388,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Baml::PartialTypes::MaintainFieldOrder))
     }
     def UseMaintainFieldOrder(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8774,19 +8411,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Integer))
     }
     def UseMalformedConstraints(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8798,19 +8434,18 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
     sig {
       params(
         llm_response: String,
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
       ).returns(T.nilable(Integer))
     }
     def UseNestedBlockConstraint(llm_response:, baml_options: {})
-      if (baml_options.keys - [:client_registry, :tb, :env]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      if (baml_options.keys - [:client_registry, :tb]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
       end
 
       @runtime.parse_llm_response(
@@ -8822,7 +8457,6 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        baml_options[:env] || ENV.to_h
       )
     end
 
