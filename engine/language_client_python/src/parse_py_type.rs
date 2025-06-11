@@ -53,7 +53,7 @@ impl From<Errors> for PyErr {
 enum MappedPyType {
     Enum(String, String),
     Class(String, IndexMap<String, PyObject>),
-    Map(IndexMap<String, PyObject>), // TODO: Does this need to maintain order?
+    Map(HashMap<String, PyObject>), // TODO: Does this need to maintain order?
     List(Vec<PyObject>),
     String(String),
     Int(i64),
@@ -292,7 +292,7 @@ pub fn parse_py_type(
                     items.push(list.get_item(idx)?.into_py_any(py)?);
                 }
                 Ok(MappedPyType::List(items))
-            } else if let Ok(kv) = any.extract::<IndexMap<String, PyObject>>(py) {
+            } else if let Ok(kv) = any.extract::<HashMap<String, PyObject>>(py) {
                 Ok(MappedPyType::Map(kv))
             } else if let Ok(b) = any.downcast_bound::<PyBool>(py) {
                 Ok(MappedPyType::Bool(b.is_true()))
