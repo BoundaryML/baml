@@ -208,6 +208,7 @@ impl minijinja::value::Object for OutputFormat {
             None => Ok(Value::from_serialize("")),
         }
     }
+    
     fn call_method(
         self: &std::sync::Arc<Self>,
         _state: &minijinja::State<'_, '_>,
@@ -218,5 +219,9 @@ impl minijinja::value::Object for OutputFormat {
             ErrorKind::UnknownMethod,
             format!("output_format has no callable attribute '{}'", name),
         ))
+    }
+
+    fn render(self: &std::sync::Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
     }
 }

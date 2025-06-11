@@ -87,6 +87,7 @@ minijinja = { version = "2.10.2", default-features = false, features = [
   "custom_syntax",
   "internal_debug",
   "deserialization",
+  "serde",
   # We don't want to use these features:
   # multi_template
   # loader

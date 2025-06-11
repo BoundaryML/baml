@@ -137,6 +137,10 @@ impl minijinja::value::Object for MinijinjaBamlMedia {
             format!("BamlImage has no callable attribute '{:#?}'", args),
         ))
     }
+
+    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
 }
 
 // Enums
@@ -170,6 +174,10 @@ impl Object for MinijinjaBamlEnum {
     fn enumerate(self: &Arc<Self>) -> Enumerator {
         Enumerator::Empty
     }
+
+    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
 }
 
 impl PartialEq for MinijinjaBamlEnum {
@@ -193,6 +201,7 @@ impl std::fmt::Display for MinijinjaBamlClass {
             let alias = self.key_to_alias.get(k).unwrap_or(k);
             map.insert(alias.to_string(), v.clone());
         }
+        // Use pretty-printed JSON formatting as expected by tests
         write!(f, "{:#?}", map)
     }
 }
@@ -216,5 +225,9 @@ impl Object for MinijinjaBamlClass {
     fn enumerate(self: &Arc<Self>) -> Enumerator {
         let keys: Vec<minijinja::Value> = self.class.keys().map(|k| minijinja::Value::from(k.as_str())).collect();
         Enumerator::Values(keys)
+    }
+
+    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
     }
 }

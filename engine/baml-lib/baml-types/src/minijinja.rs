@@ -87,4 +87,8 @@ impl minijinja::value::Object for MinijinjaBamlMedia {
             format!("BamlImage has no callable attribute '{args:#?}'"),
         ))
     }
+
+    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
 }
