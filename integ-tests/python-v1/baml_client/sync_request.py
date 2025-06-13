@@ -4030,6 +4030,56 @@ class HttpRequest:
         False,
       )
     
+    def TestOpenAIGPT4oMini2(
+        self,
+        input: str,
+        baml_options: _baml.BamlCallOptionsModApi = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
+
+      return self.__runtime.build_request_sync(
+        "TestOpenAIGPT4oMini2",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        env,
+        False,
+      )
+    
+    def TestOpenAIGPT4oMini3(
+        self,
+        input: str,
+        baml_options: _baml.BamlCallOptionsModApi = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
+
+      return self.__runtime.build_request_sync(
+        "TestOpenAIGPT4oMini3",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        env,
+        False,
+      )
+    
     def TestOpenAILegacyProvider(
         self,
         input: str,
@@ -8631,6 +8681,56 @@ class HttpStreamRequest:
 
       return self.__runtime.build_request_sync(
         "TestOpenAIGPT4oMini",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        env,
+        True,
+      )
+    
+    def TestOpenAIGPT4oMini2(
+        self,
+        input: str,
+        baml_options: _baml.BamlCallOptionsModApi = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
+
+      return self.__runtime.build_request_sync(
+        "TestOpenAIGPT4oMini2",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        env,
+        True,
+      )
+    
+    def TestOpenAIGPT4oMini3(
+        self,
+        input: str,
+        baml_options: _baml.BamlCallOptionsModApi = {},
+    ) -> baml_py.HTTPRequest:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
+
+      return self.__runtime.build_request_sync(
+        "TestOpenAIGPT4oMini3",
         {
           "input": input,
         },

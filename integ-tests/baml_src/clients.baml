@@ -139,11 +139,11 @@ client<llm> GPT35AzureFailed {
     api_key env.AZURE_OPENAI_API_KEY
   }
 }
-
+  
 client<llm> Gemini {
   provider google-ai
   options {
-    model gemini-1.5-pro-001
+    model gemini-1.5-pro
     api_key env.GOOGLE_API_KEY
     safetySettings {
       category HARM_CATEGORY_HATE_SPEECH

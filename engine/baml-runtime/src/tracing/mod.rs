@@ -49,6 +49,7 @@ cfg_if! {
 #[derive(Debug, Clone)]
 pub struct TracingCall {
     pub call_id: Uuid,
+    pub function_name: String,
     pub new_call_id_stack: Vec<baml_ids::FunctionCallId>,
     params: BamlMap<String, BamlValue>,
     start_time: web_time::SystemTime,
@@ -406,11 +407,16 @@ impl BamlTracer {
         self.trace_stats.guard().start();
         let (call_id, call_stack, last_tags, global_tags) = ctx.enter(function_name);
 
-        println!("---- {} ctx1 {:#?}", function_name, ctx.context_depth());
+        log::trace!(
+            "\n{}------------------- Entering {:?}, ctx chain {:#?}",
+            "        ".repeat(ctx.context_depth()),
+            function_name,
+            ctx
+        );
 
-        log::trace!(" Entering call {:#?} in {:?}", call_id, function_name);
         let call = TracingCall {
             call_id,
+            function_name: function_name.to_string(),
             new_call_id_stack: call_stack.clone(),
             params: params.clone(),
             start_time: web_time::SystemTime::now(),
@@ -503,21 +509,22 @@ impl BamlTracer {
     ) -> Result<uuid::Uuid> {
         let guard = self.trace_stats.guard();
         let Some((call_id, event_chain, global_and_user_tags)) = ctx.exit() else {
-            panic!(
+            anyhow::bail!(
                 "Attempting to finish a call {:#?} without first starting one. Current context {:#?}",
                 call,
                 ctx
             );
         };
-        log::info!(
-            "Finishing call: {:#?} {}\nevent chain {:#?}",
-            call.params,
+        log::trace!(
+            "\n{}------------------- Finishing call: {:#?} {}\nevent chain {:#?}",
+            "        ".repeat(ctx.context_depth()),
+            call.function_name,
             call_id,
             event_chain
         );
 
         if call.call_id != call_id {
-            panic!("Call ID mismatch: {} != {}", call.call_id, call_id);
+            anyhow::bail!("Call ID mismatch: {} != {}", call.call_id, call_id);
         }
         // Tracerv1 code below (deprecate soon)
         if let Some(tracer) = &self.tracer {
@@ -626,18 +633,18 @@ impl BamlTracer {
     ) -> Result<(uuid::Uuid, Vec<baml_ids::FunctionCallId>)> {
         let guard = self.trace_stats.guard();
         let Some((call_id, event_chain, tags)) = ctx.exit() else {
-            panic!("Attempting to finish a call without first starting one");
+            anyhow::bail!("Attempting to finish a call without first starting one");
         };
 
-        log::info!(
-            "Finishing baml call: {:#?} {}\nevent chain {:?}",
-            call.params,
+        log::trace!(
+            "Finishing baml call: {:#?} {}\nevent chain {:#?}",
+            call.function_name,
             call_id,
             event_chain
         );
 
         if call.call_id != call_id {
-            panic!("Call ID mismatch: {} != {}", call.call_id, call_id);
+            anyhow::bail!("Call ID mismatch: {} != {}", call.call_id, call_id);
         }
 
         let log_level = match response {
@@ -665,7 +672,6 @@ impl BamlTracer {
         };
 
         baml_log::elog!(log_level, &event);
-        println!("event chain {:#?}, call {:#?}", event_chain, call);
 
         let new_call_ids = event_chain.iter().map(|s| s.new_call_id.clone()).collect();
         if let Some(tracer) = &self.tracer {

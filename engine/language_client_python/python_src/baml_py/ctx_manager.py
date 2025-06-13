@@ -46,9 +46,7 @@ class CtxManager:
         prev_ctx_manager = self
         # print the call stack
         print("CtxManager __init__", id(self))
-        import traceback
 
-        print(traceback.format_stack())
         self.rt = rt
 
         self.ctx = contextvars.ContextVar[typing.Dict[int, RuntimeContextManager]](
@@ -112,6 +110,12 @@ class CtxManager:
         cln = mng.deep_clone()
         self.ctx.set({current_thread_id(): cln})
         return BamlSpan.new(self.rt, name, args, cln, env_vars)
+
+    def clone_context(self) -> RuntimeContextManager:
+        mng = self.__ctx()
+        cln = mng.deep_clone()
+        self.ctx.set({current_thread_id(): cln})
+        return cln
 
     def end_trace(
         self, span: BamlSpan, response: typing.Any, env_vars: typing.Dict[str, str]

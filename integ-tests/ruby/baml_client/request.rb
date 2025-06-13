@@ -5157,6 +5157,70 @@ module Baml
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
+    def TestOpenAIGPT4oMini2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIGPT4oMini2 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIGPT4oMini2",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        baml_options[:env] || ENV.to_h,
+        false,
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIGPT4oMini3(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIGPT4oMini3 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIGPT4oMini3",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        baml_options[:env] || ENV.to_h,
+        false,
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
     def TestOpenAILegacyProvider(
         *varargs,
         input:,
@@ -11007,6 +11071,70 @@ module Baml
 
       @runtime.build_request(
         "TestOpenAIGPT4oMini",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        baml_options[:env] || ENV.to_h,
+        true,
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIGPT4oMini2(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIGPT4oMini2 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIGPT4oMini2",
+        {
+          input: input,
+        },
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        baml_options[:env] || ENV.to_h,
+        true,
+      )
+    end
+
+    sig {
+      params(
+        varargs: T.untyped,
+        input: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+      ).returns(Baml::Ffi::HTTPRequest)
+    }
+    def TestOpenAIGPT4oMini3(
+        *varargs,
+        input:,
+        baml_options: {}
+    )
+      if varargs.any?
+        raise ArgumentError.new("TestOpenAIGPT4oMini3 may only be called with keyword arguments")
+      end
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      end
+
+      @runtime.build_request(
+        "TestOpenAIGPT4oMini3",
         {
           input: input,
         },

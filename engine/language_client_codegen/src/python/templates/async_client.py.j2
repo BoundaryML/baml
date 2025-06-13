@@ -4,6 +4,7 @@ from typing_extensions import Literal
 import baml_py
 
 from . import _baml
+from ._baml import BamlCallOptions
 from .types import Checked, Check
 from .parser import LlmResponseParser, LlmStreamParser
 from .async_request import AsyncHttpRequest, AsyncHttpStreamRequest
@@ -104,7 +105,7 @@ class BamlAsyncClient:
           "{{name}}": {{name}},
           {%- endfor %}
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -167,4 +168,4 @@ class BamlStreamClient:
 
 b = BamlAsyncClient(DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX)
 
-__all__ = ["b"]
+__all__ = ["b", "BamlCallOptions"]

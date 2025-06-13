@@ -2226,6 +2226,32 @@ paths:
                 title: TestOpenAIGPT4oMiniResponse
                 type: string
       operationId: TestOpenAIGPT4oMini
+  /call/TestOpenAIGPT4oMini2:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIGPT4oMini2'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIGPT4oMini2Response
+                type: string
+      operationId: TestOpenAIGPT4oMini2
+  /call/TestOpenAIGPT4oMini3:
+    post:
+      requestBody:
+        $ref: '#/components/requestBodies/TestOpenAIGPT4oMini3'
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                title: TestOpenAIGPT4oMini3Response
+                type: string
+      operationId: TestOpenAIGPT4oMini3
   /call/TestOpenAILegacyProvider:
     post:
       requestBody:
@@ -5156,6 +5182,38 @@ components:
         application/json:
           schema:
             title: TestOpenAIGPT4oMiniRequest
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestOpenAIGPT4oMini2:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIGPT4oMini2Request
+            type: object
+            properties:
+              input:
+                type: string
+              __baml_options__:
+                nullable: true
+                $ref: '#/components/schemas/BamlOptions'
+            required:
+            - input
+            additionalProperties: false
+    TestOpenAIGPT4oMini3:
+      required: true
+      content:
+        application/json:
+          schema:
+            title: TestOpenAIGPT4oMini3Request
             type: object
             properties:
               input:

@@ -2934,6 +2934,42 @@ export const TestOpenAIGPT4oMini = async (
 };
 
 /**
+ * Executes the "TestOpenAIGPT4oMini2" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIGPT4oMini2"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIGPT4oMini2 = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIGPT4oMini2(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIGPT4oMini3" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIGPT4oMini3"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIGPT4oMini3 = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIGPT4oMini3(
+    input,
+  );
+};
+
+/**
  * Executes the "TestOpenAILegacyProvider" BAML action.
  *
  * This server action calls the underlying BAML function "TestOpenAILegacyProvider"

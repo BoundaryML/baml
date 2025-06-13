@@ -12086,6 +12086,156 @@ func (*stream) TestOpenAIGPT4oMini(ctx context.Context, input string) <-chan *st
 	return channel
 }
 
+func TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	encoded, err := baml.EncodeRoot(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIGPT4oMini2", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	castResult := func(result any) *string {
+		return (result).(*string)
+	}
+
+	casted := castResult(*result.Data)
+
+	return casted, nil
+}
+
+func (*stream) TestOpenAIGPT4oMini2(ctx context.Context, input string) <-chan *string {
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
+	encoded, err := baml.EncodeRoot(args)
+	if err != nil {
+		panic(err)
+	}
+	channel := make(chan *string)
+	raw, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIGPT4oMini2", encoded)
+	if err != nil {
+		close(channel)
+		return channel
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-raw:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				channel <- (*result.Data).(*string)
+			}
+		}
+	}()
+	return channel
+}
+
+func TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
+
+	var callOpts callOption
+	for _, opt := range opts {
+		opt(&callOpts)
+	}
+
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+		Env:    getEnvVars(callOpts.env),
+	}
+
+	if callOpts.clientRegistry != nil {
+		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	encoded, err := baml.EncodeRoot(args)
+	if err != nil {
+		panic(err)
+	}
+
+	result, err := bamlRuntime.CallFunction(ctx, "TestOpenAIGPT4oMini3", encoded)
+	if err != nil {
+		return nil, err
+	}
+
+	if result.Error != nil {
+		return nil, result.Error
+	}
+
+	castResult := func(result any) *string {
+		return (result).(*string)
+	}
+
+	casted := castResult(*result.Data)
+
+	return casted, nil
+}
+
+func (*stream) TestOpenAIGPT4oMini3(ctx context.Context, input string) <-chan *string {
+	args := baml.BamlFunctionArguments{
+		Kwargs: map[string]any{"input": input},
+	}
+	encoded, err := baml.EncodeRoot(args)
+	if err != nil {
+		panic(err)
+	}
+	channel := make(chan *string)
+	raw, err := bamlRuntime.CallFunctionStream(ctx, "TestOpenAIGPT4oMini3", encoded)
+	if err != nil {
+		close(channel)
+		return channel
+	}
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				close(channel)
+				return
+			case result, ok := <-raw:
+				if !ok {
+					close(channel)
+					return
+				}
+				if result.Error != nil {
+					close(channel)
+					return
+				}
+				channel <- (*result.Data).(*string)
+			}
+		}
+	}()
+	return channel
+}
+
 func TestOpenAILegacyProvider(ctx context.Context, input string, opts ...CallOptionFunc) (*string, error) {
 
 	var callOpts callOption

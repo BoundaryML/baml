@@ -3876,6 +3876,54 @@ module Baml
         baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(String)
     }
+    def TestOpenAIGPT4oMini2(llm_response:, baml_options: {})
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      end
+
+      @runtime.parse_llm_response(
+        "TestOpenAIGPT4oMini2",
+        llm_response,
+        Baml::Types,
+        Baml::PartialTypes,
+        false,
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        baml_options[:env] || ENV.to_h
+      )
+    end
+
+    sig {
+      params(
+        llm_response: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+      ).returns(String)
+    }
+    def TestOpenAIGPT4oMini3(llm_response:, baml_options: {})
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      end
+
+      @runtime.parse_llm_response(
+        "TestOpenAIGPT4oMini3",
+        llm_response,
+        Baml::Types,
+        Baml::PartialTypes,
+        false,
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        baml_options[:env] || ENV.to_h
+      )
+    end
+
+    sig {
+      params(
+        llm_response: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+      ).returns(String)
+    }
     def TestOpenAILegacyProvider(llm_response:, baml_options: {})
       if (baml_options.keys - [:client_registry, :tb, :env]).any?
         raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
@@ -8263,6 +8311,54 @@ module Baml
 
       @runtime.parse_llm_response(
         "TestOpenAIGPT4oMini",
+        llm_response,
+        Baml::Types,
+        Baml::PartialTypes,
+        true,
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        baml_options[:env] || ENV.to_h
+      )
+    end
+
+    sig {
+      params(
+        llm_response: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+      ).returns(T.nilable(String))
+    }
+    def TestOpenAIGPT4oMini2(llm_response:, baml_options: {})
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      end
+
+      @runtime.parse_llm_response(
+        "TestOpenAIGPT4oMini2",
+        llm_response,
+        Baml::Types,
+        Baml::PartialTypes,
+        true,
+        @ctx_manager,
+        baml_options[:tb]&.instance_variable_get(:@registry),
+        baml_options[:client_registry],
+        baml_options[:env] || ENV.to_h
+      )
+    end
+
+    sig {
+      params(
+        llm_response: String,
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
+      ).returns(T.nilable(String))
+    }
+    def TestOpenAIGPT4oMini3(llm_response:, baml_options: {})
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
+      end
+
+      @runtime.parse_llm_response(
+        "TestOpenAIGPT4oMini3",
         llm_response,
         Baml::Types,
         Baml::PartialTypes,

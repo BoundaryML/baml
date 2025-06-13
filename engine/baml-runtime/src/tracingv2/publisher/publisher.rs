@@ -469,10 +469,10 @@ impl TracePublisher {
                 Ok(())
             }
             Err(e) => {
-                baml_log::error!("Failed to upload batch of {} events: {}", batch.len(), e);
+                log::info!("Failed to upload batch of {} events: {}", batch.len(), e);
                 // If batch size is at or below minimum, give up
                 if batch.len() <= min_batch_size {
-                    baml_log::error!(
+                    log::info!(
                         "Failed to upload single/minimum batch of {} events: {}",
                         batch.len(),
                         e
@@ -507,15 +507,15 @@ impl TracePublisher {
                         Ok(())
                     }
                     (Err(e1), Ok(())) => {
-                        baml_log::error!("First half failed: {}", e1);
+                        log::info!("First half failed: {}", e1);
                         Err(e1)
                     }
                     (Ok(()), Err(e2)) => {
-                        baml_log::error!("Second half failed: {}", e2);
+                        log::info!("Second half failed: {}", e2);
                         Err(e2)
                     }
                     (Err(e1), Err(e2)) => {
-                        baml_log::debug!("Both halves failed - first: {}, second: {}", e1, e2);
+                        log::debug!("Both halves failed - first: {}, second: {}", e1, e2);
                         Err(e1) // Return the first error
                     }
                 }
@@ -574,7 +574,7 @@ impl TracePublisher {
         {
             Ok(response) => response,
             Err(e) => {
-                baml_log::debug!("Failed to upload trace events: {}", e);
+                log::debug!("Failed to upload trace events: {}", e);
                 return Err(e.into());
             }
         };

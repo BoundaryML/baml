@@ -38,8 +38,6 @@ impl BamlSpan {
             .inner
             .start_call(function_name, args_map, &ctx.inner, &env_vars);
 
-        log::info!("started span, new ctx: {:?}", ctx.inner.context_depth());
-
         log::trace!("Starting span: {:#?} for {:?}\n", span, function_name);
         Ok(Self {
             inner: Some(span),

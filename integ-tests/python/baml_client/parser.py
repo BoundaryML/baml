@@ -4671,6 +4671,64 @@ class LlmResponseParser:
 
       return cast(str, parsed)
     
+    def TestOpenAIGPT4oMini2(
+        self,
+        llm_response: str,
+        baml_options: _baml.BamlCallOptionsModApi = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
+
+      parsed = self.__runtime.parse_llm_response(
+        "TestOpenAIGPT4oMini2",
+        llm_response,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
+        False,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        env,
+      )
+
+      return cast(str, parsed)
+    
+    def TestOpenAIGPT4oMini3(
+        self,
+        llm_response: str,
+        baml_options: _baml.BamlCallOptionsModApi = {},
+    ) -> str:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
+
+      parsed = self.__runtime.parse_llm_response(
+        "TestOpenAIGPT4oMini3",
+        llm_response,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
+        False,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        env,
+      )
+
+      return cast(str, parsed)
+    
     def TestOpenAILegacyProvider(
         self,
         llm_response: str,
@@ -10005,6 +10063,64 @@ class LlmStreamParser:
 
       parsed = self.__runtime.parse_llm_response(
         "TestOpenAIGPT4oMini",
+        llm_response,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
+        True,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        env,
+      )
+
+      return cast(Optional[str], parsed)
+    
+    def TestOpenAIGPT4oMini2(
+        self,
+        llm_response: str,
+        baml_options: _baml.BamlCallOptionsModApi = {},
+    ) -> Optional[str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
+
+      parsed = self.__runtime.parse_llm_response(
+        "TestOpenAIGPT4oMini2",
+        llm_response,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
+        True,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        env,
+      )
+
+      return cast(Optional[str], parsed)
+    
+    def TestOpenAIGPT4oMini3(
+        self,
+        llm_response: str,
+        baml_options: _baml.BamlCallOptionsModApi = {},
+    ) -> Optional[str]:
+      __tb__ = baml_options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = baml_options.get("client_registry", None)
+
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
+
+      parsed = self.__runtime.parse_llm_response(
+        "TestOpenAIGPT4oMini3",
         llm_response,
         _baml.types,
         _baml.types,

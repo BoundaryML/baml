@@ -115,7 +115,7 @@ class BamlAsyncClient:
         {
           "recipe": recipe,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -144,7 +144,7 @@ class BamlAsyncClient:
         {
           "data": data,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -173,7 +173,7 @@ class BamlAsyncClient:
         {
           "money": money,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -202,7 +202,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -231,7 +231,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -260,7 +260,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -289,7 +289,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -318,7 +318,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -347,7 +347,7 @@ class BamlAsyncClient:
         {
           "optionals": optionals,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -376,7 +376,7 @@ class BamlAsyncClient:
         {
           "a": a,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -405,7 +405,7 @@ class BamlAsyncClient:
         {
           "aud": aud,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -434,7 +434,7 @@ class BamlAsyncClient:
         {
           "aud": aud,"prompt": prompt,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -463,7 +463,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -492,7 +492,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -521,7 +521,7 @@ class BamlAsyncClient:
         {
           "cls": cls,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -550,7 +550,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -579,7 +579,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -608,7 +608,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -637,7 +637,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -666,7 +666,7 @@ class BamlAsyncClient:
         {
           "prefix": prefix,"suffix": suffix,"language": language,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -695,7 +695,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -724,7 +724,7 @@ class BamlAsyncClient:
         {
           "img": img,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -753,7 +753,7 @@ class BamlAsyncClient:
         {
           "classWithImage": classWithImage,"img2": img2,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -782,7 +782,7 @@ class BamlAsyncClient:
         {
           "classWithImage": classWithImage,"img2": img2,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -811,7 +811,7 @@ class BamlAsyncClient:
         {
           "classWithImage": classWithImage,"img2": img2,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -840,7 +840,7 @@ class BamlAsyncClient:
         {
           "img": img,"client_sector": client_sector,"client_name": client_name,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -869,7 +869,7 @@ class BamlAsyncClient:
         {
           
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -898,7 +898,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -927,7 +927,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -956,7 +956,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -985,7 +985,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1014,7 +1014,7 @@ class BamlAsyncClient:
         {
           
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1043,7 +1043,7 @@ class BamlAsyncClient:
         {
           "document": document,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1072,7 +1072,7 @@ class BamlAsyncClient:
         {
           "text": text,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1101,7 +1101,7 @@ class BamlAsyncClient:
         {
           "text": text,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1130,7 +1130,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1159,7 +1159,7 @@ class BamlAsyncClient:
         {
           "text": text,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1188,7 +1188,7 @@ class BamlAsyncClient:
         {
           "email": email,"reason": reason,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1217,7 +1217,7 @@ class BamlAsyncClient:
         {
           "resume": resume,"img": img,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1246,7 +1246,7 @@ class BamlAsyncClient:
         {
           "resume": resume,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1275,7 +1275,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1304,7 +1304,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1333,7 +1333,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1362,7 +1362,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1391,7 +1391,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1420,7 +1420,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1449,7 +1449,7 @@ class BamlAsyncClient:
         {
           "myString": myString,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1478,7 +1478,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1507,7 +1507,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1536,7 +1536,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1565,7 +1565,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1594,7 +1594,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1623,7 +1623,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1652,7 +1652,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1681,7 +1681,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1710,7 +1710,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1739,7 +1739,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1768,7 +1768,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1797,7 +1797,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1826,7 +1826,7 @@ class BamlAsyncClient:
         {
           "myArg": myArg,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1855,7 +1855,7 @@ class BamlAsyncClient:
         {
           "text": text,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1884,7 +1884,7 @@ class BamlAsyncClient:
         {
           "email": email,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1913,7 +1913,7 @@ class BamlAsyncClient:
         {
           "query": query,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1942,7 +1942,7 @@ class BamlAsyncClient:
         {
           "i1": i1,"i2": i2,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -1971,7 +1971,7 @@ class BamlAsyncClient:
         {
           "i1": i1,"i2": i2,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2000,7 +2000,7 @@ class BamlAsyncClient:
         {
           "m": m,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2029,7 +2029,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2058,7 +2058,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2087,7 +2087,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2116,7 +2116,7 @@ class BamlAsyncClient:
         {
           
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2145,7 +2145,7 @@ class BamlAsyncClient:
         {
           
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2174,7 +2174,7 @@ class BamlAsyncClient:
         {
           
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2203,7 +2203,7 @@ class BamlAsyncClient:
         {
           
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2232,7 +2232,7 @@ class BamlAsyncClient:
         {
           
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2261,7 +2261,7 @@ class BamlAsyncClient:
         {
           "m": m,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2290,7 +2290,7 @@ class BamlAsyncClient:
         {
           "money": money,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2319,7 +2319,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2348,7 +2348,7 @@ class BamlAsyncClient:
         {
           "c": c,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2377,7 +2377,7 @@ class BamlAsyncClient:
         {
           "s": s,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2406,7 +2406,7 @@ class BamlAsyncClient:
         {
           "s": s,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2435,7 +2435,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2464,7 +2464,7 @@ class BamlAsyncClient:
         {
           "name": name,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2493,7 +2493,7 @@ class BamlAsyncClient:
         {
           "inp": inp,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2522,7 +2522,7 @@ class BamlAsyncClient:
         {
           "p": p,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2551,7 +2551,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2580,7 +2580,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2609,7 +2609,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2638,7 +2638,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2667,7 +2667,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2696,7 +2696,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2725,7 +2725,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2754,7 +2754,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2783,7 +2783,7 @@ class BamlAsyncClient:
         {
           "cls": cls,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2812,7 +2812,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2841,7 +2841,7 @@ class BamlAsyncClient:
         {
           "money": money,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2870,7 +2870,7 @@ class BamlAsyncClient:
         {
           "inp": inp,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2899,7 +2899,7 @@ class BamlAsyncClient:
         {
           "s": s,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2928,7 +2928,7 @@ class BamlAsyncClient:
         {
           "a": a,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2957,7 +2957,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -2986,7 +2986,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3015,7 +3015,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3044,7 +3044,7 @@ class BamlAsyncClient:
         {
           "digits": digits,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3073,7 +3073,7 @@ class BamlAsyncClient:
         {
           "theme": theme,"length": length,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3102,7 +3102,7 @@ class BamlAsyncClient:
         {
           "theme": theme,"length": length,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3131,7 +3131,7 @@ class BamlAsyncClient:
         {
           "digits": digits,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3160,7 +3160,7 @@ class BamlAsyncClient:
         {
           "digits": digits,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3189,7 +3189,7 @@ class BamlAsyncClient:
         {
           "digits": digits,"yapping": yapping,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3218,7 +3218,7 @@ class BamlAsyncClient:
         {
           "document_txt": document_txt,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3247,7 +3247,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3276,7 +3276,7 @@ class BamlAsyncClient:
         {
           "story": story,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3305,7 +3305,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3334,7 +3334,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3363,7 +3363,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3392,7 +3392,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3421,7 +3421,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3450,7 +3450,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3479,7 +3479,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3508,7 +3508,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3537,7 +3537,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3566,7 +3566,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3595,7 +3595,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3624,7 +3624,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3653,7 +3653,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3682,7 +3682,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3711,7 +3711,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3740,7 +3740,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3769,7 +3769,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3798,7 +3798,7 @@ class BamlAsyncClient:
         {
           "input": input,"not_cached": not_cached,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3827,7 +3827,7 @@ class BamlAsyncClient:
         {
           
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3856,7 +3856,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3885,7 +3885,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3914,7 +3914,7 @@ class BamlAsyncClient:
         {
           "myBool": myBool,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3943,7 +3943,7 @@ class BamlAsyncClient:
         {
           "myArg": myArg,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -3972,7 +3972,7 @@ class BamlAsyncClient:
         {
           "myArg": myArg,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4001,7 +4001,7 @@ class BamlAsyncClient:
         {
           "myFloat": myFloat,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4030,7 +4030,7 @@ class BamlAsyncClient:
         {
           "myInt": myInt,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4059,7 +4059,7 @@ class BamlAsyncClient:
         {
           "myMap": myMap,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4088,7 +4088,7 @@ class BamlAsyncClient:
         {
           "myMap": myMap,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4117,7 +4117,7 @@ class BamlAsyncClient:
         {
           "myMap": myMap,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4146,7 +4146,7 @@ class BamlAsyncClient:
         {
           "myString": myString,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4175,7 +4175,7 @@ class BamlAsyncClient:
         {
           "myStringArray": myStringArray,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4204,7 +4204,7 @@ class BamlAsyncClient:
         {
           "myArg": myArg,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4233,7 +4233,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4262,7 +4262,7 @@ class BamlAsyncClient:
         {
           
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4291,7 +4291,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4320,7 +4320,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4349,7 +4349,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4378,7 +4378,7 @@ class BamlAsyncClient:
         {
           "img": img,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4407,7 +4407,7 @@ class BamlAsyncClient:
         {
           "img": img,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4436,7 +4436,7 @@ class BamlAsyncClient:
         {
           "imgs": imgs,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4465,7 +4465,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4494,7 +4494,7 @@ class BamlAsyncClient:
         {
           "myArg": myArg,"myArg2": myArg2,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4523,7 +4523,7 @@ class BamlAsyncClient:
         {
           "myBool": myBool,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4552,7 +4552,7 @@ class BamlAsyncClient:
         {
           "myInt": myInt,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4581,7 +4581,7 @@ class BamlAsyncClient:
         {
           "myString": myString,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4610,7 +4610,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4639,7 +4639,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4668,7 +4668,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4697,7 +4697,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4726,7 +4726,65 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
+        tb,
+        __cr__,
+        collectors,
+        env,
+      )
+      return cast(str, raw.cast_to(_baml.types, _baml.types, _baml.partial_types, False))
+    
+    async def TestOpenAIGPT4oMini2(
+        self,
+        input: str,
+        baml_options: _baml.BamlCallOptions = {},
+    ) -> str:
+      options: _baml.BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+      env = _baml.env_vars_to_dict(options.get("env", {}))
+      raw = await self.__runtime.call_function(
+        "TestOpenAIGPT4oMini2",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.clone_context(),
+        tb,
+        __cr__,
+        collectors,
+        env,
+      )
+      return cast(str, raw.cast_to(_baml.types, _baml.types, _baml.partial_types, False))
+    
+    async def TestOpenAIGPT4oMini3(
+        self,
+        input: str,
+        baml_options: _baml.BamlCallOptions = {},
+    ) -> str:
+      options: _baml.BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+      env = _baml.env_vars_to_dict(options.get("env", {}))
+      raw = await self.__runtime.call_function(
+        "TestOpenAIGPT4oMini3",
+        {
+          "input": input,
+        },
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4755,7 +4813,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4784,7 +4842,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4813,7 +4871,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4842,7 +4900,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4871,7 +4929,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4900,7 +4958,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4929,7 +4987,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4958,7 +5016,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -4987,7 +5045,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -5016,7 +5074,7 @@ class BamlAsyncClient:
         {
           
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -5045,7 +5103,7 @@ class BamlAsyncClient:
         {
           
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -5074,7 +5132,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -5103,7 +5161,7 @@ class BamlAsyncClient:
         {
           
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -5132,7 +5190,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -5161,7 +5219,7 @@ class BamlAsyncClient:
         {
           "question": question,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -5190,7 +5248,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -5219,7 +5277,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -5248,7 +5306,7 @@ class BamlAsyncClient:
         {
           
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -5277,7 +5335,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -5306,7 +5364,7 @@ class BamlAsyncClient:
         {
           "inp": inp,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -5335,7 +5393,7 @@ class BamlAsyncClient:
         {
           "input": input,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -5364,7 +5422,7 @@ class BamlAsyncClient:
         {
           "a": a,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -5393,7 +5451,7 @@ class BamlAsyncClient:
         {
           "inp": inp,
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -5422,7 +5480,7 @@ class BamlAsyncClient:
         {
           
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
@@ -11032,6 +11090,76 @@ class BamlStreamClient:
       env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "TestOpenAIGPT4oMini",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+        env,
+      )
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: cast(Optional[str], x.cast_to(_baml.types, _baml.types, _baml.partial_types, True)),
+        lambda x: cast(str, x.cast_to(_baml.types, _baml.types, _baml.partial_types, False)),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestOpenAIGPT4oMini2(
+        self,
+        input: str,
+        baml_options: _baml.BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      options: _baml.BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+      env = _baml.env_vars_to_dict(options.get("env", {}))
+      raw = self.__runtime.stream_function(
+        "TestOpenAIGPT4oMini2",
+        {
+          "input": input,
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+        env,
+      )
+
+      return baml_py.BamlStream[Optional[str], str](
+        raw,
+        lambda x: cast(Optional[str], x.cast_to(_baml.types, _baml.types, _baml.partial_types, True)),
+        lambda x: cast(str, x.cast_to(_baml.types, _baml.types, _baml.partial_types, False)),
+        self.__ctx_manager.get(),
+      )
+    
+    def TestOpenAIGPT4oMini3(
+        self,
+        input: str,
+        baml_options: _baml.BamlCallOptions = {},
+    ) -> baml_py.BamlStream[Optional[str], str]:
+      options: _baml.BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+      __tb__ = options.get("tb", None)
+      if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+      else:
+        tb = None
+      __cr__ = options.get("client_registry", None)
+      collector = options.get("collector", None)
+      collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+      env = _baml.env_vars_to_dict(options.get("env", {}))
+      raw = self.__runtime.stream_function(
+        "TestOpenAIGPT4oMini3",
         {
           "input": input,
         },

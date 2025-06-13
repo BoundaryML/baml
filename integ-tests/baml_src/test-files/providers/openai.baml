@@ -109,6 +109,22 @@ function TestOpenAIGPT4oMini(input: string) -> string {
     Write a nice haiku, given the user input. Make sure to reference the input in the haiku.
   "#
 }
+function TestOpenAIGPT4oMini2(input: string) -> string {
+  client GPT4oMini
+  prompt #"
+    {{ _.role("user") }}
+    Write a nice haiku, given the user input. Make sure to reference the input in the haiku.
+  "#
+}
+
+function TestOpenAIGPT4oMini3(input: string) -> string {
+  client GPT4oMini
+  prompt #"
+    {{ _.role("user") }}
+    Write a nice haiku, given the user input. Make sure to reference the input in the haiku.
+  "#
+}
+
 
 // Add test cases to verify the behavior
 test TestOpenAIClients {
