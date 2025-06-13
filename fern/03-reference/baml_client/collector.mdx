@@ -400,6 +400,7 @@ The `FunctionLog` class has the following properties:
 | `timing` | `Timing` | The timing of the request. |
 | `usage` | `Usage` | The usage of the request (aggregated from all calls). |
 | `calls` | `(LLMCall \| LLMStreamCall)[]` | Every call made to the LLM (including fallbacks and retries). Sorted from oldest to newest. |
+| `selected_call` | `(LLMCall \| LLMStreamCall)?` | The call used by BAML for parsing the response (there may be many due to fallbacks and retries). |
 | `raw_llm_response` | `string \| null` | The raw text from the best matching LLM. |
 | `tags` | `Map[str, any]` | Any user provided metadata. |
 
