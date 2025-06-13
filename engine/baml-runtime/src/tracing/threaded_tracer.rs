@@ -229,7 +229,6 @@ impl ThreadedTracer {
                 // take the last element in the vector
                 MetadataType::Multi(llm_events) => llm_events.last(),
             });
-            println!("submit: event {:#?}", event);
 
             let log_event_result = callback(LogEvent {
                 metadata: LogEventMetadata {

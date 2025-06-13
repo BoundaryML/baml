@@ -173,7 +173,6 @@ impl BamlTracerWrapper {
                 return cloned;
             }
         }
-        log::info!("Config changed, clearing tracers");
         // Config changed, clear all and insert new
         self.tracers.clear();
         let new_tracer = Arc::new(

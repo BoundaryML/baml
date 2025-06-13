@@ -44,8 +44,6 @@ class CtxManager:
             return
 
         prev_ctx_manager = self
-        # print the call stack
-        print("CtxManager __init__", id(self))
 
         self.rt = rt
 
