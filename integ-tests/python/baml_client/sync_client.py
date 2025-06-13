@@ -39,6 +39,7 @@ class BamlSyncClient:
     __baml_options: _baml.BamlCallOptions
 
     def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager, baml_options: Optional[_baml.BamlCallOptions] = None):
+      print("BamlSyncClient __init__")
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
       self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager, baml_options)

@@ -580,3 +580,64 @@ async def test_collector_groq():
     assert collector.usage.output_tokens is not None
     assert collector.usage.input_tokens > 0
     assert collector.usage.output_tokens > 0
+
+
+@pytest.mark.asyncio
+async def test_collector_multiple_async_nested():
+    from baml_client.tracing import trace
+
+    collector = Collector(name="my-collector")
+
+    @trace
+    async def more_nested():
+        return "hi"
+
+    @trace
+    async def gather_batch_2():
+        await more_nested()
+        # return await asyncio.gather(
+        await b.TestOpenAIGPT4oMini("hi there", baml_options={"collector": collector})
+        # )
+
+    async def gather_batch_1():
+        return await asyncio.gather(
+            b.TestOpenAIGPT4oMini("hi there", baml_options={"collector": collector}),
+            b.TestOpenAIGPT4oMini(
+                "another input", baml_options={"collector": collector}
+            ),
+            gather_batch_2(),
+        )
+
+    # batch_1_results = await asyncio.gather(gather_batch_1())
+    await gather_batch_1()
+
+    assert collector.usage.input_tokens is not None
+    assert collector.usage.output_tokens is not None
+    assert collector.usage.input_tokens > 0
+    assert collector.usage.output_tokens > 0
+
+
+@pytest.mark.asyncio
+async def test_collector_multiple_sync_nested():
+    from baml_client.tracing import trace
+
+    collector = Collector(name="my-collector")
+
+    @trace
+    def more_nested():
+        return "hi"
+
+    @trace
+    def gather_batch_2():
+        # more_nested()
+        # return await asyncio.gather(
+        b_sync.TestOpenAIGPT4oMini("hi there", baml_options={"collector": collector})
+        # )
+
+    # batch_1_results = await asyncio.gather(gather_batch_1())
+    gather_batch_2()
+
+    assert collector.usage.input_tokens is not None
+    assert collector.usage.output_tokens is not None
+    assert collector.usage.input_tokens > 0
+    assert collector.usage.output_tokens > 0

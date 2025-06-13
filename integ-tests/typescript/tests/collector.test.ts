@@ -1,3 +1,4 @@
+import { traceAsync } from '../baml_client/tracing'
 import { b, b_sync } from './test-setup'
 import { BamlRuntime, Collector, FunctionLog, Usage } from '@boundaryml/baml'
 
@@ -296,4 +297,25 @@ describe('Collector Tests', () => {
     expect(logs[0].logType).toBe('call')
     expect(logs[0].usage).not.toBeNull()
   })
+
+  it('should handle multiple async calls with nested gathers', async () => {
+    const collector = new Collector("my-collector");
+    console.log('blabla')
+  
+    async function gatherBatch2() {
+      await traceAsync("traceAsyncparent", () => b.TestOpenAIGPT4oMini("hi there", { collector }))();
+    }
+  
+    async function gatherBatch1() {
+      return await Promise.all([
+        gatherBatch2(),
+      ]);
+    }
+  
+    await gatherBatch1();
+  
+    // expect(collector.usage.inputTokens).toBeGreaterThan(0);
+    // expect(collector.usage.outputTokens).toBeGreaterThan(0);
+  });
+    
 })

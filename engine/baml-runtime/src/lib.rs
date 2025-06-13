@@ -173,6 +173,7 @@ impl BamlTracerWrapper {
                 return cloned;
             }
         }
+        log::info!("Config changed, clearing tracers");
         // Config changed, clear all and insert new
         self.tracers.clear();
         let new_tracer = Arc::new(
@@ -689,6 +690,9 @@ impl BamlRuntime {
 
         log::trace!("Calling function: {}", function_name);
         log::debug!("collectors: {:#?}", &collectors);
+        if ctx.context_depth() == 0 {
+            panic!("There should be context already");
+        }
         let call = self
             .tracer_wrapper
             .get_or_create_tracer(&env_vars)
