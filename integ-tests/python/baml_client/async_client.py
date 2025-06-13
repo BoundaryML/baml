@@ -19,7 +19,7 @@ from typing_extensions import Literal
 import baml_py
 
 from . import _baml
-from ._baml import BamlCallOptions as BamlCallOptions
+from ._baml import BamlCallOptions
 from .types import Checked, Check
 from .parser import LlmResponseParser, LlmStreamParser
 from .async_request import AsyncHttpRequest, AsyncHttpStreamRequest

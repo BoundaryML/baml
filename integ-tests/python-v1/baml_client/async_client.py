@@ -19,6 +19,7 @@ from typing_extensions import Literal
 import baml_py
 
 from . import _baml
+from ._baml import BamlCallOptions
 from .types import Checked, Check
 from .parser import LlmResponseParser, LlmStreamParser
 from .async_request import AsyncHttpRequest, AsyncHttpStreamRequest
@@ -12017,4 +12018,4 @@ class BamlStreamClient:
 
 b = BamlAsyncClient(DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX)
 
-__all__ = ["b"]
+__all__ = ["b", "BamlCallOptions"]
