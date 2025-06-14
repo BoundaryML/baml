@@ -187,6 +187,12 @@ jobs:
         run: pnpm run build:release
         working-directory: typescript/
 
+      # For dev mode we generate a binary in this directory which we should clean out.
+      - name: Remove debug CLI builds
+        run: |
+          rm -f typescript/vscode-ext/packages/vscode/server/baml-cli
+          rm -f typescript/vscode-ext/packages/vscode/server/baml-cli.exe
+
       - name: Create dist directory
         run: mkdir -p typescript/vscode-ext/packages/dist
 

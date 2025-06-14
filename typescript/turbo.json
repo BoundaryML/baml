@@ -41,7 +41,11 @@
       "cache": false
     },
     "baml-client": {
-      "dependsOn": ["@gloo-ai/baml-language-server#build", "@gloo-ai/web-panel#build", "@baml/common#build"],
+      "dependsOn": ["@gloo-ai/web-panel#build", "@baml/common#build"],
+      "outputs": ["out/**"]
+    },
+    "baml-client#build:release": {
+      "dependsOn": ["@gloo-ai/web-panel#build", "@baml/common#build"],
       "outputs": ["out/**"]
     },
     "lint": {},
