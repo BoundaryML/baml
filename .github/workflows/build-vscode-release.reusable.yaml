@@ -184,7 +184,7 @@ jobs:
         # This might be redundant if it doesn't change per target,
         # but safer to run it. Consider optimizing if slow.
         # Run from root to build dependencies correctly.
-        run: pnpm run build:release
+        run: pnpm run build
         working-directory: typescript/
 
       # For dev mode we generate a binary in this directory which we should clean out.
