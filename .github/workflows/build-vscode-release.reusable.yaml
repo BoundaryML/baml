@@ -9,11 +9,11 @@ on:
   workflow_call:
     inputs:
       is_release_build:
-        description: 'Whether this is a release build (affects --pre-release flag)'
+        description: "Whether this is a release build (affects --pre-release flag)"
         type: boolean
         default: true
       version:
-        description: 'Version string to use for the build'
+        description: "Version string to use for the build"
         type: string
         required: true
 
@@ -66,14 +66,14 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: baml-cli-${{ matrix.rust-target }}
-          path: cli-artifact-${{ matrix.code-target }} 
+          path: cli-artifact-${{ matrix.code-target }}
           # Unique path per job
         # Add error handling if the specific artifact isn't found
 
       - name: List downloaded artifact content
         run: |
-           echo "Contents of cli-artifact-${{ matrix.code-target }} directory:"
-           ls -R cli-artifact-${{ matrix.code-target }}
+          echo "Contents of cli-artifact-${{ matrix.code-target }} directory:"
+          ls -R cli-artifact-${{ matrix.code-target }}
 
       # Rust toolchain setup (only needed for WASM part)
       - uses: dtolnay/rust-toolchain@stable
@@ -175,7 +175,6 @@ jobs:
           echo "Binary copied successfully for $CODE_TARGET."
           ls -l "$dest_path"
 
-
       - name: Install Dependencies
         # Install deps in the context of the specific extension package
         run: pnpm install --frozen-lockfile
@@ -185,7 +184,7 @@ jobs:
         # This might be redundant if it doesn't change per target,
         # but safer to run it. Consider optimizing if slow.
         # Run from root to build dependencies correctly.
-        run: pnpm run build
+        run: pnpm run build:release
         working-directory: typescript/
 
       - name: Create dist directory
@@ -194,15 +193,15 @@ jobs:
       - name: Package VSCode Extension for ${{ matrix.code-target }}
         id: package
         run: |
-           PRE_RELEASE_FLAG=""
-           if [[ "${{ inputs.is_release_build }}" == "false" ]]; then
-             PRE_RELEASE_FLAG="--pre-release"
-           fi
-           OUTPUT_FILENAME="dist/baml-${{ matrix.code-target }}.vsix"
-           echo "Packaging for target: ${{ matrix.code-target }}"
-           # Run vsce from the directory containing the extension's package.json
-           npx @vscode/vsce package $PRE_RELEASE_FLAG --target ${{ matrix.code-target }} -o $OUTPUT_FILENAME --no-dependencies
-           echo "vsix_path=$OUTPUT_FILENAME" >> $GITHUB_OUTPUT
+          PRE_RELEASE_FLAG=""
+          if [[ "${{ inputs.is_release_build }}" == "false" ]]; then
+            PRE_RELEASE_FLAG="--pre-release"
+          fi
+          OUTPUT_FILENAME="dist/baml-${{ matrix.code-target }}.vsix"
+          echo "Packaging for target: ${{ matrix.code-target }}"
+          # Run vsce from the directory containing the extension's package.json
+          npx @vscode/vsce package $PRE_RELEASE_FLAG --target ${{ matrix.code-target }} -o $OUTPUT_FILENAME --no-dependencies
+          echo "vsix_path=$OUTPUT_FILENAME" >> $GITHUB_OUTPUT
         working-directory: typescript/vscode-ext/packages
 
       - name: Upload VSIX artifact for ${{ matrix.code-target }}

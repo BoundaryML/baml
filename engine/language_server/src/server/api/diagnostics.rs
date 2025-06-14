@@ -90,9 +90,10 @@ pub fn publish_session_lsp_diagnostics(
     if !file_url.to_string().contains("baml_src") {
         return Ok(());
     }
+    tracing::info!("publishing diagnostics for {}", file_url);
     let project = session
         .get_or_create_project(&path)
-        .expect("We just ensured the session is valid");
+        .expect("We just ensured the session is valid.");
 
     let diagnostics = project_diagnostics(project.clone());
     for (uri, diagnostics) in diagnostics {

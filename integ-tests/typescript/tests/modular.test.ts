@@ -110,7 +110,7 @@ describe('Modular API Tests', () => {
 
   it('modular google gemini', async () => {
     const client = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY!)
-    const model = client.getGenerativeModel({ model: 'gemini-1.5-pro-001' })
+    const model = client.getGenerativeModel({ model: 'gemini-1.5-pro' })
 
     const clientRegistry = new ClientRegistry()
     clientRegistry.setPrimary('Gemini')

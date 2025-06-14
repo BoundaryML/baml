@@ -151,7 +151,6 @@ impl BamlRuntime {
             })
             .collect::<Vec<_>>();
 
-        // let collector = collector.map(|c| c.inner.clone());
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let (result, _) = baml_runtime
                 .call_function(

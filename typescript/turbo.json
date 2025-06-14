@@ -48,10 +48,6 @@
     "clean": {
       "cache": false
     },
-    "baml-client#build": {
-      "dependsOn": ["@gloo-ai/baml-language-server#build"],
-      "outputs": ["out/**"]
-    },
     "baml#vscode:package": {
       "dependsOn": ["baml-client#build"],
       "outputs": ["baml-*.vsix"]
