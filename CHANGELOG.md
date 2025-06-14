@@ -2,6 +2,41 @@
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.90.0](https://github.com/boundaryml/baml/compare/0.89.0..0.90.0) - 2025-06-14
+
+### Bug Fixes
+- Fix bug where BAML_LOG wouldnt be printed in python due to a tracing bug (#2030) - ([7736f22](https://github.com/boundaryml/baml/commit/7736f22cc98916e7e24fcec7dfbaa406c5aa3a65)) - aaronvg
+- Fix parsing issue when there was a newline before object field (#1985) - ([ad92d3e](https://github.com/boundaryml/baml/commit/ad92d3ee847125a7a8537f3d3873e9689a0a1ce9)) - Greg Hale
+- implement handling of Media under coerce_arg (#1996) - ([929ee97](https://github.com/boundaryml/baml/commit/929ee97c716e0932f1dce4af54dcdf073c8659f5)) - Greg Hale
+- Fix inconsistent class hoisting bug (#1998) - ([779450d](https://github.com/boundaryml/baml/commit/779450daa8f35542d6bd86563b01dbe685389e91)) - Antonio Sarosi
+- Fix prompt rendering highlight regex (#1997) - ([0363df7](https://github.com/boundaryml/baml/commit/0363df7e5f3a92756e8966a386255d4b390b9f08)) - Antonio Sarosi
+- Correctly infer Vertex AI base URL for location 'global' (#2014) (#2015) - ([149b742](https://github.com/boundaryml/baml/commit/149b7420f32fc391701f69425777b59ea5370075)) - Luke Ramsden
+- Reduce namespace pollution in codegen (#2016) - ([505a9e9](https://github.com/boundaryml/baml/commit/505a9e976e097a3ba3a6f941dec62cd4f257a2e6)) - Antonio Sarosi
+- Fix bug where LSP crashed when a baml file not in a baml_src was opened (#2019) - ([e9303ae](https://github.com/boundaryml/baml/commit/e9303aebdc5c79d86b1c2a59aa43e46250693d28)) - aaronvg
+
+
+### Features
+
+- Release jetbrains extension (alpha) (#1983) - ([18b57dd](https://github.com/boundaryml/baml/commit/18b57ddcc264720f3ba016319e61147d30f12f5f)) - Samuel Lijin
+- lazy load env vars to not rely on baml client import order (#1949) - ([4397cf1](https://github.com/boundaryml/baml/commit/4397cf100f6a6d164bd46820aaafc46615f5b918)) - Rahul Tiwari
+- deeply typecheck class constructors (#2000) - ([8d66b80](https://github.com/boundaryml/baml/commit/8d66b8071301b9b7ed7cb999a6aa692c3b8503e4)) - Greg Hale
+- Fetch API (#1916) - ([67b3f4f](https://github.com/boundaryml/baml/commit/67b3f4fe06652749809aeee64aacfb7bef57cc1f)) - Antonio Sarosi
+- Migrate jinja to minijinja2, enabling latest fixes on jinja templating (#2025) - ([230c51c](https://github.com/boundaryml/baml/commit/230c51cbc879c073cbe225d03f8bbc86e80bd55c)) - aaronvg
+
+
+### Other
+- improve error message for asserts and checks (#1975) - ([070ad26](https://github.com/boundaryml/baml/commit/070ad26131f73afb2630d2559c19cbaa26a63abc)) - Greg Hale
+- Reduce Vscode Extension bundle size by removing old LSP code (#2031) - ([c92bcf6](https://github.com/boundaryml/baml/commit/c92bcf64dd1e50c40781c57a82405a428debe56a)) - aaronvg
+
+
+### Docs
+- Fix dynamic enum spelling in docs (#1986) - ([9212af2](https://github.com/boundaryml/baml/commit/9212af236c997d0a46167de2b7eefc57dbf01d93)) - ngirard
+- update docs for env vars (#1987) - ([8405ee5](https://github.com/boundaryml/baml/commit/8405ee5bb9b96d4a99a5f4b326f61a39e4336d5b)) - Rahul Tiwari
+- Add baml-cli test documentation (#2021) - ([854cdbd](https://github.com/boundaryml/baml/commit/854cdbdd259398e24311fa958e647b30dc2c8b73)) - aaronvg
+- add docs for `selected_call` (#2028) - ([97b2408](https://github.com/boundaryml/baml/commit/97b2408b5dd5d5555272cca24b3569ff1c9d5164)) - Ben Epstein
+
+
+
 ## [0.89.0](https://github.com/boundaryml/baml/compare/0.88.0..0.89.0) - 2025-05-21
 
 ### Features
