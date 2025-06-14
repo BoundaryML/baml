@@ -48,8 +48,9 @@ jobs:
 
           - target: x86_64-unknown-linux-musl
             host: ubuntu-22.04
+            # muslcc url needs to change eventually. https://github.com/elixir-sqlite/exqlite/issues/327
             before: |
-              curl -LO https://musl.cc/x86_64-linux-musl-cross.tgz
+              curl -LO https://musl.cc.timfish.dev/x86_64-linux-musl-cross.tgz
               tar -xzf x86_64-linux-musl-cross.tgz
               echo "$PWD/x86_64-linux-musl-cross/bin" >> $GITHUB_PATH
 
@@ -63,8 +64,9 @@ jobs:
 
           - target: aarch64-unknown-linux-musl
             host: ubuntu-22.04
+            # muslcc url needs to change eventually. https://github.com/elixir-sqlite/exqlite/issues/327
             before: |
-              curl -LO https://musl.cc/aarch64-linux-musl-cross.tgz
+              curl -LO https://musl.cc.timfish.dev/aarch64-linux-musl-cross.tgz
               tar -xzf aarch64-linux-musl-cross.tgz
               echo "$PWD/aarch64-linux-musl-cross/bin" >> $GITHUB_PATH
               cat >>$GITHUB_ENV <<EOF
