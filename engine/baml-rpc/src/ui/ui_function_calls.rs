@@ -250,12 +250,20 @@ pub struct OrderBy {
 pub enum RelativeTime {
     #[serde(rename = "1h")]
     OneHour,
-    #[serde(rename = "1d")]
-    OneDay,
-    #[serde(rename = "1w")]
-    OneWeek,
-    #[serde(rename = "1m")]
-    OneMonth,
+    #[serde(rename = "6h")]
+    SixHours,
+    #[serde(rename = "12h")]
+    TwelveHours,
+    #[serde(rename = "24h")]
+    TwentyFourHours,
+    #[serde(rename = "3d")]
+    ThreeDays,
+    #[serde(rename = "7d")]
+    SevenDays,
+    #[serde(rename = "14d")]
+    FourteenDays,
+    #[serde(rename = "30d")]
+    ThirtyDays,
 }
 
 #[derive(Debug, Deserialize, Serialize, TS, Clone)]
