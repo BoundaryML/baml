@@ -4,7 +4,7 @@ use baml_types::EvaluationContext;
 use indexmap::IndexMap;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_core::ir::IRHelper;
-use minijinja::value::{Object, ObjectRepr, Enumerator};
+use minijinja::value::{Enumerator, Object, ObjectRepr};
 
 use crate::{BamlMedia, BamlValue};
 
@@ -81,8 +81,42 @@ impl IntoMiniJinjaValue for BamlValue {
                     key_to_alias,
                 })
             }
-            BamlValue::Null => minijinja::Value::from(()),
+            BamlValue::Null => BamlNull.to_minijinja_value(ir, eval_ctx),
         }
+    }
+}
+
+#[derive(Debug)]
+struct BamlNull;
+
+impl IntoMiniJinjaValue for BamlNull {
+    fn to_minijinja_value(
+        &self,
+        _ir: &IntermediateRepr,
+        _eval_ctx: &EvaluationContext<'_>,
+    ) -> minijinja::Value {
+        minijinja::Value::from_object(BamlNull)
+    }
+}
+
+impl minijinja::value::Object for BamlNull {
+    fn call(
+        self: &Arc<Self>,
+        _state: &minijinja::State<'_, '_>,
+        _args: &[minijinja::value::Value],
+    ) -> Result<minijinja::value::Value, minijinja::Error> {
+        Err(minijinja::Error::new(
+            minijinja::ErrorKind::InvalidOperation,
+            "Null is not callable",
+        ))
+    }
+
+    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("null")
+    }
+
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Plain
     }
 }
 
@@ -223,7 +257,11 @@ impl Object for MinijinjaBamlClass {
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
-        let keys: Vec<minijinja::Value> = self.class.keys().map(|k| minijinja::Value::from(k.as_str())).collect();
+        let keys: Vec<minijinja::Value> = self
+            .class
+            .keys()
+            .map(|k| minijinja::Value::from(k.as_str()))
+            .collect();
         Enumerator::Values(keys)
     }
 
