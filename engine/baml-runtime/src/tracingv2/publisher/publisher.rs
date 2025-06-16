@@ -54,9 +54,10 @@ fn get_publish_channel(
     {
         let Some(join_handle) = PUBLISHING_TASK.get() else {
             if !allow_missing {
-                baml_log::fatal_once!(
-                    "Tracing publisher not started. Report this bug to the BAML team."
-                );
+                // baml_log::fatal_once!(
+                //     "Tracing publisher not started. Report this bug to the BAML team."
+                // );
+                // TODO: redo this logic -- we dont start the publisher if there's no api key for example.
             }
             return None;
         };
