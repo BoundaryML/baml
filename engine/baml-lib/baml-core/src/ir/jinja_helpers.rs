@@ -2,63 +2,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use baml_types::{BamlValue, JinjaExpression};
-use minijinja::value::{Object, ObjectRepr, Value, ValueKind};
+use minijinja::value::Value;
 use regex::Regex;
-
-// /// This only exists because [`minijinja`] renders "none" instead of "null".
-// #[derive(Debug)]
-// pub(crate) struct BamlNull;
-
-// impl std::fmt::Display for BamlNull {
-//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         f.write_str("null")
-//     }
-// }
-
-// impl Object for BamlNull {
-//     fn repr(self: &Arc<Self>) -> ObjectRepr {
-//         ObjectRepr::Plain
-//     }
-
-//     fn is_true(self: &Arc<Self>) -> bool {
-//         false
-//     }
-
-//     fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-//         f.write_str("null")
-//     }
-// }
-
-/// Render "none" as "null".
-///
-/// Seems like [`minijinja`] only calls the formatter once per value and then
-/// it calls [`std::fmt::Display::fmt`] on the value. It does not recursivelly
-/// allow us to swap values in the formatter nor control the display behavior
-/// of nested values. So this is the workaround.
-// fn replace_none_with_null(value: &Value) -> Value {
-//     match value.kind() {
-//         ValueKind::None => Value::from_object(BamlNull),
-
-//         ValueKind::Map => value
-//             .try_iter()
-//             .unwrap()
-//             .filter_map(|k| {
-//                 value
-//                     .get_item(&k)
-//                     .ok()
-//                     .map(|v| (k, replace_none_with_null(&v)))
-//             })
-//             .collect(),
-
-//         ValueKind::Iterable | ValueKind::Seq => value
-//             .try_iter()
-//             .unwrap()
-//             .map(|v| replace_none_with_null(&v))
-//             .collect(),
-
-//         other => value.clone(),
-//     }
-// }
 
 pub fn get_env<'a>() -> minijinja::Environment<'a> {
     let mut env = minijinja::Environment::new();
@@ -66,7 +11,13 @@ pub fn get_env<'a>() -> minijinja::Environment<'a> {
     env.set_formatter(|output, state, value| {
         // Top level (non-nested) none value is handled here.
         // Nested none values are handled in std::fmt::Display impl for
-        // MinijinjaBamlClass. File is jinja-runtime/src/baml_value_to_jinja_value.rs.
+        // MinijinjaBamlClass and MinijinjaBamlList.
+        // File is jinja-runtime/src/baml_value_to_jinja_value.rs.
+        //
+        // This is a little confusing and would be nice to replace all nones
+        // with nulls in a single place but had no luck getting it to work,
+        // this commit has commented code that attempts to do so:
+        // https://github.com/BoundaryML/baml/pull/2037/commits/6facd2805f79be3e2000dc61058e772d9c5943be
         let value = if value.is_none() {
             &Value::from("null")
         } else {

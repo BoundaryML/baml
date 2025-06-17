@@ -2384,4 +2384,129 @@ mod render_tests {
             _ => panic!("Expected Completion"),
         }
     }
+
+    #[test]
+    fn render_none_as_null_in_list() {
+        let ir = make_test_ir("").unwrap();
+        let template = r##"
+          {{ l }}
+        "##;
+        let args = BamlValue::Map(
+            vec![(
+                "l".to_string(),
+                BamlValue::List(vec![BamlValue::Null, BamlValue::Int(2), BamlValue::Null]),
+            )]
+            .into_iter()
+            .collect(),
+        );
+        let ctx = RenderContext {
+            client: RenderContext_Client {
+                name: "gpt4".to_string(),
+                provider: "openai".to_string(),
+                default_role: "system".to_string(),
+                allowed_roles: vec!["system".to_string()],
+            },
+            output_format: OutputFormatContent::new_string(),
+            tags: HashMap::from([("ROLE".to_string(), BamlValue::String("system".into()))]),
+        };
+        let env_vars = HashMap::new();
+        let prompt =
+            render_prompt(template, &args, ctx, &[], &ir, &env_vars).expect("should render");
+        match prompt {
+            RenderedPrompt::Completion(msg) => {
+                assert_eq!(msg, r#"[null, 2, null]"#)
+            }
+            _ => panic!("Expected Completion"),
+        }
+    }
+
+    #[test]
+    fn render_none_as_null_in_list_nested_with_objects() {
+        let ir = make_test_ir(
+            r##"
+            class TakeNull {
+                v string?
+                l (TakeNull | null)[]
+            }
+        "##,
+        )
+        .unwrap();
+        let template = r##"
+          {{ l }}
+        "##;
+        let args = BamlValue::Map(
+            vec![(
+                "l".to_string(),
+                BamlValue::List(vec![
+                    BamlValue::Null,
+                    BamlValue::Int(2),
+                    BamlValue::Class(
+                        "TakeNull".to_string(),
+                        vec![
+                            ("v".to_string(), BamlValue::Null),
+                            (
+                                "l".to_string(),
+                                BamlValue::List(vec![
+                                    BamlValue::Null,
+                                    BamlValue::Class(
+                                        "TakeNull".to_string(),
+                                        vec![
+                                            ("v".to_string(), BamlValue::Null),
+                                            (
+                                                "l".to_string(),
+                                                BamlValue::List(vec![
+                                                    BamlValue::Null,
+                                                    BamlValue::Null,
+                                                ]),
+                                            ),
+                                        ]
+                                        .into_iter()
+                                        .collect(),
+                                    ),
+                                ]),
+                            ),
+                        ]
+                        .into_iter()
+                        .collect(),
+                    ),
+                ]),
+            )]
+            .into_iter()
+            .collect(),
+        );
+        let ctx = RenderContext {
+            client: RenderContext_Client {
+                name: "gpt4".to_string(),
+                provider: "openai".to_string(),
+                default_role: "system".to_string(),
+                allowed_roles: vec!["system".to_string()],
+            },
+            output_format: OutputFormatContent::new_string(),
+            tags: HashMap::from([("ROLE".to_string(), BamlValue::String("system".into()))]),
+        };
+        let env_vars = HashMap::new();
+        let prompt =
+            render_prompt(template, &args, ctx, &[], &ir, &env_vars).expect("should render");
+        match prompt {
+            RenderedPrompt::Completion(msg) => {
+                assert_eq!(
+                    msg,
+                    r#"[null, 2, {
+    "v": null,
+    "l": [
+        null,
+        {
+            "v": null,
+            "l": [
+                null,
+                null,
+            ],
+        },
+    ],
+}]"#
+                )
+            }
+            _ => panic!("Expected Completion"),
+        }
+    }
 }
