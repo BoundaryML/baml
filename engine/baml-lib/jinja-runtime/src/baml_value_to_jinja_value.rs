@@ -285,7 +285,7 @@ impl Object for MinijinjaBamlList {
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
-        Enumerator::Values(self.list.clone())
+        Enumerator::Seq(self.list.len())
     }
 
     fn enumerator_len(self: &Arc<Self>) -> Option<usize> {
