@@ -270,7 +270,6 @@ impl ArgCoercer {
                         Ok(BamlValueWithMeta::Class(
                             name.to_string(),
                             fields,
-                            // TODO(Rahul): how do we get the dynamic flag?
                             FieldType::class(name),
                         ))
                     }

@@ -47,12 +47,12 @@ export namespace partial_types {
     
     export interface BinaryNode {
         data?: (number | null)
-        left?: ((partial_types.BinaryNode | null) | null)
-        right?: ((partial_types.BinaryNode | null) | null)
+        left: ((partial_types.BinaryNode | null) | null)
+        right: ((partial_types.BinaryNode | null) | null)
     }
     
     export interface Blah {
-        prop4?: ((string | null) | null)
+        prop4: ((string | null) | null)
     }
     
     export interface BlockConstraint {
@@ -82,9 +82,9 @@ export namespace partial_types {
     }
     
     export interface ClassOptionalOutput2 {
-        prop1?: ((string | null) | null)
-        prop2?: ((string | null) | null)
-        prop3?: ((partial_types.Blah | null) | null)
+        prop1: ((string | null) | null)
+        prop2: ((string | null) | null)
+        prop3: ((partial_types.Blah | null) | null)
     }
     
     export interface ClassToRecAlias {
@@ -108,13 +108,13 @@ export namespace partial_types {
     }
     
     export interface ClientDetails1559 {
-        client_name?: ((string | null) | null)
-        client_address?: ((string | null) | null)
-        client_postal_code?: ((string | null) | null)
-        client_city?: ((string | null) | null)
-        client_country?: ((string | null) | null)
-        client_phone?: ((string | null) | null)
-        client_email?: ((string | null) | null)
+        client_name: ((string | null) | null)
+        client_address: ((string | null) | null)
+        client_postal_code: ((string | null) | null)
+        client_city: ((string | null) | null)
+        client_country: ((string | null) | null)
+        client_phone: ((string | null) | null)
+        client_email: ((string | null) | null)
     }
     
     export interface ComplexMemoryObject {
@@ -132,7 +132,7 @@ export namespace partial_types {
     
     export interface ContactInfo {
         primary?: ((partial_types.PhoneNumber | null) | (partial_types.EmailAddress | null) | null)
-        secondary?: ((partial_types.PhoneNumber | null) | (partial_types.EmailAddress | null) | null)
+        secondary?: ((partial_types.PhoneNumber | null) | (partial_types.EmailAddress | null) | (null | null) | null)
     }
     
     export interface CustomStory {
@@ -142,9 +142,9 @@ export namespace partial_types {
     }
     
     export interface CustomTaskResult {
-        bookOrder?: ((partial_types.BookOrder | null) | null)
-        flightConfirmation?: ((partial_types.FlightConfirmation | null) | null)
-        groceryReceipt?: ((partial_types.GroceryReceipt | null) | null)
+        bookOrder?: ((partial_types.BookOrder | null) | ((null | null) | null) | null)
+        flightConfirmation?: ((partial_types.FlightConfirmation | null) | ((null | null) | null) | null)
+        groceryReceipt?: ((partial_types.GroceryReceipt | null) | ((null | null) | null) | null)
     }
     
     export interface Document1559 {
@@ -191,7 +191,7 @@ export namespace partial_types {
         location?: (string | null)
         degree?: (string | null)
         major?: (string | null)[]
-        graduation_date?: ((string | null) | null)
+        graduation_date: ((string | null) | null)
     }
     
     export interface Email {
@@ -288,13 +288,13 @@ export namespace partial_types {
     }
     
     export interface LinkedList {
-        head?: ((partial_types.Node | null) | null)
+        head: ((partial_types.Node | null) | null)
         len?: (number | null)
     }
     
     export interface LinkedListAliasNode {
         value?: (number | null)
-        next?: ((partial_types.LinkedListAliasNode | null) | null)
+        next: ((partial_types.LinkedListAliasNode | null) | null)
     }
     
     export interface LiteralClassHello {
@@ -352,14 +352,14 @@ export namespace partial_types {
     }
     
     export interface Nested {
-        prop3?: ((string | null) | null)
-        prop4?: ((string | null) | null)
+        prop3?: ((string | null) | ((null | null) | null) | null)
+        prop4?: ((string | null) | ((null | null) | null) | null)
         prop20?: (partial_types.Nested2 | null)
     }
     
     export interface Nested2 {
-        prop11?: ((string | null) | null)
-        prop12?: ((string | null) | null)
+        prop11?: ((string | null) | ((null | null) | null) | null)
+        prop12?: ((string | null) | ((null | null) | null) | null)
     }
     
     export interface NestedBlockConstraint {
@@ -372,23 +372,23 @@ export namespace partial_types {
     
     export interface Node {
         data?: (number | null)
-        next?: ((partial_types.Node | null) | null)
+        next: ((partial_types.Node | null) | null)
     }
     
     export interface NodeWithAliasIndirection {
         value?: (number | null)
-        next?: ((partial_types.NodeWithAliasIndirection | null) | null)
+        next: ((partial_types.NodeWithAliasIndirection | null) | null)
     }
     
     export interface Note1599 {
         note_title?: (string | null)
-        note_description?: ((string | null) | null)
-        note_amount?: ((string | null) | null)
+        note_description: ((string | null) | null)
+        note_amount: ((string | null) | null)
     }
     
     export interface OptionalListAndMap {
-        p?: ((string | null)[] | null)
-        q?: ((Record<string, (string | null)> | null) | null)
+        p: ((string | null)[] | null)
+        q: ((Record<string, (string | null)> | null) | null)
     }
     
     export interface OptionalTest_Prop1 {
@@ -397,15 +397,15 @@ export namespace partial_types {
     }
     
     export interface OptionalTest_ReturnType {
-        omega_1?: ((partial_types.OptionalTest_Prop1 | null) | null)
-        omega_2?: ((string | null) | null)
+        omega_1: ((partial_types.OptionalTest_Prop1 | null) | null)
+        omega_2: ((string | null) | null)
         omega_3?: ((OptionalTest_CategoryType | null) | null)[]
     }
     
     export interface OrderInfo {
         order_status?: (OrderStatus | null)
-        tracking_number?: ((string | null) | null)
-        estimated_arrival_date?: ((string | null) | null)
+        tracking_number: ((string | null) | null)
+        estimated_arrival_date: ((string | null) | null)
     }
     
     export interface OriginalA {
@@ -418,8 +418,8 @@ export namespace partial_types {
     }
     
     export interface Person {
-        name?: ((string | null) | null)
-        hair_color?: ((string | Color | null) | null)
+        name: ((string | null) | null)
+        hair_color: ((string | Color | null) | null)
         [key: string]: any;
     }
     
@@ -429,7 +429,7 @@ export namespace partial_types {
     
     export interface Quantity {
         amount?: ((number | null) | (number | null) | null)
-        unit?: ((string | null) | null)
+        unit: ((string | null) | null)
     }
     
     export interface RaysData {
@@ -439,13 +439,13 @@ export namespace partial_types {
     
     export interface ReceiptInfo {
         items?: (partial_types.ReceiptItem | null)[]
-        total_cost?: ((number | null) | null)
+        total_cost: ((number | null) | null)
         venue?: ("barisa" | "ox_burger" | null)
     }
     
     export interface ReceiptItem {
         name?: (string | null)
-        description?: ((string | null) | null)
+        description: ((string | null) | null)
         quantity?: (number | null)
         price?: (number | null)
     }
@@ -469,20 +469,20 @@ export namespace partial_types {
     }
     
     export interface Schema {
-        prop1?: ((string | null) | null)
+        prop1?: ((string | null) | ((null | null) | null) | null)
         prop2?: ((partial_types.Nested | null) | (string | null) | null)
-        prop5?: ((string | null) | null)[]
+        prop5?: ((string | null) | ((null | null) | null) | null)[]
         prop6?: ((string | null) | (partial_types.Nested | null)[] | null)
-        nested_attrs?: ((string | null) | (partial_types.Nested | null) | null)[]
-        parens?: ((string | null) | null)
-        other_group?: ((string | null) | (number | null) | null)
+        nested_attrs?: ((string | null) | ((null | null) | null) | (partial_types.Nested | null) | null)[]
+        parens?: ((string | null) | ((null | null) | null) | null)
+        other_group?: ((string | null) | ((number | null) | (string | null) | null) | null)
     }
     
     export interface SearchParams {
-        dateRange?: ((number | null) | null)
+        dateRange: ((number | null) | null)
         location?: (string | null)[]
-        jobTitle?: ((partial_types.WithReasoning | null) | null)
-        company?: ((partial_types.WithReasoning | null) | null)
+        jobTitle: ((partial_types.WithReasoning | null) | null)
+        company: ((partial_types.WithReasoning | null) | null)
         description?: (partial_types.WithReasoning | null)[]
         tags?: ((Tag | null) | (string | null) | null)[]
     }
@@ -491,8 +491,8 @@ export namespace partial_types {
         sixteen_digit_number?: (number | null)
         string_with_twenty_words: string
         class_1?: (partial_types.ClassWithoutDone | null)
-        class_2?: (partial_types.ClassWithBlockDone | null)
-        class_done_needed: partial_types.ClassWithBlockDone
+        class_2: types.ClassWithBlockDone
+        class_done_needed: types.ClassWithBlockDone
         class_needed: partial_types.ClassWithoutDone
         three_small_things?: (partial_types.SmallThing | null)[]
         final_string?: (string | null)

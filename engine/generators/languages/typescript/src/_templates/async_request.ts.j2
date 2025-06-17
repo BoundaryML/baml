@@ -7,8 +7,72 @@ import type {
 } from "./types"
 import type TypeBuilder from "./type_builder"
 
-{% from "base_request.ts.j2" import request_class %}
+type BamlCallOptions = {
+  tb?: TypeBuilder
+  clientRegistry?: ClientRegistry
+  env?: Record<string, string | undefined>
+}
 
-{{ request_class("AsyncHttpRequest", true, false) }}
+export class AsyncHttpRequest {
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
 
-{{ request_class("AsyncHttpStreamRequest", true, true) }}
+  {% for func in functions %}
+  async {{ func.name }}(
+      {% for (name, arg_type) in func.args -%}
+      {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
+      {%- endfor %}
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "{{func.name}}",
+        {
+          {% for (name, arg_type) in func.args -%}
+          "{{name}}": {{name}}{% if arg_type.meta().is_optional() %}?? null{% endif %}{% if !loop.last %},{% endif %}
+          {%- endfor %}
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  {% endfor %}
+}
+
+export class AsyncHttpStreamRequest {
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
+
+  {% for func in functions %}
+  async {{ func.name }}(
+      {% for (name, arg_type) in func.args -%}
+      {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
+      {%- endfor %}
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "{{func.name}}",
+        {
+          {% for (name, arg_type) in func.args -%}
+          "{{name}}": {{name}}{% if arg_type.meta().is_optional() %}?? null{% endif %}{% if !loop.last %},{% endif %}
+          {%- endfor %}
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  {% endfor %}
+}

@@ -294,9 +294,9 @@ export interface CustomStory {
 }
 
 export interface CustomTaskResult {
-  bookOrder?: BookOrder | null
-  flightConfirmation?: FlightConfirmation | null
-  groceryReceipt?: GroceryReceipt | null
+  bookOrder?: BookOrder | null | null
+  flightConfirmation?: FlightConfirmation | null | null
+  groceryReceipt?: GroceryReceipt | null | null
   
 }
 
@@ -343,7 +343,7 @@ export interface DynamicSchema {
 }
 
 export interface Earthling {
-  age: Checked<number, "earth_aged" | "no_infants">
+  age: Checked<number,"earth_aged" | "no_infants">
   
 }
 
@@ -392,8 +392,8 @@ export interface FlightConfirmation {
 
 export interface FooAny {
   planetary_age: Martian | Earthling
-  certainty: Checked<number, "unreasonably_certain">
-  species: Checked<string, "regex_bad" | "regex_good" | "trivial">
+  certainty: Checked<number,"unreasonably_certain">
+  species: Checked<string,"regex_bad" | "regex_good" | "trivial">
   
 }
 
@@ -501,7 +501,7 @@ export interface MaintainFieldOrder {
 }
 
 export interface MalformedConstraints {
-  foo: Checked<number, "foo_check">
+  foo: Checked<number,"foo_check">
   
 }
 
@@ -519,7 +519,7 @@ export interface Martian {
    * The age of the Martian in Mars years.
    * So many Mars years.
    */
-  age: Checked<number, "young_enough">
+  age: Checked<number,"young_enough">
   
 }
 
@@ -531,7 +531,7 @@ export interface MemoryObject {
 }
 
 export interface MergeAttrs {
-  amount: Checked<number, "gt_ten">
+  amount: Checked<number,"gt_ten">
   
 }
 
@@ -543,20 +543,20 @@ export interface NamedArgsSingleClass {
 }
 
 export interface Nested {
-  prop3?: string | null
-  prop4?: string | null
+  prop3?: string | null | null
+  prop4?: string | null | null
   prop20: Nested2
   
 }
 
 export interface Nested2 {
-  prop11?: string | null
-  prop12?: string | null
+  prop11?: string | null | null
+  prop12?: string | null | null
   
 }
 
 export interface NestedBlockConstraint {
-  nbc: Checked<BlockConstraint, "cross_field">
+  nbc: Checked<BlockConstraint,"cross_field">
   
 }
 
@@ -682,13 +682,13 @@ export interface Resume {
 }
 
 export interface Schema {
-  prop1?: string | null
+  prop1?: string | null | null
   prop2: Nested | string
-  prop5: (string | null)[]
+  prop5: (string | null | null)[]
   prop6: string | Nested[]
-  nested_attrs: (string | Nested | null)[]
-  parens?: string | null
-  other_group: string | number
+  nested_attrs: (string | null | null | Nested)[]
+  parens?: string | null | null
+  other_group: string | number | string
   
 }
 
@@ -784,8 +784,8 @@ export interface TwoStoriesOneTitle {
 
 export interface TwoStoriesOneTitleCheck {
   title: string
-  story_a: Checked<string, "too_long_story">
-  story_b: Checked<string, "too_long_story">
+  story_a: Checked<string,"too_long_story">
+  story_b: Checked<string,"too_long_story">
   
 }
 

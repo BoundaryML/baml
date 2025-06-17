@@ -449,9 +449,9 @@ export function useAliasThatPointsToRecursiveType(
  *
  *
  * **Return Type:**
- * - **Non‑streaming:** Checked<number, "gt_ten">
+ * - **Non‑streaming:** Checked<number,"gt_ten">
  * - **Streaming Partial:** Checked<number,"gt_ten">
- * - **Streaming Final:** Checked<number, "gt_ten">
+ * - **Streaming Final:** Checked<number,"gt_ten">
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**
@@ -3683,9 +3683,9 @@ export function useLiteralUnionsTest(
  *
  *
  * **Return Type:**
- * - **Non‑streaming:** Checked<BlockConstraint, "cross_field">
+ * - **Non‑streaming:** Checked<BlockConstraint,"cross_field">
  * - **Streaming Partial:** Checked<partial_types.BlockConstraint,"cross_field">
- * - **Streaming Final:** Checked<BlockConstraint, "cross_field">
+ * - **Streaming Final:** Checked<BlockConstraint,"cross_field">
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**
@@ -3730,7 +3730,7 @@ export function useMakeBlockConstraint(
  *
  * **Return Type:**
  * - **Non‑streaming:** ClassWithBlockDone
- * - **Streaming Partial:** partial_types.ClassWithBlockDone
+ * - **Streaming Partial:** types.ClassWithBlockDone
  * - **Streaming Final:** ClassWithBlockDone
  *
  * **Usage Patterns:**
@@ -4060,7 +4060,7 @@ export function useMyFunc(
  *
  * **Return Type:**
  * - **Non‑streaming:** number | string | boolean | number | string[] | Record<string, string[]>
- * - **Streaming Partial:** ((number | null) | (string | null) | (boolean | null) | (number | null) | (string | null)[] | (Record<string, (string | null)[]> | null))
+ * - **Streaming Partial:** (((number | null) | (string | null) | (boolean | null) | (number | null) | null) | (string | null)[] | (Record<string, (string | null)[]> | null))
  * - **Streaming Final:** number | string | boolean | number | string[] | Record<string, string[]>
  *
  * **Usage Patterns:**
@@ -4299,9 +4299,9 @@ export function usePredictAge(
  *
  *
  * **Return Type:**
- * - **Non‑streaming:** Checked<number, "too_big">
+ * - **Non‑streaming:** Checked<number,"too_big">
  * - **Streaming Partial:** Checked<number,"too_big">
- * - **Streaming Final:** Checked<number, "too_big">
+ * - **Streaming Final:** Checked<number,"too_big">
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**
@@ -4875,9 +4875,9 @@ export function useRecursiveUnionTest(
  *
  *
  * **Return Type:**
- * - **Non‑streaming:** Checked<number, "gt_ten">
+ * - **Non‑streaming:** Checked<number,"gt_ten">
  * - **Streaming Partial:** Checked<number,"gt_ten">
- * - **Streaming Final:** Checked<number, "gt_ten">
+ * - **Streaming Final:** Checked<number,"gt_ten">
  *
  * **Usage Patterns:**
  * 1. **Non‑streaming (Default)**

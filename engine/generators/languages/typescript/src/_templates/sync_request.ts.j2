@@ -7,8 +7,72 @@ import type {
 } from "./types"
 import type TypeBuilder from "./type_builder"
 
-{% from "base_request.ts.j2" import request_class %}
+type BamlCallOptions = {
+  tb?: TypeBuilder
+  clientRegistry?: ClientRegistry
+  env?: Record<string, string | undefined>
+}
 
-{{ request_class("HttpRequest", false, false) }}
+export class HttpRequest {
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
 
-{{ request_class("HttpStreamRequest", false, true) }}
+  {% for func in functions %}
+  {{ func.name }}(
+      {% for (name, arg_type) in func.args -%}
+      {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
+      {%- endfor %}
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return this.runtime.buildRequestSync(
+        "{{func.name}}",
+        {
+          {% for (name, arg_type) in func.args -%}
+          "{{name}}": {{name}}{% if arg_type.meta().is_optional() %}?? null{% endif %}{% if !loop.last %},{% endif %}
+          {%- endfor %}
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  {% endfor %}
+}
+
+export class HttpStreamRequest {
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
+
+  {% for func in functions %}
+  {{ func.name }}(
+      {% for (name, arg_type) in func.args -%}
+      {{name}}{% if arg_type.meta().is_optional() %}?{% endif %}: {{arg_type.serialize_type(pkg)}},
+      {%- endfor %}
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return this.runtime.buildRequestSync(
+        "{{func.name}}",
+        {
+          {% for (name, arg_type) in func.args -%}
+          "{{name}}": {{name}}{% if arg_type.meta().is_optional() %}?? null{% endif %}{% if !loop.last %},{% endif %}
+          {%- endfor %}
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  {% endfor %}
+}

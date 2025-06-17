@@ -140,7 +140,7 @@ export class BamlAsyncClient {
   async AliasWithMultipleAttrs(
       money: number,
       __baml_options__?: BamlCallOptions
-  ): Promise<number> {
+  ): Promise<types.Checked<number,"gt_ten">> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -156,7 +156,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as number
+      return raw.parsed(false) as types.Checked<number,"gt_ten">
     } catch (error) {
       throw toBamlError(error);
     }
@@ -465,7 +465,7 @@ export class BamlAsyncClient {
   async ClassifyDynEnumTwo(
       input: string,
       __baml_options__?: BamlCallOptions
-  ): Promise<types.DynEnumTwo> {
+  ): Promise<(string | types.DynEnumTwo)> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -481,7 +481,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as types.DynEnumTwo
+      return raw.parsed(false) as (string | types.DynEnumTwo)
     } catch (error) {
       throw toBamlError(error);
     }
@@ -590,7 +590,7 @@ export class BamlAsyncClient {
   async CustomTask(
       input: string,
       __baml_options__?: BamlCallOptions
-  ): Promise<types.Union3BookOrder | FlightConfirmation | GroceryReceipt> {
+  ): Promise<BookOrder | FlightConfirmation | GroceryReceipt> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -606,7 +606,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as types.Union3BookOrder | FlightConfirmation | GroceryReceipt
+      return raw.parsed(false) as BookOrder | FlightConfirmation | GroceryReceipt
     } catch (error) {
       throw toBamlError(error);
     }
@@ -740,7 +740,7 @@ export class BamlAsyncClient {
   async DifferentiateUnions(
       
       __baml_options__?: BamlCallOptions
-  ): Promise<types.Union2OriginalA | OriginalB> {
+  ): Promise<OriginalA | OriginalB> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -756,7 +756,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as types.Union2OriginalA | OriginalB
+      return raw.parsed(false) as OriginalA | OriginalB
     } catch (error) {
       throw toBamlError(error);
     }
@@ -940,7 +940,7 @@ export class BamlAsyncClient {
   async ExtractHobby(
       text: string,
       __baml_options__?: BamlCallOptions
-  ): Promise<types.Hobby[]> {
+  ): Promise<(string | types.Hobby)[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -956,7 +956,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as types.Hobby[]
+      return raw.parsed(false) as (string | types.Hobby)[]
     } catch (error) {
       throw toBamlError(error);
     }
@@ -1013,7 +1013,7 @@ export class BamlAsyncClient {
   }
   
   async ExtractReceiptInfo(
-      email: string,reason: types.Union2string | string,
+      email: string,reason: "curiosity" | "personal_finance",
       __baml_options__?: BamlCallOptions
   ): Promise<types.ReceiptInfo> {
     try {
@@ -1213,9 +1213,9 @@ export class BamlAsyncClient {
   }
   
   async FnLiteralUnionClassInputOutput(
-      input: types.Union2LiteralClassOne | LiteralClassTwo,
+      input: LiteralClassOne | LiteralClassTwo,
       __baml_options__?: BamlCallOptions
-  ): Promise<types.Union2LiteralClassOne | LiteralClassTwo> {
+  ): Promise<LiteralClassOne | LiteralClassTwo> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -1231,7 +1231,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as types.Union2LiteralClassOne | LiteralClassTwo
+      return raw.parsed(false) as LiteralClassOne | LiteralClassTwo
     } catch (error) {
       throw toBamlError(error);
     }
@@ -1415,7 +1415,7 @@ export class BamlAsyncClient {
   async FnOutputLiteralBool(
       input: string,
       __baml_options__?: BamlCallOptions
-  ): Promise<boolean> {
+  ): Promise<false> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -1431,7 +1431,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as boolean
+      return raw.parsed(false) as false
     } catch (error) {
       throw toBamlError(error);
     }
@@ -1440,7 +1440,7 @@ export class BamlAsyncClient {
   async FnOutputLiteralInt(
       input: string,
       __baml_options__?: BamlCallOptions
-  ): Promise<number> {
+  ): Promise<5> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -1456,7 +1456,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as number
+      return raw.parsed(false) as 5
     } catch (error) {
       throw toBamlError(error);
     }
@@ -1465,7 +1465,7 @@ export class BamlAsyncClient {
   async FnOutputLiteralString(
       input: string,
       __baml_options__?: BamlCallOptions
-  ): Promise<string> {
+  ): Promise<"example output"> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -1481,7 +1481,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as string
+      return raw.parsed(false) as "example output"
     } catch (error) {
       throw toBamlError(error);
     }
@@ -1688,9 +1688,9 @@ export class BamlAsyncClient {
   }
   
   async InOutLiteralStringUnionMapKey(
-      i1: Record<types.Union4string | string | string | string, string>,i2: Record<types.Union4string | string | string | string, string>,
+      i1: Record<"one" | "two" | "three" | "four", string>,i2: Record<"one" | "two" | "three" | "four", string>,
       __baml_options__?: BamlCallOptions
-  ): Promise<Record<types.Union4string | string | string | string, string>> {
+  ): Promise<Record<"one" | "two" | "three" | "four", string>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -1706,16 +1706,16 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as Record<types.Union4string | string | string | string, string>
+      return raw.parsed(false) as Record<"one" | "two" | "three" | "four", string>
     } catch (error) {
       throw toBamlError(error);
     }
   }
   
   async InOutSingleLiteralStringMapKey(
-      m: Record<string, string>,
+      m: Record<"key", string>,
       __baml_options__?: BamlCallOptions
-  ): Promise<Record<string, string>> {
+  ): Promise<Record<"key", string>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -1731,7 +1731,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as Record<string, string>
+      return raw.parsed(false) as Record<"key", string>
     } catch (error) {
       throw toBamlError(error);
     }
@@ -1790,7 +1790,7 @@ export class BamlAsyncClient {
   async LiteralUnionsTest(
       input: string,
       __baml_options__?: BamlCallOptions
-  ): Promise<types.Union3boolean | number | string> {
+  ): Promise<1 | true | "string output"> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -1806,7 +1806,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as types.Union3boolean | number | string
+      return raw.parsed(false) as 1 | true | "string output"
     } catch (error) {
       throw toBamlError(error);
     }
@@ -1815,7 +1815,7 @@ export class BamlAsyncClient {
   async MakeBlockConstraint(
       
       __baml_options__?: BamlCallOptions
-  ): Promise<types.Checked<types.BlockConstraint>> {
+  ): Promise<types.Checked<types.BlockConstraint,"cross_field">> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -1831,7 +1831,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as types.Checked<types.BlockConstraint>
+      return raw.parsed(false) as types.Checked<types.BlockConstraint,"cross_field">
     } catch (error) {
       throw toBamlError(error);
     }
@@ -2013,9 +2013,9 @@ export class BamlAsyncClient {
   }
   
   async NestedAlias(
-      c: types.Union6Record<string, string[]> | boolean | number | number | string | string[],
+      c: number | string | boolean | number | string[] | Record<string, string[]>,
       __baml_options__?: BamlCallOptions
-  ): Promise<types.Union6Record<string, string[]> | boolean | number | number | string | string[]> {
+  ): Promise<number | string | boolean | number | string[] | Record<string, string[]>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -2031,7 +2031,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as types.Union6Record<string, string[]> | boolean | number | number | string | string[]
+      return raw.parsed(false) as number | string | boolean | number | string[] | Record<string, string[]>
     } catch (error) {
       throw toBamlError(error);
     }
@@ -2090,7 +2090,7 @@ export class BamlAsyncClient {
   async OptionalTest_Function(
       input: string,
       __baml_options__?: BamlCallOptions
-  ): Promise<types.OptionalTest_ReturnType | null[]> {
+  ): Promise<(types.OptionalTest_ReturnType | null)[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -2106,7 +2106,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as types.OptionalTest_ReturnType | null[]
+      return raw.parsed(false) as (types.OptionalTest_ReturnType | null)[]
     } catch (error) {
       throw toBamlError(error);
     }
@@ -2140,7 +2140,7 @@ export class BamlAsyncClient {
   async PredictAgeBare(
       inp: string,
       __baml_options__?: BamlCallOptions
-  ): Promise<number> {
+  ): Promise<types.Checked<number,"too_big">> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -2156,16 +2156,16 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as number
+      return raw.parsed(false) as types.Checked<number,"too_big">
     } catch (error) {
       throw toBamlError(error);
     }
   }
   
   async PrimitiveAlias(
-      p: types.Union4boolean | number | number | string,
+      p: number | string | boolean | number,
       __baml_options__?: BamlCallOptions
-  ): Promise<types.Union4boolean | number | number | string> {
+  ): Promise<number | string | boolean | number> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -2181,7 +2181,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as types.Union4boolean | number | number | string
+      return raw.parsed(false) as number | string | boolean | number
     } catch (error) {
       throw toBamlError(error);
     }
@@ -2440,7 +2440,7 @@ export class BamlAsyncClient {
   async ReturnAliasWithMergedAttributes(
       money: number,
       __baml_options__?: BamlCallOptions
-  ): Promise<number> {
+  ): Promise<types.Checked<number,"gt_ten">> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -2456,7 +2456,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as number
+      return raw.parsed(false) as types.Checked<number,"gt_ten">
     } catch (error) {
       throw toBamlError(error);
     }
@@ -2715,7 +2715,7 @@ export class BamlAsyncClient {
   async StreamUnionIntegers(
       digits: number,
       __baml_options__?: BamlCallOptions
-  ): Promise<types.Union2number | string[]> {
+  ): Promise<(number | string)[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -2731,7 +2731,7 @@ export class BamlAsyncClient {
         collector,
         env,
       )
-      return raw.parsed(false) as types.Union2number | string[]
+      return raw.parsed(false) as (number | string)[]
     } catch (error) {
       throw toBamlError(error);
     }
@@ -3888,7 +3888,7 @@ export class BamlAsyncClient {
   }
   
   async TestNamedArgsLiteralBool(
-      myBool: boolean,
+      myBool: true,
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
@@ -3913,7 +3913,7 @@ export class BamlAsyncClient {
   }
   
   async TestNamedArgsLiteralInt(
-      myInt: number,
+      myInt: 1,
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
@@ -3938,7 +3938,7 @@ export class BamlAsyncClient {
   }
   
   async TestNamedArgsLiteralString(
-      myString: string,
+      myString: "My String",
       __baml_options__?: BamlCallOptions
   ): Promise<string> {
     try {
@@ -4588,7 +4588,7 @@ export class BamlAsyncClient {
   }
   
   async UnionTest_Function(
-      input: types.Union2boolean | string,
+      input: string | boolean,
       __baml_options__?: BamlCallOptions
   ): Promise<types.UnionTest_ReturnType> {
     try {
@@ -4729,7 +4729,7 @@ class BamlStreamClient {
   AaaSamOutputFormat(
       recipe: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.Recipe | null, types.Recipe> {
+  ): BamlStream<partial_types.Recipe | null, types.Recipe> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -4746,9 +4746,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.Recipe | null, types.Recipe>(
+      return new BamlStream<partial_types.Recipe | null, types.Recipe>(
         raw,
-        (a): stream_types.Recipe | null => a,
+        (a): partial_types.Recipe | null => a,
         (a): types.Recipe => a,
         this.ctxManager.cloneContext(),
       )
@@ -4760,7 +4760,7 @@ class BamlStreamClient {
   AliasThatPointsToRecursiveType(
       data: types.LinkedListAliasNode,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.LinkedListAliasNode | null, types.LinkedListAliasNode> {
+  ): BamlStream<partial_types.LinkedListAliasNode | null, types.LinkedListAliasNode> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -4777,9 +4777,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.LinkedListAliasNode | null, types.LinkedListAliasNode>(
+      return new BamlStream<partial_types.LinkedListAliasNode | null, types.LinkedListAliasNode>(
         raw,
-        (a): stream_types.LinkedListAliasNode | null => a,
+        (a): partial_types.LinkedListAliasNode | null => a,
         (a): types.LinkedListAliasNode => a,
         this.ctxManager.cloneContext(),
       )
@@ -4791,7 +4791,7 @@ class BamlStreamClient {
   AliasWithMultipleAttrs(
       money: number,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<types.Checked<number> | null, number> {
+  ): BamlStream<types.Checked<number,"gt_ten"> | null, types.Checked<number,"gt_ten">> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -4808,10 +4808,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<types.Checked<number> | null, number>(
+      return new BamlStream<types.Checked<number,"gt_ten"> | null, types.Checked<number,"gt_ten">>(
         raw,
-        (a): types.Checked<number> | null => a,
-        (a): number => a,
+        (a): types.Checked<number,"gt_ten"> | null => a,
+        (a): types.Checked<number,"gt_ten"> => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -4977,7 +4977,7 @@ class BamlStreamClient {
   AllowedOptionals(
       optionals: types.OptionalListAndMap,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.OptionalListAndMap | null, types.OptionalListAndMap> {
+  ): BamlStream<partial_types.OptionalListAndMap | null, types.OptionalListAndMap> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -4994,9 +4994,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.OptionalListAndMap | null, types.OptionalListAndMap>(
+      return new BamlStream<partial_types.OptionalListAndMap | null, types.OptionalListAndMap>(
         raw,
-        (a): stream_types.OptionalListAndMap | null => a,
+        (a): partial_types.OptionalListAndMap | null => a,
         (a): types.OptionalListAndMap => a,
         this.ctxManager.cloneContext(),
       )
@@ -5101,7 +5101,7 @@ class BamlStreamClient {
   BuildLinkedList(
       input: number[],
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.LinkedList | null, types.LinkedList> {
+  ): BamlStream<partial_types.LinkedList | null, types.LinkedList> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5118,9 +5118,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.LinkedList | null, types.LinkedList>(
+      return new BamlStream<partial_types.LinkedList | null, types.LinkedList>(
         raw,
-        (a): stream_types.LinkedList | null => a,
+        (a): partial_types.LinkedList | null => a,
         (a): types.LinkedList => a,
         this.ctxManager.cloneContext(),
       )
@@ -5132,7 +5132,7 @@ class BamlStreamClient {
   BuildTree(
       input: types.BinaryNode,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.Tree | null, types.Tree> {
+  ): BamlStream<partial_types.Tree | null, types.Tree> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5149,9 +5149,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.Tree | null, types.Tree>(
+      return new BamlStream<partial_types.Tree | null, types.Tree>(
         raw,
-        (a): stream_types.Tree | null => a,
+        (a): partial_types.Tree | null => a,
         (a): types.Tree => a,
         this.ctxManager.cloneContext(),
       )
@@ -5163,7 +5163,7 @@ class BamlStreamClient {
   ClassThatPointsToRecursiveClassThroughAlias(
       cls: types.ClassToRecAlias,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.ClassToRecAlias | null, types.ClassToRecAlias> {
+  ): BamlStream<partial_types.ClassToRecAlias | null, types.ClassToRecAlias> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5180,9 +5180,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.ClassToRecAlias | null, types.ClassToRecAlias>(
+      return new BamlStream<partial_types.ClassToRecAlias | null, types.ClassToRecAlias>(
         raw,
-        (a): stream_types.ClassToRecAlias | null => a,
+        (a): partial_types.ClassToRecAlias | null => a,
         (a): types.ClassToRecAlias => a,
         this.ctxManager.cloneContext(),
       )
@@ -5194,7 +5194,7 @@ class BamlStreamClient {
   ClassifyDynEnumTwo(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<types.DynEnumTwo | null, types.DynEnumTwo> {
+  ): BamlStream<(string | types.DynEnumTwo) | null, (string | types.DynEnumTwo)> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5211,10 +5211,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<types.DynEnumTwo | null, types.DynEnumTwo>(
+      return new BamlStream<(string | types.DynEnumTwo) | null, (string | types.DynEnumTwo)>(
         raw,
-        (a): types.DynEnumTwo | null => a,
-        (a): types.DynEnumTwo => a,
+        (a): (string | types.DynEnumTwo) | null => a,
+        (a): (string | types.DynEnumTwo) => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -5349,7 +5349,7 @@ class BamlStreamClient {
   CustomTask(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.Union3BookOrder | FlightConfirmation | GroceryReceipt | null, types.Union3BookOrder | FlightConfirmation | GroceryReceipt> {
+  ): BamlStream<BookOrder | FlightConfirmation | GroceryReceipt | null, BookOrder | FlightConfirmation | GroceryReceipt> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5366,10 +5366,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.Union3BookOrder | FlightConfirmation | GroceryReceipt | null, types.Union3BookOrder | FlightConfirmation | GroceryReceipt>(
+      return new BamlStream<BookOrder | FlightConfirmation | GroceryReceipt | null, BookOrder | FlightConfirmation | GroceryReceipt>(
         raw,
-        (a): stream_types.Union3BookOrder | FlightConfirmation | GroceryReceipt | null => a,
-        (a): types.Union3BookOrder | FlightConfirmation | GroceryReceipt => a,
+        (a): BookOrder | FlightConfirmation | GroceryReceipt | null => a,
+        (a): BookOrder | FlightConfirmation | GroceryReceipt => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -5535,7 +5535,7 @@ class BamlStreamClient {
   DifferentiateUnions(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.Union2OriginalA | OriginalB | null, types.Union2OriginalA | OriginalB> {
+  ): BamlStream<OriginalA | OriginalB | null, OriginalA | OriginalB> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5552,10 +5552,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.Union2OriginalA | OriginalB | null, types.Union2OriginalA | OriginalB>(
+      return new BamlStream<OriginalA | OriginalB | null, OriginalA | OriginalB>(
         raw,
-        (a): stream_types.Union2OriginalA | OriginalB | null => a,
-        (a): types.Union2OriginalA | OriginalB => a,
+        (a): OriginalA | OriginalB | null => a,
+        (a): OriginalA | OriginalB => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -5566,7 +5566,7 @@ class BamlStreamClient {
   DummyOutputFunction(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.DummyOutput | null, types.DummyOutput> {
+  ): BamlStream<partial_types.DummyOutput | null, types.DummyOutput> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5583,9 +5583,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.DummyOutput | null, types.DummyOutput>(
+      return new BamlStream<partial_types.DummyOutput | null, types.DummyOutput>(
         raw,
-        (a): stream_types.DummyOutput | null => a,
+        (a): partial_types.DummyOutput | null => a,
         (a): types.DummyOutput => a,
         this.ctxManager.cloneContext(),
       )
@@ -5597,7 +5597,7 @@ class BamlStreamClient {
   DynamicFunc(
       input: types.DynamicClassOne,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.DynamicClassTwo | null, types.DynamicClassTwo> {
+  ): BamlStream<partial_types.DynamicClassTwo | null, types.DynamicClassTwo> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5614,9 +5614,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.DynamicClassTwo | null, types.DynamicClassTwo>(
+      return new BamlStream<partial_types.DynamicClassTwo | null, types.DynamicClassTwo>(
         raw,
-        (a): stream_types.DynamicClassTwo | null => a,
+        (a): partial_types.DynamicClassTwo | null => a,
         (a): types.DynamicClassTwo => a,
         this.ctxManager.cloneContext(),
       )
@@ -5628,7 +5628,7 @@ class BamlStreamClient {
   DynamicInputOutput(
       input: types.DynInputOutput,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.DynInputOutput | null, types.DynInputOutput> {
+  ): BamlStream<partial_types.DynInputOutput | null, types.DynInputOutput> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5645,9 +5645,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.DynInputOutput | null, types.DynInputOutput>(
+      return new BamlStream<partial_types.DynInputOutput | null, types.DynInputOutput>(
         raw,
-        (a): stream_types.DynInputOutput | null => a,
+        (a): partial_types.DynInputOutput | null => a,
         (a): types.DynInputOutput => a,
         this.ctxManager.cloneContext(),
       )
@@ -5659,7 +5659,7 @@ class BamlStreamClient {
   DynamicListInputOutput(
       input: types.DynInputOutput[],
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.DynInputOutput | null[] | null, types.DynInputOutput[]> {
+  ): BamlStream<(partial_types.DynInputOutput | null)[] | null, types.DynInputOutput[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5676,9 +5676,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.DynInputOutput | null[] | null, types.DynInputOutput[]>(
+      return new BamlStream<(partial_types.DynInputOutput | null)[] | null, types.DynInputOutput[]>(
         raw,
-        (a): stream_types.DynInputOutput | null[] | null => a,
+        (a): (partial_types.DynInputOutput | null)[] | null => a,
         (a): types.DynInputOutput[] => a,
         this.ctxManager.cloneContext(),
       )
@@ -5721,7 +5721,7 @@ class BamlStreamClient {
   ExtractContactInfo(
       document: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.ContactInfo | null, types.ContactInfo> {
+  ): BamlStream<partial_types.ContactInfo | null, types.ContactInfo> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5738,9 +5738,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.ContactInfo | null, types.ContactInfo>(
+      return new BamlStream<partial_types.ContactInfo | null, types.ContactInfo>(
         raw,
-        (a): stream_types.ContactInfo | null => a,
+        (a): partial_types.ContactInfo | null => a,
         (a): types.ContactInfo => a,
         this.ctxManager.cloneContext(),
       )
@@ -5752,7 +5752,7 @@ class BamlStreamClient {
   ExtractEntities(
       text: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.DynamicSchema | null, types.DynamicSchema> {
+  ): BamlStream<partial_types.DynamicSchema | null, types.DynamicSchema> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5769,9 +5769,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.DynamicSchema | null, types.DynamicSchema>(
+      return new BamlStream<partial_types.DynamicSchema | null, types.DynamicSchema>(
         raw,
-        (a): stream_types.DynamicSchema | null => a,
+        (a): partial_types.DynamicSchema | null => a,
         (a): types.DynamicSchema => a,
         this.ctxManager.cloneContext(),
       )
@@ -5783,7 +5783,7 @@ class BamlStreamClient {
   ExtractHobby(
       text: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<types.Hobby | null[] | null, types.Hobby[]> {
+  ): BamlStream<((string | types.Hobby) | null)[] | null, (string | types.Hobby)[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5800,10 +5800,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<types.Hobby | null[] | null, types.Hobby[]>(
+      return new BamlStream<((string | types.Hobby) | null)[] | null, (string | types.Hobby)[]>(
         raw,
-        (a): types.Hobby | null[] | null => a,
-        (a): types.Hobby[] => a,
+        (a): ((string | types.Hobby) | null)[] | null => a,
+        (a): (string | types.Hobby)[] => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -5814,7 +5814,7 @@ class BamlStreamClient {
   ExtractNames(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<string | null[] | null, string[]> {
+  ): BamlStream<(string | null)[] | null, string[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5831,9 +5831,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<string | null[] | null, string[]>(
+      return new BamlStream<(string | null)[] | null, string[]>(
         raw,
-        (a): string | null[] | null => a,
+        (a): (string | null)[] | null => a,
         (a): string[] => a,
         this.ctxManager.cloneContext(),
       )
@@ -5845,7 +5845,7 @@ class BamlStreamClient {
   ExtractPeople(
       text: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.Person | null[] | null, types.Person[]> {
+  ): BamlStream<(partial_types.Person | null)[] | null, types.Person[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5862,9 +5862,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.Person | null[] | null, types.Person[]>(
+      return new BamlStream<(partial_types.Person | null)[] | null, types.Person[]>(
         raw,
-        (a): stream_types.Person | null[] | null => a,
+        (a): (partial_types.Person | null)[] | null => a,
         (a): types.Person[] => a,
         this.ctxManager.cloneContext(),
       )
@@ -5874,9 +5874,9 @@ class BamlStreamClient {
   }
   
   ExtractReceiptInfo(
-      email: string,reason: types.Union2string | string,
+      email: string,reason: "curiosity" | "personal_finance",
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.ReceiptInfo | null, types.ReceiptInfo> {
+  ): BamlStream<partial_types.ReceiptInfo | null, types.ReceiptInfo> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5893,9 +5893,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.ReceiptInfo | null, types.ReceiptInfo>(
+      return new BamlStream<partial_types.ReceiptInfo | null, types.ReceiptInfo>(
         raw,
-        (a): stream_types.ReceiptInfo | null => a,
+        (a): partial_types.ReceiptInfo | null => a,
         (a): types.ReceiptInfo => a,
         this.ctxManager.cloneContext(),
       )
@@ -5907,7 +5907,7 @@ class BamlStreamClient {
   ExtractResume(
       resume: string,img?: Image | null,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.Resume | null, types.Resume> {
+  ): BamlStream<partial_types.Resume | null, types.Resume> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5924,9 +5924,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.Resume | null, types.Resume>(
+      return new BamlStream<partial_types.Resume | null, types.Resume>(
         raw,
-        (a): stream_types.Resume | null => a,
+        (a): partial_types.Resume | null => a,
         (a): types.Resume => a,
         this.ctxManager.cloneContext(),
       )
@@ -5938,7 +5938,7 @@ class BamlStreamClient {
   ExtractResume2(
       resume: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.Resume | null, types.Resume> {
+  ): BamlStream<partial_types.Resume | null, types.Resume> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5955,9 +5955,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.Resume | null, types.Resume>(
+      return new BamlStream<partial_types.Resume | null, types.Resume>(
         raw,
-        (a): stream_types.Resume | null => a,
+        (a): partial_types.Resume | null => a,
         (a): types.Resume => a,
         this.ctxManager.cloneContext(),
       )
@@ -5969,7 +5969,7 @@ class BamlStreamClient {
   FnClassOptionalOutput(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.ClassOptionalOutput | null, types.ClassOptionalOutput | null> {
+  ): BamlStream<partial_types.ClassOptionalOutput | null, types.ClassOptionalOutput | null> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -5986,9 +5986,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.ClassOptionalOutput | null, types.ClassOptionalOutput | null>(
+      return new BamlStream<partial_types.ClassOptionalOutput | null, types.ClassOptionalOutput | null>(
         raw,
-        (a): stream_types.ClassOptionalOutput | null => a,
+        (a): partial_types.ClassOptionalOutput | null => a,
         (a): types.ClassOptionalOutput | null => a,
         this.ctxManager.cloneContext(),
       )
@@ -6000,7 +6000,7 @@ class BamlStreamClient {
   FnClassOptionalOutput2(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.ClassOptionalOutput2 | null, types.ClassOptionalOutput2 | null> {
+  ): BamlStream<partial_types.ClassOptionalOutput2 | null, types.ClassOptionalOutput2 | null> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6017,9 +6017,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.ClassOptionalOutput2 | null, types.ClassOptionalOutput2 | null>(
+      return new BamlStream<partial_types.ClassOptionalOutput2 | null, types.ClassOptionalOutput2 | null>(
         raw,
-        (a): stream_types.ClassOptionalOutput2 | null => a,
+        (a): partial_types.ClassOptionalOutput2 | null => a,
         (a): types.ClassOptionalOutput2 | null => a,
         this.ctxManager.cloneContext(),
       )
@@ -6031,7 +6031,7 @@ class BamlStreamClient {
   FnEnumListOutput(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<types.EnumOutput | null[] | null, types.EnumOutput[]> {
+  ): BamlStream<(types.EnumOutput | null)[] | null, types.EnumOutput[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6048,9 +6048,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<types.EnumOutput | null[] | null, types.EnumOutput[]>(
+      return new BamlStream<(types.EnumOutput | null)[] | null, types.EnumOutput[]>(
         raw,
-        (a): types.EnumOutput | null[] | null => a,
+        (a): (types.EnumOutput | null)[] | null => a,
         (a): types.EnumOutput[] => a,
         this.ctxManager.cloneContext(),
       )
@@ -6093,7 +6093,7 @@ class BamlStreamClient {
   FnLiteralClassInputOutput(
       input: types.LiteralClassHello,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.LiteralClassHello | null, types.LiteralClassHello> {
+  ): BamlStream<partial_types.LiteralClassHello | null, types.LiteralClassHello> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6110,9 +6110,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.LiteralClassHello | null, types.LiteralClassHello>(
+      return new BamlStream<partial_types.LiteralClassHello | null, types.LiteralClassHello>(
         raw,
-        (a): stream_types.LiteralClassHello | null => a,
+        (a): partial_types.LiteralClassHello | null => a,
         (a): types.LiteralClassHello => a,
         this.ctxManager.cloneContext(),
       )
@@ -6122,9 +6122,9 @@ class BamlStreamClient {
   }
   
   FnLiteralUnionClassInputOutput(
-      input: types.Union2LiteralClassOne | LiteralClassTwo,
+      input: LiteralClassOne | LiteralClassTwo,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.Union2LiteralClassOne | LiteralClassTwo | null, types.Union2LiteralClassOne | LiteralClassTwo> {
+  ): BamlStream<LiteralClassOne | LiteralClassTwo | null, LiteralClassOne | LiteralClassTwo> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6141,10 +6141,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.Union2LiteralClassOne | LiteralClassTwo | null, types.Union2LiteralClassOne | LiteralClassTwo>(
+      return new BamlStream<LiteralClassOne | LiteralClassTwo | null, LiteralClassOne | LiteralClassTwo>(
         raw,
-        (a): stream_types.Union2LiteralClassOne | LiteralClassTwo | null => a,
-        (a): types.Union2LiteralClassOne | LiteralClassTwo => a,
+        (a): LiteralClassOne | LiteralClassTwo | null => a,
+        (a): LiteralClassOne | LiteralClassTwo => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -6217,7 +6217,7 @@ class BamlStreamClient {
   FnOutputClass(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.TestOutputClass | null, types.TestOutputClass> {
+  ): BamlStream<partial_types.TestOutputClass | null, types.TestOutputClass> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6234,9 +6234,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.TestOutputClass | null, types.TestOutputClass>(
+      return new BamlStream<partial_types.TestOutputClass | null, types.TestOutputClass>(
         raw,
-        (a): stream_types.TestOutputClass | null => a,
+        (a): partial_types.TestOutputClass | null => a,
         (a): types.TestOutputClass => a,
         this.ctxManager.cloneContext(),
       )
@@ -6248,7 +6248,7 @@ class BamlStreamClient {
   FnOutputClassList(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.TestOutputClass | null[] | null, types.TestOutputClass[]> {
+  ): BamlStream<(partial_types.TestOutputClass | null)[] | null, types.TestOutputClass[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6265,9 +6265,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.TestOutputClass | null[] | null, types.TestOutputClass[]>(
+      return new BamlStream<(partial_types.TestOutputClass | null)[] | null, types.TestOutputClass[]>(
         raw,
-        (a): stream_types.TestOutputClass | null[] | null => a,
+        (a): (partial_types.TestOutputClass | null)[] | null => a,
         (a): types.TestOutputClass[] => a,
         this.ctxManager.cloneContext(),
       )
@@ -6279,7 +6279,7 @@ class BamlStreamClient {
   FnOutputClassNested(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.TestClassNested | null, types.TestClassNested> {
+  ): BamlStream<partial_types.TestClassNested | null, types.TestClassNested> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6296,9 +6296,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.TestClassNested | null, types.TestClassNested>(
+      return new BamlStream<partial_types.TestClassNested | null, types.TestClassNested>(
         raw,
-        (a): stream_types.TestClassNested | null => a,
+        (a): partial_types.TestClassNested | null => a,
         (a): types.TestClassNested => a,
         this.ctxManager.cloneContext(),
       )
@@ -6310,7 +6310,7 @@ class BamlStreamClient {
   FnOutputClassWithEnum(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.TestClassWithEnum | null, types.TestClassWithEnum> {
+  ): BamlStream<partial_types.TestClassWithEnum | null, types.TestClassWithEnum> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6327,9 +6327,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.TestClassWithEnum | null, types.TestClassWithEnum>(
+      return new BamlStream<partial_types.TestClassWithEnum | null, types.TestClassWithEnum>(
         raw,
-        (a): stream_types.TestClassWithEnum | null => a,
+        (a): partial_types.TestClassWithEnum | null => a,
         (a): types.TestClassWithEnum => a,
         this.ctxManager.cloneContext(),
       )
@@ -6372,7 +6372,7 @@ class BamlStreamClient {
   FnOutputLiteralBool(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<boolean | null, boolean> {
+  ): BamlStream<false | null, false> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6389,10 +6389,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<boolean | null, boolean>(
+      return new BamlStream<false | null, false>(
         raw,
-        (a): boolean | null => a,
-        (a): boolean => a,
+        (a): false | null => a,
+        (a): false => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -6403,7 +6403,7 @@ class BamlStreamClient {
   FnOutputLiteralInt(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<number | null, number> {
+  ): BamlStream<5 | null, 5> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6420,10 +6420,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<number | null, number>(
+      return new BamlStream<5 | null, 5>(
         raw,
-        (a): number | null => a,
-        (a): number => a,
+        (a): 5 | null => a,
+        (a): 5 => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -6434,7 +6434,7 @@ class BamlStreamClient {
   FnOutputLiteralString(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<string | null, string> {
+  ): BamlStream<"example output" | null, "example output"> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6451,10 +6451,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<string | null, string>(
+      return new BamlStream<"example output" | null, "example output">(
         raw,
-        (a): string | null => a,
-        (a): string => a,
+        (a): "example output" | null => a,
+        (a): "example output" => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -6465,7 +6465,7 @@ class BamlStreamClient {
   FnOutputStringList(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<string | null[] | null, string[]> {
+  ): BamlStream<(string | null)[] | null, string[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6482,9 +6482,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<string | null[] | null, string[]>(
+      return new BamlStream<(string | null)[] | null, string[]>(
         raw,
-        (a): string | null[] | null => a,
+        (a): (string | null)[] | null => a,
         (a): string[] => a,
         this.ctxManager.cloneContext(),
       )
@@ -6527,7 +6527,7 @@ class BamlStreamClient {
   FnTestClassAlias(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.TestClassAlias | null, types.TestClassAlias> {
+  ): BamlStream<partial_types.TestClassAlias | null, types.TestClassAlias> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6544,9 +6544,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.TestClassAlias | null, types.TestClassAlias>(
+      return new BamlStream<partial_types.TestClassAlias | null, types.TestClassAlias>(
         raw,
-        (a): stream_types.TestClassAlias | null => a,
+        (a): partial_types.TestClassAlias | null => a,
         (a): types.TestClassAlias => a,
         this.ctxManager.cloneContext(),
       )
@@ -6589,7 +6589,7 @@ class BamlStreamClient {
   GetDataType(
       text: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.RaysData | null, types.RaysData> {
+  ): BamlStream<partial_types.RaysData | null, types.RaysData> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6606,9 +6606,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.RaysData | null, types.RaysData>(
+      return new BamlStream<partial_types.RaysData | null, types.RaysData>(
         raw,
-        (a): stream_types.RaysData | null => a,
+        (a): partial_types.RaysData | null => a,
         (a): types.RaysData => a,
         this.ctxManager.cloneContext(),
       )
@@ -6620,7 +6620,7 @@ class BamlStreamClient {
   GetOrderInfo(
       email: types.Email,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.OrderInfo | null, types.OrderInfo> {
+  ): BamlStream<partial_types.OrderInfo | null, types.OrderInfo> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6637,9 +6637,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.OrderInfo | null, types.OrderInfo>(
+      return new BamlStream<partial_types.OrderInfo | null, types.OrderInfo>(
         raw,
-        (a): stream_types.OrderInfo | null => a,
+        (a): partial_types.OrderInfo | null => a,
         (a): types.OrderInfo => a,
         this.ctxManager.cloneContext(),
       )
@@ -6651,7 +6651,7 @@ class BamlStreamClient {
   GetQuery(
       query: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.SearchParams | null, types.SearchParams> {
+  ): BamlStream<partial_types.SearchParams | null, types.SearchParams> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6668,9 +6668,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.SearchParams | null, types.SearchParams>(
+      return new BamlStream<partial_types.SearchParams | null, types.SearchParams>(
         raw,
-        (a): stream_types.SearchParams | null => a,
+        (a): partial_types.SearchParams | null => a,
         (a): types.SearchParams => a,
         this.ctxManager.cloneContext(),
       )
@@ -6711,9 +6711,9 @@ class BamlStreamClient {
   }
   
   InOutLiteralStringUnionMapKey(
-      i1: Record<types.Union4string | string | string | string, string>,i2: Record<types.Union4string | string | string | string, string>,
+      i1: Record<"one" | "two" | "three" | "four", string>,i2: Record<"one" | "two" | "three" | "four", string>,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<Record<stream_types.Union4string | string | string | string, string | null> | null, Record<types.Union4string | string | string | string, string>> {
+  ): BamlStream<Record<"one" | "two" | "three" | "four", string | null> | null, Record<"one" | "two" | "three" | "four", string>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6730,10 +6730,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<Record<stream_types.Union4string | string | string | string, string | null> | null, Record<types.Union4string | string | string | string, string>>(
+      return new BamlStream<Record<"one" | "two" | "three" | "four", string | null> | null, Record<"one" | "two" | "three" | "four", string>>(
         raw,
-        (a): Record<stream_types.Union4string | string | string | string, string | null> | null => a,
-        (a): Record<types.Union4string | string | string | string, string> => a,
+        (a): Record<"one" | "two" | "three" | "four", string | null> | null => a,
+        (a): Record<"one" | "two" | "three" | "four", string> => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -6742,9 +6742,9 @@ class BamlStreamClient {
   }
   
   InOutSingleLiteralStringMapKey(
-      m: Record<string, string>,
+      m: Record<"key", string>,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<Record<string, string | null> | null, Record<string, string>> {
+  ): BamlStream<Record<"key", string | null> | null, Record<"key", string>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6761,10 +6761,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<Record<string, string | null> | null, Record<string, string>>(
+      return new BamlStream<Record<"key", string | null> | null, Record<"key", string>>(
         raw,
-        (a): Record<string, string | null> | null => a,
-        (a): Record<string, string> => a,
+        (a): Record<"key", string | null> | null => a,
+        (a): Record<"key", string> => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -6775,7 +6775,7 @@ class BamlStreamClient {
   JsonTypeAliasCycle(
       input: types.JsonValue,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.JsonValue | null, types.JsonValue> {
+  ): BamlStream<partial_types.JsonValue | null, types.JsonValue> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6792,9 +6792,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.JsonValue | null, types.JsonValue>(
+      return new BamlStream<partial_types.JsonValue | null, types.JsonValue>(
         raw,
-        (a): stream_types.JsonValue | null => a,
+        (a): partial_types.JsonValue | null => a,
         (a): types.JsonValue => a,
         this.ctxManager.cloneContext(),
       )
@@ -6837,7 +6837,7 @@ class BamlStreamClient {
   LiteralUnionsTest(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.Union3boolean | number | string | null, types.Union3boolean | number | string> {
+  ): BamlStream<1 | true | "string output" | null, 1 | true | "string output"> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6854,10 +6854,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.Union3boolean | number | string | null, types.Union3boolean | number | string>(
+      return new BamlStream<1 | true | "string output" | null, 1 | true | "string output">(
         raw,
-        (a): stream_types.Union3boolean | number | string | null => a,
-        (a): types.Union3boolean | number | string => a,
+        (a): 1 | true | "string output" | null => a,
+        (a): 1 | true | "string output" => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -6868,7 +6868,7 @@ class BamlStreamClient {
   MakeBlockConstraint(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<types.Checked<stream_types.BlockConstraint> | null, types.Checked<types.BlockConstraint>> {
+  ): BamlStream<types.Checked<partial_types.BlockConstraint,"cross_field"> | null, types.Checked<types.BlockConstraint,"cross_field">> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6885,10 +6885,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<types.Checked<stream_types.BlockConstraint> | null, types.Checked<types.BlockConstraint>>(
+      return new BamlStream<types.Checked<partial_types.BlockConstraint,"cross_field"> | null, types.Checked<types.BlockConstraint,"cross_field">>(
         raw,
-        (a): types.Checked<stream_types.BlockConstraint> | null => a,
-        (a): types.Checked<types.BlockConstraint> => a,
+        (a): types.Checked<partial_types.BlockConstraint,"cross_field"> | null => a,
+        (a): types.Checked<types.BlockConstraint,"cross_field"> => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -6899,7 +6899,7 @@ class BamlStreamClient {
   MakeClassWithBlockDone(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.ClassWithBlockDone | null, types.ClassWithBlockDone> {
+  ): BamlStream<partial_types.ClassWithBlockDone | null, types.ClassWithBlockDone> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6916,9 +6916,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.ClassWithBlockDone | null, types.ClassWithBlockDone>(
+      return new BamlStream<partial_types.ClassWithBlockDone | null, types.ClassWithBlockDone>(
         raw,
-        (a): stream_types.ClassWithBlockDone | null => a,
+        (a): partial_types.ClassWithBlockDone | null => a,
         (a): types.ClassWithBlockDone => a,
         this.ctxManager.cloneContext(),
       )
@@ -6930,7 +6930,7 @@ class BamlStreamClient {
   MakeClassWithExternalDone(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.ClassWithoutDone | null, types.ClassWithoutDone> {
+  ): BamlStream<partial_types.ClassWithoutDone | null, types.ClassWithoutDone> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6947,9 +6947,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.ClassWithoutDone | null, types.ClassWithoutDone>(
+      return new BamlStream<partial_types.ClassWithoutDone | null, types.ClassWithoutDone>(
         raw,
-        (a): stream_types.ClassWithoutDone | null => a,
+        (a): partial_types.ClassWithoutDone | null => a,
         (a): types.ClassWithoutDone => a,
         this.ctxManager.cloneContext(),
       )
@@ -6961,7 +6961,7 @@ class BamlStreamClient {
   MakeNestedBlockConstraint(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.NestedBlockConstraint | null, types.NestedBlockConstraint> {
+  ): BamlStream<partial_types.NestedBlockConstraint | null, types.NestedBlockConstraint> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -6978,9 +6978,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.NestedBlockConstraint | null, types.NestedBlockConstraint>(
+      return new BamlStream<partial_types.NestedBlockConstraint | null, types.NestedBlockConstraint>(
         raw,
-        (a): stream_types.NestedBlockConstraint | null => a,
+        (a): partial_types.NestedBlockConstraint | null => a,
         (a): types.NestedBlockConstraint => a,
         this.ctxManager.cloneContext(),
       )
@@ -6992,7 +6992,7 @@ class BamlStreamClient {
   MakeSemanticContainer(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.SemanticContainer | null, types.SemanticContainer> {
+  ): BamlStream<partial_types.SemanticContainer | null, types.SemanticContainer> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7009,9 +7009,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.SemanticContainer | null, types.SemanticContainer>(
+      return new BamlStream<partial_types.SemanticContainer | null, types.SemanticContainer>(
         raw,
-        (a): stream_types.SemanticContainer | null => a,
+        (a): partial_types.SemanticContainer | null => a,
         (a): types.SemanticContainer => a,
         this.ctxManager.cloneContext(),
       )
@@ -7023,7 +7023,7 @@ class BamlStreamClient {
   MapAlias(
       m: Record<string, string[]>,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<Record<string, string | null[] | null> | null, Record<string, string[]>> {
+  ): BamlStream<Record<string, (string | null)[] | null> | null, Record<string, string[]>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7040,9 +7040,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<Record<string, string | null[] | null> | null, Record<string, string[]>>(
+      return new BamlStream<Record<string, (string | null)[] | null> | null, Record<string, string[]>>(
         raw,
-        (a): Record<string, string | null[] | null> | null => a,
+        (a): Record<string, (string | null)[] | null> | null => a,
         (a): Record<string, string[]> => a,
         this.ctxManager.cloneContext(),
       )
@@ -7054,7 +7054,7 @@ class BamlStreamClient {
   MergeAliasAttributes(
       money: number,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.MergeAttrs | null, types.MergeAttrs> {
+  ): BamlStream<partial_types.MergeAttrs | null, types.MergeAttrs> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7071,9 +7071,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.MergeAttrs | null, types.MergeAttrs>(
+      return new BamlStream<partial_types.MergeAttrs | null, types.MergeAttrs>(
         raw,
-        (a): stream_types.MergeAttrs | null => a,
+        (a): partial_types.MergeAttrs | null => a,
         (a): types.MergeAttrs => a,
         this.ctxManager.cloneContext(),
       )
@@ -7085,7 +7085,7 @@ class BamlStreamClient {
   MyFunc(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.DynamicOutput | null, types.DynamicOutput> {
+  ): BamlStream<partial_types.DynamicOutput | null, types.DynamicOutput> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7102,9 +7102,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.DynamicOutput | null, types.DynamicOutput>(
+      return new BamlStream<partial_types.DynamicOutput | null, types.DynamicOutput>(
         raw,
-        (a): stream_types.DynamicOutput | null => a,
+        (a): partial_types.DynamicOutput | null => a,
         (a): types.DynamicOutput => a,
         this.ctxManager.cloneContext(),
       )
@@ -7114,9 +7114,9 @@ class BamlStreamClient {
   }
   
   NestedAlias(
-      c: types.Union6Record<string, string[]> | boolean | number | number | string | string[],
+      c: number | string | boolean | number | string[] | Record<string, string[]>,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.Union6Record<string, string[]> | boolean | number | number | string | string[] | null, types.Union6Record<string, string[]> | boolean | number | number | string | string[]> {
+  ): BamlStream<number | string | boolean | number | string[] | Record<string, string[]> | null, number | string | boolean | number | string[] | Record<string, string[]>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7133,10 +7133,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.Union6Record<string, string[]> | boolean | number | number | string | string[] | null, types.Union6Record<string, string[]> | boolean | number | number | string | string[]>(
+      return new BamlStream<number | string | boolean | number | string[] | Record<string, string[]> | null, number | string | boolean | number | string[] | Record<string, string[]>>(
         raw,
-        (a): stream_types.Union6Record<string, string[]> | boolean | number | number | string | string[] | null => a,
-        (a): types.Union6Record<string, string[]> | boolean | number | number | string | string[] => a,
+        (a): number | string | boolean | number | string[] | Record<string, string[]> | null => a,
+        (a): number | string | boolean | number | string[] | Record<string, string[]> => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -7147,7 +7147,7 @@ class BamlStreamClient {
   NullLiteralClassHello(
       s: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.ClassForNullLiteral | null, types.ClassForNullLiteral> {
+  ): BamlStream<partial_types.ClassForNullLiteral | null, types.ClassForNullLiteral> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7164,9 +7164,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.ClassForNullLiteral | null, types.ClassForNullLiteral>(
+      return new BamlStream<partial_types.ClassForNullLiteral | null, types.ClassForNullLiteral>(
         raw,
-        (a): stream_types.ClassForNullLiteral | null => a,
+        (a): partial_types.ClassForNullLiteral | null => a,
         (a): types.ClassForNullLiteral => a,
         this.ctxManager.cloneContext(),
       )
@@ -7209,7 +7209,7 @@ class BamlStreamClient {
   OptionalTest_Function(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.OptionalTest_ReturnType | null[] | null, types.OptionalTest_ReturnType | null[]> {
+  ): BamlStream<(partial_types.OptionalTest_ReturnType | null)[] | null, (types.OptionalTest_ReturnType | null)[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7226,10 +7226,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.OptionalTest_ReturnType | null[] | null, types.OptionalTest_ReturnType | null[]>(
+      return new BamlStream<(partial_types.OptionalTest_ReturnType | null)[] | null, (types.OptionalTest_ReturnType | null)[]>(
         raw,
-        (a): stream_types.OptionalTest_ReturnType | null[] | null => a,
-        (a): types.OptionalTest_ReturnType | null[] => a,
+        (a): (partial_types.OptionalTest_ReturnType | null)[] | null => a,
+        (a): (types.OptionalTest_ReturnType | null)[] => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -7240,7 +7240,7 @@ class BamlStreamClient {
   PredictAge(
       name: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.FooAny | null, types.FooAny> {
+  ): BamlStream<partial_types.FooAny | null, types.FooAny> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7257,9 +7257,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.FooAny | null, types.FooAny>(
+      return new BamlStream<partial_types.FooAny | null, types.FooAny>(
         raw,
-        (a): stream_types.FooAny | null => a,
+        (a): partial_types.FooAny | null => a,
         (a): types.FooAny => a,
         this.ctxManager.cloneContext(),
       )
@@ -7271,7 +7271,7 @@ class BamlStreamClient {
   PredictAgeBare(
       inp: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<types.Checked<number> | null, number> {
+  ): BamlStream<types.Checked<number,"too_big"> | null, types.Checked<number,"too_big">> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7288,10 +7288,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<types.Checked<number> | null, number>(
+      return new BamlStream<types.Checked<number,"too_big"> | null, types.Checked<number,"too_big">>(
         raw,
-        (a): types.Checked<number> | null => a,
-        (a): number => a,
+        (a): types.Checked<number,"too_big"> | null => a,
+        (a): types.Checked<number,"too_big"> => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -7300,9 +7300,9 @@ class BamlStreamClient {
   }
   
   PrimitiveAlias(
-      p: types.Union4boolean | number | number | string,
+      p: number | string | boolean | number,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.Union4boolean | number | number | string | null, types.Union4boolean | number | number | string> {
+  ): BamlStream<number | string | boolean | number | null, number | string | boolean | number> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7319,10 +7319,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.Union4boolean | number | number | string | null, types.Union4boolean | number | number | string>(
+      return new BamlStream<number | string | boolean | number | null, number | string | boolean | number>(
         raw,
-        (a): stream_types.Union4boolean | number | number | string | null => a,
-        (a): types.Union4boolean | number | number | string => a,
+        (a): number | string | boolean | number | null => a,
+        (a): number | string | boolean | number => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -7550,7 +7550,7 @@ class BamlStreamClient {
   RecursiveAliasCycle(
       input: types.RecAliasOne,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.RecAliasOne | null, types.RecAliasOne> {
+  ): BamlStream<partial_types.RecAliasOne | null, types.RecAliasOne> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7567,9 +7567,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.RecAliasOne | null, types.RecAliasOne>(
+      return new BamlStream<partial_types.RecAliasOne | null, types.RecAliasOne>(
         raw,
-        (a): stream_types.RecAliasOne | null => a,
+        (a): partial_types.RecAliasOne | null => a,
         (a): types.RecAliasOne => a,
         this.ctxManager.cloneContext(),
       )
@@ -7581,7 +7581,7 @@ class BamlStreamClient {
   RecursiveClassWithAliasIndirection(
       cls: types.NodeWithAliasIndirection,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.NodeWithAliasIndirection | null, types.NodeWithAliasIndirection> {
+  ): BamlStream<partial_types.NodeWithAliasIndirection | null, types.NodeWithAliasIndirection> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7598,9 +7598,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.NodeWithAliasIndirection | null, types.NodeWithAliasIndirection>(
+      return new BamlStream<partial_types.NodeWithAliasIndirection | null, types.NodeWithAliasIndirection>(
         raw,
-        (a): stream_types.NodeWithAliasIndirection | null => a,
+        (a): partial_types.NodeWithAliasIndirection | null => a,
         (a): types.NodeWithAliasIndirection => a,
         this.ctxManager.cloneContext(),
       )
@@ -7612,7 +7612,7 @@ class BamlStreamClient {
   RecursiveUnionTest(
       input: types.RecursiveUnion,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.RecursiveUnion | null, types.RecursiveUnion> {
+  ): BamlStream<partial_types.RecursiveUnion | null, types.RecursiveUnion> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7629,9 +7629,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.RecursiveUnion | null, types.RecursiveUnion>(
+      return new BamlStream<partial_types.RecursiveUnion | null, types.RecursiveUnion>(
         raw,
-        (a): stream_types.RecursiveUnion | null => a,
+        (a): partial_types.RecursiveUnion | null => a,
         (a): types.RecursiveUnion => a,
         this.ctxManager.cloneContext(),
       )
@@ -7643,7 +7643,7 @@ class BamlStreamClient {
   ReturnAliasWithMergedAttributes(
       money: number,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<types.Checked<number> | null, number> {
+  ): BamlStream<types.Checked<number,"gt_ten"> | null, types.Checked<number,"gt_ten">> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7660,10 +7660,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<types.Checked<number> | null, number>(
+      return new BamlStream<types.Checked<number,"gt_ten"> | null, types.Checked<number,"gt_ten">>(
         raw,
-        (a): types.Checked<number> | null => a,
-        (a): number => a,
+        (a): types.Checked<number,"gt_ten"> | null => a,
+        (a): types.Checked<number,"gt_ten"> => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -7705,7 +7705,7 @@ class BamlStreamClient {
   ReturnJsonEntry(
       s: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.JsonTemplate | null, types.JsonTemplate> {
+  ): BamlStream<partial_types.JsonTemplate | null, types.JsonTemplate> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7722,9 +7722,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.JsonTemplate | null, types.JsonTemplate>(
+      return new BamlStream<partial_types.JsonTemplate | null, types.JsonTemplate>(
         raw,
-        (a): stream_types.JsonTemplate | null => a,
+        (a): partial_types.JsonTemplate | null => a,
         (a): types.JsonTemplate => a,
         this.ctxManager.cloneContext(),
       )
@@ -7736,7 +7736,7 @@ class BamlStreamClient {
   ReturnMalformedConstraints(
       a: number,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.MalformedConstraints | null, types.MalformedConstraints> {
+  ): BamlStream<partial_types.MalformedConstraints | null, types.MalformedConstraints> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7753,9 +7753,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.MalformedConstraints | null, types.MalformedConstraints>(
+      return new BamlStream<partial_types.MalformedConstraints | null, types.MalformedConstraints>(
         raw,
-        (a): stream_types.MalformedConstraints | null => a,
+        (a): partial_types.MalformedConstraints | null => a,
         (a): types.MalformedConstraints => a,
         this.ctxManager.cloneContext(),
       )
@@ -7767,7 +7767,7 @@ class BamlStreamClient {
   SchemaDescriptions(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.Schema | null, types.Schema> {
+  ): BamlStream<partial_types.Schema | null, types.Schema> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7784,9 +7784,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.Schema | null, types.Schema>(
+      return new BamlStream<partial_types.Schema | null, types.Schema>(
         raw,
-        (a): stream_types.Schema | null => a,
+        (a): partial_types.Schema | null => a,
         (a): types.Schema => a,
         this.ctxManager.cloneContext(),
       )
@@ -7798,7 +7798,7 @@ class BamlStreamClient {
   SimpleRecursiveListAlias(
       input: types.RecursiveListAlias,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.RecursiveListAlias | null, types.RecursiveListAlias> {
+  ): BamlStream<partial_types.RecursiveListAlias | null, types.RecursiveListAlias> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7815,9 +7815,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.RecursiveListAlias | null, types.RecursiveListAlias>(
+      return new BamlStream<partial_types.RecursiveListAlias | null, types.RecursiveListAlias>(
         raw,
-        (a): stream_types.RecursiveListAlias | null => a,
+        (a): partial_types.RecursiveListAlias | null => a,
         (a): types.RecursiveListAlias => a,
         this.ctxManager.cloneContext(),
       )
@@ -7829,7 +7829,7 @@ class BamlStreamClient {
   SimpleRecursiveMapAlias(
       input: types.RecursiveMapAlias,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.RecursiveMapAlias | null, types.RecursiveMapAlias> {
+  ): BamlStream<partial_types.RecursiveMapAlias | null, types.RecursiveMapAlias> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7846,9 +7846,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.RecursiveMapAlias | null, types.RecursiveMapAlias>(
+      return new BamlStream<partial_types.RecursiveMapAlias | null, types.RecursiveMapAlias>(
         raw,
-        (a): stream_types.RecursiveMapAlias | null => a,
+        (a): partial_types.RecursiveMapAlias | null => a,
         (a): types.RecursiveMapAlias => a,
         this.ctxManager.cloneContext(),
       )
@@ -7860,7 +7860,7 @@ class BamlStreamClient {
   StreamBigNumbers(
       digits: number,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.BigNumbers | null, types.BigNumbers> {
+  ): BamlStream<partial_types.BigNumbers | null, types.BigNumbers> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7877,9 +7877,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.BigNumbers | null, types.BigNumbers>(
+      return new BamlStream<partial_types.BigNumbers | null, types.BigNumbers>(
         raw,
-        (a): stream_types.BigNumbers | null => a,
+        (a): partial_types.BigNumbers | null => a,
         (a): types.BigNumbers => a,
         this.ctxManager.cloneContext(),
       )
@@ -7891,7 +7891,7 @@ class BamlStreamClient {
   StreamFailingAssertion(
       theme: string,length: number,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.TwoStoriesOneTitle | null, types.TwoStoriesOneTitle> {
+  ): BamlStream<partial_types.TwoStoriesOneTitle | null, types.TwoStoriesOneTitle> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7908,9 +7908,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.TwoStoriesOneTitle | null, types.TwoStoriesOneTitle>(
+      return new BamlStream<partial_types.TwoStoriesOneTitle | null, types.TwoStoriesOneTitle>(
         raw,
-        (a): stream_types.TwoStoriesOneTitle | null => a,
+        (a): partial_types.TwoStoriesOneTitle | null => a,
         (a): types.TwoStoriesOneTitle => a,
         this.ctxManager.cloneContext(),
       )
@@ -7922,7 +7922,7 @@ class BamlStreamClient {
   StreamFailingCheck(
       theme: string,length: number,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.TwoStoriesOneTitleCheck | null, types.TwoStoriesOneTitleCheck> {
+  ): BamlStream<partial_types.TwoStoriesOneTitleCheck | null, types.TwoStoriesOneTitleCheck> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -7939,9 +7939,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.TwoStoriesOneTitleCheck | null, types.TwoStoriesOneTitleCheck>(
+      return new BamlStream<partial_types.TwoStoriesOneTitleCheck | null, types.TwoStoriesOneTitleCheck>(
         raw,
-        (a): stream_types.TwoStoriesOneTitleCheck | null => a,
+        (a): partial_types.TwoStoriesOneTitleCheck | null => a,
         (a): types.TwoStoriesOneTitleCheck => a,
         this.ctxManager.cloneContext(),
       )
@@ -7984,7 +7984,7 @@ class BamlStreamClient {
   StreamUnionIntegers(
       digits: number,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.Union2number | string | null[] | null, types.Union2number | string[]> {
+  ): BamlStream<(number | string)[] | null, (number | string)[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -8001,10 +8001,10 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.Union2number | string | null[] | null, types.Union2number | string[]>(
+      return new BamlStream<(number | string)[] | null, (number | string)[]>(
         raw,
-        (a): stream_types.Union2number | string | null[] | null => a,
-        (a): types.Union2number | string[] => a,
+        (a): (number | string)[] | null => a,
+        (a): (number | string)[] => a,
         this.ctxManager.cloneContext(),
       )
     } catch (error) {
@@ -8015,7 +8015,7 @@ class BamlStreamClient {
   StreamingCompoundNumbers(
       digits: number,yapping: boolean,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.CompoundBigNumbers | null, types.CompoundBigNumbers> {
+  ): BamlStream<partial_types.CompoundBigNumbers | null, types.CompoundBigNumbers> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -8032,9 +8032,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.CompoundBigNumbers | null, types.CompoundBigNumbers>(
+      return new BamlStream<partial_types.CompoundBigNumbers | null, types.CompoundBigNumbers>(
         raw,
-        (a): stream_types.CompoundBigNumbers | null => a,
+        (a): partial_types.CompoundBigNumbers | null => a,
         (a): types.CompoundBigNumbers => a,
         this.ctxManager.cloneContext(),
       )
@@ -8046,7 +8046,7 @@ class BamlStreamClient {
   StructureDocument1559(
       document_txt: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.Document1559 | null, types.Document1559> {
+  ): BamlStream<partial_types.Document1559 | null, types.Document1559> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -8063,9 +8063,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.Document1559 | null, types.Document1559>(
+      return new BamlStream<partial_types.Document1559 | null, types.Document1559>(
         raw,
-        (a): stream_types.Document1559 | null => a,
+        (a): partial_types.Document1559 | null => a,
         (a): types.Document1559 => a,
         this.ctxManager.cloneContext(),
       )
@@ -8077,7 +8077,7 @@ class BamlStreamClient {
   TakeRecAliasDep(
       input: types.RecursiveAliasDependency,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.RecursiveAliasDependency | null, types.RecursiveAliasDependency> {
+  ): BamlStream<partial_types.RecursiveAliasDependency | null, types.RecursiveAliasDependency> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -8094,9 +8094,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.RecursiveAliasDependency | null, types.RecursiveAliasDependency>(
+      return new BamlStream<partial_types.RecursiveAliasDependency | null, types.RecursiveAliasDependency>(
         raw,
-        (a): stream_types.RecursiveAliasDependency | null => a,
+        (a): partial_types.RecursiveAliasDependency | null => a,
         (a): types.RecursiveAliasDependency => a,
         this.ctxManager.cloneContext(),
       )
@@ -8945,7 +8945,7 @@ class BamlStreamClient {
   TestFnNamedArgsSingleMapStringToClass(
       myMap: Record<string, types.StringToClassEntry>,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<Record<string, stream_types.StringToClassEntry | null> | null, Record<string, types.StringToClassEntry>> {
+  ): BamlStream<Record<string, partial_types.StringToClassEntry | null> | null, Record<string, types.StringToClassEntry>> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -8962,9 +8962,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<Record<string, stream_types.StringToClassEntry | null> | null, Record<string, types.StringToClassEntry>>(
+      return new BamlStream<Record<string, partial_types.StringToClassEntry | null> | null, Record<string, types.StringToClassEntry>>(
         raw,
-        (a): Record<string, stream_types.StringToClassEntry | null> | null => a,
+        (a): Record<string, partial_types.StringToClassEntry | null> | null => a,
         (a): Record<string, types.StringToClassEntry> => a,
         this.ctxManager.cloneContext(),
       )
@@ -9100,7 +9100,7 @@ class BamlStreamClient {
   TestFnNamedArgsSingleStringList(
       myArg: string[],
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<string | null[] | null, string[]> {
+  ): BamlStream<(string | null)[] | null, string[]> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -9117,9 +9117,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<string | null[] | null, string[]>(
+      return new BamlStream<(string | null)[] | null, string[]>(
         raw,
-        (a): string | null[] | null => a,
+        (a): (string | null)[] | null => a,
         (a): string[] => a,
         this.ctxManager.cloneContext(),
       )
@@ -9379,7 +9379,7 @@ class BamlStreamClient {
   TestMemory(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.TestMemoryOutput | null, types.TestMemoryOutput> {
+  ): BamlStream<partial_types.TestMemoryOutput | null, types.TestMemoryOutput> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -9396,9 +9396,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.TestMemoryOutput | null, types.TestMemoryOutput>(
+      return new BamlStream<partial_types.TestMemoryOutput | null, types.TestMemoryOutput>(
         raw,
-        (a): stream_types.TestMemoryOutput | null => a,
+        (a): partial_types.TestMemoryOutput | null => a,
         (a): types.TestMemoryOutput => a,
         this.ctxManager.cloneContext(),
       )
@@ -9439,7 +9439,7 @@ class BamlStreamClient {
   }
   
   TestNamedArgsLiteralBool(
-      myBool: boolean,
+      myBool: true,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
   ): BamlStream<string | null, string> {
     try {
@@ -9470,7 +9470,7 @@ class BamlStreamClient {
   }
   
   TestNamedArgsLiteralInt(
-      myInt: number,
+      myInt: 1,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
   ): BamlStream<string | null, string> {
     try {
@@ -9501,7 +9501,7 @@ class BamlStreamClient {
   }
   
   TestNamedArgsLiteralString(
-      myString: string,
+      myString: "My String",
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
   ): BamlStream<string | null, string> {
     try {
@@ -9565,7 +9565,7 @@ class BamlStreamClient {
   TestOllamaHaiku(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.Haiku | null, types.Haiku> {
+  ): BamlStream<partial_types.Haiku | null, types.Haiku> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -9582,9 +9582,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.Haiku | null, types.Haiku>(
+      return new BamlStream<partial_types.Haiku | null, types.Haiku>(
         raw,
-        (a): stream_types.Haiku | null => a,
+        (a): partial_types.Haiku | null => a,
         (a): types.Haiku => a,
         this.ctxManager.cloneContext(),
       )
@@ -10154,7 +10154,7 @@ class BamlStreamClient {
   TestThinking(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.CustomStory | null, types.CustomStory> {
+  ): BamlStream<partial_types.CustomStory | null, types.CustomStory> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -10171,9 +10171,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.CustomStory | null, types.CustomStory>(
+      return new BamlStream<partial_types.CustomStory | null, types.CustomStory>(
         raw,
-        (a): stream_types.CustomStory | null => a,
+        (a): partial_types.CustomStory | null => a,
         (a): types.CustomStory => a,
         this.ctxManager.cloneContext(),
       )
@@ -10185,7 +10185,7 @@ class BamlStreamClient {
   TestUniverseQuestion(
       question: types.UniverseQuestionInput,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.UniverseQuestion | null, types.UniverseQuestion> {
+  ): BamlStream<partial_types.UniverseQuestion | null, types.UniverseQuestion> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -10202,9 +10202,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.UniverseQuestion | null, types.UniverseQuestion>(
+      return new BamlStream<partial_types.UniverseQuestion | null, types.UniverseQuestion>(
         raw,
-        (a): stream_types.UniverseQuestion | null => a,
+        (a): partial_types.UniverseQuestion | null => a,
         (a): types.UniverseQuestion => a,
         this.ctxManager.cloneContext(),
       )
@@ -10307,9 +10307,9 @@ class BamlStreamClient {
   }
   
   UnionTest_Function(
-      input: types.Union2boolean | string,
+      input: string | boolean,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.UnionTest_ReturnType | null, types.UnionTest_ReturnType> {
+  ): BamlStream<partial_types.UnionTest_ReturnType | null, types.UnionTest_ReturnType> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -10326,9 +10326,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.UnionTest_ReturnType | null, types.UnionTest_ReturnType>(
+      return new BamlStream<partial_types.UnionTest_ReturnType | null, types.UnionTest_ReturnType>(
         raw,
-        (a): stream_types.UnionTest_ReturnType | null => a,
+        (a): partial_types.UnionTest_ReturnType | null => a,
         (a): types.UnionTest_ReturnType => a,
         this.ctxManager.cloneContext(),
       )
@@ -10371,7 +10371,7 @@ class BamlStreamClient {
   UseMaintainFieldOrder(
       input: types.MaintainFieldOrder,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<stream_types.MaintainFieldOrder | null, types.MaintainFieldOrder> {
+  ): BamlStream<partial_types.MaintainFieldOrder | null, types.MaintainFieldOrder> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -10388,9 +10388,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<stream_types.MaintainFieldOrder | null, types.MaintainFieldOrder>(
+      return new BamlStream<partial_types.MaintainFieldOrder | null, types.MaintainFieldOrder>(
         raw,
-        (a): stream_types.MaintainFieldOrder | null => a,
+        (a): partial_types.MaintainFieldOrder | null => a,
         (a): types.MaintainFieldOrder => a,
         this.ctxManager.cloneContext(),
       )
@@ -10464,3 +10464,8167 @@ class BamlStreamClient {
 }
 
 export const b = new BamlAsyncClient(DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX)
+import type { BamlRuntime, BamlCtxManager, ClientRegistry, Image, Audio } from "@boundaryml/baml"
+import { toBamlError, HTTPRequest } from "@boundaryml/baml"
+import type { Checked, Check } from "./types"
+import type * as types from "./types"
+import type {AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, ClientDetails1559, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, Document1559, DummyOutput, DynEnumOne, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, DynamicSchema, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Haiku, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MaintainFieldOrder, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, Note1599, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, RecursiveUnion, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, Tree, TwoStoriesOneTitle, TwoStoriesOneTitleCheck, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types"
+import type TypeBuilder from "./type_builder"
+
+type BamlCallOptions = {
+  tb?: TypeBuilder
+  clientRegistry?: ClientRegistry
+  env?: Record<string, string | undefined>
+}
+
+export class AsyncHttpRequest {
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
+
+  
+  async AaaSamOutputFormat(
+      recipe: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AaaSamOutputFormat",
+        {
+          "recipe": recipe
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AliasThatPointsToRecursiveType(
+      data: types.LinkedListAliasNode,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AliasThatPointsToRecursiveType",
+        {
+          "data": data
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AliasWithMultipleAttrs(
+      money: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AliasWithMultipleAttrs",
+        {
+          "money": money
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AliasedInputClass(
+      input: types.InputClass,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AliasedInputClass",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AliasedInputClass2(
+      input: types.InputClass,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AliasedInputClass2",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AliasedInputClassNested(
+      input: types.InputClassNested,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AliasedInputClassNested",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AliasedInputEnum(
+      input: types.AliasedEnum,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AliasedInputEnum",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AliasedInputList(
+      input: types.AliasedEnum[],
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AliasedInputList",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AllowedOptionals(
+      optionals: types.OptionalListAndMap,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AllowedOptionals",
+        {
+          "optionals": optionals
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AssertFn(
+      a: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AssertFn",
+        {
+          "a": a
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AudioInput(
+      aud: Audio,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AudioInput",
+        {
+          "aud": aud
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AudioInputOpenai(
+      aud: Audio,prompt: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AudioInputOpenai",
+        {
+          "aud": aud,"prompt": prompt
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async BuildLinkedList(
+      input: number[],
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "BuildLinkedList",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async BuildTree(
+      input: types.BinaryNode,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "BuildTree",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ClassThatPointsToRecursiveClassThroughAlias(
+      cls: types.ClassToRecAlias,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ClassThatPointsToRecursiveClassThroughAlias",
+        {
+          "cls": cls
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ClassifyDynEnumTwo(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ClassifyDynEnumTwo",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ClassifyMessage(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ClassifyMessage",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ClassifyMessage2(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ClassifyMessage2",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ClassifyMessage3(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ClassifyMessage3",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async Completion(
+      prefix: string,suffix: string,language: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "Completion",
+        {
+          "prefix": prefix,"suffix": suffix,"language": language
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async CustomTask(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "CustomTask",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DescribeImage(
+      img: Image,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DescribeImage",
+        {
+          "img": img
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DescribeImage2(
+      classWithImage: types.ClassWithImage,img2: Image,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DescribeImage2",
+        {
+          "classWithImage": classWithImage,"img2": img2
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DescribeImage3(
+      classWithImage: types.ClassWithImage,img2: Image,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DescribeImage3",
+        {
+          "classWithImage": classWithImage,"img2": img2
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DescribeImage4(
+      classWithImage: types.ClassWithImage,img2: Image,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DescribeImage4",
+        {
+          "classWithImage": classWithImage,"img2": img2
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DescribeMedia1599(
+      img: Image,client_sector: string,client_name: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DescribeMedia1599",
+        {
+          "img": img,"client_sector": client_sector,"client_name": client_name
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DifferentiateUnions(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DifferentiateUnions",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DummyOutputFunction(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DummyOutputFunction",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DynamicFunc(
+      input: types.DynamicClassOne,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DynamicFunc",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DynamicInputOutput(
+      input: types.DynInputOutput,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DynamicInputOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DynamicListInputOutput(
+      input: types.DynInputOutput[],
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DynamicListInputOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExpectFailure(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExpectFailure",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractContactInfo(
+      document: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractContactInfo",
+        {
+          "document": document
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractEntities(
+      text: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractEntities",
+        {
+          "text": text
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractHobby(
+      text: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractHobby",
+        {
+          "text": text
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractNames(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractNames",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractPeople(
+      text: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractPeople",
+        {
+          "text": text
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractReceiptInfo(
+      email: string,reason: "curiosity" | "personal_finance",
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractReceiptInfo",
+        {
+          "email": email,"reason": reason
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractResume(
+      resume: string,img?: Image | null,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractResume",
+        {
+          "resume": resume,"img": img?? null
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractResume2(
+      resume: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractResume2",
+        {
+          "resume": resume
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnClassOptionalOutput(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnClassOptionalOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnClassOptionalOutput2(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnClassOptionalOutput2",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnEnumListOutput(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnEnumListOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnEnumOutput(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnEnumOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnLiteralClassInputOutput(
+      input: types.LiteralClassHello,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnLiteralClassInputOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnLiteralUnionClassInputOutput(
+      input: LiteralClassOne | LiteralClassTwo,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnLiteralUnionClassInputOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnNamedArgsSingleStringOptional(
+      myString?: string | null,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnNamedArgsSingleStringOptional",
+        {
+          "myString": myString?? null
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputBool(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputBool",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputClass(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputClass",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputClassList(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputClassList",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputClassNested(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputClassNested",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputClassWithEnum(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputClassWithEnum",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputInt(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputInt",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputLiteralBool(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputLiteralBool",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputLiteralInt(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputLiteralInt",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputLiteralString(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputLiteralString",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputStringList(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputStringList",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnTestAliasedEnumOutput(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnTestAliasedEnumOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnTestClassAlias(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnTestClassAlias",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnTestNamedArgsSingleEnum(
+      myArg: types.NamedArgsSingleEnum,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnTestNamedArgsSingleEnum",
+        {
+          "myArg": myArg
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async GetDataType(
+      text: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "GetDataType",
+        {
+          "text": text
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async GetOrderInfo(
+      email: types.Email,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "GetOrderInfo",
+        {
+          "email": email
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async GetQuery(
+      query: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "GetQuery",
+        {
+          "query": query
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async InOutEnumMapKey(
+      i1: Record<types.MapKey, string>,i2: Record<types.MapKey, string>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "InOutEnumMapKey",
+        {
+          "i1": i1,"i2": i2
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async InOutLiteralStringUnionMapKey(
+      i1: Record<"one" | "two" | "three" | "four", string>,i2: Record<"one" | "two" | "three" | "four", string>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "InOutLiteralStringUnionMapKey",
+        {
+          "i1": i1,"i2": i2
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async InOutSingleLiteralStringMapKey(
+      m: Record<"key", string>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "InOutSingleLiteralStringMapKey",
+        {
+          "m": m
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async JsonTypeAliasCycle(
+      input: types.JsonValue,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "JsonTypeAliasCycle",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async LLMEcho(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "LLMEcho",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async LiteralUnionsTest(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "LiteralUnionsTest",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MakeBlockConstraint(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MakeBlockConstraint",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MakeClassWithBlockDone(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MakeClassWithBlockDone",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MakeClassWithExternalDone(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MakeClassWithExternalDone",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MakeNestedBlockConstraint(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MakeNestedBlockConstraint",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MakeSemanticContainer(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MakeSemanticContainer",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MapAlias(
+      m: Record<string, string[]>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MapAlias",
+        {
+          "m": m
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MergeAliasAttributes(
+      money: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MergeAliasAttributes",
+        {
+          "money": money
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MyFunc(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MyFunc",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async NestedAlias(
+      c: number | string | boolean | number | string[] | Record<string, string[]>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "NestedAlias",
+        {
+          "c": c
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async NullLiteralClassHello(
+      s: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "NullLiteralClassHello",
+        {
+          "s": s
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async OpenAIWithAnthropicResponseHello(
+      s: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "OpenAIWithAnthropicResponseHello",
+        {
+          "s": s
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async OptionalTest_Function(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "OptionalTest_Function",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PredictAge(
+      name: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PredictAge",
+        {
+          "name": name
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PredictAgeBare(
+      inp: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PredictAgeBare",
+        {
+          "inp": inp
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PrimitiveAlias(
+      p: number | string | boolean | number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PrimitiveAlias",
+        {
+          "p": p
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PromptTestClaude(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PromptTestClaude",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PromptTestClaudeChat(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PromptTestClaudeChat",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PromptTestClaudeChatNoSystem(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PromptTestClaudeChatNoSystem",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PromptTestOpenAI(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PromptTestOpenAI",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PromptTestOpenAIChat(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PromptTestOpenAIChat",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PromptTestOpenAIChatNoSystem(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PromptTestOpenAIChatNoSystem",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PromptTestStreaming(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PromptTestStreaming",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async RecursiveAliasCycle(
+      input: types.RecAliasOne,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "RecursiveAliasCycle",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async RecursiveClassWithAliasIndirection(
+      cls: types.NodeWithAliasIndirection,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "RecursiveClassWithAliasIndirection",
+        {
+          "cls": cls
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async RecursiveUnionTest(
+      input: types.RecursiveUnion,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "RecursiveUnionTest",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ReturnAliasWithMergedAttributes(
+      money: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ReturnAliasWithMergedAttributes",
+        {
+          "money": money
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ReturnFailingAssert(
+      inp: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ReturnFailingAssert",
+        {
+          "inp": inp
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ReturnJsonEntry(
+      s: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ReturnJsonEntry",
+        {
+          "s": s
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ReturnMalformedConstraints(
+      a: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ReturnMalformedConstraints",
+        {
+          "a": a
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async SchemaDescriptions(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "SchemaDescriptions",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async SimpleRecursiveListAlias(
+      input: types.RecursiveListAlias,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "SimpleRecursiveListAlias",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async SimpleRecursiveMapAlias(
+      input: types.RecursiveMapAlias,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "SimpleRecursiveMapAlias",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async StreamBigNumbers(
+      digits: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "StreamBigNumbers",
+        {
+          "digits": digits
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async StreamFailingAssertion(
+      theme: string,length: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "StreamFailingAssertion",
+        {
+          "theme": theme,"length": length
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async StreamFailingCheck(
+      theme: string,length: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "StreamFailingCheck",
+        {
+          "theme": theme,"length": length
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async StreamOneBigNumber(
+      digits: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "StreamOneBigNumber",
+        {
+          "digits": digits
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async StreamUnionIntegers(
+      digits: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "StreamUnionIntegers",
+        {
+          "digits": digits
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async StreamingCompoundNumbers(
+      digits: number,yapping: boolean,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "StreamingCompoundNumbers",
+        {
+          "digits": digits,"yapping": yapping
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async StructureDocument1559(
+      document_txt: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "StructureDocument1559",
+        {
+          "document_txt": document_txt
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TakeRecAliasDep(
+      input: types.RecursiveAliasDependency,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TakeRecAliasDep",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TellStory(
+      story: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TellStory",
+        {
+          "story": story
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAnthropic(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAnthropic",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAnthropicShorthand(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAnthropicShorthand",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAws(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAws",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAwsClaude37(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAwsClaude37",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAwsInferenceProfile(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAwsInferenceProfile",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAwsInvalidAccessKey(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAwsInvalidAccessKey",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAwsInvalidProfile(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAwsInvalidProfile",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAwsInvalidRegion(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAwsInvalidRegion",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAwsInvalidSessionToken(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAwsInvalidSessionToken",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzure(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzure",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzureFailure(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzureFailure",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzureO1NoMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzureO1NoMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzureO1WithMaxCompletionTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzureO1WithMaxCompletionTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzureO1WithMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzureO1WithMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzureO3NoMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzureO3NoMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzureO3WithMaxCompletionTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzureO3WithMaxCompletionTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzureWithMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzureWithMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestCaching(
+      input: string,not_cached: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestCaching",
+        {
+          "input": input,"not_cached": not_cached
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFallbackClient(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFallbackClient",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFallbackStrategy(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFallbackStrategy",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFallbackToShorthand(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFallbackToShorthand",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleBool(
+      myBool: boolean,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleBool",
+        {
+          "myBool": myBool
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleClass(
+      myArg: types.NamedArgsSingleClass,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleClass",
+        {
+          "myArg": myArg
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleEnumList(
+      myArg: types.NamedArgsSingleEnumList[],
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleEnumList",
+        {
+          "myArg": myArg
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleFloat(
+      myFloat: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleFloat",
+        {
+          "myFloat": myFloat
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleInt(
+      myInt: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleInt",
+        {
+          "myInt": myInt
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleMapStringToClass(
+      myMap: Record<string, types.StringToClassEntry>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleMapStringToClass",
+        {
+          "myMap": myMap
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleMapStringToMap(
+      myMap: Record<string, Record<string, string>>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleMapStringToMap",
+        {
+          "myMap": myMap
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleMapStringToString(
+      myMap: Record<string, string>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleMapStringToString",
+        {
+          "myMap": myMap
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleString(
+      myString: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleString",
+        {
+          "myString": myString
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleStringArray(
+      myStringArray: string[],
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleStringArray",
+        {
+          "myStringArray": myStringArray
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleStringList(
+      myArg: string[],
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleStringList",
+        {
+          "myArg": myArg
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestGemini(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestGemini",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestGeminiOpenAiGeneric(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestGeminiOpenAiGeneric",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestGeminiSystem(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestGeminiSystem",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestGeminiSystemAsChat(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestGeminiSystemAsChat",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestGroq(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestGroq",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestImageInput(
+      img: Image,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestImageInput",
+        {
+          "img": img
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestImageInputAnthropic(
+      img: Image,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestImageInputAnthropic",
+        {
+          "img": img
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestImageListInput(
+      imgs: Image[],
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestImageListInput",
+        {
+          "imgs": imgs
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestMemory(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestMemory",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestMulticlassNamedArgs(
+      myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestMulticlassNamedArgs",
+        {
+          "myArg": myArg,"myArg2": myArg2
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestNamedArgsLiteralBool(
+      myBool: true,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestNamedArgsLiteralBool",
+        {
+          "myBool": myBool
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestNamedArgsLiteralInt(
+      myInt: 1,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestNamedArgsLiteralInt",
+        {
+          "myInt": myInt
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestNamedArgsLiteralString(
+      myString: "My String",
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestNamedArgsLiteralString",
+        {
+          "myString": myString
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOllama(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOllama",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOllamaHaiku(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOllamaHaiku",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAI(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAI",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIDummyClient(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIDummyClient",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIGPT4oMini(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIGPT4oMini",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIGPT4oMini2(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIGPT4oMini2",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIGPT4oMini3(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIGPT4oMini3",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAILegacyProvider(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAILegacyProvider",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIO1NoMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIO1NoMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIO1WithMaxCompletionTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIO1WithMaxCompletionTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIO1WithMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIO1WithMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIShorthand(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIShorthand",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIWithFinishReasonError(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIWithFinishReasonError",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIWithMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIWithMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIWithNullMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIWithNullMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenRouterMistralSmall3_1_24b(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenRouterMistralSmall3_1_24b",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestRetryConstant(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestRetryConstant",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestRetryExponential(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestRetryExponential",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestRoundRobinStrategy(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestRoundRobinStrategy",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestSingleFallbackClient(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestSingleFallbackClient",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestThinking(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestThinking",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestUniverseQuestion(
+      question: types.UniverseQuestionInput,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestUniverseQuestion",
+        {
+          "question": question
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestVertex(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestVertex",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestVertexClaude(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestVertexClaude",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestVertexWithSystemInstructions(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestVertexWithSystemInstructions",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async UnionTest_Function(
+      input: string | boolean,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "UnionTest_Function",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async UseBlockConstraint(
+      inp: types.BlockConstraintForParam,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "UseBlockConstraint",
+        {
+          "inp": inp
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async UseMaintainFieldOrder(
+      input: types.MaintainFieldOrder,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "UseMaintainFieldOrder",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async UseMalformedConstraints(
+      a: types.MalformedConstraints2,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "UseMalformedConstraints",
+        {
+          "a": a
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async UseNestedBlockConstraint(
+      inp: types.NestedBlockConstraintForParam,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "UseNestedBlockConstraint",
+        {
+          "inp": inp
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+}
+
+export class AsyncHttpStreamRequest {
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
+
+  
+  async AaaSamOutputFormat(
+      recipe: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AaaSamOutputFormat",
+        {
+          "recipe": recipe
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AliasThatPointsToRecursiveType(
+      data: types.LinkedListAliasNode,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AliasThatPointsToRecursiveType",
+        {
+          "data": data
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AliasWithMultipleAttrs(
+      money: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AliasWithMultipleAttrs",
+        {
+          "money": money
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AliasedInputClass(
+      input: types.InputClass,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AliasedInputClass",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AliasedInputClass2(
+      input: types.InputClass,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AliasedInputClass2",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AliasedInputClassNested(
+      input: types.InputClassNested,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AliasedInputClassNested",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AliasedInputEnum(
+      input: types.AliasedEnum,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AliasedInputEnum",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AliasedInputList(
+      input: types.AliasedEnum[],
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AliasedInputList",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AllowedOptionals(
+      optionals: types.OptionalListAndMap,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AllowedOptionals",
+        {
+          "optionals": optionals
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AssertFn(
+      a: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AssertFn",
+        {
+          "a": a
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AudioInput(
+      aud: Audio,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AudioInput",
+        {
+          "aud": aud
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async AudioInputOpenai(
+      aud: Audio,prompt: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "AudioInputOpenai",
+        {
+          "aud": aud,"prompt": prompt
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async BuildLinkedList(
+      input: number[],
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "BuildLinkedList",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async BuildTree(
+      input: types.BinaryNode,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "BuildTree",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ClassThatPointsToRecursiveClassThroughAlias(
+      cls: types.ClassToRecAlias,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ClassThatPointsToRecursiveClassThroughAlias",
+        {
+          "cls": cls
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ClassifyDynEnumTwo(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ClassifyDynEnumTwo",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ClassifyMessage(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ClassifyMessage",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ClassifyMessage2(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ClassifyMessage2",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ClassifyMessage3(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ClassifyMessage3",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async Completion(
+      prefix: string,suffix: string,language: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "Completion",
+        {
+          "prefix": prefix,"suffix": suffix,"language": language
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async CustomTask(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "CustomTask",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DescribeImage(
+      img: Image,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DescribeImage",
+        {
+          "img": img
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DescribeImage2(
+      classWithImage: types.ClassWithImage,img2: Image,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DescribeImage2",
+        {
+          "classWithImage": classWithImage,"img2": img2
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DescribeImage3(
+      classWithImage: types.ClassWithImage,img2: Image,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DescribeImage3",
+        {
+          "classWithImage": classWithImage,"img2": img2
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DescribeImage4(
+      classWithImage: types.ClassWithImage,img2: Image,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DescribeImage4",
+        {
+          "classWithImage": classWithImage,"img2": img2
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DescribeMedia1599(
+      img: Image,client_sector: string,client_name: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DescribeMedia1599",
+        {
+          "img": img,"client_sector": client_sector,"client_name": client_name
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DifferentiateUnions(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DifferentiateUnions",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DummyOutputFunction(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DummyOutputFunction",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DynamicFunc(
+      input: types.DynamicClassOne,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DynamicFunc",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DynamicInputOutput(
+      input: types.DynInputOutput,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DynamicInputOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async DynamicListInputOutput(
+      input: types.DynInputOutput[],
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "DynamicListInputOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExpectFailure(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExpectFailure",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractContactInfo(
+      document: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractContactInfo",
+        {
+          "document": document
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractEntities(
+      text: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractEntities",
+        {
+          "text": text
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractHobby(
+      text: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractHobby",
+        {
+          "text": text
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractNames(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractNames",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractPeople(
+      text: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractPeople",
+        {
+          "text": text
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractReceiptInfo(
+      email: string,reason: "curiosity" | "personal_finance",
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractReceiptInfo",
+        {
+          "email": email,"reason": reason
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractResume(
+      resume: string,img?: Image | null,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractResume",
+        {
+          "resume": resume,"img": img?? null
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ExtractResume2(
+      resume: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ExtractResume2",
+        {
+          "resume": resume
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnClassOptionalOutput(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnClassOptionalOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnClassOptionalOutput2(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnClassOptionalOutput2",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnEnumListOutput(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnEnumListOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnEnumOutput(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnEnumOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnLiteralClassInputOutput(
+      input: types.LiteralClassHello,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnLiteralClassInputOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnLiteralUnionClassInputOutput(
+      input: LiteralClassOne | LiteralClassTwo,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnLiteralUnionClassInputOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnNamedArgsSingleStringOptional(
+      myString?: string | null,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnNamedArgsSingleStringOptional",
+        {
+          "myString": myString?? null
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputBool(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputBool",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputClass(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputClass",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputClassList(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputClassList",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputClassNested(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputClassNested",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputClassWithEnum(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputClassWithEnum",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputInt(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputInt",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputLiteralBool(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputLiteralBool",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputLiteralInt(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputLiteralInt",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputLiteralString(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputLiteralString",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnOutputStringList(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnOutputStringList",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnTestAliasedEnumOutput(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnTestAliasedEnumOutput",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnTestClassAlias(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnTestClassAlias",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async FnTestNamedArgsSingleEnum(
+      myArg: types.NamedArgsSingleEnum,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "FnTestNamedArgsSingleEnum",
+        {
+          "myArg": myArg
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async GetDataType(
+      text: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "GetDataType",
+        {
+          "text": text
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async GetOrderInfo(
+      email: types.Email,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "GetOrderInfo",
+        {
+          "email": email
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async GetQuery(
+      query: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "GetQuery",
+        {
+          "query": query
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async InOutEnumMapKey(
+      i1: Record<types.MapKey, string>,i2: Record<types.MapKey, string>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "InOutEnumMapKey",
+        {
+          "i1": i1,"i2": i2
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async InOutLiteralStringUnionMapKey(
+      i1: Record<"one" | "two" | "three" | "four", string>,i2: Record<"one" | "two" | "three" | "four", string>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "InOutLiteralStringUnionMapKey",
+        {
+          "i1": i1,"i2": i2
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async InOutSingleLiteralStringMapKey(
+      m: Record<"key", string>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "InOutSingleLiteralStringMapKey",
+        {
+          "m": m
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async JsonTypeAliasCycle(
+      input: types.JsonValue,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "JsonTypeAliasCycle",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async LLMEcho(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "LLMEcho",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async LiteralUnionsTest(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "LiteralUnionsTest",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MakeBlockConstraint(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MakeBlockConstraint",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MakeClassWithBlockDone(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MakeClassWithBlockDone",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MakeClassWithExternalDone(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MakeClassWithExternalDone",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MakeNestedBlockConstraint(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MakeNestedBlockConstraint",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MakeSemanticContainer(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MakeSemanticContainer",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MapAlias(
+      m: Record<string, string[]>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MapAlias",
+        {
+          "m": m
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MergeAliasAttributes(
+      money: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MergeAliasAttributes",
+        {
+          "money": money
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async MyFunc(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "MyFunc",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async NestedAlias(
+      c: number | string | boolean | number | string[] | Record<string, string[]>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "NestedAlias",
+        {
+          "c": c
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async NullLiteralClassHello(
+      s: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "NullLiteralClassHello",
+        {
+          "s": s
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async OpenAIWithAnthropicResponseHello(
+      s: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "OpenAIWithAnthropicResponseHello",
+        {
+          "s": s
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async OptionalTest_Function(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "OptionalTest_Function",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PredictAge(
+      name: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PredictAge",
+        {
+          "name": name
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PredictAgeBare(
+      inp: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PredictAgeBare",
+        {
+          "inp": inp
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PrimitiveAlias(
+      p: number | string | boolean | number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PrimitiveAlias",
+        {
+          "p": p
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PromptTestClaude(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PromptTestClaude",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PromptTestClaudeChat(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PromptTestClaudeChat",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PromptTestClaudeChatNoSystem(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PromptTestClaudeChatNoSystem",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PromptTestOpenAI(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PromptTestOpenAI",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PromptTestOpenAIChat(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PromptTestOpenAIChat",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PromptTestOpenAIChatNoSystem(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PromptTestOpenAIChatNoSystem",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async PromptTestStreaming(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "PromptTestStreaming",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async RecursiveAliasCycle(
+      input: types.RecAliasOne,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "RecursiveAliasCycle",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async RecursiveClassWithAliasIndirection(
+      cls: types.NodeWithAliasIndirection,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "RecursiveClassWithAliasIndirection",
+        {
+          "cls": cls
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async RecursiveUnionTest(
+      input: types.RecursiveUnion,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "RecursiveUnionTest",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ReturnAliasWithMergedAttributes(
+      money: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ReturnAliasWithMergedAttributes",
+        {
+          "money": money
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ReturnFailingAssert(
+      inp: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ReturnFailingAssert",
+        {
+          "inp": inp
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ReturnJsonEntry(
+      s: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ReturnJsonEntry",
+        {
+          "s": s
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async ReturnMalformedConstraints(
+      a: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "ReturnMalformedConstraints",
+        {
+          "a": a
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async SchemaDescriptions(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "SchemaDescriptions",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async SimpleRecursiveListAlias(
+      input: types.RecursiveListAlias,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "SimpleRecursiveListAlias",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async SimpleRecursiveMapAlias(
+      input: types.RecursiveMapAlias,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "SimpleRecursiveMapAlias",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async StreamBigNumbers(
+      digits: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "StreamBigNumbers",
+        {
+          "digits": digits
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async StreamFailingAssertion(
+      theme: string,length: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "StreamFailingAssertion",
+        {
+          "theme": theme,"length": length
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async StreamFailingCheck(
+      theme: string,length: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "StreamFailingCheck",
+        {
+          "theme": theme,"length": length
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async StreamOneBigNumber(
+      digits: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "StreamOneBigNumber",
+        {
+          "digits": digits
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async StreamUnionIntegers(
+      digits: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "StreamUnionIntegers",
+        {
+          "digits": digits
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async StreamingCompoundNumbers(
+      digits: number,yapping: boolean,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "StreamingCompoundNumbers",
+        {
+          "digits": digits,"yapping": yapping
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async StructureDocument1559(
+      document_txt: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "StructureDocument1559",
+        {
+          "document_txt": document_txt
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TakeRecAliasDep(
+      input: types.RecursiveAliasDependency,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TakeRecAliasDep",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TellStory(
+      story: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TellStory",
+        {
+          "story": story
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAnthropic(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAnthropic",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAnthropicShorthand(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAnthropicShorthand",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAws(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAws",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAwsClaude37(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAwsClaude37",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAwsInferenceProfile(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAwsInferenceProfile",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAwsInvalidAccessKey(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAwsInvalidAccessKey",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAwsInvalidProfile(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAwsInvalidProfile",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAwsInvalidRegion(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAwsInvalidRegion",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAwsInvalidSessionToken(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAwsInvalidSessionToken",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzure(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzure",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzureFailure(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzureFailure",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzureO1NoMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzureO1NoMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzureO1WithMaxCompletionTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzureO1WithMaxCompletionTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzureO1WithMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzureO1WithMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzureO3NoMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzureO3NoMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzureO3WithMaxCompletionTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzureO3WithMaxCompletionTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestAzureWithMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestAzureWithMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestCaching(
+      input: string,not_cached: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestCaching",
+        {
+          "input": input,"not_cached": not_cached
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFallbackClient(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFallbackClient",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFallbackStrategy(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFallbackStrategy",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFallbackToShorthand(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFallbackToShorthand",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleBool(
+      myBool: boolean,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleBool",
+        {
+          "myBool": myBool
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleClass(
+      myArg: types.NamedArgsSingleClass,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleClass",
+        {
+          "myArg": myArg
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleEnumList(
+      myArg: types.NamedArgsSingleEnumList[],
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleEnumList",
+        {
+          "myArg": myArg
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleFloat(
+      myFloat: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleFloat",
+        {
+          "myFloat": myFloat
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleInt(
+      myInt: number,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleInt",
+        {
+          "myInt": myInt
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleMapStringToClass(
+      myMap: Record<string, types.StringToClassEntry>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleMapStringToClass",
+        {
+          "myMap": myMap
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleMapStringToMap(
+      myMap: Record<string, Record<string, string>>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleMapStringToMap",
+        {
+          "myMap": myMap
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleMapStringToString(
+      myMap: Record<string, string>,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleMapStringToString",
+        {
+          "myMap": myMap
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleString(
+      myString: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleString",
+        {
+          "myString": myString
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleStringArray(
+      myStringArray: string[],
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleStringArray",
+        {
+          "myStringArray": myStringArray
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestFnNamedArgsSingleStringList(
+      myArg: string[],
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestFnNamedArgsSingleStringList",
+        {
+          "myArg": myArg
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestGemini(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestGemini",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestGeminiOpenAiGeneric(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestGeminiOpenAiGeneric",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestGeminiSystem(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestGeminiSystem",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestGeminiSystemAsChat(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestGeminiSystemAsChat",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestGroq(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestGroq",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestImageInput(
+      img: Image,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestImageInput",
+        {
+          "img": img
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestImageInputAnthropic(
+      img: Image,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestImageInputAnthropic",
+        {
+          "img": img
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestImageListInput(
+      imgs: Image[],
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestImageListInput",
+        {
+          "imgs": imgs
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestMemory(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestMemory",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestMulticlassNamedArgs(
+      myArg: types.NamedArgsSingleClass,myArg2: types.NamedArgsSingleClass,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestMulticlassNamedArgs",
+        {
+          "myArg": myArg,"myArg2": myArg2
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestNamedArgsLiteralBool(
+      myBool: true,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestNamedArgsLiteralBool",
+        {
+          "myBool": myBool
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestNamedArgsLiteralInt(
+      myInt: 1,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestNamedArgsLiteralInt",
+        {
+          "myInt": myInt
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestNamedArgsLiteralString(
+      myString: "My String",
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestNamedArgsLiteralString",
+        {
+          "myString": myString
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOllama(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOllama",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOllamaHaiku(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOllamaHaiku",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAI(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAI",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIDummyClient(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIDummyClient",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIGPT4oMini(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIGPT4oMini",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIGPT4oMini2(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIGPT4oMini2",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIGPT4oMini3(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIGPT4oMini3",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAILegacyProvider(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAILegacyProvider",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIO1NoMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIO1NoMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIO1WithMaxCompletionTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIO1WithMaxCompletionTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIO1WithMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIO1WithMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIShorthand(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIShorthand",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIWithFinishReasonError(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIWithFinishReasonError",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIWithMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIWithMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenAIWithNullMaxTokens(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenAIWithNullMaxTokens",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestOpenRouterMistralSmall3_1_24b(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestOpenRouterMistralSmall3_1_24b",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestRetryConstant(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestRetryConstant",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestRetryExponential(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestRetryExponential",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestRoundRobinStrategy(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestRoundRobinStrategy",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestSingleFallbackClient(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestSingleFallbackClient",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestThinking(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestThinking",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestUniverseQuestion(
+      question: types.UniverseQuestionInput,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestUniverseQuestion",
+        {
+          "question": question
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestVertex(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestVertex",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestVertexClaude(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestVertexClaude",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async TestVertexWithSystemInstructions(
+      
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "TestVertexWithSystemInstructions",
+        {
+          
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async UnionTest_Function(
+      input: string | boolean,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "UnionTest_Function",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async UseBlockConstraint(
+      inp: types.BlockConstraintForParam,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "UseBlockConstraint",
+        {
+          "inp": inp
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async UseMaintainFieldOrder(
+      input: types.MaintainFieldOrder,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "UseMaintainFieldOrder",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async UseMalformedConstraints(
+      a: types.MalformedConstraints2,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "UseMalformedConstraints",
+        {
+          "a": a
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  async UseNestedBlockConstraint(
+      inp: types.NestedBlockConstraintForParam,
+      __baml_options__?: BamlCallOptions
+  ): Promise<HTTPRequest> {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return await this.runtime.buildRequest(
+        "UseNestedBlockConstraint",
+        {
+          "inp": inp
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+}

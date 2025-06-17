@@ -169,210 +169,152 @@ export enum TestEnum {
 }
 
 export interface AnotherObject {
-  
   id: string
-  
   thingy2: string
-  
   thingy3: string
   
 }
 
 export interface BigNumbers {
-  
   a: number
-  
   b: number
   
 }
 
 export interface BinaryNode {
-  
   data: number
-  
   left?: BinaryNode | null
-  
   right?: BinaryNode | null
   
 }
 
 export interface Blah {
-  
   prop4?: string | null
   
 }
 
 export interface BlockConstraint {
-  
   foo: number
-  
   bar: string
   
 }
 
 export interface BlockConstraintForParam {
-  
   bcfp: number
-  
   bcfp2: string
   
 }
 
 export interface BookOrder {
-  
   orderId: string
-  
   title: string
-  
   quantity: number
-  
   price: number
   
 }
 
 export interface ClassForNullLiteral {
-  
-  a: string
+  a: "hi"
   
 }
 
 export interface ClassOptionalOutput {
-  
   prop1: string
-  
   prop2: string
   
 }
 
 export interface ClassOptionalOutput2 {
-  
   prop1?: string | null
-  
   prop2?: string | null
-  
   prop3?: Blah | null
   
 }
 
 export interface ClassToRecAlias {
-  
   list: LinkedListAliasNode
   
 }
 
 export interface ClassWithBlockDone {
-  
   i_16_digits: number
-  
   s_20_words: string
   
 }
 
 export interface ClassWithImage {
-  
   myImage: Image
-  
   param2: string
-  
   fake_image: FakeImage
   
 }
 
 export interface ClassWithoutDone {
-  
   i_16_digits: number
-  
   s_20_words: string
   
 }
 
 export interface ClientDetails1559 {
-  
   client_name?: string | null
-  
   client_address?: string | null
-  
   client_postal_code?: string | null
-  
   client_city?: string | null
-  
   client_country?: string | null
-  
   client_phone?: string | null
-  
   client_email?: string | null
   
 }
 
 export interface ComplexMemoryObject {
-  
   id: string
-  
   name: string
-  
   description: string
-  
-  metadata: Union3number | number | string[]
+  metadata: (string | number | number)[]
   
 }
 
 export interface CompoundBigNumbers {
-  
   big: BigNumbers
-  
   big_nums: BigNumbers[]
-  
   another: BigNumbers
   
 }
 
 export interface ContactInfo {
-  
-  primary: Union2EmailAddress | PhoneNumber
-  
-  secondary?: Union2EmailAddress | PhoneNumber | null
+  primary: PhoneNumber | EmailAddress
+  secondary?: PhoneNumber | EmailAddress | null
   
 }
 
 export interface CustomStory {
-  
   title: string
-  
   characters: string[]
-  
   content: string
   
 }
 
 export interface CustomTaskResult {
-  
   bookOrder?: BookOrder | null
-  
   flightConfirmation?: FlightConfirmation | null
-  
   groceryReceipt?: GroceryReceipt | null
   
 }
 
 export interface Document1559 {
-  
   client_details: ClientDetails1559
-  
   notes: Note1599[]
   
 }
 
 export interface DummyOutput {
-  
   nonce: string
-  
   nonce2: string
   
   [key: string]: any;
 }
 
 export interface DynInputOutput {
-  
   testKey: string
   
   [key: string]: any;
@@ -384,12 +326,9 @@ export interface DynamicClassOne {
 }
 
 export interface DynamicClassTwo {
-  
   hi: string
-  
   some_class: SomeClassNestedDynamic
-  
-  status: DynEnumOne
+  status: (string | DynEnumOne)
   
   [key: string]: any;
 }
@@ -405,229 +344,169 @@ export interface DynamicSchema {
 }
 
 export interface Earthling {
-  
-  age: number
+  age: Checked<number,"earth_aged" | "no_infants">
   
 }
 
 export interface Education {
-  
   institution: string
-  
   location: string
-  
   degree: string
-  
   major: string[]
-  
   graduation_date?: string | null
   
 }
 
 export interface Email {
-  
   subject: string
-  
   body: string
-  
   from_address: string
   
 }
 
 export interface EmailAddress {
-  
   value: string
   
 }
 
 export interface Event {
-  
   title: string
-  
   date: string
-  
   location: string
-  
   description: string
   
 }
 
 export interface FakeImage {
-  
   url: string
   
 }
 
 export interface FlightConfirmation {
-  
   confirmationNumber: string
-  
   flightNumber: string
-  
   departureTime: string
-  
   arrivalTime: string
-  
   seatNumber: string
   
 }
 
 export interface FooAny {
-  
-  planetary_age: Union2Earthling | Martian
-  
-  certainty: number
-  
-  species: string
+  planetary_age: Martian | Earthling
+  certainty: Checked<number,"unreasonably_certain">
+  species: Checked<string,"regex_bad" | "regex_good" | "trivial">
   
 }
 
 export interface Forest {
-  
   trees: Tree[]
   
 }
 
 export interface FormatterTest0 {
-  
   lorem: string
-  
   ipsum: string
   
 }
 
 export interface FormatterTest1 {
-  
   lorem: string
-  
   ipsum: string
   
 }
 
 export interface FormatterTest2 {
-  
   lorem: string
-  
   ipsum: string
   
 }
 
 export interface FormatterTest3 {
-  
   lorem: string
-  
   ipsum: string
   
 }
 
 export interface GroceryReceipt {
-  
   receiptId: string
-  
   storeName: string
-  
-  items: Union3number | number | string[]
-  
+  items: (string | number | number)[]
   totalAmount: number
   
 }
 
 export interface Haiku {
-  
   line1: string
-  
   line2: string
-  
   line3: string
   
 }
 
 export interface InnerClass {
-  
   prop1: string
-  
   prop2: string
-  
   inner: InnerClass2
   
 }
 
 export interface InnerClass2 {
-  
   prop2: number
-  
   prop3: number
   
 }
 
 export interface InputClass {
-  
   key: string
-  
   key2: string
   
 }
 
 export interface InputClassNested {
-  
   key: string
-  
   nested: InputClass
   
 }
 
 export interface LinkedList {
-  
   head?: Node | null
-  
   len: number
   
 }
 
 export interface LinkedListAliasNode {
-  
   value: number
-  
   next?: LinkedListAliasNode | null
   
 }
 
 export interface LiteralClassHello {
-  
-  prop: string
+  prop: "hello"
   
 }
 
 export interface LiteralClassOne {
-  
-  prop: string
+  prop: "one"
   
 }
 
 export interface LiteralClassTwo {
-  
-  prop: string
+  prop: "two"
   
 }
 
 export interface MaintainFieldOrder {
-  
   a: string
-  
   b: string
-  
   c: string
   
 }
 
 export interface MalformedConstraints {
-  
-  foo: number
+  foo: Checked<number,"foo_check">
   
 }
 
 export interface MalformedConstraints2 {
-  
   foo: number
   
 }
@@ -639,388 +518,282 @@ export interface MalformedConstraints2 {
 export interface Martian {
   /**
    * The age of the Martian in Mars years.
- * So many Mars years.
+   * So many Mars years.
    */
-  age: number
+  age: Checked<number,"young_enough">
   
 }
 
 export interface MemoryObject {
-  
   id: string
-  
   name: string
-  
   description: string
   
 }
 
 export interface MergeAttrs {
-  
-  amount: number
+  amount: Checked<number,"gt_ten">
   
 }
 
 export interface NamedArgsSingleClass {
-  
   key: string
-  
   key_two: boolean
-  
   key_three: number
   
 }
 
 export interface Nested {
-  
   prop3?: string | null
-  
   prop4?: string | null
-  
   prop20: Nested2
   
 }
 
 export interface Nested2 {
-  
   prop11?: string | null
-  
   prop12?: string | null
   
 }
 
 export interface NestedBlockConstraint {
-  
-  nbc: Checked<BlockConstraint>
+  nbc: Checked<BlockConstraint,"cross_field">
   
 }
 
 export interface NestedBlockConstraintForParam {
-  
   nbcfp: BlockConstraintForParam
   
 }
 
 export interface Node {
-  
   data: number
-  
   next?: Node | null
   
 }
 
 export interface NodeWithAliasIndirection {
-  
   value: number
-  
   next?: NodeWithAliasIndirection | null
   
 }
 
 export interface Note1599 {
-  
   note_title: string
-  
   note_description?: string | null
-  
   note_amount?: string | null
   
 }
 
 export interface OptionalListAndMap {
-  
   p?: string[] | null
-  
   q?: Record<string, string> | null
   
 }
 
 export interface OptionalTest_Prop1 {
-  
   omega_a: string
-  
   omega_b: number
   
 }
 
 export interface OptionalTest_ReturnType {
-  
   omega_1?: OptionalTest_Prop1 | null
-  
   omega_2?: string | null
-  
-  omega_3: OptionalTest_CategoryType | null[]
+  omega_3: (OptionalTest_CategoryType | null)[]
   
 }
 
 export interface OrderInfo {
-  
   order_status: OrderStatus
-  
   tracking_number?: string | null
-  
   estimated_arrival_date?: string | null
   
 }
 
 export interface OriginalA {
-  
   value: number
   
 }
 
 export interface OriginalB {
-  
   value: number
   
   [key: string]: any;
 }
 
 export interface Person {
-  
   name?: string | null
-  
-  hair_color?: Color | null
+  hair_color?: (string | Color) | null
   
   [key: string]: any;
 }
 
 export interface PhoneNumber {
-  
   value: string
   
 }
 
 export interface Quantity {
-  
-  amount: Union2number | number
-  
+  amount: number | number
   unit?: string | null
   
 }
 
 export interface RaysData {
-  
   dataType: DataType
-  
-  value: Union2Event | Resume
+  value: Resume | Event
   
 }
 
 export interface ReceiptInfo {
-  
   items: ReceiptItem[]
-  
   total_cost?: number | null
-  
-  venue: Union2string | string
+  venue: "barisa" | "ox_burger"
   
 }
 
 export interface ReceiptItem {
-  
   name: string
-  
   description?: string | null
-  
   quantity: number
-  
   price: number
   
 }
 
 export interface Recipe {
-  
   ingredients: Record<string, Quantity>
-  
-  recipe_type: Union2string | string
+  recipe_type: "breakfast" | "dinner"
   
 }
 
 export interface RecursiveAliasDependency {
-  
   value: JsonValue
   
 }
 
 export interface Resume {
-  
   name: string
-  
   email: string
-  
   phone: string
-  
   experience: string[]
-  
   education: Education[]
-  
   skills: string[]
   
 }
 
 export interface Schema {
-  
   prop1?: string | null
-  
-  prop2: Union2Nested | string
-  
-  prop5: string | null[]
-  
-  prop6: Union2Nested[] | string
-  
-  nested_attrs: Union2Nested | string | null[]
-  
+  prop2: Nested | string
+  prop5: (string | null)[]
+  prop6: string | Nested[]
+  nested_attrs: (string | Nested)[]
   parens?: string | null
-  
-  other_group: Union2number | string
+  other_group: string | number
   
 }
 
 export interface SearchParams {
-  
   dateRange?: number | null
-  
   location: string[]
-  
   jobTitle?: WithReasoning | null
-  
   company?: WithReasoning | null
-  
   description: WithReasoning[]
-  
-  tags: Union2Tag | string[]
+  tags: (Tag | string)[]
   
 }
 
 export interface SemanticContainer {
-  
   sixteen_digit_number: number
-  
   string_with_twenty_words: string
-  
   class_1: ClassWithoutDone
-  
   class_2: ClassWithBlockDone
-  
   class_done_needed: ClassWithBlockDone
-  
   class_needed: ClassWithoutDone
-  
   three_small_things: SmallThing[]
-  
   final_string: string
   
 }
 
 export interface SimpleTag {
-  
   field: string
   
 }
 
 export interface SmallThing {
-  
   i_16_digits: number
-  
   i_8_digits: number
   
 }
 
 export interface SomeClassNestedDynamic {
-  
   hi: string
   
   [key: string]: any;
 }
 
 export interface StringToClassEntry {
-  
   word: string
   
 }
 
 export interface TestClassAlias {
-  
   key: string
-  
   key2: string
-  
   key3: string
-  
   key4: string
-  
   key5: string
   
 }
 
 export interface TestClassNested {
-  
   prop1: string
-  
   prop2: InnerClass
   
 }
 
 export interface TestClassWithEnum {
-  
   prop1: string
-  
   prop2: EnumInClass
   
 }
 
 export interface TestMemoryOutput {
-  
-  items: Union3AnotherObject | ComplexMemoryObject | MemoryObject[]
-  
-  more_items: Union3AnotherObject | ComplexMemoryObject | MemoryObject[]
+  items: (MemoryObject | ComplexMemoryObject | AnotherObject)[]
+  more_items: (MemoryObject | ComplexMemoryObject | AnotherObject)[]
   
 }
 
 export interface TestOutputClass {
-  
   prop1: string
-  
   prop2: number
   
 }
 
 export interface Tree {
-  
   data: number
-  
   children: Forest
   
 }
 
 export interface TwoStoriesOneTitle {
-  
   title: string
-  
   story_a: string
-  
   story_b: string
   
 }
 
 export interface TwoStoriesOneTitleCheck {
-  
   title: string
-  
-  story_a: string
-  
-  story_b: string
+  story_a: Checked<string,"too_long_story">
+  story_b: Checked<string,"too_long_story">
   
 }
 
 export interface UnionTest_ReturnType {
-  
-  prop1: Union2boolean | string
-  
-  prop2: Union2boolean | number[]
-  
-  prop3: Union2boolean[] | number[]
+  prop1: string | boolean
+  prop2: (number | boolean)[]
+  prop3: boolean[] | number[]
   
 }
 
@@ -1028,54 +801,49 @@ export interface UnionTest_ReturnType {
  * my docs
  */
 export interface UniverseQuestion {
-  
   question: string
-  
   answer: string
   
 }
 
 export interface UniverseQuestionInput {
-  
   question: string
   
 }
 
 export interface WithReasoning {
-  
   value: string
-  
   reasoning: string
   
 }
 
 export type Amount = number
 
-export type Combination = Union6Record<string, string[]> | boolean | number | number | string | string[]
+export type Combination = number | string | boolean | number | string[] | Record<string, string[]>
 
-export type Currency = number
+export type Currency = Checked<number,"gt_ten">
 
 export type Graph = Record<string, string[]>
 
 export type JsonArray = JsonValue[]
 
-export type JsonEntry = Union2JsonTemplate | SimpleTag
+export type JsonEntry = SimpleTag | JsonTemplate
 
 export type JsonObject = Record<string, JsonValue>
 
 export type JsonTemplate = Record<string, JsonEntry>
 
-export type JsonValue = Union6JsonArray | JsonObject | boolean | number | number | string
+export type JsonValue = number | string | boolean | number | JsonObject | JsonArray
 
 export type LinkedListAlias = LinkedListAliasNode
 
 export type List = string[]
 
-export type MultipleAttrs = number
+export type MultipleAttrs = Checked<number,"gt_ten">
 
 export type NodeIndirection = NodeWithAliasIndirection
 
-export type Primitive = Union4boolean | number | number | string
+export type Primitive = number | string | boolean | number
 
 export type RecAliasOne = RecAliasTwo
 
@@ -1087,4 +855,4 @@ export type RecursiveListAlias = RecursiveListAlias[]
 
 export type RecursiveMapAlias = Record<string, RecursiveMapAlias>
 
-export type RecursiveUnion = Union2Record<string, RecursiveUnion> | string
+export type RecursiveUnion = string | Record<string, RecursiveUnion>

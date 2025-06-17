@@ -220,8 +220,6 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
     /// For some `BamlValueWithMeta` with type `FieldType`, walk the structure of both the value
     /// and the type simultaneously, associating each node in the `BamlValue` with its
     /// `FieldType`.
-    /// TODO (Greg): Make this function DynamicTypes-aware. Right now it assigns default metadata
-    /// to unknown classes, which may have been created with TypeBuilder.
     fn distribute_type_with_meta<T: Clone + std::fmt::Debug>(
         &self,
         value: BamlValueWithMeta<T>,
@@ -331,7 +329,6 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
 
             BamlValueWithMeta::Enum(name, val, meta) => {
                 if self.is_subtype(
-                    // TODO(Rahul): how do we get the dynamic flag?
                     &FieldType::Enum {
                         name: name.clone(),
                         dynamic: false,
@@ -347,7 +344,6 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
 
             BamlValueWithMeta::Class(name, fields, meta) => {
                 if !self.is_subtype(
-                    // TODO(Rahul): how do we get the dynamic flag?
                     &FieldType::class(name.as_str()),
                     &field_type,
                 ) {
@@ -1034,7 +1030,6 @@ pub fn infer_type(value: &BamlValue) -> Option<FieldType> {
             Default::default(),
         )),
         BamlValue::Enum(enum_name, _) => {
-            // TODO(Rahul): how do we get the dynamic flag?
             Some(FieldType::Enum {
                 name: enum_name.clone(),
                 dynamic: false,
@@ -1042,7 +1037,6 @@ pub fn infer_type(value: &BamlValue) -> Option<FieldType> {
             })
         }
         BamlValue::Class(class_name, _) => {
-            // TODO(Rahul): how do we get the dynamic flag?
             Some(FieldType::Class {
                 name: class_name.clone(),
                 mode: baml_types::ir_type::StreamingMode::NonStreaming,
@@ -1110,7 +1104,6 @@ pub fn infer_type_with_meta<T>(value: &BamlValueWithMeta<T>) -> Option<FieldType
             Default::default(),
         )),
         BamlValueWithMeta::Enum(enum_name, _, _) => {
-            // TODO(Rahul): how do we get the dynamic flag?
             Some(FieldType::Enum {
                 name: enum_name.clone(),
                 dynamic: false,
@@ -1118,7 +1111,6 @@ pub fn infer_type_with_meta<T>(value: &BamlValueWithMeta<T>) -> Option<FieldType
             })
         }
         BamlValueWithMeta::Class(class_name, _, _) => {
-            // TODO(Rahul): how do we get the dynamic flag?
             Some(FieldType::Class {
                 name: class_name.clone(),
                 mode: baml_types::ir_type::StreamingMode::NonStreaming,

@@ -6,11 +6,11 @@ export default class TypeBuilder {
     private tb: _TypeBuilder;
     {% for cls in classes %}
     {{cls.name}}: {% if cls.dynamic %}ClassBuilder{% else %}ClassViewer{% endif %}<'{{cls.name}}'
-    {%- for (name, _, _, _) in cls.fields %}{% if loop.first %}, {%endif%}"{{name}}"{% if !loop.last %} | {% endif %}{% endfor -%}
+    {%- for field in cls.fields %}{% if loop.first %}, {%endif%}"{{field.name}}"{% if !loop.last %} | {% endif %}{% endfor -%}
     >;
     {% endfor %}
-    {% for enum in enums %}
-    {{enum.name}}: {% if enum.dynamic %}EnumBuilder{% else %}EnumViewer{% endif %}<'{{enum.name}}'{%- for (value, _) in enum.values %}{% if loop.first %}, {%endif%}"{{value}}"{% if !loop.last %} | {% endif %}{% endfor -%}>;
+    {% for e in enums %}
+    {{e.name}}: {% if e.dynamic %}EnumBuilder{% else %}EnumViewer{% endif %}<'{{e.name}}'{%- for (value, _) in e.values %}{% if loop.first %}, {%endif%}"{{value}}"{% if !loop.last %} | {% endif %}{% endfor -%}>;
     {% endfor %}
 
     constructor() {
@@ -19,18 +19,18 @@ export default class TypeBuilder {
             {% for cls in classes %}"{{cls.name}}",{% endfor %}
           ]),
           enums: new Set([
-            {% for enum in enums %}"{{enum.name}}",{% endfor %}
+            {% for e in enums %}"{{e.name}}",{% endfor %}
           ]),
           runtime: DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
         });
         {% for cls in classes %}
         this.{{cls.name}} = this.tb.{% if cls.dynamic %}classBuilder{% else %}classViewer{% endif %}("{{cls.name}}", [
-          {% for (name, _, _, _) in cls.fields %}"{{name}}",{% endfor %}
+          {% for field in cls.fields %}"{{field.name}}",{% endfor %}
         ]);
         {% endfor %}
-        {% for enum in enums %}
-        this.{{enum.name}} = this.tb.{% if enum.dynamic %}enumBuilder{% else %}enumViewer{% endif %}("{{enum.name}}", [
-          {% for (value, _) in enum.values %}"{{value}}",{% endfor %}
+        {% for e in enums %}
+        this.{{e.name}} = this.tb.{% if e.dynamic %}enumBuilder{% else %}enumViewer{% endif %}("{{e.name}}", [
+          {% for (value, _) in e.values %}"{{value}}",{% endfor %}
         ]);
         {% endfor %}
     }

@@ -36,7 +36,7 @@ impl Package {
     }
 
     pub fn stream_types() -> Package {
-        Package::new("baml_client.stream_types")
+        Package::new("baml_client.partial_types")
     }
 
     pub fn checked() -> Package {

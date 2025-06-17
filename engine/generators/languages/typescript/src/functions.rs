@@ -2,7 +2,7 @@ use askama::Template;
 use baml_types::GeneratorDefaultClientMode;
 use std::fmt;
 
-use crate::{generated_types::{ClassTS}, package::CurrentRenderPackage, r#type::{SerializeType, TypeTS}};
+use crate::{package::CurrentRenderPackage, r#type::{SerializeType, TypeTS}};
 
 impl fmt::Display for TypeTS {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -34,9 +34,25 @@ pub fn render_async_client(functions: &[FunctionTS],types: &[String],pkg: &Curre
     }.render()
 }
 
+#[derive(askama::Template)]
+#[template(path = "async_request.ts.j2", escape = "none")]
+struct AsyncRequest<'a> {
+    functions: &'a [FunctionTS],
+    types: &'a [String],
+    pkg: &'a CurrentRenderPackage,
+}
+
+pub fn render_async_request(functions: &[FunctionTS],types: &[String],pkg: &CurrentRenderPackage) -> Result<String, askama::Error> {
+    AsyncRequest {
+        functions,
+        types,
+        pkg,
+    }.render()
+}
+
 
 #[derive(askama::Template)]
-#[template(path = "sync_client.ts.j2", escape = "none")]
+#[template(path = "sync_request.ts.j2", escape = "none")]
 struct SyncClient<'a> {
     functions: &'a [FunctionTS],
     types: &'a [String],
@@ -51,6 +67,21 @@ pub fn render_sync_client(functions: &[FunctionTS],types: &[String],pkg: &Curren
     }.render()
 }
 
+#[derive(askama::Template)]
+#[template(path = "sync_request.ts.j2", escape = "none")]
+struct SyncRequest<'a> {
+    functions: &'a [FunctionTS],
+    types: &'a [String],
+    pkg: &'a CurrentRenderPackage,
+}
+
+pub fn render_sync_request(functions: &[FunctionTS],types: &[String],pkg: &CurrentRenderPackage) -> Result<String, askama::Error> {
+    SyncRequest {
+        functions,
+        types,
+        pkg,
+    }.render()
+}
 
 #[derive(askama::Template)]
 #[template(path = "index.ts.j2", escape = "none", ext = "txt")]
@@ -71,6 +102,43 @@ pub fn render_globals(_pkg: &CurrentRenderPackage) -> Result<String, askama::Err
     Ok(include_str!("./_templates/globals.ts").to_string())
 }
 
+#[derive(askama::Template)]
+#[template(path = "config.ts.j2", escape = "none", ext = "txt")]
+struct Config<'a> {
+    pkg: &'a CurrentRenderPackage,
+}
+
+pub fn render_config(pkg: &CurrentRenderPackage) -> Result<String, askama::Error> {
+    Config {
+        pkg,
+    }.render()
+}
+
+#[derive(askama::Template)]
+#[template(path = "tracing.ts.j2", escape = "none", ext = "txt")]
+struct Tracing<'a> {
+    pkg: &'a CurrentRenderPackage,
+}
+
+pub fn render_tracing(pkg: &CurrentRenderPackage) -> Result<String, askama::Error> {
+    Tracing {
+        pkg,
+    }.render()
+}
+
+#[derive(askama::Template)]
+#[template(path = "inlinedbaml.ts.j2", escape = "none", ext = "txt")]
+struct InlinedBaml<'a> {
+    pkg: &'a CurrentRenderPackage,
+    file_map: &'a [(String, String)],
+}
+
+pub fn render_inlinedbaml(pkg: &CurrentRenderPackage, file_map: Vec<(String, String)>) -> Result<String, askama::Error> {
+    InlinedBaml {
+        pkg,
+        file_map: &file_map,
+    }.render()
+}
 
 /// A map of file paths to their contents.
 ///
@@ -98,4 +166,3 @@ pub fn render_source_files(file_map: Vec<(String, String)>) -> Result<String, as
         file_map: &file_map,
     }.render()
 }
-

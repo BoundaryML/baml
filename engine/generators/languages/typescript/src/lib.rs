@@ -1,6 +1,9 @@
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
-use functions::{render_async_client, render_globals, render_index, render_sync_client};
-use generated_types::render_ts_types;
+use functions::{
+    render_async_client, render_async_request, render_config, render_globals, render_index,
+    render_inlinedbaml, render_sync_client, render_sync_request, render_tracing,
+};
+use generated_types::{render_partial_types, render_ts_types, render_type_builder};
 mod functions;
 mod generated_types;
 mod ir_to_ts;
@@ -38,7 +41,6 @@ $ pnpm add @boundaryml/baml
         "typescript"
     }
 
-
     fn generate_sdk_files(
         &self,
         collector: &mut FileCollector<Self>,
@@ -54,16 +56,11 @@ $ pnpm add @boundaryml/baml
             .chain(ir.walk_alias_cycles().map(|a| a.item.0.clone()))
             .collect();
         types.sort();
-        // collector.add_file("baml_source_map.ts", render_source_files(file_map)?);
-        // collector.add_file("runtime.ts", render_runtime_code(&pkg)?);
-        collector.add_file(
-            "index.ts",
-            render_index(&args.default_client_mode)?,
-        )?;
-        collector.add_file(
-            "globals.ts",
-            render_globals(&pkg)?,
-        )?;
+        collector.add_file("inlinedbaml.ts", render_inlinedbaml(&pkg, file_map)?)?;
+        collector.add_file("config.ts", render_config(&pkg)?)?;
+        collector.add_file("index.ts", render_index(&args.default_client_mode)?)?;
+        collector.add_file("globals.ts", render_globals(&pkg)?)?;
+        collector.add_file("tracing.ts", render_tracing(&pkg)?)?;
         let functions = ir
             .functions
             .iter()
@@ -73,107 +70,57 @@ $ pnpm add @boundaryml/baml
             "async_client.ts",
             render_async_client(&functions, &types, &pkg)?,
         )?;
+        collector.append_to_file(
+            "async_client.ts",
+            &render_async_request(&functions, &types, &pkg)?,
+        )?;
         collector.add_file(
             "sync_client.ts",
             render_sync_client(&functions, &types, &pkg)?,
         )?;
-        // collector.add_file(
-        //     "functions.ts",
-        //     render_functions(&functions, &pkg, ts_mod_name)?,
-        // );
-
-        // collector.add_file(
-        //     "functions_stream.ts",
-        //     render_functions_stream(&functions, &pkg, ts_mod_name)?,
-        // );
-
-        let ts_classes = ir
-            .walk_classes()
+        collector.append_to_file(
+            "sync_client.ts",
+            &render_sync_request(&functions, &types, &pkg)?,
+        )?;
+        let classes = ir.walk_classes().collect::<Vec<_>>();
+        let ts_classes = classes
+            .iter()
             .map(|c| ir_to_ts::classes::ir_class_to_ts(c.item, &pkg))
+            .collect::<Vec<_>>();
+        let ts_classes_stream = classes
+            .iter()
+            .map(|c| ir_to_ts::classes::ir_class_to_ts_stream(c.item, &pkg))
             .collect::<Vec<_>>();
         let ts_enums = ir
             .walk_enums()
             .map(|e| ir_to_ts::enums::ir_enum_to_ts(e.item, &pkg))
             .collect::<Vec<_>>();
-        // let unions = {
-        //     let mut unions = ir.walk_all_types()
-        //                 .filter_map(|t| ir_to_ts::unions::ir_union_to_ts(t, &pkg))
-        //                 .collect::<Vec<_>>();
-        //     // dedup by name!
-        //     unions.sort_by_key(|u| u.name.clone());
-        //     unions.dedup_by_key(|u| u.name.clone());
-        //     unions
-        // };
         let mut type_aliases = ir
             .walk_type_aliases()
             .map(|a| ir_to_ts::type_aliases::ir_type_alias_to_ts(a.item, &pkg))
             .collect::<Vec<_>>();
         type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
-        // collector.add_file(
-        //     "types.ts",
-        //     render_types(&ts_classes)?,
-        // );
-
         pkg.set("baml_client.types");
         collector.add_file(
             "types.ts",
             render_ts_types(&ts_enums, &ts_classes, &type_aliases, &pkg)?,
-        );
-        // collector.add_file(
-        //     "partial_types.ts",
-        //     render_partial_types(&ts_classes, &pkg)?,
-        // );
-        // collector.add_file(
-        //     "types/enums.go",
-        //     render_ts_types(&enums, &pkg)?,
-        // );
-        // collector.add_file(
-        //     "types/unions.go",
-        //     render_ts_types(&unions, &pkg)?,
-        // );
-        // collector.add_file(
-        //     "types/type_aliases.go",
-        //     render_ts_types(&type_aliases, &pkg)?,
-        // );
+        )?;
 
-        // let unions = {
-        //     let mut unions = ir.walk_all_types()
-        //                 .filter_map(|t| ir_to_ts::unions::ir_union_to_ts_stream(t, &pkg))
-        //                 .collect::<Vec<_>>();
-        //     // dedup by name!
-        //     unions.sort_by_key(|u| u.name.clone());
-        //     unions.dedup_by_key(|u| u.name.clone());
-        //     unions
-        // };
+        pkg.set("baml_client.partial_types");
+        collector.add_file(
+            "partial_types.ts",
+            render_partial_types(&ts_classes_stream, &types, &pkg)?,
+        )?;
 
-        // let type_aliases = ir
-        //     .walk_type_aliases()
-        //     .map(|c| ir_to_ts::type_aliases::ir_type_alias_to_ts_stream(c.item, &pkg))
-        //     .collect::<Vec<_>>();
-
-        pkg.set("baml_client.stream_types");
-        // collector.add_file(
-        //     "stream_types/utils.ts",
-        //     render_ts_stream_types_utils(&pkg)?,
-        // );
-        // collector.add_file(
-        //     "stream_types/classes.ts",
-        //     render_ts_stream_types(&ts_classes, &pkg)?,
-        // );
-        // collector.add_file(
-        //     "stream_types/unions.ts",
-        //     render_ts_stream_types(&unions, &pkg)?,
-        // );
-        // collector.add_file(
-        //     "stream_types/type_aliases.ts",
-        //     render_ts_stream_types(&type_aliases, &pkg)?,
-        // );
+        collector.add_file(
+            "type_builder.ts",
+            render_type_builder(&ts_classes, &ts_enums)?,
+        )?;
 
         Ok(())
     }
 }
-
 
 #[cfg(test)]
 mod generated_tests {
@@ -190,10 +137,10 @@ mod generated_tests {
 
 #[cfg(test)]
 mod tests {
-   #[test]
+    #[test]
     fn test_name() {
-        use std::str::FromStr;
         use dir_writer::LanguageFeatures;
+        use std::str::FromStr;
 
         let gen_type = baml_types::GeneratorOutputType::from_str(crate::TsLanguageFeatures::name())
             .expect("TsLanguageFeatures name should be a valid GeneratorOutputType");

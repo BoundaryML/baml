@@ -73,11 +73,11 @@ export const AliasThatPointsToRecursiveType = async (
  *
  * @param { number } money - Input parameter.
  *
- * @returns {Promise<Checked<number, "gt_ten">>} A promise that resolves with the result of the action.
+ * @returns {Promise<Checked<number,"gt_ten">>} A promise that resolves with the result of the action.
  */
 export const AliasWithMultipleAttrs = async (
   money: number,
-): Promise<Checked<number, "gt_ten">> => {
+): Promise<Checked<number,"gt_ten">> => {
   return b.AliasWithMultipleAttrs(
     money,
   );
@@ -1308,10 +1308,10 @@ export const LiteralUnionsTest = async (
  * with the specified parameters.
  *
  *
- * @returns {Promise<Checked<BlockConstraint, "cross_field">>} A promise that resolves with the result of the action.
+ * @returns {Promise<Checked<BlockConstraint,"cross_field">>} A promise that resolves with the result of the action.
  */
 export const MakeBlockConstraint = async (
-): Promise<Checked<BlockConstraint, "cross_field">> => {
+): Promise<Checked<BlockConstraint,"cross_field">> => {
   return b.MakeBlockConstraint(
   );
 };
@@ -1528,11 +1528,11 @@ export const PredictAge = async (
  *
  * @param { string } inp - Input parameter.
  *
- * @returns {Promise<Checked<number, "too_big">>} A promise that resolves with the result of the action.
+ * @returns {Promise<Checked<number,"too_big">>} A promise that resolves with the result of the action.
  */
 export const PredictAgeBare = async (
   inp: string,
-): Promise<Checked<number, "too_big">> => {
+): Promise<Checked<number,"too_big">> => {
   return b.PredictAgeBare(
     inp,
   );
@@ -1744,11 +1744,11 @@ export const RecursiveUnionTest = async (
  *
  * @param { number } money - Input parameter.
  *
- * @returns {Promise<Checked<number, "gt_ten">>} A promise that resolves with the result of the action.
+ * @returns {Promise<Checked<number,"gt_ten">>} A promise that resolves with the result of the action.
  */
 export const ReturnAliasWithMergedAttributes = async (
   money: number,
-): Promise<Checked<number, "gt_ten">> => {
+): Promise<Checked<number,"gt_ten">> => {
   return b.ReturnAliasWithMergedAttributes(
     money,
   );

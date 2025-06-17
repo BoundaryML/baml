@@ -1,5 +1,5 @@
 use crate::package::Package;
-use crate::r#type::{MediaTypeTS, TypeMetaTS, TypeTS, TypeWrapper};
+use crate::r#type::{LiteralValue, MediaTypeTS, TypeMetaTS, TypeTS, TypeWrapper};
 use baml_types::{
     baml_value::TypeLookups,
     ir_type::{Type, TypeStreaming},
@@ -12,7 +12,6 @@ pub mod classes;
 pub mod enums;
 pub mod functions;
 pub mod type_aliases;
-// pub mod unions;
 
 pub(crate) fn stream_type_to_ts(field: &TypeStreaming, _lookup: &impl TypeLookups) -> TypeTS {
     use TypeStreaming as T;
@@ -33,11 +32,14 @@ pub(crate) fn stream_type_to_ts(field: &TypeStreaming, _lookup: &impl TypeLookup
             dynamic: *dynamic,
             meta,
         },
-        T::Literal(literal_value, _) => match literal_value {
-            baml_types::LiteralValue::String(_) => TypeTS::String(meta),
-            baml_types::LiteralValue::Int(_) => TypeTS::Int(meta),
-            baml_types::LiteralValue::Bool(_) => TypeTS::Bool(meta),
-        },
+        T::Literal(literal_value, _) => {
+            let val = match literal_value {
+                baml_types::LiteralValue::String(val) => LiteralValue::String(val.to_string()),
+                baml_types::LiteralValue::Int(val) => LiteralValue::Int(*val),
+                baml_types::LiteralValue::Bool(val) => LiteralValue::Bool(*val),
+            };
+            TypeTS::Literal(val, meta)
+        }
         T::Class {
             name,
             dynamic,
@@ -90,7 +92,7 @@ pub(crate) fn stream_type_to_ts(field: &TypeStreaming, _lookup: &impl TypeLookup
                     .iter()
                     .any(|c| matches!(c.level, ConstraintLevel::Check))
                 {
-                    type_go.meta_mut().make_checked();
+                    type_go.meta_mut().make_checked(union_meta.constraints.iter().map(|c| c.label.clone()).collect());
                 }
                 type_go.meta_mut().make_optional();
                 if union_meta.streaming_behavior.state {
@@ -98,38 +100,15 @@ pub(crate) fn stream_type_to_ts(field: &TypeStreaming, _lookup: &impl TypeLookup
                 }
                 type_go
             }
-            baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => {
-                let options: Vec<_> = type_generics.into_iter().map(&recursive_fn).collect();
-                let num_options = options.len();
-                let mut name = options
-                    .iter()
-                    .map(|t| t.default_name_within_union())
-                    .collect::<Vec<_>>();
-                name.sort();
-                let name = name.join(" | ");
-                TypeTS::Union {
-                    package: stream_pkg.clone(),
-                    name: format!("Union{}{}", num_options, name),
-                    meta,
-                }
-            }
+            baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => TypeTS::Union {
+                variants: type_generics.into_iter().map(&recursive_fn).collect(),
+                meta,
+            },
             baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
-                let options: Vec<_> = type_generics.into_iter().map(recursive_fn).collect();
-                let num_options = options.len();
-                let mut name = options
-                    .iter()
-                    .map(|t| t.default_name_within_union())
-                    .collect::<Vec<_>>();
-                name.sort();
-                let name = name.join(" | ");
                 let mut meta = meta;
                 meta.make_optional();
                 TypeTS::Union {
-                    package: match union_meta.streaming_behavior.done {
-                        true => types_pkg.clone(),
-                        false => stream_pkg.clone(),
-                    },
-                    name: format!("Union{}{}", num_options, name),
+                    variants: type_generics.into_iter().map(&recursive_fn).collect(),
                     meta,
                 }
             }
@@ -147,18 +126,32 @@ pub(crate) fn type_to_ts(field: &Type, _lookup: &impl TypeLookups) -> TypeTS {
     let type_pkg = Package::types();
 
     let type_ts = match field {
-        T::Primitive(type_value, _) => type_value.into(),
-        T::Enum { name, dynamic, .. } => TypeTS::Enum {
+        T::Primitive(type_value, _) => match type_value {
+            TypeValue::String => TypeTS::String(meta),
+            TypeValue::Int => TypeTS::Int(meta),
+            TypeValue::Float => TypeTS::Float(meta),
+            TypeValue::Bool => TypeTS::Bool(meta),
+            TypeValue::Null => TypeTS::Any {
+                reason: "Null types are not supported in Typescript".to_string(),
+                meta,
+            },
+            TypeValue::Media(baml_media_type) => TypeTS::Media(baml_media_type.into(), meta),
+        },
+        T::Enum { name, dynamic, .. } => {
+            TypeTS::Enum {
             package: type_pkg.clone(),
             name: name.clone(),
             dynamic: *dynamic,
             meta,
-        },
-        T::Literal(literal_value, _) => match literal_value {
-            baml_types::LiteralValue::String(_) => TypeTS::String(meta),
-            baml_types::LiteralValue::Int(_) => TypeTS::Int(meta),
-            baml_types::LiteralValue::Bool(_) => TypeTS::Bool(meta),
-        },
+        }},
+        T::Literal(literal_value, _) => TypeTS::Literal(
+            match literal_value {
+                baml_types::LiteralValue::String(val) => LiteralValue::String(val.to_string()),
+                baml_types::LiteralValue::Int(val) => LiteralValue::Int(*val),
+                baml_types::LiteralValue::Bool(val) => LiteralValue::Bool(*val),
+            },
+            meta,
+        ),
         T::Class { name, dynamic, .. } => TypeTS::Class {
             package: type_pkg.clone(),
             name: name.clone(),
@@ -197,41 +190,19 @@ pub(crate) fn type_to_ts(field: &Type, _lookup: &impl TypeLookups) -> TypeTS {
                     .iter()
                     .any(|c| matches!(c.level, ConstraintLevel::Check))
                 {
-                    type_ts.meta_mut().make_checked();
+                    type_ts.meta_mut().make_checked(union_meta.constraints.iter().map(|c| c.label.clone()).collect());
                 }
                 type_ts
             }
-            baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => {
-                let options: Vec<_> = type_generics.into_iter().map(&recursive_fn).collect();
-                let num_options = options.len();
-                let mut name = options
-                    .iter()
-                    .map(|t| t.default_name_within_union())
-                    .collect::<Vec<_>>();
-                name.sort();
-                let name = name.join(" | ");
-                TypeTS::Union {
-                    package: type_pkg.clone(),
-                    name: format!("Union{}{}", num_options, name),
-                    meta,
-                }
-            }
+            baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => TypeTS::Union {
+                variants: type_generics.into_iter().map(&recursive_fn).collect(),
+                meta,
+            },
             baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
-                let options: Vec<_> = type_generics.into_iter().map(recursive_fn).collect();
-                let num_options = options.len();
-
-                let mut name = options
-                    .iter()
-                    .map(|t| t.default_name_within_union())
-                    .collect::<Vec<_>>();
-                name.sort();
-                let name = name.join(" | ");
-
                 let mut meta = meta;
                 meta.make_optional();
                 TypeTS::Union {
-                    package: type_pkg.clone(),
-                    name: format!("Union{}{}", num_options, name),
+                    variants: type_generics.into_iter().map(&recursive_fn).collect(),
                     meta,
                 }
             }
@@ -250,7 +221,8 @@ fn meta_to_ts(meta: &TypeMeta) -> TypeMetaTS {
 
     let wrapper = TypeWrapper::default();
     let wrapper = if has_checks {
-        wrapper.wrap_with_checked()
+        let names = meta.constraints.iter().map(|c| c.label.as_ref().map(|l| l.to_string())).collect();
+        wrapper.wrap_with_checked(names)
     } else {
         wrapper
     };
@@ -270,7 +242,7 @@ fn stream_meta_to_ts(meta: &TypeMetaStreaming) -> TypeMetaTS {
 
     let wrapper = TypeWrapper::default();
     let wrapper = if has_checks {
-        wrapper.wrap_with_checked()
+        wrapper.wrap_with_checked(meta.constraints.iter().map(|c| c.label.as_ref().map(|l| l.to_string())).collect())
     } else {
         wrapper
     };
