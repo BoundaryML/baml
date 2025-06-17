@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::sync::Arc;
 
 use baml_types::{BamlValue, JinjaExpression};
 use minijinja::value::Value;
