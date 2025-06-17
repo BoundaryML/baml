@@ -81,42 +81,8 @@ impl IntoMiniJinjaValue for BamlValue {
                     key_to_alias,
                 })
             }
-            BamlValue::Null => BamlNull.to_minijinja_value(ir, eval_ctx),
+            BamlValue::Null => minijinja::Value::from(()),
         }
-    }
-}
-
-#[derive(Debug)]
-struct BamlNull;
-
-impl IntoMiniJinjaValue for BamlNull {
-    fn to_minijinja_value(
-        &self,
-        _ir: &IntermediateRepr,
-        _eval_ctx: &EvaluationContext<'_>,
-    ) -> minijinja::Value {
-        minijinja::Value::from_object(BamlNull)
-    }
-}
-
-impl minijinja::value::Object for BamlNull {
-    fn call(
-        self: &Arc<Self>,
-        _state: &minijinja::State<'_, '_>,
-        _args: &[minijinja::value::Value],
-    ) -> Result<minijinja::value::Value, minijinja::Error> {
-        Err(minijinja::Error::new(
-            minijinja::ErrorKind::InvalidOperation,
-            "Null is not callable",
-        ))
-    }
-
-    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("null")
-    }
-
-    fn repr(self: &Arc<Self>) -> ObjectRepr {
-        ObjectRepr::Plain
     }
 }
 
@@ -233,7 +199,16 @@ impl std::fmt::Display for MinijinjaBamlClass {
         // replace the keys with the aliases
         for (k, v) in self.class.iter() {
             let alias = self.key_to_alias.get(k).unwrap_or(k);
-            map.insert(alias.to_string(), v.clone());
+
+            // This handles nested none values.
+            // Top level none values are handled in jinja-runtime/src/jinja_helpers.rs.
+            let value = if v.is_none() {
+                minijinja::Value::from_object(BamlNull)
+            } else {
+                v.clone()
+            };
+
+            map.insert(alias.to_string(), value);
         }
         // Use pretty-printed JSON formatting as expected by tests
         write!(f, "{:#?}", map)
@@ -267,5 +242,31 @@ impl Object for MinijinjaBamlClass {
 
     fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
+    }
+}
+
+// Null
+
+/// This only exists because [`minijinja`] renders "none" instead of "null".
+#[derive(Debug)]
+pub(crate) struct BamlNull;
+
+impl std::fmt::Display for BamlNull {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("null")
+    }
+}
+
+impl Object for BamlNull {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Plain
+    }
+
+    fn is_true(self: &Arc<Self>) -> bool {
+        false
+    }
+
+    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("null")
     }
 }
