@@ -2,15 +2,9 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
-	"reflect"
 	b "unions/baml_client"
 	types "unions/baml_client/types"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
-	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
-	flatbuffers "github.com/google/flatbuffers/go"
 )
 
 func main() {
@@ -33,36 +27,48 @@ func main() {
 	}
 	array := []types.ExistingSystemComponent{input}
 
-	content_bytes, err := baml.EncodeRoot(array)
+	stream, err := b.Stream.JsonInput(context.Background(), array)
 	if err != nil {
 		panic(err)
 	}
-
-	parsed_data := cffi.CFFIValueHolder{}
-	flatbuffers.GetRootAs(content_bytes, 0, &parsed_data)
-	decoded_data := baml.Decode(&parsed_data)
-
-	fmt.Println(decoded_data)
-
-	// Ensure they are the same
-	if !reflect.DeepEqual(array, decoded_data) {
-		// Print the JSON diff
-		json1, err := json.Marshal(array)
-		if err != nil {
-			panic(err)
+	for msg := range stream {
+		if msg.IsFinal {
+			fmt.Println(msg.Final())
+		} else {
+			fmt.Println(msg.Stream())
 		}
-		json2, err := json.Marshal(decoded_data)
-		if err != nil {
-			panic(err)
-		}
-		fmt.Println(string(json1))
-		fmt.Println(string(json2))
-		panic("arrays are not the same")
 	}
 
-	result, err := b.JsonInput(context.Background(), array)
-	if err != nil {
-		panic(err)
-	}
-	fmt.Println(result)
+	// content_bytes, err := baml.EncodeRoot(array)
+	// if err != nil {
+	// 	panic(err)
+	// }
+
+	// parsed_data := cffi.CFFIValueHolder{}
+	// flatbuffers.GetRootAs(content_bytes, 0, &parsed_data)
+	// decoded_data := baml.Decode(&parsed_data)
+
+	// fmt.Println(decoded_data)
+
+	// // Ensure they are the same
+	// if !reflect.DeepEqual(array, decoded_data) {
+	// 	// Print the JSON diff
+	// 	json1, err := json.Marshal(array)
+	// 	if err != nil {
+	// 		panic(err)
+	// 	}
+	// 	json2, err := json.Marshal(decoded_data)
+	// 	if err != nil {
+	// 		panic(err)
+	// 	}
+	// 	fmt.Println(string(json1))
+	// 	fmt.Println(string(json2))
+	// 	panic("arrays are not the same")
+	// }
+
+	// result, err := b.JsonInput(context.Background(), array)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	// fmt.Println(result)
 }
