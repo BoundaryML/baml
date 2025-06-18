@@ -138,8 +138,15 @@ jobs:
         with:
           ruby-version: '3.4.4'
           bundler-cache: true
-      - name: Install sorbet
-        run: gem install sorbet sorbet-runtime
+      - name: Install Ruby dependencies
+        run: |
+          gem install sorbet sorbet-runtime
+          bundle add tapioca --group "development, test" --require false
+          bundle install
+      - name: Initialize Sorbet with Tapioca
+        env:
+          SRB_YES: "1"
+        run: bundle exec tapioca init
       - name: Test Rust
         # skip doctests & integration tests (the latter require OPENAI_API_KEY and ANTHROPIC_API_KEY to be set)
         run: cargo test --lib
