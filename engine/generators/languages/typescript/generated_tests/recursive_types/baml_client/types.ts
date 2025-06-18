@@ -52,7 +52,7 @@ export function get_checks<CheckName extends string>(
   return Object.values(checks);
 }
 export interface UseMyUnion {
-  u?: number | Recursive1[] | string | null;
+  u?: Recursive1 | number | string | null;
 }
 
 export type JSON =

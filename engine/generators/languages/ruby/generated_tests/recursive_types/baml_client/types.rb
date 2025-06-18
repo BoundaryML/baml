@@ -44,7 +44,7 @@ module BamlClient
 
   class UseMyUnion < T::Struct
       include Baml::Sorbet::Struct
-      const :u, T.nilable(T.any(Recursive1, Integer, String))
+      const :u, T.nilable(T.any(Integer, T::Array[Recursive1], String))
   end
 
   # #########################################################################

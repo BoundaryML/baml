@@ -45,7 +45,7 @@ def all_succeeded(checks: typing.Dict[CheckName, Check]) -> bool:
 # #########################################################################
 
 class UseMyUnion(BaseModel):
-    u: typing.Optional[typing.Union["Recursive1", int, str]] = None
+    u: typing.Optional[typing.Union[int, typing.List["Recursive1"], str]] = None
 
 # #########################################################################
 # Generated type aliases (5)

@@ -37,6 +37,6 @@ export interface StreamState<T> {
 
 export namespace partial_types {
   export interface UseMyUnion {
-    u?: number | Recursive1[] | string | null;
+    u?: Recursive1 | number | string | null;
   }
 }
