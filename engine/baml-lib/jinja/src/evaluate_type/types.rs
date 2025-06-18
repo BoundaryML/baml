@@ -177,7 +177,7 @@ impl Type {
     pub fn is_optional(&self) -> bool {
         match self {
             Type::None => true,
-            Type::Union(v) => v.iter().any(|x| x.is_optional()),
+            Type::Union(v) => v.iter().any(Type::is_optional),
             _ => false,
         }
     }
@@ -271,7 +271,7 @@ impl PredefinedTypes {
                     }
                 }
             }))
-            .map(|k| k.to_string())
+            .map(String::to_owned)
             .collect()
     }
 

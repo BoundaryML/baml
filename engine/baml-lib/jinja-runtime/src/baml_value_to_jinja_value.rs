@@ -4,7 +4,7 @@ use baml_types::EvaluationContext;
 use indexmap::IndexMap;
 use internal_baml_core::ir::repr::IntermediateRepr;
 use internal_baml_core::ir::IRHelper;
-use minijinja::value::{Object, ObjectRepr, Enumerator};
+use minijinja::value::{Enumerator, Object, ObjectRepr};
 
 use crate::{BamlMedia, BamlValue};
 
@@ -38,7 +38,7 @@ impl IntoMiniJinjaValue for BamlValue {
                     .iter()
                     .map(|v| v.to_minijinja_value(ir, eval_ctx))
                     .collect();
-                minijinja::Value::from(list)
+                minijinja::Value::from_object(MinijinjaBamlList { list })
             }
             BamlValue::Media(i) => i.to_minijinja_value(ir, eval_ctx),
             // For enums and classes we compute the aliases from the IR, and generate custom jinja structs that print out the alias if stringified.
@@ -199,7 +199,16 @@ impl std::fmt::Display for MinijinjaBamlClass {
         // replace the keys with the aliases
         for (k, v) in self.class.iter() {
             let alias = self.key_to_alias.get(k).unwrap_or(k);
-            map.insert(alias.to_string(), v.clone());
+
+            // This handles nested none values.
+            // Top level none values are handled in jinja-runtime/src/jinja_helpers.rs.
+            let value = if v.is_none() {
+                minijinja::Value::from_object(BamlNull)
+            } else {
+                v.clone()
+            };
+
+            map.insert(alias.to_string(), value);
         }
         // Use pretty-printed JSON formatting as expected by tests
         write!(f, "{:#?}", map)
@@ -223,11 +232,97 @@ impl Object for MinijinjaBamlClass {
     }
 
     fn enumerate(self: &Arc<Self>) -> Enumerator {
-        let keys: Vec<minijinja::Value> = self.class.keys().map(|k| minijinja::Value::from(k.as_str())).collect();
+        let keys: Vec<minijinja::Value> = self
+            .class
+            .keys()
+            .map(|k| minijinja::Value::from(k.as_str()))
+            .collect();
         Enumerator::Values(keys)
     }
 
     fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         std::fmt::Display::fmt(self, f)
+    }
+}
+
+// List
+
+struct MinijinjaBamlList {
+    list: Vec<minijinja::Value>,
+}
+
+impl std::fmt::Display for MinijinjaBamlList {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let mut list = f.debug_list();
+
+        // Replace "none" with "null". See comments in std::fmt::Display impl
+        // for MinijinjaBamlClass and see BamlNull.
+        for value in &self.list {
+            if value.is_none() {
+                list.entry(&minijinja::Value::from_object(BamlNull));
+            } else {
+                list.entry(value);
+            }
+        }
+
+        list.finish()
+    }
+}
+
+impl std::fmt::Debug for MinijinjaBamlList {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
+}
+
+impl Object for MinijinjaBamlList {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Seq
+    }
+
+    fn get_value(self: &Arc<Self>, key: &minijinja::Value) -> Option<minijinja::Value> {
+        self.list.get(key.as_usize()?).cloned()
+    }
+
+    fn enumerate(self: &Arc<Self>) -> Enumerator {
+        Enumerator::Seq(self.list.len())
+    }
+
+    fn enumerator_len(self: &Arc<Self>) -> Option<usize> {
+        Some(self.list.len())
+    }
+
+    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
+    }
+}
+
+// Null
+
+/// This only exists because [`minijinja`] renders "none" instead of "null".
+///
+/// Don't use for anything else other than rendering because if we use this
+/// instead of `minijinja::Value::from(())` then the `{% if v is none %}`
+/// comparison in Jinja will not work.
+#[derive(Debug)]
+pub(crate) struct BamlNull;
+
+impl std::fmt::Display for BamlNull {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("null")
+    }
+}
+
+impl Object for BamlNull {
+    fn repr(self: &Arc<Self>) -> ObjectRepr {
+        ObjectRepr::Plain
+    }
+
+    fn is_true(self: &Arc<Self>) -> bool {
+        false
+    }
+
+    fn render(self: &Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("null")
     }
 }
