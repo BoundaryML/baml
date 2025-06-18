@@ -867,7 +867,7 @@ fn get_dummy_value(
         baml_runtime::FieldType::Literal(_, _) => None,
         baml_runtime::FieldType::Enum { .. } => None,
         baml_runtime::FieldType::Class { .. } => None,
-        baml_runtime::FieldType::RecursiveTypeAlias(_, _) => None,
+        baml_runtime::FieldType::RecursiveTypeAlias{ .. } => None,
         baml_runtime::FieldType::List(item, _) => {
             let dummy = get_dummy_value(indent + 1, allow_multiline, item);
             // Repeat it 2 times

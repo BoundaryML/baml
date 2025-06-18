@@ -87,4 +87,8 @@ pub fn generate_sdk(
 
         Ok(res)
     }
+
+    #[cfg(target_arch = "wasm32")] {
+        Ok(res)
+    }
 }

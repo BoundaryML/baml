@@ -8,11 +8,13 @@ class ExistingSystemComponent {
   explanation string
 }
 
-function JsonInput(x: ExistingSystemComponent[]) -> ExistingSystemComponent[] {
+function JsonInput(x: ExistingSystemComponent[]) -> (string @assert({{ this|length > 0 and this[0] != "[" }}) @stream.not_null)[] @stream.not_null {
     client "ollama/phi4:latest"
     prompt #"
-        repeat back to me:
+        repeat back to me a summary of this:
         {{ x }}
+
+        {{ ctx.output_format }}
     "#
 }
 

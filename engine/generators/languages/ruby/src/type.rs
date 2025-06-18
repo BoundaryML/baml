@@ -5,13 +5,13 @@ use crate::{package::{CurrentRenderPackage, Package}};
 pub enum TypeWrapper {
     #[default]
     None,
-    Checked(Box<TypeWrapper>, Vec<EscapedRubyString>),
+    Checked(Box<TypeWrapper>),
     Optional(Box<TypeWrapper>),
 }
 
 impl TypeWrapper {
-    pub fn wrap_with_checked<T: AsRef<str>>(self, names: Vec<T>) -> TypeWrapper {
-        TypeWrapper::Checked(Box::new(self), names.into_iter().map(|i| EscapedRubyString::new(i.as_ref())).collect())
+    pub fn wrap_with_checked<T: AsRef<str>>(self, _names: Vec<T>) -> TypeWrapper {
+        TypeWrapper::Checked(Box::new(self))
     }
 }
 
@@ -29,7 +29,7 @@ impl TypeMetaRb {
     }
 
     pub fn is_checked(&self) -> bool {
-        matches!(self.type_wrapper, TypeWrapper::Checked(_, _))
+        matches!(self.type_wrapper, TypeWrapper::Checked(_))
     }
 
     pub fn make_checked<T: AsRef<str>>(&mut self, names: Vec<T>) -> &mut Self {
@@ -58,11 +58,10 @@ impl WrapType for TypeWrapper {
         let (pkg, orig) = &params;
         match self {
             TypeWrapper::None => orig.clone(),
-            TypeWrapper::Checked(inner, names) => format!(
-                "{}Checked[{}, {}]",
+            TypeWrapper::Checked(inner) => format!(
+                "{}Checked[{}]",
                 Package::checked().relative_from(pkg),
                 inner.wrap_type(params),
-                names.iter().map(|n| format!(":{} Check", n.0)).collect::<Vec<_>>().join(", ")
             ),
             TypeWrapper::Optional(inner) => format!(
                 "T.nilable({})",

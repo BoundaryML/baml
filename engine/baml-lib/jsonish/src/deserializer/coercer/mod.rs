@@ -269,7 +269,6 @@ pub fn run_user_checks(
     baml_value: &BamlValue,
     type_: &FieldType,
 ) -> Result<Vec<(Constraint, bool)>> {
-    eprintln!("baml_value: {:?} type: {}", baml_value, type_);
     let res = type_
         .meta()
         .constraints
@@ -279,6 +278,5 @@ pub fn run_user_checks(
             Ok((constraint.clone(), result))
         })
         .collect::<Result<Vec<_>>>();
-    eprintln!("res: {:?}", res);
     res
 }
