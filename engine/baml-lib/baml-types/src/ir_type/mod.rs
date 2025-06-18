@@ -1201,7 +1201,7 @@ mod tests {
         let int = FieldType::int_with_meta(type_meta::Base {
             streaming_behavior: type_meta::base::StreamingBehavior {
                 state: true,
-                needed: false,
+                needed: true,
                 done: false,
             },
             ..Default::default()
