@@ -58,7 +58,7 @@ mod class {
     /// {%- endif %}
     /// export interface {{name}} {
     ///   {%- for field in fields %}
-    ///   {{- field.render()?|indent(4, true) -}}
+    ///   {{- field.render()? }}
     ///   {%- endfor %}
     ///   {% if dynamic %}
     ///   [key: string]: any;
