@@ -20,10 +20,3 @@ class Person {
   age int
   poem string
 }
-
-// error: Error validating: Type mismatch in class constructor
-//   -->  expr/constructors.baml:6
-//    | 
-//  5 | 
-//  6 | let x = MyClass { a: 1, b: 2 };
-//    | 

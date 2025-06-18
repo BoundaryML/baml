@@ -42,7 +42,7 @@ fn Foo() -> Bar {
 //  8 |   let req_bad = std::Request { 
 //  9 |     base_url: 10,
 //    | 
-// error: Error validating: std::Request.query_params expected type map<string, string>, but found map<string, int>
+// error: Error validating: std::Request.query_params expected type map<string, string>, but found map<string, (int | null)>
 //   -->  expr/constructors_invalid.baml:11
 //    | 
 // 10 |     headers: {},
