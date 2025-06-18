@@ -78,9 +78,11 @@ class DataType(str, Enum):
     Resume = "Resume"
     Event = "Event"
 
-class DynEnumOne(str, Enum):pass
+class DynEnumOne(str, Enum):
+    pass
 
-class DynEnumTwo(str, Enum):pass
+class DynEnumTwo(str, Enum):
+    pass
 
 class EnumInClass(str, Enum):
     ONE = "ONE"

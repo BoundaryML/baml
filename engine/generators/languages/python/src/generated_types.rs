@@ -72,7 +72,9 @@ mod enums {
     ///     {%- if let Some(docstring) = docstring %}
     ///     {{crate::utils::prefix_lines(docstring, "# ") }}
     ///     {% endif %}
-    ///     {%- if values.is_empty() %}pass{% endif %}
+    ///     {%- if values.is_empty() %}
+    ///     pass
+    ///     {%- endif %}
     ///     {%- for (value, docstring) in values %}
     ///     {%- if let Some(docstring) = docstring %}
     ///     {{ crate::utils::prefix_lines(docstring, "# ") }}
@@ -426,7 +428,6 @@ pub(crate) fn render_py_types<T: askama::Template>(
 /// ```askama
 /// import typing
 /// import typing_extensions
-/// from enum import Enum
 /// 
 /// {%- if pkg.is_pydantic_2 %}
 /// from pydantic import BaseModel, ConfigDict
