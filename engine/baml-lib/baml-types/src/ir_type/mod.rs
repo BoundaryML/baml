@@ -566,9 +566,7 @@ fn partialize(r#type: &Type, lookup: &impl TypeLookups) -> TypeStreaming {
                 meta: meta.clone(),
             },
             FieldType::List(item_type, _) => {
-                let mut item_type = item_type.clone();
-                item_type.meta_mut().streaming_behavior.needed = true;
-                TypeStreaming::List(Box::new(partialize(&item_type, lookup)), meta)
+                TypeStreaming::List(Box::new(partialize(item_type, lookup)), meta)
             }
             FieldType::Map(key_type, item_type, _) => TypeStreaming::Map(
                 {
@@ -616,7 +614,7 @@ fn partialize(r#type: &Type, lookup: &impl TypeLookups) -> TypeStreaming {
                 TypeStreaming::Union(unsafe { UnionTypeGeneric::new_unsafe(variants) }, meta)
             }
         };
-        if needed || base_type_streaming.is_optional() || matches!(base_type_streaming, TypeStreaming::List(..) | TypeGeneric::Map(..)) {
+        if needed || base_type_streaming.is_optional() {
             // Needed streaming types, and streaming types that are optional, need
             // no further processing to add optionality.
             base_type_streaming

@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	b "unions/baml_client"
 	types "unions/baml_client/types"
@@ -33,9 +34,19 @@ func main() {
 	}
 	for msg := range stream {
 		if msg.IsFinal {
-			fmt.Println(msg.Final())
+			fmt.Println("final")
+			json_bytes, err := json.Marshal(msg.Final())
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println(string(json_bytes))
 		} else {
-			fmt.Println(msg.Stream())
+			fmt.Println("stream")
+			json_bytes, err := json.Marshal(msg.Stream())
+			if err != nil {
+				panic(err)
+			}
+			fmt.Println(string(json_bytes))
 		}
 	}
 

@@ -151,7 +151,6 @@ pub fn validate_asserts(constraints: &[(Constraint, bool)]) -> Result<(), Parsin
             },
         )
         .collect::<Vec<_>>();
-    eprintln!("failing_asserts: {:?}", failing_asserts);
     let causes = failing_asserts
         .into_iter()
         .map(|(label, expr)| ParsingError {
@@ -165,7 +164,6 @@ pub fn validate_asserts(constraints: &[(Constraint, bool)]) -> Result<(), Parsin
         })
         .collect::<Vec<_>>();
     if !causes.is_empty() {
-        eprintln!("causes: {:?}", causes);
         Err(ParsingError {
             causes: vec![],
             reason: "Assertions failed.".to_string(), // IMPORTANT: DO NOT CHANGE THIS MESSAGE. TALK TO GREG.
