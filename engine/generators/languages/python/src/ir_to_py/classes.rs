@@ -56,10 +56,7 @@ fn ir_field_to_py_stream<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> Fi
 mod tests {
     use internal_baml_core::ir::{repr::make_test_ir, IRHelper};
 
-    use crate::{
-        package::Package,
-        r#type::{TypePy, TypeMetaPy},
-    };
+    
 
     use super::*;
 

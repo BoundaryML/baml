@@ -81,7 +81,7 @@ impl LanguageFeatures for GoLanguageFeatures {
             unions.dedup_by_key(|u| u.name.clone());
             unions
         };
-        let mut type_aliases = ir
+        let type_aliases = ir
             .walk_type_aliases()
             .collect::<Vec<_>>();
         let mut go_type_aliases = type_aliases

@@ -1,9 +1,9 @@
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
-use functions::{render_client, render_runtime, render_source_files, render_type_map};
+use functions::{render_client, render_runtime};
 use generated_types::render_rb_types;
 
 use crate::{
-    functions::{render_config, render_globals, render_init, render_parser, render_tracing},
+    functions::render_globals,
     generated_types::{
         render_rb_stream_types_utils, render_rb_type_builder, render_rb_types_utils,
     },
