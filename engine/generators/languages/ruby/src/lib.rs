@@ -129,8 +129,12 @@ impl LanguageFeatures for RbLanguageFeatures {
             .collect::<Vec<_>>();
         let type_aliases = ir
             .walk_type_aliases()
+            .collect::<Vec<_>>();
+        let mut rb_type_aliases = type_aliases
+            .iter()
             .map(|c| ir_to_rb::type_aliases::ir_type_alias_to_rb(c.item, &pkg))
             .collect::<Vec<_>>();
+        rb_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
         // pkg.set("baml_client.type_map");
         // collector.add_file("type_map.rb", render_type_map(&rb_classes, &enums)?)?;
@@ -146,13 +150,14 @@ impl LanguageFeatures for RbLanguageFeatures {
         collector.append_to_file("types.rb", &render_rb_types_utils(&pkg)?)?;
         collector.append_to_file("types.rb", &render_rb_types(&enums, &pkg)?)?;
         collector.append_to_file("types.rb", &render_rb_types(&rb_classes, &pkg)?)?;
-        collector.append_to_file("types.rb", &render_rb_types(&type_aliases, &pkg)?)?;
+        collector.append_to_file("types.rb", &render_rb_types(&rb_type_aliases, &pkg)?)?;
         collector.append_to_file("types.rb", "\nend\n")?;
 
-        let type_aliases = ir
-            .walk_type_aliases()
+        let mut rb_stream_type_aliases = type_aliases
+            .iter()
             .map(|c| ir_to_rb::type_aliases::ir_type_alias_to_rb_stream(c.item, &pkg))
             .collect::<Vec<_>>();
+        rb_stream_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
         let rb_classes = ir
             .walk_classes()
@@ -163,7 +168,7 @@ impl LanguageFeatures for RbLanguageFeatures {
         collector.add_file("stream_types.rb", "module StreamTypes\n")?;
         collector.append_to_file("stream_types.rb", &render_rb_stream_types_utils(&pkg)?)?;
         collector.append_to_file("stream_types.rb", &render_rb_types(&rb_classes, &pkg)?)?;
-        collector.append_to_file("stream_types.rb", &render_rb_types(&type_aliases, &pkg)?)?;
+        collector.append_to_file("stream_types.rb", &render_rb_types(&rb_stream_type_aliases, &pkg)?)?;
         collector.append_to_file("stream_types.rb", "\nend\n")?;
 
         Ok(())

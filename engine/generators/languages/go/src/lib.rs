@@ -81,10 +81,14 @@ impl LanguageFeatures for GoLanguageFeatures {
             unions.dedup_by_key(|u| u.name.clone());
             unions
         };
-        let type_aliases = ir
+        let mut type_aliases = ir
             .walk_type_aliases()
+            .collect::<Vec<_>>();
+        let mut go_type_aliases = type_aliases
+            .iter()
             .map(|c| ir_to_go::type_aliases::ir_type_alias_to_go(c.item, &pkg))
             .collect::<Vec<_>>();
+        go_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
         collector.add_file(
             "type_map.go",
@@ -110,7 +114,7 @@ impl LanguageFeatures for GoLanguageFeatures {
         );
         collector.add_file(
             "types/type_aliases.go",
-            render_go_types(&type_aliases, &pkg)?,
+            render_go_types(&go_type_aliases, &pkg)?,
         );
 
         let unions = {
@@ -123,10 +127,11 @@ impl LanguageFeatures for GoLanguageFeatures {
             unions
         };
 
-        let type_aliases = ir
-            .walk_type_aliases()
+        let mut stream_type_aliases = type_aliases
+            .iter()
             .map(|c| ir_to_go::type_aliases::ir_type_alias_to_go_stream(c.item, &pkg))
             .collect::<Vec<_>>();
+        stream_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
         let go_classes = ir
             .walk_classes()
@@ -148,7 +153,7 @@ impl LanguageFeatures for GoLanguageFeatures {
         );
         collector.add_file(
             "stream_types/type_aliases.go",
-            render_go_stream_types(&type_aliases, &pkg, go_mod_name)?,
+            render_go_stream_types(&stream_type_aliases, &pkg, go_mod_name)?,
         );
 
         Ok(())

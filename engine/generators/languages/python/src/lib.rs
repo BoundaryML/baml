@@ -1,8 +1,15 @@
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
-use functions::{render_async_client, render_sync_client, render_runtime, render_source_files, render_type_map};
-use generated_types::{render_py_types};
+use functions::{
+    render_async_client, render_runtime, render_source_files, render_sync_client, render_type_map,
+};
+use generated_types::render_py_types;
 
-use crate::{functions::{render_config, render_globals, render_init, render_parser, render_tracing}, generated_types::{render_py_stream_types_utils, render_py_type_builder, render_py_types_utils}};
+use crate::{
+    functions::{render_config, render_globals, render_init, render_parser, render_tracing},
+    generated_types::{
+        render_py_stream_types_utils, render_py_type_builder, render_py_types_utils,
+    },
+};
 
 mod functions;
 mod generated_types;
@@ -32,14 +39,18 @@ impl LanguageFeatures for PyLanguageFeatures {
     fn name() -> &'static str {
         "python/pydantic"
     }
-    
+
     fn generate_sdk_files(
         &self,
         collector: &mut FileCollector<Self>,
         ir: std::sync::Arc<IntermediateRepr>,
         args: &GeneratorArgs,
     ) -> Result<(), anyhow::Error> {
-        let pkg = package::CurrentRenderPackage::new("baml_client", ir.clone(), args.is_pydantic_2.unwrap_or(true));
+        let pkg = package::CurrentRenderPackage::new(
+            "baml_client",
+            ir.clone(),
+            args.is_pydantic_2.unwrap_or(true),
+        );
         let file_map = args.file_map_as_json_string()?;
 
         collector.add_file("__init__.py", render_init(&pkg, &args.default_client_mode)?)?;
@@ -53,19 +64,10 @@ impl LanguageFeatures for PyLanguageFeatures {
             .iter()
             .map(|f| ir_to_py::functions::ir_function_to_py(f, &pkg))
             .collect::<Vec<_>>();
-        collector.add_file(
-            "async_client.py",
-            render_async_client(&functions, &pkg)?,
-        )?;
+        collector.add_file("async_client.py", render_async_client(&functions, &pkg)?)?;
 
-        collector.add_file(
-            "sync_client.py",
-            render_sync_client(&functions, &pkg)?,
-        )?;
-        collector.add_file(
-            "parser.py",
-            render_parser(&functions, &pkg)?,
-        )?;
+        collector.add_file("sync_client.py", render_sync_client(&functions, &pkg)?)?;
+        collector.add_file("parser.py", render_parser(&functions, &pkg)?)?;
 
         let py_classes = ir
             .walk_classes()
@@ -75,16 +77,16 @@ impl LanguageFeatures for PyLanguageFeatures {
             .walk_enums()
             .map(|e| ir_to_py::enums::ir_enum_to_py(e.item, &pkg))
             .collect::<Vec<_>>();
-        let type_aliases = ir
-            .walk_type_aliases()
+        let type_aliases = ir.walk_type_aliases().collect::<Vec<_>>();
+
+        let mut py_type_aliases = type_aliases
+            .iter()
             .map(|c| ir_to_py::type_aliases::ir_type_alias_to_py(c.item, &pkg))
             .collect::<Vec<_>>();
+        py_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
         pkg.set("baml_client.type_map");
-        collector.add_file(
-            "type_map.py",
-            render_type_map(&py_classes, &enums)?,
-        )?;
+        collector.add_file("type_map.py", render_type_map(&py_classes, &enums)?)?;
 
         pkg.set("baml_client.type_builder");
 
@@ -94,27 +96,16 @@ impl LanguageFeatures for PyLanguageFeatures {
         )?;
 
         pkg.set("baml_client.types");
-        collector.add_file(
-            "types.py",
-            render_py_types_utils(&pkg)?,
-        )?;
-        collector.append_to_file(
-            "types.py",
-            &render_py_types(&enums, &pkg)?,
-        )?;
-        collector.append_to_file(
-            "types.py",
-            &render_py_types(&py_classes, &pkg)?,
-        )?;
-        collector.append_to_file(
-            "types.py",
-            &render_py_types(&type_aliases, &pkg)?,
-        )?;
+        collector.add_file("types.py", render_py_types_utils(&pkg)?)?;
+        collector.append_to_file("types.py", &render_py_types(&enums, &pkg)?)?;
+        collector.append_to_file("types.py", &render_py_types(&py_classes, &pkg)?)?;
+        collector.append_to_file("types.py", &render_py_types(&py_type_aliases, &pkg)?)?;
 
-        let type_aliases = ir
-            .walk_type_aliases()
+        let mut py_stream_type_aliases = type_aliases
+            .iter()
             .map(|c| ir_to_py::type_aliases::ir_type_alias_to_py_stream(c.item, &pkg))
             .collect::<Vec<_>>();
+        py_stream_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
         let py_classes = ir
             .walk_classes()
@@ -122,29 +113,18 @@ impl LanguageFeatures for PyLanguageFeatures {
             .collect::<Vec<_>>();
 
         pkg.set("baml_client.stream_types");
-        collector.add_file(
-            "stream_types.py",
-            render_py_stream_types_utils(&pkg)?,
-        )?;
-        collector.append_to_file(
-            "stream_types.py",
-            &render_py_types(&py_classes, &pkg)?,
-        )?;
-        collector.append_to_file(
-            "stream_types.py",
-            &render_py_types(&type_aliases, &pkg)?,
-        )?;
+        collector.add_file("stream_types.py", render_py_stream_types_utils(&pkg)?)?;
+        collector.append_to_file("stream_types.py", &render_py_types(&py_classes, &pkg)?)?;
+        collector.append_to_file("stream_types.py", &render_py_types(&py_stream_type_aliases, &pkg)?)?;
 
         Ok(())
     }
 }
 
-
 #[cfg(test)]
 mod generated_tests {
     use test_harness::{create_code_gen_test_suites, TestLanguageFeatures};
-    
-    
+
     impl TestLanguageFeatures for crate::PyLanguageFeatures {
         fn test_name() -> &'static str {
             "python"
@@ -156,10 +136,10 @@ mod generated_tests {
 
 #[cfg(test)]
 mod tests {
-   #[test]
+    #[test]
     fn test_name() {
-        use std::str::FromStr;
         use dir_writer::LanguageFeatures;
+        use std::str::FromStr;
 
         let gen_type = baml_types::GeneratorOutputType::from_str(crate::PyLanguageFeatures::name())
             .expect("PyLanguageFeatures name should be a valid GeneratorOutputType");
