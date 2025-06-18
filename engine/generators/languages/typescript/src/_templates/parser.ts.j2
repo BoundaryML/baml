@@ -1,0 +1,61 @@
+import type { BamlRuntime, BamlCtxManager, ClientRegistry, Image, Audio, Collector } from "@boundaryml/baml"
+import { toBamlError } from "@boundaryml/baml"
+import type { Checked, Check } from "./types"
+import type { partial_types } from "./partial_types"
+import type * as types from "./types"
+import type {
+  {%- for t in types %}{{ t }}{% if !loop.last %}, {% endif %}{% endfor -%}
+} from "./types"
+import type TypeBuilder from "./type_builder"
+
+export class LlmResponseParser {
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
+
+  {% for func in functions %}
+  {{ func.name }}(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): {{func.return_type.serialize_type(pkg)}} {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return this.runtime.parseLlmResponse(
+        "{{func.name}}",
+        llmResponse,
+        false,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        env,
+      ) as {{func.return_type.serialize_type(pkg)}}
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  {% endfor %}
+}
+
+export class LlmStreamParser {
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager) {}
+
+  {% for func in functions %}
+  {{ func.name }}(
+      llmResponse: string,
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry }
+  ): {{func.stream_return_type.serialize_type(pkg)}} {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return this.runtime.parseLlmResponse(
+        "{{func.name}}",
+        llmResponse,
+        true,
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        env,
+      ) as {{func.stream_return_type.serialize_type(pkg)}}
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  {% endfor %}
+}

@@ -32,9 +32,10 @@ describe("Literal types tests", () => {
   });
 
   it("literal string union key in map", async () => {
+    type MapKey = "one" | "two" | "three" | "four";
     const res = await b.InOutLiteralStringUnionMapKey(
-      { one: "1" },
-      { two: "2" },
+      { one: "1" } as { [K in MapKey]?: string },
+      { two: "2" } as { [K in MapKey]?: string },
     );
     expect(res).toHaveProperty("one", "1");
     expect(res).toHaveProperty("two", "2");

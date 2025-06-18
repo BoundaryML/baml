@@ -164,7 +164,9 @@ describe("Streaming Tests", () => {
     let msgs: partial_types.TestClassNested[] = [];
     for await (const msg of stream) {
       console.log("msg", msg);
-      msgs.push(msg);
+      if (msg != null) {
+        msgs.push(msg);
+      }
     }
 
     const final = await stream.getFinalResponse();
@@ -182,10 +184,12 @@ describe("Semantic Streaming Tests", () => {
 
     const msgs: partial_types.SemanticContainer[] = [];
     for await (const msg of stream) {
-      msgs.push(msg ?? "");
+      if (msg != null) {
+        msgs.push(msg);
+      }
 
       // Test field stability.
-      if (msg.sixteen_digit_number != null) {
+      if (msg?.sixteen_digit_number != null) {
         if (reference_int == null) {
           reference_int = msg.sixteen_digit_number;
         } else {
@@ -194,20 +198,21 @@ describe("Semantic Streaming Tests", () => {
       }
 
       // Test @stream.with_state.
+      console.log("msg", msg);
       if (
-        msg.class_needed.s_20_words?.value &&
-        msg.class_needed.s_20_words.value.split(" ").length < 3 &&
-        msg.final_string == null
+        msg?.class_needed.s_20_words?.value &&
+        msg?.class_needed.s_20_words.value.split(" ").length < 3 &&
+        msg?.final_string == null
       ) {
         expect(msg.class_needed.s_20_words.state).toEqual("Incomplete");
       }
-      if (msg.final_string) {
-        expect(msg.class_needed.s_20_words?.state).toEqual("Complete");
+      if (msg?.final_string) {
+        expect(msg?.class_needed.s_20_words?.state).toEqual("Complete");
       }
 
       // Test @stream.not_null.
-      if (msg.three_small_things) {
-        for (const sub of msg.three_small_things) {
+      if (msg?.three_small_things) {
+        for (const sub of msg?.three_small_things) {
           expect(sub?.i_16_digits).toBeDefined();
         }
       }

@@ -247,7 +247,12 @@ impl SerializeType for TypeTS {
                 format!("{}{}", package.relative_from(pkg), name)
             }
             TypeTS::Union { .. } => self.default_name_within_union(),
-            TypeTS::Enum { package, name, dynamic,.. } => {
+            TypeTS::Enum {
+                package,
+                name,
+                dynamic,
+                ..
+            } => {
                 if *dynamic {
                     format!("(string | {}{})", package.relative_from(pkg), name)
                 } else {
@@ -255,21 +260,24 @@ impl SerializeType for TypeTS {
                 }
             }
             TypeTS::List(inner, _) => match &**inner {
-                TypeTS::Union {..} => format!("({})[]", inner.default_name_within_union()),
+                TypeTS::Union { .. } => format!("({})[]", inner.default_name_within_union()),
                 _ => {
                     if inner.meta().is_optional() {
                         format!("({})[]", inner.serialize_type(pkg))
                     } else {
                         format!("{}[]", inner.serialize_type(pkg))
                     }
-                },
+                }
             },
             TypeTS::Map(key, value, _) => {
-                format!(
-                    "Record<{}, {}>",
-                    key.serialize_type(pkg),
-                    value.serialize_type(pkg)
-                )
+                let k = key.serialize_type(pkg);
+                let v = value.serialize_type(pkg);
+                match &**key {
+                    TypeTS::Enum { .. } | TypeTS::Union { .. } => {
+                        format!("Partial<Record<{}, {}>>", k, v)
+                    }
+                    _ => format!("Record<{}, {}>", k, v)
+                }
             }
             TypeTS::Any { .. } => "undefined".to_string(),
         };

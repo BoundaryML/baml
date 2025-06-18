@@ -1,7 +1,6 @@
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
 use functions::{
-    render_async_client, render_async_request, render_config, render_globals, render_index,
-    render_inlinedbaml, render_sync_client, render_sync_request, render_tracing,
+    render_async_client, render_async_request, render_config, render_globals, render_index, render_inlinedbaml, render_parser, render_sync_client, render_sync_request, render_tracing
 };
 use generated_types::{render_partial_types, render_ts_types, render_type_builder};
 mod functions;
@@ -56,30 +55,31 @@ $ pnpm add @boundaryml/baml
             .chain(ir.walk_alias_cycles().map(|a| a.item.0.clone()))
             .collect();
         types.sort();
-        collector.add_file("inlinedbaml.ts", render_inlinedbaml(&pkg, file_map)?)?;
-        collector.add_file("config.ts", render_config(&pkg)?)?;
-        collector.add_file("index.ts", render_index(&args.default_client_mode)?)?;
-        collector.add_file("globals.ts", render_globals(&pkg)?)?;
-        collector.add_file("tracing.ts", render_tracing(&pkg)?)?;
         let functions = ir
             .functions
             .iter()
             .map(|f| ir_to_ts::functions::ir_function_to_ts(f, &pkg))
             .collect::<Vec<_>>();
+        collector.add_file("inlinedbaml.ts", render_inlinedbaml(&pkg, file_map)?)?;
+        collector.add_file("config.ts", render_config(&pkg)?)?;
+        collector.add_file("index.ts", render_index(&args.default_client_mode)?)?;
+        collector.add_file("globals.ts", render_globals(&pkg)?)?;
+        collector.add_file("tracing.ts", render_tracing(&pkg)?)?;
+        collector.add_file("parser.ts", render_parser(&functions, &types, &pkg)?)?;
         collector.add_file(
             "async_client.ts",
             render_async_client(&functions, &types, &pkg)?,
         )?;
-        collector.append_to_file(
-            "async_client.ts",
+        collector.add_file(
+            "async_request.ts",
             &render_async_request(&functions, &types, &pkg)?,
         )?;
         collector.add_file(
             "sync_client.ts",
             render_sync_client(&functions, &types, &pkg)?,
         )?;
-        collector.append_to_file(
-            "sync_client.ts",
+        collector.add_file(
+            "sync_request.ts",
             &render_sync_request(&functions, &types, &pkg)?,
         )?;
         let classes = ir.walk_classes().collect::<Vec<_>>();

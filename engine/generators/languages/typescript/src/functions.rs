@@ -52,7 +52,7 @@ pub fn render_async_request(functions: &[FunctionTS],types: &[String],pkg: &Curr
 
 
 #[derive(askama::Template)]
-#[template(path = "sync_request.ts.j2", escape = "none")]
+#[template(path = "sync_client.ts.j2", escape = "none")]
 struct SyncClient<'a> {
     functions: &'a [FunctionTS],
     types: &'a [String],
@@ -164,5 +164,21 @@ struct SourceFiles<'a> {
 pub fn render_source_files(file_map: Vec<(String, String)>) -> Result<String, askama::Error> {
     SourceFiles {
         file_map: &file_map,
+    }.render()
+}
+
+#[derive(askama::Template)]
+#[template(path = "parser.ts.j2", escape = "none", ext = "txt")]
+struct Parser<'a> {
+    functions: &'a [FunctionTS],
+    types: &'a [String],
+    pkg: &'a CurrentRenderPackage,
+}
+
+pub fn render_parser(functions: &[FunctionTS], types: &[String], pkg: &CurrentRenderPackage) -> Result<String, askama::Error> {
+    Parser {
+        functions,
+        types,
+        pkg,
     }.render()
 }
