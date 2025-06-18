@@ -13,12 +13,12 @@
 
 package types
 
-type SystemComponentCategory = Union2KresourceOrKservice
-
 type MyUnion = *Union3IntOrRecursive1OrString
-
-type Recursive1 = Union2IntOrListRecursive1
 
 type Nonrecursive1 = *int64
 
 type Nonrecursive2 = *string
+
+type Recursive1 = Union2IntOrListRecursive1
+
+type SystemComponentCategory = Union2KresourceOrKservice

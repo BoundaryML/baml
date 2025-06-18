@@ -1,4 +1,4 @@
-# typed: false
+# typed: strict
 # ----------------------------------------------------------------------------
 #
 #  Welcome to Baml! To use this generated code, please run the following:

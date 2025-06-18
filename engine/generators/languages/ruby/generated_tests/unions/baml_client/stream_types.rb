@@ -42,7 +42,7 @@ module BamlClient
 
   class UseMyUnion < T::Struct
       include Baml::Sorbet::Struct
-      const :u, T.nilable(T.any(Recursive1, Integer, String))
+      const :u, T.nilable(T.any(Integer, T::Array[T.nilable(Recursive1)], String))
   end
 
   # #########################################################################
@@ -50,19 +50,19 @@ module BamlClient
   # #########################################################################
 
 
-  SystemComponentCategory = T.type_alias{ T.nilable(T.any(String, String)) }
-
-
   MyUnion = T.type_alias{ T.nilable(T.any(Recursive1, Integer, String)) }
-
-
-  Recursive1 = T.type_alias{ T.nilable(T.any(Integer, T::Array[T.nilable(T.anything)])) }
 
 
   Nonrecursive1 = T.type_alias{ T.nilable(Integer) }
 
 
   Nonrecursive2 = T.type_alias{ T.nilable(String) }
+
+
+  Recursive1 = T.type_alias{ T.nilable(T.any(Integer, T::Array[T.nilable(T.anything)])) }
+
+
+  SystemComponentCategory = T.type_alias{ T.nilable(T.any(String, String)) }
 
 
   end

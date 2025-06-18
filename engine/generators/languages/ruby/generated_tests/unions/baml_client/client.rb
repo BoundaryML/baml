@@ -1,4 +1,4 @@
-# typed: false
+# typed: strict
 # ----------------------------------------------------------------------------
 #
 #  Welcome to Baml! To use this generated code, please run the following:
@@ -49,7 +49,7 @@ module BamlClient
           varargs: T.untyped,
           x: T::Array[BamlClient::Types::ExistingSystemComponent],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(T::Array[BamlClient::Types::ExistingSystemComponent])}
+      ).returns(T::Array[String])}
       def JsonInput(
           *varargs,
           x:,
@@ -68,7 +68,7 @@ module BamlClient
           parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
           # for sorbet we need to cast to the return type since parsed is now the right value
           # We just need to tell sorbet that the return type is the right type
-          parsed.cast_to(T::Array[BamlClient::Types::ExistingSystemComponent])
+          parsed.cast_to(T::Array[String])
       end
 
   end
@@ -85,7 +85,7 @@ module BamlClient
           varargs: T.untyped,
           x: T::Array[BamlClient::Types::ExistingSystemComponent],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Array[T.nilable(BamlClient::StreamTypes::ExistingSystemComponent)]), T::Array[BamlClient::Types::ExistingSystemComponent]])}
+      ).returns(Baml::BamlStream[T::Array[String], T::Array[String]])}
       def JsonInput(
           *varargs,
           x:,
@@ -101,7 +101,7 @@ module BamlClient
               x: x,
           })
 
-          Baml::BamlStream[T.nilable(T::Array[T.nilable(BamlClient::StreamTypes::ExistingSystemComponent)]), T::Array[BamlClient::Types::ExistingSystemComponent]].new(
+          Baml::BamlStream[T::Array[String], T::Array[String]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )

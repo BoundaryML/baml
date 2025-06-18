@@ -58,13 +58,13 @@ module BamlClient
   MyUnion = T.type_alias{ T.nilable(T.any(Recursive1, Integer, String)) }
 
 
-  Recursive1 = T.type_alias{ T.any(Integer, T::Array[T.anything]) }
-
-
   Nonrecursive1 = T.type_alias{ T.nilable(Integer) }
 
 
   Nonrecursive2 = T.type_alias{ T.nilable(String) }
+
+
+  Recursive1 = T.type_alias{ T.any(Integer, T::Array[T.anything]) }
 
 
   end
