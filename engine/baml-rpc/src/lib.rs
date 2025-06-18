@@ -12,6 +12,7 @@ pub use s3::S3UploadMetadata;
 pub use base::EpochMsTimestamp;
 
 pub use baml_ids::*;
+pub use ui::ui_baml_src::{GetBamlSrcBundle, GetBamlSrcBundleRequest, GetBamlSrcBundleResponse};
 pub use ui::ui_control_plane_orgs::{
     CreateOrganization, CreateOrganizationRequest, CreateOrganizationResponse, GetOrganization,
     GetOrganizationRequest, GetOrganizationResponse, Organization, UpdateOrganization,
