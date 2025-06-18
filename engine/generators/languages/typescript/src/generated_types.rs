@@ -58,7 +58,7 @@ mod class {
     /// {%- endif %}
     /// export interface {{name}} {
     ///   {%- for field in fields %}
-    ///   {{- field.render()? -}}
+    ///   {{- field.render()?|indent(4, true) -}}
     ///   {%- endfor %}
     ///   {% if dynamic %}
     ///   [key: string]: any;
@@ -126,21 +126,20 @@ mod class {
 ///
 /// export namespace partial_types {
 ///   {%- for cls in classes %}
-///   {%- if let Some(docstring) = cls.docstring %}
-///   /**
-///   {{crate::utils::prefix_lines(docstring, " * ") }}
-///   */
-///   {%- endif %}
-///   export interface {{cls.name}} {
-/// 
-///   {%- for field in cls.fields -%}
-///     {{ field.render()? -}}
-///   {%- endfor -%}
-///   {%- if cls.dynamic %}
-///   [key: string]: any;
-///   {%- endif %}
-///   }
+///     {%- if let Some(docstring) = cls.docstring %}
+///     /**
+///     {{crate::utils::prefix_lines(docstring, " * ") }}
+///     */
+///     {%- endif %}
+///     export interface {{cls.name}} {
+///     {%- for field in cls.fields %}
+///         {{- field.render()?|indent(4, true) }}
 ///     {%- endfor %}
+///     {%- if cls.dynamic %}
+///       [key: string]: any;
+///     {%- endif %}
+///     }
+///   {%- endfor %}
 /// }
 /// ```
 #[derive(askama::Template)]
