@@ -25,6 +25,8 @@ var typeMap = map[string]reflect.Type{
 
 	"types.Union__List__Recursive1__int":                                   reflect.TypeOf(types.Union2IntOrListRecursive1{}),
 	"stream_types.Union__List__Recursive1__int":                            reflect.TypeOf(stream_types.Union2IntOrListRecursive1{}),
+	"types.Union__List__Recursive1__int__string":                           reflect.TypeOf(types.Union3IntOrListRecursive1OrString{}),
+	"stream_types.Union__List__Recursive1__int__string":                    reflect.TypeOf(stream_types.Union3IntOrListRecursive1OrString{}),
 	"types.Union__Recursive1__int__string":                                 reflect.TypeOf(types.Union3IntOrRecursive1OrString{}),
 	"stream_types.Union__Recursive1__int__string":                          reflect.TypeOf(stream_types.Union3IntOrRecursive1OrString{}),
 	"types.Union__List__JSON__Map__string_JSON__float__int__string":        reflect.TypeOf(types.Union5FloatOrIntOrListJSONOrMapStringKeyJSONValueOrString{}),
