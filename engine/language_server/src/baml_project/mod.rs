@@ -1342,7 +1342,7 @@ fn get_dummy_value(
 ) -> Option<String> {
     let indent_str = "  ".repeat(indent);
     match t {
-        baml_runtime::FieldType::Primitive(t) => {
+        baml_runtime::FieldType::Primitive(t, _) => {
             let dummy = match t {
                 TypeValue::String => {
                     if allow_multiline {
@@ -1368,11 +1368,11 @@ fn get_dummy_value(
 
             Some(dummy)
         }
-        baml_runtime::FieldType::Literal(_) => None,
-        baml_runtime::FieldType::Enum(_) => None,
-        baml_runtime::FieldType::Class(_) => None,
-        baml_runtime::FieldType::RecursiveTypeAlias(_) => None,
-        baml_runtime::FieldType::List(item) => {
+        baml_runtime::FieldType::Literal(_, _) => None,
+        baml_runtime::FieldType::Enum { .. } => None,
+        baml_runtime::FieldType::Class { .. } => None,
+        baml_runtime::FieldType::RecursiveTypeAlias { .. } => None,
+        baml_runtime::FieldType::List(item, _) => {
             let dummy = get_dummy_value(indent + 1, allow_multiline, item);
             // Repeat it 2 times
             match dummy {
@@ -1390,7 +1390,7 @@ fn get_dummy_value(
                 _ => None,
             }
         }
-        baml_runtime::FieldType::Map(k, v) => {
+        baml_runtime::FieldType::Map(k, v, _) => {
             let dummy_k = get_dummy_value(indent, false, k);
             let dummy_v = get_dummy_value(indent + 1, allow_multiline, v);
             match (dummy_k, dummy_v) {
@@ -1409,11 +1409,12 @@ fn get_dummy_value(
                 _ => None,
             }
         }
-        baml_runtime::FieldType::Union(fields) => fields
+        baml_runtime::FieldType::Union(fields, _) => fields
+            .iter_include_null()
             .iter()
             .filter_map(|f| get_dummy_value(indent, allow_multiline, f))
             .next(),
-        baml_runtime::FieldType::Tuple(vals) => {
+        baml_runtime::FieldType::Tuple(vals, _) => {
             let dummy = vals
                 .iter()
                 .filter_map(|f| get_dummy_value(0, false, f))
@@ -1421,11 +1422,7 @@ fn get_dummy_value(
                 .join(", ");
             Some(format!("({},)", dummy))
         }
-        baml_runtime::FieldType::Optional(_) => None,
-        baml_runtime::FieldType::WithMetadata { base, .. } => {
-            get_dummy_value(indent, allow_multiline, base)
-        }
-        baml_runtime::FieldType::Arrow(_) => None,
+        baml_runtime::FieldType::Arrow(_, _) => None,
     }
 }
 

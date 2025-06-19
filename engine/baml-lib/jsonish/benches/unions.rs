@@ -7,10 +7,10 @@ pub fn bench_unions(c: &mut Criterion) {
     let mut group = c.benchmark_group("unions");
 
     let target = FieldType::union(vec![
-        FieldType::Class("VideoContent".to_string()),
-        FieldType::Class("TextContent".to_string()),
-        FieldType::Class("ImageContent".to_string()),
-        FieldType::Class("AudioContent".to_string()),
+        FieldType::class("VideoContent"),
+        FieldType::class("TextContent"),
+        FieldType::class("ImageContent"),
+        FieldType::class("AudioContent"),
     ]);
     let ir = jsonish::helpers::load_test_ir(UNION_SCHEMA);
     let of = jsonish::helpers::render_output_format(&ir, &target, &Default::default()).unwrap();
@@ -52,7 +52,7 @@ pub fn bench_unions(c: &mut Criterion) {
         })
     });
 
-    let target = FieldType::RecursiveTypeAlias("JSONValue".to_string());
+    let target = FieldType::recursive_type_alias("JSONValue");
     let of = jsonish::helpers::render_output_format(&ir, &target, &Default::default()).unwrap();
 
     group.bench_function("json_value_jsonish_only", |b| {

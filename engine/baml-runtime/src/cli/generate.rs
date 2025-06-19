@@ -74,7 +74,7 @@ impl GenerateArgs {
             let generate_output = runtime
                 .generate_client(
                     &client_type,
-                    &internal_baml_codegen::GeneratorArgs::new(
+                    &generators_lib::GeneratorArgs::new(
                         output_dir_relative_to_baml_src.join("baml_client"),
                         &self.from,
                         all_files.iter(),

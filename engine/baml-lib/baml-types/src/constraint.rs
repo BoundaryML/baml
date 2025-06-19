@@ -8,6 +8,22 @@ pub struct Constraint {
 }
 
 impl Constraint {
+    pub fn new_check(label: &str, expr: &str) -> Self {
+        Self {
+            label: Some(label.to_string()),
+            level: ConstraintLevel::Check,
+            expression: JinjaExpression(expr.to_string()),
+        }
+    }
+
+    pub fn new_assert(label: &str, expr: &str) -> Self {
+        Self {
+            label: Some(label.to_string()),
+            level: ConstraintLevel::Assert,
+            expression: JinjaExpression(expr.to_string()),
+        }
+    }
+
     pub fn as_check(self) -> Option<(String, JinjaExpression)> {
         match self.level {
             ConstraintLevel::Check => Some((

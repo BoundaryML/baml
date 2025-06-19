@@ -59,7 +59,11 @@ impl std::fmt::Display for ExposedError {
                 message,
                 status_code,
             } => {
-                write!(f, "LLM client \"{}\" failed with status code: {}\nMessage: {}", client_name, status_code, message)
+                write!(
+                    f,
+                    "LLM client \"{}\" failed with status code: {}\nMessage: {}",
+                    client_name, status_code, message
+                )
             }
         }
     }
@@ -78,9 +82,7 @@ pub(crate) trait IntoBamlError {
 impl<'a> IntoBamlError for &'a anyhow::Error {
     fn into_baml_error<'b>(&self) -> baml_types::tracing::events::BamlError<'b> {
         // print as the downcast_ref of whatever error actually is
-        eprintln!("into_baml_error invoked: {} {:#?}", self.downcast_ref::<String>().is_some(), self);
         if let Some(er) = self.downcast_ref::<ExposedError>() {
-            eprintln!("ExposedError: {:#?}", er);
             return match er {
                 ExposedError::ValidationError {
                     prompt,
@@ -113,14 +115,13 @@ impl<'a> IntoBamlError for &'a anyhow::Error {
                     message: Cow::Owned(message.clone()),
                     status_code: status_code.to_u16() as i32,
                 },
-            }
+            };
         }
-        if let Some(baml_error) = self.downcast_ref::<baml_types::tracing::events::BamlError<'_>>() {
-            eprintln!("BamlError: {:#?}", baml_error);
+        if let Some(baml_error) = self.downcast_ref::<baml_types::tracing::events::BamlError<'_>>()
+        {
             return baml_error.clone();
         }
-        eprintln!("External: {:#?}", self);
-            baml_types::tracing::events::BamlError::External {
+        baml_types::tracing::events::BamlError::External {
             message: Cow::Owned(format!("into_baml_error: {:?}", self)),
         }
     }

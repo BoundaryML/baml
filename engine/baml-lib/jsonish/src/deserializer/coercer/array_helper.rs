@@ -130,7 +130,7 @@ pub(super) fn pick_best(
                 // If matching on a union, and one of the choices is picking an object that only
                 // had a single string coerced from JSON, prefer the other one
                 // (since string cost is low, its better to pick the other one if possible)
-                if matches!(target, FieldType::Union(_)) {
+                if matches!(target, FieldType::Union(_, _)) {
                     let a_is_coerced_string = a_props.len() == 1
                         && a_props.iter().all(|(_, cond)| {
                             matches!(cond, BamlValueWithFlags::String(..))
@@ -242,7 +242,7 @@ pub(super) fn pick_best(
         Some(&(i, _, _, v)) => {
             let mut v = v.clone();
             if res.len() > 1 {
-                v.add_flag(if matches!(target, FieldType::Union(_)) {
+                v.add_flag(if matches!(target, FieldType::Union(_, _)) {
                     Flag::UnionMatch(i, res.to_vec())
                 } else {
                     Flag::FirstMatch(i, res.to_vec())

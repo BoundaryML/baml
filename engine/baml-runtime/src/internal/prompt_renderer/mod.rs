@@ -5,7 +5,7 @@ use jsonish::{BamlValueWithFlags, ResponseBamlValue};
 use render_output_format::render_output_format;
 
 use anyhow::Result;
-use baml_types::{BamlValue, FieldType, StreamingBehavior, TypeValue};
+use baml_types::{BamlValue, FieldType, TypeValue};
 use internal_baml_core::{
     error_unsupported,
     ir::{
@@ -61,7 +61,7 @@ impl PromptRenderer {
             function_name: "fake".into(),
             client_spec: ClientSpec::Named("fake".into()),
             output_defs: OutputFormatContent::mk_fake(),
-            output_type: FieldType::Primitive(TypeValue::String),
+            output_type: FieldType::Primitive(TypeValue::String, Default::default()),
         }
     }
 

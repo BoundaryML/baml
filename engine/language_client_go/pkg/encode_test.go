@@ -16,7 +16,7 @@ func TestEncodeFunctionArguments(t *testing.T) {
 			Kwargs: map[string]any{"a": "b", "c": 1, "d": 2.2, "e": true},
 			ClientRegistry: &ClientRegistry{
 				primary: &[]string{"a"}[0],
-				clients: ClientRegistryMap{
+				clients: clientRegistryMap{
 					"a": clientProperty{
 						provider: "b",
 						options:  map[string]any{"a": "b", "c": 1, "d": 2.2, "e": true},

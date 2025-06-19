@@ -1,8 +1,7 @@
-import { b, b_sync } from './test-setup';
+import { b, b_sync } from "./test-setup";
 
-
-describe('Expose Parser Tests', () => {
-  it('should expose parser', () => {
+describe("Expose Parser Tests", () => {
+  it("should expose parser", () => {
     const llmResponse = `
       \`\`\`json
       {
@@ -45,10 +44,10 @@ describe('Expose Parser Tests', () => {
         },
       },
       len: 5,
-    })
-  })
+    });
+  });
 
-  it('should expose parser sync', () => {
+  it("should expose parser sync", () => {
     const llmResponse = `
       \`\`\`json
       {
@@ -91,10 +90,10 @@ describe('Expose Parser Tests', () => {
         },
       },
       len: 5,
-    })
-  })
+    });
+  });
 
-  it('should expose stream parser', () => {
+  it("should expose stream parser", () => {
     const stream = `
       \`\`\`json
       {
@@ -109,10 +108,10 @@ describe('Expose Parser Tests', () => {
       experience: [],
       education: [],
       skills: [],
-    })
-  })
+    });
+  });
 
-  it('should expose stream parser sync', () => {
+  it("should expose stream parser sync", () => {
     const stream = `
       \`\`\`json
       {
@@ -127,6 +126,6 @@ describe('Expose Parser Tests', () => {
       experience: [],
       education: [],
       skills: [],
-    })
-  })
-})
+    });
+  });
+});

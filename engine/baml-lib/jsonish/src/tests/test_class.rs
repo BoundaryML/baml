@@ -1,4 +1,5 @@
 use super::*;
+use baml_types::type_meta::base::TypeMeta;
 
 //
 const FOO_FILE: &str = r#"
@@ -16,7 +17,7 @@ test_deserializer!(
     test_foo,
     FOO_FILE,
     r#"{"hi": ["a", "b"]}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     {"hi": ["a", "b"]}
 );
 
@@ -24,7 +25,7 @@ test_deserializer!(
     test_wrapped_objects,
     FOO_FILE,
     r#"{"hi": "a"}"#,
-    FieldType::List(FieldType::Class("Foo".to_string()).into()),
+    FieldType::list(FieldType::class("Foo")),
     [{"hi": ["a"]}]
 );
 
@@ -32,7 +33,7 @@ test_deserializer!(
     test_string_from_obj_and_string,
     FOO_FILE,
     r#"The output is: {"hi": ["a", "b"]}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     {"hi": ["a", "b"]}
 );
 
@@ -40,7 +41,7 @@ test_deserializer!(
     test_string_from_obj_and_string_with_extra_text,
     FOO_FILE,
     r#"This is a test. The output is: {"hi": ["a", "b"]}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     {"hi": ["a", "b"]}
 );
 
@@ -48,7 +49,7 @@ test_deserializer!(
     test_string_from_obj_and_string_with_invalid_extra_text,
     FOO_FILE,
     r#"{"hi": ["a", "b"]} is the output."#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     {"hi": ["a", "b"]}
 );
 
@@ -56,7 +57,7 @@ test_deserializer!(
   str_with_quotes,
   FOO_FILE,
   r#"{"foo": "[\"bar\"]"}"#,
-  FieldType::Class("Bar".to_string()),
+  FieldType::class("Bar"),
   {"foo": "[\"bar\"]"}
 );
 
@@ -64,7 +65,7 @@ test_deserializer!(
   str_with_nested_json,
   FOO_FILE,
   r#"{"foo": "{\"foo\": [\"bar\"]}"}"#,
-  FieldType::Class("Bar".to_string()),
+  FieldType::class("Bar"),
   {"foo": "{\"foo\": [\"bar\"]}"}
 );
 
@@ -76,7 +77,7 @@ test_deserializer!(
   "foo": "Here is how you can build the API call:\n```json\n{\n  \"foo\": {\n    \"world\": [\n      \"bar\"\n    ]\n  }\n}\n```"
 }
 "#,
-    FieldType::Class("Bar".to_string()),
+    FieldType::class("Bar"),
     {"foo": "Here is how you can build the API call:\n```json\n{\n  \"foo\": {\n    \"world\": [\n      \"bar\"\n    ]\n  }\n}\n```"}
 );
 
@@ -90,7 +91,7 @@ test_deserializer!(
     test_optional_foo,
     OPTIONAL_FOO,
     r#"{}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     { "foo": null }
 );
 
@@ -98,7 +99,7 @@ test_deserializer!(
     test_optional_foo_with_value,
     OPTIONAL_FOO,
     r#"{"foo": ""}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     { "foo": "" }
 );
 
@@ -113,7 +114,7 @@ test_deserializer!(
     test_multi_fielded_foo,
     MULTI_FIELDED_FOO,
     r#"{"one": "a"}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     { "one": "a", "two": null }
 );
 
@@ -121,7 +122,7 @@ test_deserializer!(
     test_multi_fielded_foo_with_optional,
     MULTI_FIELDED_FOO,
     r#"{"one": "a", "two": "b"}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     { "one": "a", "two": "b" }
 );
 
@@ -145,7 +146,7 @@ test_deserializer!(
             ]    
         }
     ```"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     { "one": "hi", "two": "hello" }
 );
 
@@ -161,7 +162,7 @@ test_deserializer!(
     test_multi_fielded_foo_with_list,
     MULTI_FIELDED_FOO_WITH_LIST,
     r#"{"a": 1, "b": "hi", "c": ["a", "b"]}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     { "a": 1, "b": "hi", "c": ["a", "b"] }
 );
 
@@ -179,7 +180,7 @@ test_deserializer!(
     test_nested_class,
     NEST_CLASS,
     r#"{"foo": {"a": "hi"}}"#,
-    FieldType::Class("Bar".to_string()),
+    FieldType::class("Bar"),
     { "foo": { "a": "hi" } }
 );
 
@@ -202,7 +203,7 @@ test_deserializer!(
             "a": "twooo"
         }
     }"#,
-    FieldType::Class("Bar".to_string()),
+    FieldType::class("Bar"),
     { "foo": { "a": "hi" } }
 );
 
@@ -223,7 +224,7 @@ test_deserializer!(
         }
     }
     "#,
-    FieldType::Class("Bar".to_string()),
+    FieldType::class("Bar"),
     { "foo": { "a": "hi" } }
 );
 
@@ -255,7 +256,7 @@ test_deserializer!(
         "education": [],
         "skills": ["politician", "former brigadier-general"]
     }"#,
-    FieldType::Class("Resume".to_string()),
+    FieldType::class("Resume"),
     {
         "name": "Lee Hsien Loong",
         "email": null,
@@ -282,7 +283,7 @@ test_partial_deserializer!(
         "experience": [
             "Senior Minister of Singapore since 2024",
             "Prime Minister of Singapore from 2004 to "#,
-    FieldType::Class("Resume".to_string()),
+    FieldType::class("Resume"),
     {
         "name": "Lee Hsien Loong",
         "email": null,
@@ -303,7 +304,7 @@ test_partial_deserializer!(
         "experience": [
             "Senior Minister of Singapore since 2024",
             "Prime Minister of Singapore from 2004 to "#,
-    FieldType::Class("Resume".to_string()),
+    FieldType::class("Resume"),
     {
         "name": null,
         "email": null,
@@ -337,7 +338,7 @@ test_deserializer!(
         "key4": "This is a value for key4",
         "key.with.punctuation/123": "This is a value with punctuation and numbers"
       }"#,
-    FieldType::Class("TestClassAlias".to_string()),
+    FieldType::class("TestClassAlias"),
     {
         "key": "This is a value with a dash",
         "key2": "This is a value for key21",
@@ -361,7 +362,7 @@ test_deserializer!(
     test_class_with_whitespace_keys,
     CLASS_SIMPLE,
     r#"{" answer ": {" content ": 78.54}}"#,
-    FieldType::Class("SimpleTest".to_string()),
+    FieldType::class("SimpleTest"),
     {
         "answer": {
             "content": 78.54
@@ -405,7 +406,7 @@ test_deserializer!(
           "SIMD on custom silicon"
         ]
       }"#,
-    FieldType::Class("Resume".to_string()),
+    FieldType::class("Resume"),
     {
         "name": "Vaibhav Gupta",
         "education": [
@@ -564,7 +565,7 @@ test_failing_deserializer!(
     }
     "#,
     r#"My inner string"#,
-    FieldType::Class("Foo".to_string())
+    FieldType::class("Foo")
 );
 
 test_failing_deserializer!(
@@ -579,7 +580,7 @@ test_failing_deserializer!(
     }
     "#,
     r#"My inner string"#,
-    FieldType::Class("Foo".to_string())
+    FieldType::class("Foo")
 );
 
 test_failing_deserializer!(
@@ -590,7 +591,7 @@ test_failing_deserializer!(
     }
     "#,
     r#"My inner string"#,
-    FieldType::Class("Foo".to_string())
+    FieldType::class("Foo")
 );
 
 test_deserializer!(
@@ -601,7 +602,7 @@ test_deserializer!(
     }
     "#,
     r#"1214"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     { "foo": 1214 }
 );
 
@@ -613,7 +614,7 @@ test_deserializer!(
     }
     "#,
     r#"1214.123"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     { "foo": 1214.123 }
 );
 
@@ -625,7 +626,7 @@ test_deserializer!(
     }
     "#,
     r#" true "#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     { "foo": true }
 );
 
@@ -697,7 +698,7 @@ test_deserializer!(
 }
 ```
 "#,
-FieldType::Class("Schema".to_string()),
+FieldType::class("Schema"),
 {
     "prop1": "one",
     "prop2": {
@@ -968,7 +969,7 @@ r#"{
     }
   ]
 }"#,
-FieldType::Class("Page".into()),
+FieldType::class("Page"),
 {
     "object": "page",
     "icon": {
@@ -1078,7 +1079,7 @@ Here's the redesigned code with these changes:
   ]
 
   "#,
-  FieldType::Class("DoCommandACReturnType".to_string()),
+  FieldType::class("DoCommandACReturnType"),
   {
     "sections": [
       {
@@ -1109,7 +1110,7 @@ test_partial_deserializer!(
   test_object_finished_ints,
   OBJECT_STREAM_TEST,
   r#"{"a": 1234,"b": 1234, "c": 1234}"#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {"a": 1234, "b": 1234, "c": 1234}
 );
 
@@ -1121,7 +1122,7 @@ test_deserializer!(
   }
   "#,
   r#"{"a": ""}"#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {"a": ""}
 );
 
@@ -1133,7 +1134,7 @@ test_deserializer!(
   }
   "#,
   r#"{a: ""}"#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {"a": ""}
 );
 
@@ -1151,7 +1152,7 @@ test_deserializer!(
     b: "",
     res: []
   }"#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {"a": "", "b": "", "res": []}
 );
 
@@ -1171,7 +1172,7 @@ test_deserializer!(
     res: [hello,
      world]
   }"#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "a": "Hi friends!",
     "b": "hey world lets do something kinda cool\n    so that we can test this out",
@@ -1194,7 +1195,7 @@ test_deserializer!(
   
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "pointer": {
       "pointer": null,
@@ -1215,7 +1216,7 @@ test_deserializer!(
   
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "pointer": {
       "pointer": null,
@@ -1238,7 +1239,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "pointer": {
       "pointer": 1,
@@ -1268,7 +1269,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "b": {
       "f": {
@@ -1292,7 +1293,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "pointer": {
       "pointer": 1,
@@ -1319,7 +1320,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "rec_one": {
       "rec_one": 1,
@@ -1357,7 +1358,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "rec_one": {
       "rec_one": 1,
@@ -1389,7 +1390,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "rec_one": true,
     "rec_two": false
@@ -1415,7 +1416,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "rec_one": {
       "rec_one": {
@@ -1484,7 +1485,7 @@ test_partial_deserializer_streaming!(
     test_integ_test_failure,
     INTEG_TEST_FAILURE_SCHEMA,
     INTEG_TEST_FAILURE_STR,
-    FieldType::Class("TestOutputClass".to_string()),
+    FieldType::class("TestOutputClass"),
     { "prop1": "In the realm of artificial intelligence, advancements have been remarkable. Between neural networks and cutting-edge algorithms, the landscape of machine learning has evolved dramatically. From the development of self-driving cars to sophisticated chatbots that can engage in human-like conversations, AI technology has become an integral aspect of modern life. Researchers are continually pushing the boundaries of what is possible, exploring deep learning techniques that enable machines to learn from extensive datasets. The application of AI spans various industries including healthcare, where predictive analytics aids in diagnostics, to finance, where algorithms manage investment portfolios. As AI continues to adapt and grow, ethical considerations surrounding data privacy and decision-making processes become increasingly important. Ongoing debates question the implications of relying on AI and machine learning for critical functions in society. Moreover, governments and organizations alike are grappling with the challenges of regulation and oversight in this fast-paced field. The future of AI seems bright, but it also poses inquiries into trust, accountability, and the long-term effects on the job market. As we look ahead, the collaboration between humans and machines could redefine productivity and creativity, paving the way for innovative solutions to complex problems that society faces.",
       "prop2": 1
     }
@@ -1504,7 +1505,7 @@ test_deserializer!(
 
     Anything else I can help with?
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "rec_one": "and then i said \"hi\", and also \"bye\"",
     "rec_two": "and then i said \"hi\", and also \"bye\"",
@@ -1523,7 +1524,7 @@ test_partial_deserializer_streaming!(
     The answer is
     { rec_one: "and then i said \"hi\"
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "rec_one": "and then i said \"hi\"\n  ",
     "rec_two": null
@@ -1541,7 +1542,7 @@ test_partial_deserializer_streaming!(
     The answer is
     { rec_one: "and then i said "hi", and also "bye""
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "rec_one": "and then i said \"hi\", and also \"bye\"",
     "rec_two": null
@@ -1559,7 +1560,7 @@ test_deserializer!(
     The answer is
     { rec_one: ["first with "quotes", and also "more"", "second"], rec_two: ["third", "fourth"] },
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "rec_one": vec!["first with \"quotes\", and also \"more\"", "second"],
     "rec_two": vec!["third", "fourth"]
@@ -1577,7 +1578,7 @@ test_partial_deserializer_streaming!(
     The answer is
     { rec_one: ["first", "second"
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "rec_one": vec!["first", "second"],
     "rec_two": []
@@ -1595,7 +1596,7 @@ test_partial_deserializer_streaming!(
     The answer is
     { rec_one: ["and then i said "hi", "and also "bye"]
   "#,
-  FieldType::Class("Foo".to_string()),
+  FieldType::class("Foo"),
   {
     "rec_one": vec!["and then i said \"hi\", \"and also \"bye"],
     "rec_two": []
@@ -1617,7 +1618,7 @@ test_deserializer!(
   r#"
     {foo:FOO, name: "Greg"}
   "#,
-  FieldType::Class("WithFoo".to_string()),
+  FieldType::class("WithFoo"),
   {
     "foo": "FOO",
     "name": "Greg"

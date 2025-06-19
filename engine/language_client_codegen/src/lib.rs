@@ -14,121 +14,13 @@ use sugar_path::SugarPath;
 use version_check::{check_version, GeneratorType, VersionCheckMode};
 
 mod dir_writer;
-mod go;
-pub mod openapi;
-mod python;
-mod ruby;
-mod typescript;
+// mod go;
+// pub mod openapi;
+// mod python;
+// mod ruby;
+// mod typescript;
 pub mod version_check;
-
-pub struct GeneratorArgs {
-    /// Output directory for the generated client, relative to baml_src
-    output_dir_relative_to_baml_src: PathBuf,
-
-    /// Path to the BAML source directory
-    baml_src_dir: PathBuf,
-
-    inlined_file_map: BTreeMap<PathBuf, String>,
-
-    version: String,
-    no_version_check: bool,
-
-    // Default call mode for functions
-    default_client_mode: GeneratorDefaultClientMode,
-    on_generate: Vec<String>,
-
-    // The type of client to generate
-    client_type: GeneratorOutputType,
-    client_package_name: Option<String>,
-
-    // For TS generators, we can choose between CJS and ESM module formats
-    module_format: Option<ModuleFormat>,
-}
-
-fn relative_path_to_baml_src(path: &Path, baml_src: &Path) -> Result<PathBuf> {
-    pathdiff::diff_paths(path, baml_src).ok_or_else(|| {
-        anyhow::anyhow!(
-            "Failed to compute relative path from {} to {}",
-            path.display(),
-            baml_src.display()
-        )
-    })
-}
-
-impl GeneratorArgs {
-    pub fn new<'i>(
-        output_dir_relative_to_baml_src: impl Into<PathBuf>,
-        baml_src_dir: impl Into<PathBuf>,
-        input_files: impl IntoIterator<Item = (&'i PathBuf, &'i String)>,
-        version: String,
-        no_version_check: bool,
-        default_client_mode: GeneratorDefaultClientMode,
-        on_generate: Vec<String>,
-        client_type: GeneratorOutputType,
-        client_package_name: Option<String>,
-        module_format: Option<ModuleFormat>,
-    ) -> Result<Self> {
-        let baml_src = baml_src_dir.into();
-        let input_file_map: BTreeMap<PathBuf, String> = input_files
-            .into_iter()
-            .map(|(k, v)| Ok((relative_path_to_baml_src(k, &baml_src)?, v.clone())))
-            .collect::<Result<_>>()?;
-
-        Ok(Self {
-            output_dir_relative_to_baml_src: output_dir_relative_to_baml_src.into(),
-            baml_src_dir: baml_src.clone(),
-            // for the key, whhich is the name, just get the filename
-            inlined_file_map: input_file_map,
-            version,
-            no_version_check,
-            default_client_mode,
-            on_generate,
-            client_type,
-            client_package_name,
-            module_format,
-        })
-    }
-
-    pub fn file_map(&self) -> Result<Vec<(String, String)>> {
-        self.inlined_file_map
-            .iter()
-            .map(|(k, v)| {
-                Ok((
-                    serde_json::to_string(&k.display().to_string()).map_err(|e| {
-                        anyhow::Error::from(e)
-                            .context(format!("Failed to serialize key {:#}", k.display()))
-                    })?,
-                    serde_json::to_string(v).map_err(|e| {
-                        anyhow::Error::from(e)
-                            .context(format!("Failed to serialize contents of {:#}", k.display()))
-                    })?,
-                ))
-            })
-            .collect()
-    }
-
-    pub fn output_dir(&self) -> PathBuf {
-        use sugar_path::SugarPath;
-        self.baml_src_dir
-            .join(&self.output_dir_relative_to_baml_src)
-            .normalize()
-    }
-
-    /// Returns baml_src relative to the output_dir.
-    ///
-    /// We need this to be able to codegen a singleton client, so that our generated code can build
-    /// baml_src relative to the path of the file in which the singleton is defined. In Python this is
-    /// os.path.dirname(__file__) for globals.py; in TS this is __dirname for globals.ts.
-    pub fn baml_src_relative_to_output_dir(&self) -> Result<PathBuf> {
-        pathdiff::diff_paths(&self.baml_src_dir, &self.output_dir()).ok_or_else(|| {
-            anyhow::anyhow!(
-                "Failed to compute baml_src ({}) relative to output_dir ({})",
-                self.baml_src_dir.display(),
-                self.output_dir().display()
-            )
-        })
-    }
-}
+pub use generators_lib::GeneratorArgs;
 
 pub struct GenerateOutput {
     pub client_type: GeneratorOutputType,
@@ -140,8 +32,11 @@ pub struct GenerateOutput {
 }
 
 pub trait GenerateClient {
-    fn generate_client(&self, ir: &IntermediateRepr, gen: &GeneratorArgs)
-        -> Result<GenerateOutput>;
+    fn generate_client(
+        &self,
+        ir: std::sync::Arc<IntermediateRepr>,
+        gen: &GeneratorArgs,
+    ) -> Result<GenerateOutput>;
 }
 
 // Assume VSCode is the only one that uses WASM, and it does call this method but at a different time.
@@ -178,97 +73,100 @@ fn version_check_with_error(
     }
 }
 
-impl GenerateClient for GeneratorOutputType {
-    fn generate_client(
-        &self,
-        ir: &IntermediateRepr,
-        gen: &GeneratorArgs,
-    ) -> Result<GenerateOutput> {
-        let runtime_version = env!("CARGO_PKG_VERSION");
+// impl GenerateClient for GeneratorOutputType {
+//     fn generate_client(
+//         &self,
+//         ir: std::sync::Arc<IntermediateRepr>,
+//         gen: &GeneratorArgs,
+//     ) -> Result<GenerateOutput> {
+//         let runtime_version = env!("CARGO_PKG_VERSION");
 
-        // Version check
-        let version_check_result = if !gen.no_version_check {
-            // log::info!("Checking version");
-            version_check_with_error(
-                runtime_version,
-                &gen.version,
-                GeneratorType::CLI,
-                VersionCheckMode::Strict,
-                *self,
-            )
-        } else {
-            Ok(())
-        };
+//         // Version check
+//         let version_check_result = if !gen.no_version_check {
+//             // log::info!("Checking version");
+//             version_check_with_error(
+//                 runtime_version,
+//                 &gen.version,
+//                 GeneratorType::CLI,
+//                 VersionCheckMode::Strict,
+//                 *self,
+//             )
+//         } else {
+//             Ok(())
+//         };
 
-        if let Err(e) = version_check_result {
-            return Err(e);
-        }
+//         if let Err(e) = version_check_result {
+//             return Err(e);
+//         }
 
-        // Generate files
-        let files = match self {
-            GeneratorOutputType::OpenApi => openapi::generate(ir, gen),
-            GeneratorOutputType::PythonPydantic => python::generate(ir, gen, false),
-            GeneratorOutputType::PythonPydanticV1 => python::generate(ir, gen, true),
-            GeneratorOutputType::RubySorbet => ruby::generate(ir, gen),
-            GeneratorOutputType::Typescript => typescript::generate(ir, gen),
-            GeneratorOutputType::TypescriptReact => typescript::generate(ir, gen),
-            GeneratorOutputType::Go => go::generate(ir, gen),
-        }?;
+//         // Generate files
+//         match self {
+//             // GeneratorOutputType::OpenApi => openapi::generate(ir, gen),
+//             // GeneratorOutputType::PythonPydantic => python::generate(ir, gen, false),
+//             // GeneratorOutputType::PythonPydanticV1 => python::generate(ir, gen, true),
+//             // GeneratorOutputType::RubySorbet => ruby::generate(ir, gen),
+//             // GeneratorOutputType::Typescript => typescript::generate(ir, gen),
+//             // GeneratorOutputType::TypescriptReact => typescript::generate(ir, gen),
+//             GeneratorOutputType::Go => {
+//                 generate_sdk(ir, gen)?;
+//             },
+//             _ => todo!("ONLY GO SUPPORTED ATM"),
+//         }?;
 
-        // Run on_generate commands
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            // log::info!("Running on_generate commands");
-            for cmd in gen.on_generate.iter() {
-                baml_log::info!("Running {:?} in {}", cmd, gen.output_dir().display());
+//         // Run on_generate commands
+//         // #[cfg(not(target_arch = "wasm32"))]
+//         // {
+//         //     // log::info!("Running on_generate commands");
+//         //     for cmd in gen.on_generate.iter() {
+//         //         baml_log::info!("Running {:?} in {}", cmd, gen.output_dir().display());
 
-                let output_result = std::process::Command::new("sh")
-                    .arg("-c")
-                    .arg(cmd)
-                    .current_dir(gen.output_dir())
-                    .output()
-                    .context(format!("Failed to run on_generate command {:?}", cmd));
+//         //         let output_result = std::process::Command::new("sh")
+//         //             .arg("-c")
+//         //             .arg(cmd)
+//         //             .current_dir(gen.output_dir())
+//         //             .output()
+//         //             .context(format!("Failed to run on_generate command {:?}", cmd));
 
-                let output = match output_result {
-                    Ok(output) => output,
-                    Err(e) => {
-                        log::error!("Failed to execute on_generate command: {:?}", e);
-                        return Err(e);
-                    }
-                };
+//         //         let output = match output_result {
+//         //             Ok(output) => output,
+//         //             Err(e) => {
+//         //                 log::error!("Failed to execute on_generate command: {:?}", e);
+//         //                 return Err(e);
+//         //             }
+//         //         };
 
-                // log::info!("on_generate command finished");
-                if !output.status.success() {
-                    let stdout = String::from_utf8_lossy(&output.stdout);
-                    let stderr = String::from_utf8_lossy(&output.stderr);
-                    let error_msg = format!(
-                        "on_generate command finished with {}: {:?}\nStdout:\n{}\nStderr:\n{}",
-                        match output.status.code() {
-                            Some(code) => format!("exit code {}", code),
-                            None => "no exit code".to_string(),
-                        },
-                        cmd,
-                        stdout,
-                        stderr
-                    );
-                    return Err(anyhow::anyhow!("{}", error_msg));
-                }
-            }
+//         //         // log::info!("on_generate command finished");
+//         //         if !output.status.success() {
+//         //             let stdout = String::from_utf8_lossy(&output.stdout);
+//         //             let stderr = String::from_utf8_lossy(&output.stderr);
+//         //             let error_msg = format!(
+//         //                 "on_generate command finished with {}: {:?}\nStdout:\n{}\nStderr:\n{}",
+//         //                 match output.status.code() {
+//         //                     Some(code) => format!("exit code {}", code),
+//         //                     None => "no exit code".to_string(),
+//         //                 },
+//         //                 cmd,
+//         //                 stdout,
+//         //                 stderr
+//         //             );
+//         //             return Err(anyhow::anyhow!("{}", error_msg));
+//         //         }
+//         //     }
 
-            if matches!(self, GeneratorOutputType::OpenApi) && gen.on_generate.is_empty() {
-                // TODO: we should auto-suggest a command for the user to run here
-                log::warn!("No on_generate commands were provided for OpenAPI generator - skipping OpenAPI client generation");
-            }
-        }
+//         //     if matches!(self, GeneratorOutputType::OpenApi) && gen.on_generate.is_empty() {
+//         //         // TODO: we should auto-suggest a command for the user to run here
+//         //         log::warn!("No on_generate commands were provided for OpenAPI generator - skipping OpenAPI client generation");
+//         //     }
+//         // }
 
-        Ok(GenerateOutput {
-            client_type: *self,
-            output_dir_shorthand: gen.output_dir_relative_to_baml_src.clone(),
-            output_dir_full: gen.output_dir(),
-            files,
-        })
-    }
-}
+//         // Ok(GenerateOutput {
+//         //     client_type: *self,
+//         //     output_dir_shorthand: gen.output_dir_relative_to_baml_src.clone(),
+//         //     output_dir_full: gen.output_dir(),
+//         //     files,
+//         // })
+//     }
+// }
 
 /// A set of names of @check attributes. This set determines the
 /// way name of a Python Class or TypeScript Interface that holds
@@ -351,35 +249,28 @@ pub fn type_check_attributes(ir: &IntermediateRepr) -> HashSet<TypeCheckAttribut
 }
 
 /// The set of Check names associated with a type.
-/// TODO: This should use `distribute_metadata` instead of pattern matching.
 fn field_type_attributes(field_type: &FieldType) -> Option<TypeCheckAttributes> {
-    match field_type {
-        FieldType::WithMetadata {
-            base, constraints, ..
-        } => {
-            let direct_sub_attributes = field_type_attributes(base);
-            let mut check_names = TypeCheckAttributes(
-                constraints
-                    .iter()
-                    .filter_map(|Constraint { label, level, .. }| {
-                        if matches!(level, ConstraintLevel::Check) {
-                            Some(label.clone().expect("TODO"))
-                        } else {
-                            None
-                        }
-                    })
-                    .collect::<HashSet<String>>(),
-            );
-            if let Some(ref sub_attrs) = direct_sub_attributes {
-                check_names.extend(sub_attrs);
-            }
-            if !check_names.is_empty() {
-                Some(check_names)
-            } else {
-                None
-            }
-        }
-        _ => None,
+    let check_names =
+        TypeCheckAttributes(
+            field_type
+                .meta()
+                .constraints
+                .iter()
+                .filter_map(|Constraint { label, level, .. }| {
+                    if matches!(level, ConstraintLevel::Check) {
+                        Some(label.clone().expect(
+                            "label always exists for a check - this is enforced by the parser",
+                        ))
+                    } else {
+                        None
+                    }
+                })
+                .collect::<HashSet<String>>(),
+        );
+    if !check_names.is_empty() {
+        Some(check_names)
+    } else {
+        None
     }
 }
 

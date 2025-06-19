@@ -1,13 +1,18 @@
 use baml_types::GeneratorOutputType;
 use internal_baml_schema_ast::ast::{Field, FieldType, WithIdentifier, WithName, WithSpan};
 
-use super::{reserved_names::{reserved_names, ReservedNamesMode}, types::validate_type};
+use super::{
+    reserved_names::{reserved_names, ReservedNamesMode},
+    types::validate_type,
+};
 use crate::validate::validation_pipeline::context::Context;
 use internal_baml_diagnostics::DatamodelError;
 
+use crate::validate::validation_pipeline::validations::reserved_names::{
+    RESERVED_NAMES_FUNCTION_PARAMETERS, RESERVED_NAMES_PYTHON, RESERVED_NAMES_TYPESCRIPT,
+};
 use itertools::join;
 use std::collections::{HashMap, HashSet};
-use crate::validate::validation_pipeline::validations::reserved_names::{RESERVED_NAMES_PYTHON, RESERVED_NAMES_FUNCTION_PARAMETERS, RESERVED_NAMES_TYPESCRIPT};
 pub(super) fn validate(ctx: &mut Context<'_>) {
     let mut defined_types = internal_baml_jinja_types::PredefinedTypes::default(
         internal_baml_jinja_types::JinjaContext::Prompt,
@@ -102,34 +107,36 @@ pub(super) fn assert_no_field_name_collisions(
     }
 
     // check for reserved names in function parameters
-    let reserved = reserved_names(generator_output_types, ReservedNamesMode::FunctionParameters);
+    let reserved = reserved_names(
+        generator_output_types,
+        ReservedNamesMode::FunctionParameters,
+    );
     for func in ctx.db.walk_functions() {
         for param in func.walk_input_args() {
             match param.ast_arg().0 {
-                Some(id) => {
-                    match reserved.get(id.name()) {
-                        Some(langs) => {
-                            match langs.as_slice() {
-                                [lang] => {
-                                    ctx.push_error(DatamodelError::new_validation_error(
-                                        &format!("{} is a reserved word in {}", id.name(), lang),
-                                        id.span().clone(),
-                                    ));
-                                }
-                                _ => {
-                                    ctx.push_error(DatamodelError::new_validation_error(
-                                        &format!("{} is a reserved word in language clients: {}", id.name(), join(langs, ", ")),
-                                        id.span().clone(),
-                                    ));
-                                }
-                            }
+                Some(id) => match reserved.get(id.name()) {
+                    Some(langs) => match langs.as_slice() {
+                        [lang] => {
+                            ctx.push_error(DatamodelError::new_validation_error(
+                                &format!("{} is a reserved word in {}", id.name(), lang),
+                                id.span().clone(),
+                            ));
                         }
-                        None => {}
-                    }
-                }
+                        _ => {
+                            ctx.push_error(DatamodelError::new_validation_error(
+                                &format!(
+                                    "{} is a reserved word in language clients: {}",
+                                    id.name(),
+                                    join(langs, ", ")
+                                ),
+                                id.span().clone(),
+                            ));
+                        }
+                    },
+                    None => {}
+                },
                 None => {}
             }
         }
     }
 }
-

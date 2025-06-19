@@ -338,9 +338,7 @@ impl IRSignature {
                     (
                         TypeNodeSignature {
                             signature: Signature::new_class(class_walker.name(), &shallow_hash)?,
-                            field_type: Arc::new(baml_types::FieldType::Class(
-                                class_walker.name().to_string(),
-                            )),
+                            field_type: Arc::new(baml_types::FieldType::class(class_walker.name())),
                         },
                         ClassSignatureDetails {
                             fields: Arc::new(
@@ -370,9 +368,7 @@ impl IRSignature {
                     (
                         TypeNodeSignature {
                             signature: Signature::new_enum(enum_walker.name(), &shallow_hash)?,
-                            field_type: Arc::new(baml_types::FieldType::Enum(
-                                enum_walker.name().to_string(),
-                            )),
+                            field_type: Arc::new(baml_types::FieldType::r#enum(enum_walker.name())),
                         },
                         EnumSignatureDetails {
                             values: Arc::new(

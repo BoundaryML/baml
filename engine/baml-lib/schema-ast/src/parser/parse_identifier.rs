@@ -1,8 +1,8 @@
-use internal_baml_diagnostics::Diagnostics;
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 use crate::{
     assert_correct_parser,
-    ast::{Identifier, RefIdentifier},
+    ast::{Identifier, RefIdentifier, WithName},
     parser::Rule,
     unreachable_rule,
 };

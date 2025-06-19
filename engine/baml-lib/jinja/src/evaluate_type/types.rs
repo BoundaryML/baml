@@ -6,6 +6,7 @@ use std::{
 };
 
 use baml_types::LiteralValue;
+use indexmap::IndexMap;
 use minijinja::machinery::{
     ast::{Call, Spanned},
     Span,
@@ -176,7 +177,7 @@ impl Type {
     pub fn is_optional(&self) -> bool {
         match self {
             Type::None => true,
-            Type::Union(v) => v.iter().any(|x| x.is_optional()),
+            Type::Union(v) => v.iter().any(Type::is_optional),
             _ => false,
         }
     }
@@ -232,20 +233,20 @@ impl BitOr for Type {
 
 #[derive(Debug)]
 enum Scope {
-    CodeBlock(HashMap<String, Type>),
-    Branch(HashMap<String, Type>, HashMap<String, Type>, bool),
+    CodeBlock(IndexMap<String, Type>),
+    Branch(IndexMap<String, Type>, IndexMap<String, Type>, bool),
 }
 
 #[derive(Debug)]
 pub struct PredefinedTypes {
-    functions: HashMap<String, (Type, Vec<(String, Type)>)>,
-    classes: HashMap<String, HashMap<String, Type>>,
+    functions: IndexMap<String, (Type, Vec<(String, Type)>)>,
+    classes: HashMap<String, IndexMap<String, Type>>,
     /// TODO: See the comment for [`Type::AliasRef`].
     ///
     /// We should use this but we can't without a significant refactor.
-    aliases: HashMap<String, Type>,
+    aliases: IndexMap<String, Type>,
     // Variable name <--> Definition
-    variables: HashMap<String, Type>,
+    variables: IndexMap<String, Type>,
     scopes: Vec<Scope>,
 
     errors: Vec<TypeError>,
@@ -270,13 +271,13 @@ impl PredefinedTypes {
                     }
                 }
             }))
-            .map(|k| k.to_string())
+            .map(String::to_owned)
             .collect()
     }
 
     pub fn default(context: JinjaContext) -> Self {
         Self {
-            functions: HashMap::from([
+            functions: IndexMap::from([
                 (
                     "baml::Chat".into(),
                     (Type::String, vec![("role".into(), Type::String)]),
@@ -319,14 +320,14 @@ impl PredefinedTypes {
             classes: HashMap::from([
                 (
                     "baml::Client".into(),
-                    HashMap::from([
+                    IndexMap::from([
                         ("name".into(), Type::String),
                         ("provider".into(), Type::String),
                     ]),
                 ),
                 (
                     "baml::Context".into(),
-                    HashMap::from([
+                    IndexMap::from([
                         (
                             "output_format".into(),
                             Type::Both(
@@ -343,14 +344,14 @@ impl PredefinedTypes {
                 ),
                 (
                     "baml::BuiltIn".into(),
-                    HashMap::from([
+                    IndexMap::from([
                         ("chat".into(), Type::FunctionRef("baml::Chat".into())),
                         ("role".into(), Type::FunctionRef("baml::Chat".into())),
                     ]),
                 ),
                 (
                     "jinja::loop".into(),
-                    HashMap::from([
+                    IndexMap::from([
                         ("index".into(), Type::Int),
                         ("index0".into(), Type::Int),
                         ("revindex".into(), Type::Int),
@@ -364,20 +365,20 @@ impl PredefinedTypes {
                 ),
             ]),
             variables: match context {
-                JinjaContext::Prompt => HashMap::from([
+                JinjaContext::Prompt => IndexMap::from([
                     ("ctx".into(), Type::ClassRef("baml::Context".into())),
                     ("_".into(), Type::ClassRef("baml::BuiltIn".into())),
                 ]),
                 JinjaContext::Parsing => Default::default(),
             },
-            aliases: HashMap::new(),
+            aliases: IndexMap::new(),
             scopes: Vec::new(),
             errors: Vec::new(),
         }
     }
 
     pub fn start_scope(&mut self) {
-        self.scopes.push(Scope::CodeBlock(HashMap::new()));
+        self.scopes.push(Scope::CodeBlock(IndexMap::new()));
     }
 
     pub fn end_scope(&mut self) {
@@ -386,7 +387,7 @@ impl PredefinedTypes {
 
     pub fn start_branch(&mut self) {
         self.scopes
-            .push(Scope::Branch(HashMap::new(), HashMap::new(), true));
+            .push(Scope::Branch(IndexMap::new(), IndexMap::new(), true));
     }
 
     pub fn start_else_branch(&mut self) {
@@ -468,7 +469,7 @@ impl PredefinedTypes {
             .or_else(|| self.variables.get(name))
     }
 
-    pub fn as_class(&self, name: &str) -> Option<&HashMap<String, Type>> {
+    pub fn as_class(&self, name: &str) -> Option<&IndexMap<String, Type>> {
         self.classes.get(name)
     }
 
@@ -480,7 +481,7 @@ impl PredefinedTypes {
         self.functions.insert(name.to_string(), (ret, args));
     }
 
-    pub fn add_class(&mut self, name: &str, fields: HashMap<String, Type>) {
+    pub fn add_class(&mut self, name: &str, fields: IndexMap<String, Type>) {
         self.classes.insert(name.to_string(), fields);
     }
 
@@ -535,7 +536,7 @@ impl PredefinedTypes {
         &self,
         (func, expr): (&str, &Spanned<Call>),
         positional_args: &[Type],
-        kwargs: &HashMap<&str, Type>,
+        kwargs: &IndexMap<&str, Type>,
     ) -> (Type, Vec<TypeError>) {
         let span = expr.span();
         let val = self.as_function(func);

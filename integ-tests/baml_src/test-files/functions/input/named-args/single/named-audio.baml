@@ -40,4 +40,14 @@ test TestURLAudioInput{
   }  
 }
 
+test TestURLAudioInputOpenai{
+  functions [AudioInputOpenai]
+  args {
+    aud{ 
+      url https://actions.google.com/sounds/v1/emergency/beeper_emergency_call.ogg
+    }
+    prompt "Does this sound like a roar? Yes or no? One word no other characters."
+  }  
+}
+
 

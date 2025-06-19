@@ -52,6 +52,7 @@
           cmake
           git
 	  go
+	  gotools
           openssl
           pkg-config
           lld_17

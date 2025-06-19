@@ -1,0 +1,32 @@
+/**
+ * If this import fails, you may need to upgrade @boundaryml/baml.
+ * 
+ * Please upgrade @boundaryml/baml to {{version}}.
+ * 
+ * $ npm install @boundaryml/baml@{{version}}
+ * $ yarn add @boundaryml/baml@{{version}}
+ * $ pnpm add @boundaryml/baml@{{version}}
+ * 
+ * If nothing else works, please ask for help:
+ * 
+ * https://github.com/boundaryml/baml/issues
+ * https://boundaryml.com/discord
+ * 
+ **/
+import { ThrowIfVersionMismatch } from "@boundaryml/baml";
+
+export const version = "{{ version }}";
+
+ThrowIfVersionMismatch(version);
+
+
+{% if default_client_mode == GeneratorDefaultClientMode::Async %}
+export { b } from "./async_client"
+{% else %}
+export { b } from "./sync_client"
+{% endif %}
+export * from "./types"
+export type { partial_types } from "./partial_types"
+export * from "./tracing"
+export { resetBamlEnvVars } from "./globals"
+export { BamlClientHttpError, BamlValidationError, BamlClientFinishReasonError } from "@boundaryml/baml"

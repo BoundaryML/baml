@@ -1,0 +1,77 @@
+/// Streaming version of {{ fn.name }}
+{% if let Some(doc) = fn.documentation -%}
+{{ crate::utils::prefix_lines(doc, "// ") }}
+{% endif -%}
+func (*stream) {{ fn.name }}(ctx context.Context{% for (name, go_type) in fn.args -%}
+        , {{name}} {{go_type.serialize_type(pkg)}}
+        {%- endfor %}, opts ...CallOptionFunc) (<-chan StreamValue[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}], error) {
+
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
+
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ {% for (name, go_type) in fn.args -%}"{{name}}": {{name}},{% endfor %} },
+        Env: getEnvVars(callOpts.env),
+    }
+
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
+
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
+
+    encoded, err := baml.EncodeRoot(args)
+    if err != nil {
+        // This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
+        // and include the type of the args you're passing in.
+        wrapped_err := fmt.Errorf("BAML INTERNAL ERROR: {{ fn.name }}: %w", err)
+        panic(wrapped_err)
+    }
+
+    internal_ctx := context.Background()
+    internal_channel, err := bamlRuntime.CallFunctionStream(internal_ctx, "{{ fn.name }}", encoded)
+    if err != nil {
+        return nil, err
+    }
+
+    channel := make(chan StreamValue[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}])
+    go func() {
+        defer func() {
+            internal_ctx.Done()
+        }()
+        for {
+            select {
+            case <-ctx.Done():
+                close(channel)
+                return
+            case result, ok := <-internal_channel:
+                if !ok {
+                    close(channel)
+                    return
+                }
+                if result.Error != nil {
+                    close(channel)
+                    return
+                }
+                if result.HasData {
+                    data := {{ fn.return_type.cast_from_function("result.Data", pkg) }}
+                    channel <- StreamValue[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}]{
+                        IsFinal: true,
+                        as_final: &data,
+                    }
+                } else {
+                    data := {{ fn.stream_return_type.cast_from_function("result.StreamData", pkg) }}
+                    channel <- StreamValue[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}]{
+                        IsFinal: false,
+                        as_stream: &data,
+                    }
+                }
+            }
+        }
+    }()
+    return channel, nil
+}

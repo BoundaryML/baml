@@ -26,6 +26,10 @@ impl SyncRequestHandler for Rename {
         params: RenameParams,
     ) -> Result<Option<lsp_types::WorkspaceEdit>> {
         let url = params.text_document_position.text_document.uri;
+        if !url.to_string().contains("baml_src") {
+            return Ok(None);
+        }
+
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;

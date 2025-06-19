@@ -150,9 +150,9 @@ class TestAllInputs:
     @pytest.mark.asyncio
     async def test_use_malformed_constraint(self):
         with pytest.raises(errors.BamlError) as e:
-            res = await b.UseMalformedConstraints(MalformedConstraints2(foo=2))
-            assert res == 3
-        assert "object has no method named length" in str(e)
+            _res = await b.UseMalformedConstraints(MalformedConstraints2(foo=2))
+
+        assert "object has no method named length" in str(e.value)
 
     @pytest.mark.asyncio
     async def test_single_class(self):
@@ -507,7 +507,6 @@ async def test_should_work_with_audio_url():
 
 @pytest.mark.asyncio
 async def test_should_work_with_audio_base64_gpt4o():
-
     res = await b.AudioInputOpenai(
         aud=baml_py.Audio.from_base64("audio/mp3", audio_b64),
         prompt="does this sound like a roar? yes or no",
@@ -517,7 +516,6 @@ async def test_should_work_with_audio_base64_gpt4o():
 
 @pytest.mark.asyncio
 async def test_should_work_with_audio_url_gpt4o():
-
     res = await b.AudioInputOpenai(
         aud=baml_py.Audio.from_url(
             "https://github.com/sourcesounds/tf/raw/refs/heads/master/sound/vo/engineer_cloakedspyidentify09.mp3"
@@ -689,20 +687,21 @@ async def test_streaming():
 
     final = await stream.get_final_response()
 
-    assert (
-        first_msg_time - start_time <= 1.5
-    ), "Expected first message within 1 second but it took longer."
-    assert (
-        last_msg_time - start_time >= 1
-    ), "Expected last message after 1.5 seconds but it was earlier."
+    assert first_msg_time - start_time <= 1.5, (
+        "Expected first message within 1 second but it took longer."
+    )
+    assert last_msg_time - start_time >= 1, (
+        "Expected last message after 1.5 seconds but it was earlier."
+    )
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     assert msgs[-1] == final, "Expected last stream message to match final response."
 
@@ -733,20 +732,21 @@ def test_streaming_sync():
 
     final = stream.get_final_response()
 
-    assert (
-        first_msg_time - start_time <= 1.5
-    ), "Expected first message within 1 second but it took longer."
-    assert (
-        last_msg_time - start_time >= 1
-    ), "Expected last message after 1.5 seconds but it was earlier."
+    assert first_msg_time - start_time <= 1.5, (
+        "Expected first message within 1 second but it took longer."
+    )
+    assert last_msg_time - start_time >= 1, (
+        "Expected last message after 1.5 seconds but it was earlier."
+    )
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     assert msgs[-1] == final, "Expected last stream message to match final response."
 
@@ -769,11 +769,12 @@ async def test_streaming_claude():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     print("msgs:")
     print(msgs[-1])
@@ -794,11 +795,12 @@ async def test_streaming_gemini():
     assert len(final) > 0, "Expected non-empty final but got empty."
     assert len(msgs) > 0, "Expected at least one streamed response but got none."
     for prev_msg, msg in zip(msgs, msgs[1:]):
-        assert msg.startswith(
-            prev_msg
-        ), "Expected messages to be continuous, but prev was %r and next was %r" % (
-            prev_msg,
-            msg,
+        assert msg.startswith(prev_msg), (
+            "Expected messages to be continuous, but prev was %r and next was %r"
+            % (
+                prev_msg,
+                msg,
+            )
         )
     print("msgs:")
     print(msgs[-1])
@@ -1206,9 +1208,9 @@ In conclusion, this story is a reflection on the power of dreams and the respons
     print("Duration no caching: ", duration)
     print("Duration with caching: ", duration2)
 
-    assert (
-        duration2 < duration
-    ), f"{duration2} < {duration}. Expected second call to be faster than first by a large margin."
+    assert duration2 < duration, (
+        f"{duration2} < {duration}. Expected second call to be faster than first by a large margin."
+    )
 
 
 @pytest.mark.asyncio
@@ -1276,9 +1278,9 @@ async def test_baml_validation_error_format():
         except errors.BamlValidationError as e:
             print("Error: ", e)
             assert hasattr(e, "prompt"), "Error object should have 'prompt' attribute"
-            assert hasattr(
-                e, "raw_output"
-            ), "Error object should have 'raw_output' attribute"
+            assert hasattr(e, "raw_output"), (
+                "Error object should have 'raw_output' attribute"
+            )
             assert hasattr(e, "message"), "Error object should have 'message' attribute"
             assert 'Say "hello there"' in e.prompt
 

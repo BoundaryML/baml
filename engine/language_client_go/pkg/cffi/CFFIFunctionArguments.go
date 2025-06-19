@@ -94,8 +94,28 @@ func (rcv *CFFIFunctionArguments) EnvLength() int {
 	return 0
 }
 
+func (rcv *CFFIFunctionArguments) Collectors(obj *CFFICollector, j int) bool {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		x := rcv._tab.Vector(o)
+		x += flatbuffers.UOffsetT(j) * 4
+		x = rcv._tab.Indirect(x)
+		obj.Init(rcv._tab.Bytes, x)
+		return true
+	}
+	return false
+}
+
+func (rcv *CFFIFunctionArguments) CollectorsLength() int {
+	o := flatbuffers.UOffsetT(rcv._tab.Offset(10))
+	if o != 0 {
+		return rcv._tab.VectorLen(o)
+	}
+	return 0
+}
+
 func CFFIFunctionArgumentsStart(builder *flatbuffers.Builder) {
-	builder.StartObject(3)
+	builder.StartObject(4)
 }
 func CFFIFunctionArgumentsAddKwargs(builder *flatbuffers.Builder, kwargs flatbuffers.UOffsetT) {
 	builder.PrependUOffsetTSlot(0, flatbuffers.UOffsetT(kwargs), 0)
@@ -110,6 +130,12 @@ func CFFIFunctionArgumentsAddEnv(builder *flatbuffers.Builder, env flatbuffers.U
 	builder.PrependUOffsetTSlot(2, flatbuffers.UOffsetT(env), 0)
 }
 func CFFIFunctionArgumentsStartEnvVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
+	return builder.StartVector(4, numElems, 4)
+}
+func CFFIFunctionArgumentsAddCollectors(builder *flatbuffers.Builder, collectors flatbuffers.UOffsetT) {
+	builder.PrependUOffsetTSlot(3, flatbuffers.UOffsetT(collectors), 0)
+}
+func CFFIFunctionArgumentsStartCollectorsVector(builder *flatbuffers.Builder, numElems int) flatbuffers.UOffsetT {
 	return builder.StartVector(4, numElems, 4)
 }
 func CFFIFunctionArgumentsEnd(builder *flatbuffers.Builder) flatbuffers.UOffsetT {

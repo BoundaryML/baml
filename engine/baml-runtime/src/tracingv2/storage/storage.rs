@@ -264,7 +264,6 @@ fn build_function_log(
     // Build each LLMCall or LLMStreamCall
     let mut calls = Vec::new();
     for (_rid, call_acc) in calls_map {
-        println!("### _rid: {:?}", _rid);
         let (client, provider) = parse_llm_client_and_provider(call_acc.llm_request.as_ref());
         let start_t = call_acc.timestamp_first_seen.unwrap_or(start_ms);
         let end_t = call_acc.timestamp_last_seen.unwrap_or(start_t);

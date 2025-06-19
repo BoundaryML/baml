@@ -1,7 +1,8 @@
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_expr::{
-        parse_expr_block, parse_fn_app, parse_for_loop, parse_if_expression, parse_lambda,
+        parse_expr_block, parse_fn_app, parse_for_loop, parse_generic_fn_app, parse_if_expression,
+        parse_lambda,
     },
     parse_identifier::parse_identifier,
     Rule,
@@ -40,13 +41,11 @@ pub(crate) fn parse_expression(
         ))),
         Rule::class_constructor => Some(parse_class_constructor(first_child, diagnostics)),
         Rule::fn_app => parse_fn_app(first_child, diagnostics),
+        Rule::generic_fn_app => parse_generic_fn_app(first_child, diagnostics),
         Rule::lambda => parse_lambda(first_child, diagnostics),
+        Rule::expr_block => parse_expr_block(first_child, diagnostics)
+            .map(|block| Expression::ExprBlock(block, span)),
         Rule::for_loop => parse_for_loop(first_child, diagnostics),
-        Rule::expr_block => {
-            let res = parse_expr_block(first_child, diagnostics);
-            res
-        }
-        .map(|block| Expression::ExprBlock(block, span)),
         Rule::if_expression => parse_if_expression(first_child, diagnostics),
 
         Rule::BLOCK_LEVEL_CATCH_ALL => {
@@ -312,6 +311,7 @@ pub fn parse_jinja_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) ->
 
 pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Expression {
     assert_correct_parser!(token, Rule::class_constructor);
+
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
     let class_name = parse_identifier(
@@ -322,43 +322,46 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
     while let Some(field_or_close_bracket) = tokens.next() {
         if field_or_close_bracket.as_str() == "}" {
             break;
-        } else if field_or_close_bracket.as_str() == "," {
-            continue;
-        } else if field_or_close_bracket.as_rule() == Rule::NEWLINE {
-            continue;
-        } else {
-            assert_correct_parser!(field_or_close_bracket, Rule::class_field_value_pair);
-            let mut field_tokens = field_or_close_bracket.into_inner();
-            let identifier_or_spread = field_tokens.next().expect("Guaranteed by the grammar");
-            match identifier_or_spread.as_rule() {
-                Rule::struct_spread => {
-                    let mut struct_spread_tokens = identifier_or_spread.into_inner();
-                    let maybe_expr = parse_expression(
-                        struct_spread_tokens
-                            .next()
-                            .expect("Guaranteed by the grammar"),
-                        diagnostics,
-                    );
-                    if let Some(expr) = maybe_expr {
-                        fields.push(ClassConstructorField::Spread(expr));
-                    }
-                }
-                Rule::identifier => {
-                    let field_name = parse_identifier(identifier_or_spread, diagnostics);
-
-                    let _colon = field_tokens.next();
-                    let maybe_expr = parse_expression(
-                        field_tokens.next().expect("Guaranteed by the grammar"),
-                        diagnostics,
-                    );
-                    if let Some(expr) = maybe_expr {
-                        fields.push(ClassConstructorField::Named(field_name, expr));
-                    }
-                }
-                _ => unreachable_rule!(identifier_or_spread, Rule::class_field_value_pair),
-            }
-            let _maybe_comma = tokens.next();
         }
+        if field_or_close_bracket.as_str() == "," {
+            continue;
+        }
+        if field_or_close_bracket.as_rule() == Rule::NEWLINE {
+            continue;
+        }
+
+        assert_correct_parser!(field_or_close_bracket, Rule::class_field_value_pair);
+
+        let mut field_tokens = field_or_close_bracket.into_inner();
+        let identifier_or_spread = field_tokens.next().expect("Guaranteed by the grammar");
+        match identifier_or_spread.as_rule() {
+            Rule::struct_spread => {
+                let mut struct_spread_tokens = identifier_or_spread.into_inner();
+                let maybe_expr = parse_expression(
+                    struct_spread_tokens
+                        .next()
+                        .expect("Guaranteed by the grammar"),
+                    diagnostics,
+                );
+                if let Some(expr) = maybe_expr {
+                    fields.push(ClassConstructorField::Spread(expr));
+                }
+            }
+            Rule::identifier => {
+                let field_name = parse_identifier(identifier_or_spread, diagnostics);
+
+                let _colon = field_tokens.next();
+                let maybe_expr = parse_expression(
+                    field_tokens.next().expect("Guaranteed by the grammar"),
+                    diagnostics,
+                );
+                if let Some(expr) = maybe_expr {
+                    fields.push(ClassConstructorField::Named(field_name, expr));
+                }
+            }
+            _ => unreachable_rule!(identifier_or_spread, Rule::class_field_value_pair),
+        }
+        let _maybe_comma = tokens.next();
     }
     let class_constructor = ClassConstructor { class_name, fields };
 

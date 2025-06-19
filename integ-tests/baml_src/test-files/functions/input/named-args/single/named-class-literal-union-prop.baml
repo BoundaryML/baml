@@ -16,3 +16,12 @@ function FnLiteralUnionClassInputOutput(input: LiteralClassOne | LiteralClassTwo
     {{ input }}
   "#
 }
+
+test TestFnLiteralUnionClassInputOutput{
+  functions [FnLiteralUnionClassInputOutput]
+  args {
+    input {
+      prop "one"
+    }
+  }
+}

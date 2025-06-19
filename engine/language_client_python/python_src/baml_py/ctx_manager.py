@@ -10,6 +10,7 @@ import typing
 from .baml_py import BamlLogEvent, RuntimeContextManager, BamlRuntime, BamlSpan
 import atexit
 import threading
+from typing import Dict
 
 F = typing.TypeVar("F", bound=typing.Callable[..., typing.Any])
 
@@ -26,11 +27,28 @@ def current_thread_id() -> int:
     return current_thread.ident or 0
 
 
+prev_ctx_manager: typing.Optional["CtxManager"] = None
+
+
 class CtxManager:
+    def __new__(cls, *args, **kwargs):
+        if prev_ctx_manager is not None:
+            return prev_ctx_manager
+        return super().__new__(cls)
+
     def __init__(self, rt: BamlRuntime):
+        global prev_ctx_manager
+        if prev_ctx_manager is not None:
+            self.rt = prev_ctx_manager.rt
+            self.ctx = prev_ctx_manager.ctx
+            return
+
+        prev_ctx_manager = self
+
         self.rt = rt
+
         self.ctx = contextvars.ContextVar[typing.Dict[int, RuntimeContextManager]](
-            "baml_ctx", default={current_thread_id(): rt.create_context_manager()}
+            "baml_ctx", default={}
         )
         atexit.register(self.rt.flush)
 
@@ -71,20 +89,35 @@ class CtxManager:
         return self.__ctx()
 
     def start_trace_sync(
-        self, name: str, args: typing.Dict[str, typing.Any], env_vars: typing.Dict[str, str]
+        self,
+        name: str,
+        args: typing.Dict[str, typing.Any],
+        env_vars: typing.Dict[str, str],
     ) -> BamlSpan:
+        # Clone the current context before creating the span
         mng = self.__ctx()
         return BamlSpan.new(self.rt, name, args, mng, env_vars)
 
     def start_trace_async(
-        self, name: str, args: typing.Dict[str, typing.Any], env_vars: typing.Dict[str, str]
+        self,
+        name: str,
+        args: typing.Dict[str, typing.Any],
+        env_vars: typing.Dict[str, str],
     ) -> BamlSpan:
         mng = self.__ctx()
         cln = mng.deep_clone()
         self.ctx.set({current_thread_id(): cln})
         return BamlSpan.new(self.rt, name, args, cln, env_vars)
 
-    def end_trace(self, span: BamlSpan, response: typing.Any, env_vars: typing.Dict[str, str]) -> None:
+    def clone_context(self) -> RuntimeContextManager:
+        mng = self.__ctx()
+        cln = mng.deep_clone()
+        self.ctx.set({current_thread_id(): cln})
+        return cln
+
+    def end_trace(
+        self, span: BamlSpan, response: typing.Any, env_vars: typing.Dict[str, str]
+    ) -> None:
         span.finish(response, self.__ctx(), env_vars)
 
     def flush(self) -> None:

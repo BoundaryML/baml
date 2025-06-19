@@ -1,9 +1,11 @@
 use anyhow::Result;
 use baml_types::expr::VarIndex;
-use baml_types::TypeValue;
+use baml_types::ir_type::ArrowGeneric;
+use baml_types::{type_meta::base::TypeMeta, TypeValue};
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use crate::ir::builtin::builtin_ir;
 use crate::ir::ir_helpers::item_type;
 use crate::ir::IntermediateRepr;
 use crate::ir::{repr::initial_context, IRHelper};
@@ -23,64 +25,72 @@ use crate::ir::IRHelperExtended;
 /// TODO: Implement it directly in terms of the bidirectional typing algorithm.
 pub fn typecheck_exprs(ctx: &mut Context<'_>) -> Result<()> {
     let null_configuration = Configuration::new();
-    if let Ok(ir) = IntermediateRepr::from_parser_database(ctx.db, null_configuration) {
-        let mut typing_context: HashMap<String, FieldType> = ir
-            .expr_fns
-            .iter()
-            .map(|expr_fn| {
-                (
-                    expr_fn.elem.name.clone(),
-                    FieldType::Arrow(Box::new(Arrow {
-                        param_types: expr_fn.elem.inputs.iter().map(|(_, t)| t.clone()).collect(),
-                        return_type: expr_fn.elem.output.clone(),
-                    })),
-                )
-            })
-            .chain(ir.functions.iter().map(|llm_function| {
-                (
-                    llm_function.elem.name.clone(),
-                    FieldType::Arrow(Box::new(Arrow {
-                        param_types: llm_function
-                            .elem
-                            .inputs
-                            .iter()
-                            .map(|(_, t)| t.clone())
-                            .collect(),
-                        return_type: llm_function.elem.output.clone(),
-                    })),
-                )
-            }))
-            .collect();
 
-        for expr_fn in ir.expr_fns.iter() {
-            let expr_fn_with_types = infer_types_in_context(
-                &mut typing_context,
-                Arc::new(
-                    expr_fn
-                        .elem
-                        .clone()
-                        .assign_param_types_to_body_variables()
-                        .expr
-                        .clone(),
+    let Ok(mut ir) = IntermediateRepr::from_parser_database(ctx.db, null_configuration) else {
+        return Ok(());
+    };
+    ir.extend(builtin_ir());
+
+    let mut typing_context: HashMap<String, FieldType> = ir
+        .expr_fns
+        .iter()
+        .map(|expr_fn| {
+            (
+                expr_fn.elem.name.clone(),
+                FieldType::Arrow(Box::new(ArrowGeneric {
+                    param_types: expr_fn.elem.inputs.iter().map(|(_, t)| t.clone()).collect(),
+                    return_type: expr_fn.elem.output.clone(),
+                }),
+                Default::default(),
                 ),
-            );
-            typecheck_in_context(
-                &ir,
-                &mut ctx.diagnostics,
-                &typing_context,
-                &expr_fn_with_types,
-            )?;
-            // deeply_check_inference(&expr_fn_with_types)?;
-        }
+            )
+        })
+        .chain(ir.functions.iter().map(|llm_function| {
+            (
+                llm_function.elem.name.clone(),
+                FieldType::Arrow(Box::new(ArrowGeneric {
+                    param_types: llm_function
+                        .elem
+                        .inputs
+                        .iter()
+                        .map(|(_, t)| t.clone())
+                        .collect(),
+                    return_type: llm_function.elem.output.clone(),
+                }),
+                Default::default(),
+                ),
+            )
+        }))
+        .collect();
 
-        for toplevel_assignment in ir.toplevel_assignments.iter() {
-            typecheck_in_context(
-                &ir,
-                &mut ctx.diagnostics,
-                &typing_context,
-                &toplevel_assignment.elem.expr.elem,
-            )?;
-        }
+    for expr_fn in ir.expr_fns.iter() {
+        let expr_fn_with_types = infer_types_in_context(
+            &mut typing_context,
+            Arc::new(
+                expr_fn
+                    .elem
+                    .clone()
+                    .assign_param_types_to_body_variables()
+                    .expr
+                    .clone(),
+            ),
+        );
+        typecheck_in_context(
+            &ir,
+            &mut ctx.diagnostics,
+            &typing_context,
+            &expr_fn_with_types,
+        )?;
+        // deeply_check_inference(&expr_fn_with_types)?;
+    }
+
+    for toplevel_assignment in ir.toplevel_assignments.iter() {
+        typecheck_in_context(
+            &ir,
+            &mut ctx.diagnostics,
+            &typing_context,
+            &toplevel_assignment.elem.expr.elem,
+        )?;
     }
     Ok(())
 }
@@ -93,6 +103,7 @@ pub fn typecheck_in_context(
     typing_context: &HashMap<String, FieldType>,
     expr: &Expr<ExprMetadata>,
 ) -> Result<()> {
+    // eprintln!("TYPECHECKING: {:?}", expr.dump_str());
     match expr {
         Expr::Atom(atom) => {
             // Atoms always typecheck.
@@ -102,6 +113,8 @@ pub fn typecheck_in_context(
             // Bare functions always typecheck.
             // Ok(())
         }
+        // Builtins always typecheck.
+        Expr::Builtin(builtin, _) => {}
         Expr::FreeVar(var, (var_span, maybe_type)) => {
             if let Some(var_type) = maybe_type {
                 if let Some(ctx_type) = typing_context.get(var) {
@@ -117,7 +130,7 @@ pub fn typecheck_in_context(
         Expr::BoundVar(_, _) => {}
         Expr::Lambda(arity, body, (span, maybe_type)) => {
             // (\(x,y) -> x + y) : (Int,Int) -> Int
-            if let Some(FieldType::Arrow(arrow)) = maybe_type {
+            if let Some(FieldType::Arrow(arrow, _)) = maybe_type {
                 let mut inner_context = typing_context.clone();
                 let fresh_names = body.fresh_names(*arity);
                 let opened_body = fresh_names.iter().enumerate().fold(
@@ -142,7 +155,7 @@ pub fn typecheck_in_context(
                             body.meta()
                                 .1
                                 .as_ref()
-                                .map_or("?".to_string(), |t| t.to_string()),
+                                .map_or("?".to_string(), FieldType::to_string),
                             arrow.return_type.to_string()
                         ),
                         body.meta().0.clone(),
@@ -153,10 +166,15 @@ pub fn typecheck_in_context(
         }
         // (\[x,y] -> x + y) (1,2)
         // ([Int,Int] -> Int) ([Int,Int]
-        Expr::App(f, xs, (span, maybe_app_type)) => {
+        Expr::App {
+            func: f,
+            args: xs,
+            meta: (span, maybe_app_type),
+            type_args,
+        } => {
             // First check that the param types are compatible with the arguments.
             match (&f.meta().1, xs.as_ref()) {
-                (Some(FieldType::Arrow(arrow)), Expr::ArgsTuple(args, _)) => {
+                (Some(FieldType::Arrow(arrow, _)), Expr::ArgsTuple(args, _)) => {
                     for (param_type, arg) in arrow.param_types.iter().zip(args.iter()) {
                         if !compatible_as_subtype(ir, &arg.meta().1, &Some(param_type.clone())) {
                             diagnostics.push_error(DatamodelError::new_validation_error(
@@ -191,7 +209,8 @@ pub fn typecheck_in_context(
         Expr::List(items, meta) => {
             for item in items.iter() {
                 if let Some(item_type) = item.meta().1.as_ref() {
-                    let item_list_type = FieldType::List(Box::new(item_type.clone()));
+                    let item_list_type =
+                        FieldType::List(Box::new(item_type.clone()), TypeMeta::default());
                     if !compatible_as_subtype(ir, &Some(item_list_type), &meta.1.clone()) {
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             "Type mismatch in list",
@@ -205,13 +224,16 @@ pub fn typecheck_in_context(
         Expr::Map(items, meta) => {
             if let Some(map_type) = meta.1.as_ref() {
                 if let Some((key_type, item_type)) = match map_type {
-                    FieldType::Map(key_type, item_type) => Some((key_type, item_type)),
+                    FieldType::Map(key_type, item_type, _) => Some((key_type, item_type)),
                     _ => None,
                 } {
                     for (_key, item) in items.iter() {
                         if let Some(item_type) = item.meta().1.as_ref() {
-                            let item_map_type =
-                                FieldType::Map(key_type.clone(), Box::new(item_type.clone()));
+                            let item_map_type = FieldType::Map(
+                                key_type.clone(),
+                                Box::new(item_type.clone()),
+                                TypeMeta::default(),
+                            );
                             if !compatible_as_subtype(ir, &Some(item_map_type), &meta.1.clone()) {
                                 diagnostics.push_error(DatamodelError::new_validation_error(
                                     "Type mismatch in map",
@@ -236,24 +258,69 @@ pub fn typecheck_in_context(
             meta,
         } => {
             if let Ok(class_walker) = ir.find_class(name) {
+                // Typecheck each field in the constructor.
                 for (field_name, field_value) in fields.iter() {
                     let maybe_field_type = field_value.meta().1.clone();
                     if let Some(field_type) = maybe_field_type {
                         if let Some(field_walker) = class_walker.find_field(field_name) {
+                            // panic!("SOME FIELD TYPE FOUND: {:?}", field_walker.r#type());
                             if !compatible_as_subtype(
                                 ir,
                                 &Some(field_walker.r#type().clone()),
-                                &Some(field_type),
+                                &Some(field_type.clone()),
                             ) {
+                                // panic!("INCOMPATIBLE");
                                 diagnostics.push_error(DatamodelError::new_validation_error(
-                                    "Type mismatch in class constructor",
-                                    meta.0.clone(),
+                                    &format!(
+                                        "{}.{} expected type {}, but found {}",
+                                        name,
+                                        field_name,
+                                        field_walker.r#type(),
+                                        field_type
+                                    ),
+                                    field_value.meta().0.clone(),
                                 ));
                             }
+                            typecheck_in_context(ir, diagnostics, typing_context, field_value)?;
+                        } else {
+                            diagnostics.push_error(DatamodelError::new_validation_error(
+                                &format!("Class {} has no field {}", name, field_name),
+                                field_value.meta().0.clone(),
+                            ));
                         }
                     }
                 }
+
+                // Check that all fields are present.
+                if spread.is_none() {
+                    let missing_fields = class_walker
+                        .walk_fields()
+                        .filter_map(|f| {
+                            if !fields.contains_key(f.name()) {
+                                Some(f.name().to_string())
+                            } else {
+                                None
+                            }
+                        })
+                        .collect::<Vec<_>>();
+                    if !missing_fields.is_empty() {
+                        diagnostics.push_error(DatamodelError::new_validation_error(
+                            &format!(
+                                "Class {} is missing fields: {}",
+                                name,
+                                missing_fields.join(", ")
+                            ),
+                            meta.0.clone(),
+                        ));
+                    }
+                }
+            } else {
+                diagnostics.push_error(DatamodelError::new_validation_error(
+                    &format!("Unknown class: {}", name),
+                    meta.0.clone(),
+                ));
             }
+
             let spread_type = spread.as_ref().and_then(|s| s.meta().1.clone());
             if !compatible_as_subtype(ir, &meta.1, &spread_type) {
                 diagnostics.push_error(DatamodelError::new_validation_error(
@@ -266,7 +333,10 @@ pub fn typecheck_in_context(
             if !compatible_as_subtype(
                 ir,
                 &cond.meta().1,
-                &Some(FieldType::Primitive(TypeValue::Bool)),
+                &Some(FieldType::Primitive(
+                    TypeValue::Bool,
+                    TypeMeta::default(),
+                )),
             ) {
                 diagnostics.push_error(DatamodelError::new_validation_error(
                     "Type mismatch in if",
@@ -283,7 +353,7 @@ pub fn typecheck_in_context(
             meta,
         } => {
             let iterable_type_ok: bool = match &iterable.meta().1 {
-                Some(FieldType::List(_)) => true,
+                Some(FieldType::List(_, _)) => true,
                 _ => false, // TODO: Aliases.
             };
             if !iterable_type_ok {
@@ -351,19 +421,30 @@ pub fn infer_types_in_context(
             let new_meta = (expr.meta().0.clone(), new_body.meta().1.clone());
             Arc::new(Expr::Let(var_name.clone(), new_expr, new_body, new_meta))
         }
-        Expr::App(f, args, (span, maybe_app_type)) => {
+        Expr::App {
+            func: f,
+            args,
+            meta: (span, maybe_app_type),
+            type_args,
+        } => {
             // Infer the type of an App from the return type of the function, if
             // it is a function with a known return type.
             let new_f = infer_types_in_context(typing_context, f.clone());
             let new_args = infer_types_in_context(typing_context, args.clone());
             let new_app_type = match &new_f.meta().1 {
-                Some(FieldType::Arrow(arrow)) => Some(arrow.return_type.clone()),
+                Some(FieldType::Arrow(arrow, _)) => Some(arrow.return_type.clone()),
                 ty => None,
             }
             .or(maybe_app_type.clone());
             let new_meta = (span.clone(), new_app_type);
-            Arc::new(Expr::App(new_f, new_args, new_meta))
+            Arc::new(Expr::App {
+                func: new_f,
+                args: new_args,
+                meta: new_meta,
+                type_args: type_args.clone(),
+            })
         }
+        Expr::Builtin(builtin, _) => expr.clone(),
         Expr::ArgsTuple(ref args, _) => {
             let new_args = args
                 .iter()
@@ -393,7 +474,7 @@ pub fn infer_types_in_context(
                         };
                         Arc::new(body.open(&target, fresh_name))
                     });
-            if let Some(FieldType::Arrow(arrow)) = maybe_type {
+            if let Some(FieldType::Arrow(arrow, _)) = maybe_type {
                 for (param_type, param_name) in arrow.param_types.iter().zip(fresh_names.iter()) {
                     local_typing_context.insert(param_name.to_string(), param_type.clone());
                 }
@@ -501,7 +582,7 @@ pub fn infer_types_in_context(
             // otherwise there is a borrowing issue. (To see why, try taking an immutable
             // reference to `repr` in `from_parser_database`).
             let item_ty = iterable.meta().1.as_ref().and_then(|t| match t {
-                FieldType::List(inner) => Some(inner),
+                FieldType::List(inner, _) => Some(inner),
                 _ => None,
             });
             if let Some(item_ty) = item_ty {
@@ -510,11 +591,9 @@ pub fn infer_types_in_context(
             let new_iterable = infer_types_in_context(typing_context, iterable.clone());
             let new_body = infer_types_in_context(typing_context, body.clone());
             let mut new_meta = meta.clone();
-            new_meta.1 = new_body
-                .meta()
-                .1
-                .as_ref()
-                .map(|body_type| FieldType::List(Box::new(body_type.clone())));
+            new_meta.1 = new_body.meta().1.as_ref().map(|body_type| {
+                FieldType::List(Box::new(body_type.clone()), TypeMeta::default())
+            });
             Arc::new(Expr::ForLoop {
                 item: item.clone(),
                 iterable: iterable.clone(),

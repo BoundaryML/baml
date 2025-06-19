@@ -1,10 +1,11 @@
 mod generate_types;
 mod go_language_features;
+mod types;
 
 use std::{fmt::format, path::PathBuf};
 
 use anyhow::Result;
-use baml_types::ToUnionName;
+use baml_types::{ir_type::UnionTypeViewGeneric, ToUnionName};
 use generate_types::{cast_value, to_go_literal, GoType, ToTypeReferenceInTypeDefinition};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::{
@@ -112,6 +113,7 @@ impl TryFrom<(&'_ IntermediateRepr, &'_ crate::GeneratorArgs)> for GoClient {
         })
     }
 }
+}
 
 trait ToTypeReferenceInClientDefinition {
     fn to_type_ref(&self, ir: &IntermediateRepr, with_checked: bool) -> String;
@@ -128,25 +130,36 @@ impl ToTypeReferenceInClientDefinition for FieldType {
         self.simplify().to_partial_type_ref_impl(ir, with_checked)
     }
     fn to_type_ref_impl(&self, ir: &IntermediateRepr, _with_checked: bool) -> String {
-        match self {
-            FieldType::Enum(name) => {
+        let base_rep = match self {
+            FieldType::Enum { name, .. } => {
                 // enums handle the dynamic types internally
                 format!("types.{name}")
             }
-            FieldType::Literal(value) => to_go_literal(value),
-            FieldType::RecursiveTypeAlias(name) => format!("types.{name}"),
-            FieldType::Class(name) => format!("types.{name}"),
-            FieldType::List(inner) => format!("[]{}", inner.to_type_ref(ir, _with_checked)),
-            FieldType::Map(key, value) => {
+            FieldType::Literal(value, _) => to_go_literal(value),
+            FieldType::RecursiveTypeAlias(name, _) => format!("types.{name}"),
+            FieldType::Class { name, .. } => format!("types.{name}"),
+            FieldType::List(inner, _) => format!("[]{}", inner.to_type_ref(ir, _with_checked)),
+            FieldType::Map(key, value, _) => {
                 format!(
                     "map[{}]{}",
                     key.to_type_ref(ir, _with_checked),
                     value.to_type_ref(ir, _with_checked)
                 )
             }
-            FieldType::Primitive(r#type) => r#type.to_go(),
-            FieldType::Union(inner) => format!("types.{}", self.to_union_name()),
-            FieldType::Tuple(inner) => format!(
+            FieldType::Primitive(r#type, _) => r#type.to_go(),
+            FieldType::Union(inner, _) => match inner.view() {
+                UnionTypeViewGeneric::Null => "any".to_string(),
+                UnionTypeViewGeneric::Optional(field_type) => {
+                    format!("*{}", field_type.to_type_ref(ir, _with_checked))
+                }
+                UnionTypeViewGeneric::OneOf(field_types) => {
+                    format!("types.{}", self.to_union_name())
+                }
+                UnionTypeViewGeneric::OneOfOptional(field_types) => {
+                    format!("*types.{}", self.to_union_name())
+                }
+            },
+            FieldType::Tuple(inner, _) => format!(
                 "Tuple[{}]",
                 inner
                     .iter()
@@ -154,23 +167,19 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Optional(inner) => {
-                format!("*{}", inner.to_type_ref(ir, _with_checked))
+            FieldType::Arrow(_, _) => panic!("Generation is not supported with expr fns"),
+        };
+        match field_type_attributes(self) {
+            Some(_) => {
+                format!("types.Checked[{base_rep}]")
             }
-            FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
-                Some(_) => {
-                    let base_type_ref = base.to_type_ref(ir, _with_checked);
-                    format!("types.Checked[{base_type_ref}]")
-                }
-                None => base.to_type_ref(ir, _with_checked),
-            },
-            FieldType::Arrow(_) => panic!("Generation is not supported with expr fns"),
+            None => base_rep,
         }
     }
 
     fn to_partial_type_ref_impl(&self, ir: &IntermediateRepr, with_checked: bool) -> String {
-        match self {
-            FieldType::Enum(name) => {
+        let base_rep = match self {
+            FieldType::Enum { name, .. } => {
                 if ir
                     .find_enum(name)
                     .map(|e| e.item.attributes.get("dynamic_type").is_some())
@@ -181,29 +190,33 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     format!("*types.{name}")
                 }
             }
-            FieldType::Class(name) => format!("partial_types.{name}"),
-            FieldType::RecursiveTypeAlias(name) => format!("types.{name}"),
-            FieldType::Literal(value) => format!("*{}", to_go_literal(value)),
-            FieldType::List(inner) => {
+            FieldType::Class { name, .. } => format!("partial_types.{name}"),
+            FieldType::RecursiveTypeAlias(name, _) => format!("types.{name}"),
+            FieldType::Literal(value, _) => format!("*{}", to_go_literal(value)),
+            FieldType::List(inner, _) => {
                 format!("[]{}", inner.to_partial_type_ref(ir, with_checked))
             }
-            FieldType::Map(key, value) => {
+            FieldType::Map(key, value, _) => {
                 format!(
                     "map[{}]{}",
                     key.to_type_ref(ir, with_checked),
                     value.to_partial_type_ref(ir, with_checked)
                 )
             }
-            FieldType::Primitive(r#type) => format!("*{}", r#type.to_go()),
-            FieldType::Union(inner) => format!(
-                "*Union[{}]",
-                inner
-                    .iter()
-                    .map(|t| t.to_partial_type_ref(ir, with_checked))
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
-            FieldType::Tuple(inner) => format!(
+            FieldType::Primitive(r#type, _) => format!("*{}", r#type.to_go()),
+            FieldType::Union(inner, _) => match inner.view() {
+                UnionTypeViewGeneric::Null => "any".to_string(),
+                UnionTypeViewGeneric::Optional(field_type) => {
+                    format!("*{}", field_type.to_partial_type_ref(ir, with_checked))
+                }
+                UnionTypeViewGeneric::OneOf(field_types) => {
+                    format!("types.{}", self.to_union_name())
+                }
+                UnionTypeViewGeneric::OneOfOptional(field_types) => {
+                    format!("*types.{}", self.to_union_name())
+                }
+            },
+            FieldType::Tuple(inner, _) => format!(
                 "*Tuple[{}]",
                 inner
                     .iter()
@@ -211,15 +224,13 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Optional(inner) => inner.to_partial_type_ref(ir, with_checked),
-            FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
-                Some(_) => {
-                    let base_type_ref = base.to_partial_type_ref(ir, with_checked);
-                    format!("Checked[{base_type_ref}]")
-                }
-                None => base.to_partial_type_ref(ir, with_checked),
-            },
-            FieldType::Arrow(_) => panic!("Generation is not supported with expr fns"),
+            FieldType::Arrow(_, _) => panic!("Generation is not supported with expr fns"),
+        };
+        match field_type_attributes(self) {
+            Some(_) => {
+                format!("types.Checked[{base_rep}]")
+            }
+            None => base_rep,
         }
     }
 }

@@ -75,11 +75,11 @@ pub fn validate_template(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::HashMap;
+    use indexmap::IndexMap;
 
     fn mk_params() -> PredefinedTypes {
         let mut types = PredefinedTypes::default(JinjaContext::Prompt);
-        types.add_class("Foo", HashMap::from([("name".to_string(), Type::String)]));
+        types.add_class("Foo", IndexMap::from([("name".to_string(), Type::String)]));
         types.add_variable(
             "foo",
             Type::Union(vec![Type::None, Type::ClassRef("Foo".to_string())]),

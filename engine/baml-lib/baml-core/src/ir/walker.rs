@@ -1,5 +1,5 @@
 use anyhow::Result;
-use baml_types::{BamlValue, EvaluationContext, StreamingBehavior, UnresolvedValue};
+use baml_types::{BamlValue, EvaluationContext, type_meta::base::StreamingBehavior, UnresolvedValue};
 use indexmap::{IndexMap, IndexSet};
 
 use internal_baml_diagnostics::Span;

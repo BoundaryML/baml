@@ -1,4 +1,5 @@
 use baml_types::LiteralValue;
+use baml_types::type_meta::base::TypeMeta;
 
 use super::*;
 
@@ -8,7 +9,7 @@ test_deserializer!(
 type A = A[]
     "#,
     "[[], [], [[]]]",
-    FieldType::RecursiveTypeAlias("A".into()),
+    FieldType::recursive_type_alias("A"),
     [[], [], [[]]]
 );
 
@@ -18,7 +19,7 @@ test_deserializer!(
 type A = map<string, A>
     "#,
     r#"{"one": {"two": {}}, "three": {"four": {}}}"#,
-    FieldType::RecursiveTypeAlias("A".into()),
+    FieldType::recursive_type_alias("A"),
     {
         "one": {"two": {}},
         "three": {"four": {}}
@@ -32,7 +33,7 @@ type A = map<string, A>
     "#,
     r#"{"one": {"two": {}}, "three": {"four": {}}}"#,
     FieldType::union(vec![
-        FieldType::RecursiveTypeAlias("A".into()),
+        FieldType::recursive_type_alias("A"),
         FieldType::int(),
     ]),
     {
@@ -49,7 +50,7 @@ type B = C
 type C = A[]
     "#,
     "[[], [], [[]]]",
-    FieldType::RecursiveTypeAlias("A".into()),
+    FieldType::recursive_type_alias("A"),
     [[], [], [[]]]
 );
 
@@ -66,7 +67,7 @@ type JsonValue = int | float | bool | string | null | JsonValue[] | map<string, 
         "bool": true
     }
     "#,
-    FieldType::RecursiveTypeAlias("JsonValue".into()),
+    FieldType::recursive_type_alias("JsonValue"),
     {
         "int": 1,
         "float": 1.0,
@@ -88,7 +89,7 @@ type JsonValue = int | float | bool | string | null | JsonValue[] | map<string, 
         "list": [1, 2, 3]
     }
     "#,
-    FieldType::RecursiveTypeAlias("JsonValue".into()),
+    FieldType::recursive_type_alias("JsonValue"),
     {
         "number": 1,
         "string": "test",
@@ -114,7 +115,7 @@ type JsonValue = int | float | bool | string | null | JsonValue[] | map<string, 
         }
     }
     "#,
-    FieldType::RecursiveTypeAlias("JsonValue".into()),
+    FieldType::recursive_type_alias("JsonValue"),
     {
         "number": 1,
         "string": "test",
@@ -158,7 +159,7 @@ type JsonValue = int | float | bool | string | null | JsonValue[] | map<string, 
         }
     }
     "#,
-    FieldType::RecursiveTypeAlias("JsonValue".into()),
+    FieldType::recursive_type_alias("JsonValue"),
     {
         "number": 1,
         "string": "test",
@@ -206,7 +207,7 @@ type JsonValue = int | float | bool | string | null | JsonValue[] | map<string, 
         }
     ]
     "#,
-    FieldType::RecursiveTypeAlias("JsonValue".into()),
+    FieldType::recursive_type_alias("JsonValue"),
     [
         {
             "number": 1,
@@ -231,7 +232,7 @@ type JsonValue = int | float | bool | string | null | JsonValue[] | map<string, 
     r#"
     [[42.1]]
     "#,
-    FieldType::RecursiveTypeAlias("JsonValue".into()),
+    FieldType::recursive_type_alias("JsonValue"),
     // [[[[[[[[[[[[[[[[[[[[42]]]]]]]]]]]]]]]]]]]]
     [[42.1]]
 );
@@ -255,7 +256,7 @@ type JsonObject = map<string, JsonValue>
         }
     }
     "#,
-    FieldType::RecursiveTypeAlias("JsonValue".into()),
+    FieldType::recursive_type_alias("JsonValue"),
     {
         "number": 1,
         "string": "test",
@@ -300,7 +301,7 @@ type JsonValue = int | float | bool | string | null | JsonValue[] | map<string, 
         }
     }
     "#,
-    FieldType::RecursiveTypeAlias("JsonValue".into()),
+    FieldType::recursive_type_alias("JsonValue"),
     {
         "recipe": {
             "name": "Chocolate Chip Cookies",
@@ -338,7 +339,7 @@ type JsonObject = map<string, JsonValue>
     "#,
     );
 
-    let target_type = FieldType::RecursiveTypeAlias("JsonValue".into());
+    let target_type = FieldType::recursive_type_alias("JsonValue");
     let target =
         crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
 

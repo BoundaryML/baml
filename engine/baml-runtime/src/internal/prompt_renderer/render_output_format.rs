@@ -234,12 +234,15 @@ fn relevant_data_models<'a>(
     let eval_ctx = ctx.eval_ctx(false);
 
     while let Some(output) = stack.pop() {
-        match ir.distribute_metadata(&output) {
-            (FieldType::Enum(enm), (constraints, streaming_behavior)) => {
+        match &output {
+            FieldType::Enum {
+                name: enm,
+                dynamic: _,
+                meta: ref metadata,
+            } => {
                 if checked_types.insert(output.to_string()) {
                     let overrides = ctx.enum_overrides.get(enm);
-                    let walker = ir.find_enum(enm);
-
+                    let walker = ir.find_enum(&enm);
                     let real_values = walker
                         .as_ref()
                         .map(|e| e.walk_values().map(|v| v.name().to_string()))
@@ -255,7 +258,7 @@ fn relevant_data_models<'a>(
                         .collect::<IndexSet<_>>()
                         .into_iter()
                         .map(|value| {
-                            let meta = find_enum_value(enm, &value, &walker, &overrides, ctx)?;
+                            let meta = find_enum_value(&enm, &value, &walker, &overrides, ctx)?;
                             Ok(meta)
                         })
                         .filter_map(|v| v.transpose())
@@ -275,16 +278,16 @@ fn relevant_data_models<'a>(
                     enums.push(Enum {
                         name: Name::new_with_alias(enm.to_string(), alias.value()),
                         values,
-                        constraints,
+                        constraints: metadata.constraints.clone(),
                     });
                 }
             }
-            (FieldType::List(inner), _) | (FieldType::Optional(inner), _) => {
+            FieldType::List(inner, _) => {
                 if !checked_types.contains(&inner.to_string()) {
                     stack.push(inner.as_ref().clone());
                 }
             }
-            (FieldType::Map(k, v), _) => {
+            FieldType::Map(k, ref v, _) => {
                 if checked_types.insert(output.to_string()) {
                     if !checked_types.contains(&k.to_string()) {
                         stack.push(k.as_ref().clone());
@@ -294,7 +297,7 @@ fn relevant_data_models<'a>(
                     }
                 }
             }
-            (FieldType::Tuple(options), _) | (FieldType::Union(options), _) => {
+            FieldType::Tuple(ref options, _) => {
                 if checked_types.insert(output.to_string()) {
                     for inner in options {
                         if !checked_types.contains(&inner.to_string()) {
@@ -303,10 +306,24 @@ fn relevant_data_models<'a>(
                     }
                 }
             }
-            (FieldType::Class(cls), (constraints, streaming_behavior)) => {
+            FieldType::Union(ref options, _) => {
                 if checked_types.insert(output.to_string()) {
-                    let overrides = ctx.class_override.get(cls);
-                    let walker = ir.find_class(cls);
+                    for inner in options.iter_include_null() {
+                        if !checked_types.contains(&inner.to_string()) {
+                            stack.push(inner.clone());
+                        }
+                    }
+                }
+            }
+            FieldType::Class {
+                name: cls,
+                mode: _,
+                dynamic: _,
+                meta: ref metadata,
+            } => {
+                if checked_types.insert(output.to_string()) {
+                    let overrides = ctx.class_override.get(&cls.to_string());
+                    let walker = ir.find_class(&cls.to_string());
 
                     let real_fields = walker
                         .as_ref()
@@ -325,7 +342,7 @@ fn relevant_data_models<'a>(
                         .into_iter()
                         .map(|field| {
                             let meta =
-                                find_existing_class_field(cls, &field, &walker, &overrides, ctx)?;
+                                find_existing_class_field(&cls, &field, &walker, &overrides, ctx)?;
                             Ok(meta)
                         });
 
@@ -333,7 +350,7 @@ fn relevant_data_models<'a>(
                         .map(|o| {
                             o.new_fields
                                 .keys()
-                                .map(|k| find_new_class_field(cls, k, &walker, o, ctx))
+                                .map(|k| find_new_class_field(&cls, k, &walker, o, ctx))
                         })
                         .into_iter()
                         .flatten();
@@ -382,22 +399,12 @@ fn relevant_data_models<'a>(
                     classes.push(Class {
                         name: Name::new_with_alias(cls.to_string(), alias.value()),
                         fields,
-                        constraints,
-                        streaming_behavior,
+                        constraints: metadata.constraints.clone(),
+                        streaming_behavior: metadata.streaming_behavior.clone(),
                     });
-                } else {
-                    // TODO: @antonio This one was nasty! If aliases are not
-                    // resolved in the `ir.finite_recursive_cycles()` function
-                    // then an alias that points to a recursive class will get
-                    // resolved below and then this code will run, introducing
-                    // a recursive class in the relevant data models that does
-                    // not exist in the IR although it should!. Now it's been
-                    // fixed so this should be safe to remove, it wasn't even
-                    // a bug it was "why is this working when IT SHOULD NOT".
-                    recursive_classes.insert(cls.to_owned());
                 }
             }
-            (FieldType::RecursiveTypeAlias(name), _) => {
+            FieldType::RecursiveTypeAlias { name, .. } => {
                 // TODO: Same O(n) problem as above.
                 for cycle in ir.structural_recursive_alias_cycles() {
                     if cycle.contains_key(name) {
@@ -426,12 +433,9 @@ fn relevant_data_models<'a>(
                     }
                 }
             }
-            (FieldType::Literal(_), _) => {}
-            (FieldType::Primitive(_), _) => {}
-            (FieldType::Arrow(_), _) => {}
-            (FieldType::WithMetadata { .. }, _) => {
-                unreachable!("It is guaranteed that a call to distribute_constraints will not return FieldType::Constrained")
-            }
+            FieldType::Literal(_, _) => {}
+            FieldType::Primitive(_, _) => {}
+            FieldType::Arrow(_, _) => {}
         }
     }
 
@@ -472,7 +476,7 @@ mod tests {
             .create_ctx(None, None, env_vars.clone(), vec![FunctionCallId::new()])
             .unwrap();
 
-        let field_type = FieldType::Enum("Foo".to_string());
+        let field_type = FieldType::r#enum("Foo");
         let render_output =
             render_output_format(baml_runtime.inner.ir.as_ref(), &ctx, &field_type).unwrap();
 
@@ -657,18 +661,20 @@ Month
 - November
 - December
 
-Date {
-  day: int,
-  month: Month,
-  year: int,
-}
-
 Answer in JSON using this schema:
 {
   education: [
     {
-      from_date: Date,
-      to_date: Date or "current",
+      from_date: {
+        day: int,
+        month: Month,
+        year: int,
+      },
+      to_date: {
+        day: int,
+        month: Month,
+        year: int,
+      } or "current",
       school: string,
       description: string,
     }
@@ -677,5 +683,37 @@ Answer in JSON using this schema:
         "#
             .trim()
         )
+    }
+
+    #[test]
+    fn test_render_output_format_description_and_alias() {
+        let files = vec![(
+            "test-file.baml",
+            r#"
+            class Foo {
+                bar string @alias("a") @description("d")
+            }
+            "#,
+        )]
+        .into_iter()
+        .collect();
+        let env_vars = HashMap::new();
+        let baml_runtime = BamlRuntime::from_file_content(".", &files, env_vars.clone()).unwrap();
+        let ctx_manager = baml_runtime.create_ctx_manager(BamlValue::Null, None);
+        let ctx: RuntimeContext = ctx_manager
+            .create_ctx(None, None, env_vars.clone(), vec![FunctionCallId::new()])
+            .expect("Should create context");
+
+        let field_type = FieldType::class("Foo");
+        let render_output =
+            render_output_format(baml_runtime.inner.ir.as_ref(), &ctx, &field_type).unwrap();
+
+        let foo = render_output.find_class("Foo").unwrap();
+        assert_eq!(
+            foo.fields[0].0,
+            Name::new_with_alias("bar".to_string(), Some("a".to_string()))
+        );
+        assert_eq!(foo.fields[0].1, FieldType::r#string());
+        assert_eq!(foo.fields[0].2, Some("d".to_string()));
     }
 }

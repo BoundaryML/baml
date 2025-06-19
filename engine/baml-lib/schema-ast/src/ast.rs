@@ -9,6 +9,7 @@ pub mod expr;
 mod expression;
 mod field;
 
+mod app;
 mod identifier;
 mod indentation_type;
 mod newline_type;
@@ -21,6 +22,7 @@ mod type_expression_block;
 mod value_expression_block;
 pub(crate) use self::comment::Comment;
 
+pub use app::App;
 pub use argument::{Argument, ArgumentId, ArgumentsList};
 pub use assignment::Assignment;
 pub use attribute::{Attribute, AttributeContainer, AttributeId};

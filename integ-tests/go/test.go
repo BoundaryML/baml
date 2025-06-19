@@ -11,15 +11,28 @@ import (
 func main() {
 	ctx := context.Background()
 
-	registry := baml.NewClientRegistry()
-	registry.AddLlmClient("a", "openai", map[string]any{"a": "b"})
-	registry.SetPrimaryClient("a")
+	collector := baml.NewCollector()
 
-	v2, err := b.AaaSamOutputFormat(ctx, "oranges", b.WithClientRegistry(registry))
+	v2, err := b.AaaSamOutputFormat(ctx, "oranges", b.WithCollector(collector))
 	if err != nil {
 		panic(err)
 	}
 	fmt.Println(*v2)
+
+	usage, err := collector.Usage()
+	if err != nil {
+		panic(err)
+	}
+	input_tokens, err := usage.InputTokens()
+	if err != nil {
+		panic(err)
+	}
+	output_tokens, err := usage.OutputTokens()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Printf("input_tokens: %d\n", input_tokens)
+	fmt.Printf("output_tokens: %d\n", output_tokens)
 
 	v2, err = b.AaaSamOutputFormat(ctx, "pineapple")
 	if err != nil {

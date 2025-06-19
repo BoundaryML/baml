@@ -78,7 +78,7 @@ impl WithJsonSchema for FunctionArgs {
                 let mut required_props = vec![];
                 for (name, t) in args.iter() {
                     properties[name] = t.json_schema();
-                    if let FieldType::Optional(_) = t {
+                    if !t.is_optional() {
                         required_props.push(name.clone());
                     }
                 }
@@ -98,11 +98,8 @@ impl WithJsonSchema for Vec<(String, FieldType)> {
         let mut required_props = vec![];
         for (name, t) in self.iter() {
             properties[name.clone()] = t.json_schema();
-            match t {
-                FieldType::Optional(_) => {}
-                _ => {
-                    required_props.push(name.clone());
-                }
+            if !t.is_optional() {
+                required_props.push(name.clone());
             }
         }
         json!({
@@ -134,11 +131,8 @@ impl WithJsonSchema for Walker<'_, &Class> {
         let mut required_props = vec![];
         for field in self.elem().static_fields.iter() {
             properties[field.elem.name.clone()] = field.elem.r#type.elem.json_schema();
-            match field.elem.r#type.elem {
-                FieldType::Optional(_) => {}
-                _ => {
-                    required_props.push(field.elem.name.clone());
-                }
+            if !field.elem.r#type.elem.is_optional() {
+                required_props.push(field.elem.name.clone());
             }
         }
         json!({
@@ -153,16 +147,16 @@ impl WithJsonSchema for Walker<'_, &Class> {
 impl WithJsonSchema for FieldType {
     fn json_schema(&self) -> serde_json::Value {
         match self {
-            FieldType::Class(name) | FieldType::Enum(name) => json!({
+            FieldType::Class { name, .. } | FieldType::Enum { name, .. } => json!({
                 "$ref": format!("#/definitions/{}", name),
             }),
-            FieldType::Literal(v) => json!({
+            FieldType::Literal(v, _) => json!({
                 "const": v.to_string(),
             }),
-            FieldType::RecursiveTypeAlias(_) => json!({
+            FieldType::RecursiveTypeAlias { .. } => json!({
                 "type": ["number", "string", "boolean", "object", "array", "null"]
             }),
-            FieldType::Primitive(t) => match t {
+            FieldType::Primitive(t, _) => match t {
                 TypeValue::String => json!({
                     "type": "string",
                 }),
@@ -191,7 +185,7 @@ impl WithJsonSchema for FieldType {
             },
             // Handle list types (arrays) with optional support
             // For example: string[]? generates a schema that allows both array and null
-            FieldType::List(item) => {
+            FieldType::List(item, _) => {
                 let mut schema = json!({
                     "type": "array",
                     "items": (*item).json_schema()
@@ -204,10 +198,10 @@ impl WithJsonSchema for FieldType {
                     schema["default"] = serde_json::Value::Null;
                 }
                 schema
-            },
+            }
             // Handle map types with optional support
             // For example: map<string, int>? generates a schema that allows both object and null
-            FieldType::Map(_k, v) => {
+            FieldType::Map(_k, v, _) => {
                 let mut schema = json!({
                     "type": "object",
                     "additionalProperties": {
@@ -222,48 +216,23 @@ impl WithJsonSchema for FieldType {
                     schema["default"] = serde_json::Value::Null;
                 }
                 schema
-            },
-            FieldType::Union(options) => json!({
-                "anyOf": options.iter().map(|t| {
-                    let mut res = t.json_schema();
-                    // if res is a map, add a "title" field
-                    if let serde_json::Value::Object(r) = &mut res {
-                        r.insert("title".to_string(), json!(t.to_string()));
+            }
+            FieldType::Union(options, _) => json!({
+                    "anyOf": options.iter_include_null().iter().map(|t| {
+                        let mut res = t.json_schema();
+                        // if res is a map, add a "title" field
+                        if let serde_json::Value::Object(r) = &mut res {
+                            r.insert("title".to_string(), json!(t.to_string()));
+                        }
+                        res
                     }
-                    res
-                }
-            ).collect::<Vec<_>>(),
+                ).collect::<Vec<_>>(),
             }),
-            FieldType::Tuple(options) => json!({
+            FieldType::Tuple(options, _) => json!({
                 "type": "array",
                 "prefixItems": options.iter().map(|t| t.json_schema()).collect::<Vec<_>>(),
             }),
-            // Handle optional types (marked with ?) that aren't lists or maps
-            FieldType::Optional(inner) => {
-                match **inner {
-                    // For primitive types, we can simply add "null" to the allowed types
-                    FieldType::Primitive(_) => {
-                        let mut res = inner.json_schema();
-                        res["type"] = json!([res["type"], "null"]);
-                        res["default"] = serde_json::Value::Null;
-                        res
-                    }
-                    // For complex types, we need to use anyOf to allow either the type or null
-                    _ => {
-                        let mut res = inner.json_schema();
-                        // Add a title for better schema documentation
-                        if let serde_json::Value::Object(r) = &mut res {
-                            r.insert("title".to_string(), json!(inner.to_string()));
-                        }
-                        json!({
-                            "anyOf": [res, json!({"type": "null", "title": "null"})],
-                            "default": serde_json::Value::Null,
-                        })
-                    }
-                }
-            }
-            FieldType::WithMetadata { base, .. } => base.json_schema(),
-            FieldType::Arrow(_) => json!({}), // TODO: Make this function partial - it should not return for Arrow.
+            FieldType::Arrow(_, _) => json!({}), // TODO: Make this function partial - it should not return for Arrow.
         }
     }
 }

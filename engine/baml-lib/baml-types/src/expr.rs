@@ -3,7 +3,7 @@ use std::collections::HashSet;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-use crate::{field_type::FieldType, BamlMap, BamlValueWithMeta};
+use crate::{ir_type::FieldType, BamlMap, BamlValueWithMeta};
 use internal_baml_diagnostics::Span;
 use itertools::join;
 
@@ -20,23 +20,33 @@ pub enum Expr<T> {
         spread: Option<Box<Expr<T>>>,
         meta: T,
     },
-
     LLMFunction(Name, Vec<Name>, T),
     // A free variable, not bound by a lambda.
     FreeVar(Name, T),
     // The DeBruijn index of a bound variable.
     BoundVar(VarIndex, T),
     Lambda(usize, Arc<Expr<T>>, T), // number of parameters, body, metadata
-    App(Arc<Expr<T>>, Arc<Expr<T>>, T),
+    App {
+        func: Arc<Expr<T>>,
+        type_args: Vec<FieldType>,
+        args: Arc<Expr<T>>,
+        meta: T,
+    },
     If(Arc<Expr<T>>, Arc<Expr<T>>, Option<Arc<Expr<T>>>, T),
     Let(Name, Arc<Expr<T>>, Arc<Expr<T>>, T), // let name = expr in body
     ArgsTuple(Vec<Expr<T>>, T),
+    Builtin(Builtin, T),
     ForLoop {
         item: Name, // An identifier. TODO: Generalize to left-hand-side. i.e. name or other pattern.
         iterable: Arc<Expr<T>>,
         body: Arc<Expr<T>>,
         meta: T,
     },
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Builtin {
+    FetchValue,
 }
 
 pub type Name = String;
@@ -81,9 +91,10 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::BoundVar(_, meta) => meta,
             Expr::FreeVar(_, meta) => meta,
             Expr::Lambda(_, _, meta) => meta,
-            Expr::App(_, _, meta) => meta,
+            Expr::App { meta, .. } => meta,
             Expr::ArgsTuple(_, meta) => meta,
             Expr::Let(_, _, _, meta) => meta,
+            Expr::Builtin(_, meta) => meta,
             Expr::If(_, _, _, meta) => meta,
             Expr::ForLoop { meta, .. } => meta,
         }
@@ -99,9 +110,10 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::BoundVar(_, meta) => meta,
             Expr::FreeVar(_, meta) => meta,
             Expr::Lambda(_, _, meta) => meta,
-            Expr::App(_, _, meta) => meta,
+            Expr::App { meta, .. } => meta,
             Expr::Let(_, _, _, meta) => meta,
             Expr::ArgsTuple(_, meta) => meta,
+            Expr::Builtin(_, meta) => meta,
             Expr::If(_, _, _, meta) => meta,
             Expr::ForLoop { meta, .. } => meta,
         }
@@ -117,9 +129,10 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::BoundVar(_, meta) => meta,
             Expr::FreeVar(_, meta) => meta,
             Expr::Lambda(_, _, meta) => meta,
-            Expr::App(_, _, meta) => meta,
+            Expr::App { meta, .. } => meta,
             Expr::ArgsTuple(_, meta) => meta,
             Expr::Let(_, _, _, meta) => meta,
+            Expr::Builtin(_, meta) => meta,
             Expr::If(_, _, _, meta) => meta,
             Expr::ForLoop { meta, .. } => meta,
         }
@@ -135,7 +148,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             Expr::BoundVar(ind, _) => ind.dump_str(),
             Expr::FreeVar(name, _) => name.clone(),
             Expr::Lambda(_, body, _) => format!("\\. -> {}", body.dump_str()),
-            Expr::App(func, args, _) => {
+            Expr::App { func, args, .. } => {
                 let args_str = match args.as_ref() {
                     Expr::ArgsTuple(args, _) => args
                         .iter()
@@ -152,6 +165,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                 };
                 format!("{}({})", func_str, args_str)
             }
+            Expr::Builtin(builtin, _) => format!("{builtin:?}"),
             Expr::Let(name, expr, body, _) => {
                 format!("Let {} = {} in {}", name, expr.dump_str(), body.dump_str())
             }
@@ -226,6 +240,9 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             (Expr::LLMFunction(n1, _, _), Expr::LLMFunction(n2, _, _)) => n1 == n2,
             (Expr::LLMFunction(_, _, _), _) => false,
 
+            (Expr::Builtin(b1, _), Expr::Builtin(b2, _)) => b1 == b2,
+            (Expr::Builtin(_, _), _) => false,
+
             (Expr::BoundVar(n1, _), Expr::BoundVar(n2, _)) => n1 == n2,
             (Expr::BoundVar(_, _), _) => false,
 
@@ -237,10 +254,15 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
             }
             (Expr::Lambda(_, _, _), _) => false,
 
-            (Expr::App(f1, x1, _), Expr::App(f2, x2, _)) => {
-                f1.temporary_same_state(f2) && x1.temporary_same_state(x2)
-            }
-            (Expr::App(_, _, _), _) => false,
+            (
+                Expr::App {
+                    func: f1, args: x1, ..
+                },
+                Expr::App {
+                    func: f2, args: x2, ..
+                },
+            ) => f1.temporary_same_state(f2) && x1.temporary_same_state(x2),
+            (Expr::App { .. }, _) => false,
 
             (Expr::Let(n1, e1, b1, _), Expr::Let(n2, e2, b2, _)) => {
                 n1 == n2 && e1.temporary_same_state(e2) && b1.temporary_same_state(b2)
@@ -401,10 +423,11 @@ impl Expr<ExprMetadata> {
                 field_vars
             }
             Expr::LLMFunction(_, _, _) => HashSet::new(),
+            Expr::Builtin(_, _) => HashSet::new(),
             Expr::FreeVar(name, _) => HashSet::from([name.clone()]),
             Expr::BoundVar(_, _) => HashSet::new(),
             Expr::Lambda(_, body, _) => body.free_vars(),
-            Expr::App(func, args, _) => {
+            Expr::App { func, args, .. } => {
                 let mut free_vars = func.free_vars();
                 free_vars.extend(args.free_vars());
                 free_vars
@@ -501,11 +524,18 @@ impl<T: Clone> Expr<T> {
                 Arc::new(body.open(&target.deeper(), new_name)),
                 m.clone(),
             ),
-            Expr::App(f, x, m) => Expr::App(
-                Arc::new(f.open(target, new_name)),
-                Arc::new(x.open(target, new_name)),
-                m.clone(),
-            ),
+            Expr::App {
+                func,
+                args,
+                meta,
+                type_args,
+            } => Expr::App {
+                func: Arc::new(func.open(target, new_name)),
+                args: Arc::new(args.open(target, new_name)),
+                type_args: type_args.clone(),
+                meta: meta.clone(),
+            },
+            Expr::Builtin(builtin, m) => Expr::Builtin(builtin.clone(), m.clone()),
             Expr::Let(n, e, body, m) => Expr::Let(
                 n.clone(),
                 Arc::new(e.open(target, new_name)),
@@ -582,11 +612,18 @@ impl<T: Clone> Expr<T> {
                 Arc::new(body.close(&new_index.deeper(), target)),
                 m.clone(),
             ),
-            Expr::App(f, x, m) => Expr::App(
-                Arc::new(f.close(new_index, target)),
-                Arc::new(x.close(new_index, target)),
-                m.clone(),
-            ),
+            Expr::App {
+                func,
+                args,
+                meta,
+                type_args,
+            } => Expr::App {
+                func: Arc::new(func.close(new_index, target)),
+                args: Arc::new(args.close(new_index, target)),
+                type_args: type_args.clone(),
+                meta: meta.clone(),
+            },
+            Expr::Builtin(builtin, m) => Expr::Builtin(builtin.clone(), m.clone()),
             Expr::Let(n, e, body, m) => Expr::Let(
                 n.clone(),
                 Arc::new(e.close(new_index, target)),
@@ -619,7 +656,7 @@ impl<T: Clone> Expr<T> {
 }
 
 /// An iterator over the sub-expressions of an expression.
-impl <'a, T: 'a> IntoIterator for &'a Expr<T> {
+impl<'a, T: 'a> IntoIterator for &'a Expr<T> {
     type Item = &'a Expr<T>;
     type IntoIter = ExprIterator<'a, T>;
 
@@ -633,11 +670,11 @@ pub struct ExprIterator<'a, T> {
     pub stack: VecDeque<&'a Expr<T>>,
 }
 
-impl <'a, T> ExprIterator<'a, T> {
+impl<'a, T> ExprIterator<'a, T> {
     fn new(root: &'a Expr<T>) -> Self {
         let mut stack = VecDeque::new();
         stack.push_back(root);
-        Self { stack}
+        Self { stack }
     }
 }
 
@@ -673,9 +710,9 @@ impl<'a, T: 'a> Iterator for ExprIterator<'a, T> {
                 Expr::Lambda(_, body, _) => {
                     self.stack.push_back(body);
                 }
-                Expr::App(f, x, _) => {
-                    self.stack.push_back(f);
-                    self.stack.push_back(x);
+                Expr::App { func, args, .. } => {
+                    self.stack.push_back(func);
+                    self.stack.push_back(args);
                 }
                 Expr::If(cond, then, else_, _) => {
                     self.stack.push_back(cond);
@@ -697,6 +734,7 @@ impl<'a, T: 'a> Iterator for ExprIterator<'a, T> {
                     self.stack.push_back(iterable);
                     self.stack.push_back(body);
                 }
+                Expr::Builtin(_, _) => {}
             }
             Some(&expr)
         } else {
@@ -704,4 +742,3 @@ impl<'a, T: 'a> Iterator for ExprIterator<'a, T> {
         }
     }
 }
-

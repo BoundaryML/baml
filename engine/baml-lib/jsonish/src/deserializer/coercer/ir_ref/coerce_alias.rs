@@ -10,7 +10,7 @@ pub fn coerce_alias(
     target: &FieldType,
     value: Option<&crate::jsonish::Value>,
 ) -> Result<BamlValueWithFlags, ParsingError> {
-    assert!(matches!(target, FieldType::RecursiveTypeAlias(_)));
+    assert!(matches!(target, FieldType::RecursiveTypeAlias { .. }));
     log::debug!(
         "scope: {scope} :: coercing to: {name} (current: {current})",
         name = target.to_string(),
@@ -18,7 +18,7 @@ pub fn coerce_alias(
         current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
     );
 
-    let FieldType::RecursiveTypeAlias(alias) = target else {
+    let FieldType::RecursiveTypeAlias { name: alias, .. } = target else {
         unreachable!("coerce_alias");
     };
 

@@ -184,6 +184,8 @@ export type StreamingServerTypes = {
   TestOpenAI: string,
   TestOpenAIDummyClient: string,
   TestOpenAIGPT4oMini: string,
+  TestOpenAIGPT4oMini2: string,
+  TestOpenAIGPT4oMini3: string,
   TestOpenAILegacyProvider: string,
   TestOpenAIO1NoMaxTokens: string,
   TestOpenAIO1WithMaxCompletionTokens: string,

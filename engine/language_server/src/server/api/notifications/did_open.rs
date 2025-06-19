@@ -27,6 +27,9 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
         tracing::info!("DidOpenTextDocumentHandler");
 
         let url = params.text_document.uri;
+        if !url.to_string().contains("baml_src") {
+            return Ok(());
+        }
 
         // TODO: do this when server initializes instead of every time a file is opened
         // note this just schedules the task. It will run after the current task is done.

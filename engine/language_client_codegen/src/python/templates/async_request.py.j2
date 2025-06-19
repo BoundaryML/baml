@@ -1,27 +1,10 @@
-from typing import Any, Dict, List, Optional, Union, TypedDict, Type
-from typing_extensions import NotRequired, Literal
-import os
+from typing import Dict, List, Optional, Union
+from typing_extensions import Literal
 
 import baml_py
 
-from . import types
-from .types import Checked, Check
-from .type_builder import TypeBuilder
+from . import _baml
 
-
-class BamlCallOptions(TypedDict, total=False):
-    tb: NotRequired[TypeBuilder]
-    client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
-    env: NotRequired[Dict[str, Optional[str]]]
-
-def env_vars_to_dict(overrides: Dict[str, Optional[str]]) -> Dict[str, str]:
-    base = os.environ.copy()
-    for k, v in overrides.items():
-        if v is not None:
-            base[k] = v
-        else:
-            base.pop(k, None)
-    return base
 
 class AsyncHttpRequest:
     __runtime: baml_py.BamlRuntime
@@ -37,7 +20,7 @@ class AsyncHttpRequest:
         {% for (name, type, default_value) in fn.args -%}
         {{name}}: {{type}}{% if let Some(d) = default_value %} = {{d}}{% endif %},
         {%- endfor %}
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -45,7 +28,7 @@ class AsyncHttpRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return await self.__runtime.build_request(
         "{{fn.name}}",
@@ -77,7 +60,7 @@ class AsyncHttpStreamRequest:
         {% for (name, type, default_value) in fn.args -%}
         {{name}}: {{type}}{% if let Some(d) = default_value %} = {{d}}{% endif %},
         {%- endfor %}
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> baml_py.HTTPRequest:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -85,7 +68,7 @@ class AsyncHttpStreamRequest:
       else:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       return await self.__runtime.build_request(
         "{{fn.name}}",

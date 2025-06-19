@@ -1,7 +1,7 @@
 use std::fmt;
 use std::sync::{Arc, Mutex};
 
-use baml_types::{BamlValue, EvaluationContext, FieldType, StreamingBehavior};
+use baml_types::{BamlValue, EvaluationContext, FieldType};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::{
     internal_baml_parser_database::ParserDatabase, ir::repr::TypeBuilderEntry,
@@ -55,7 +55,7 @@ impl<T: Meta> From<&Arc<Mutex<T>>> for PropertyAttributes {
             skip,
             meta: properties,
             constraints: Vec::new(),
-            streaming_behavior: StreamingBehavior::default(),
+            streaming_behavior: Default::default(),
         }
     }
 }
@@ -950,7 +950,7 @@ mod tests {
   Classes: [
     Address {
       street string (alias=String("streetAddress"), description=String("Street address including number")),
-      unit int? (description=String("Apartment/unit number if applicable")),
+      unit (int | null) (description=String("Apartment/unit number if applicable")),
       tags string[] (alias=String("labels")),
       is_primary bool,
       coordinates float (skip=Bool(true))

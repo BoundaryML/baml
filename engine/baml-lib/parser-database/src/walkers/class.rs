@@ -5,6 +5,7 @@ use super::{field::FieldWalker, EnumWalker};
 use crate::types::Attributes;
 use baml_types::Constraint;
 use either::Either;
+use indexmap::IndexMap;
 use internal_baml_schema_ast::ast::Identifier;
 use internal_baml_schema_ast::ast::SubType;
 use internal_baml_schema_ast::ast::{self, ArgumentId, WithIdentifier, WithName, WithSpan};
@@ -76,7 +77,7 @@ impl<'db> ClassWalker<'db> {
                         .as_ref()
                         .map(|field_type| (f.name().to_string(), self.db.to_jinja_type(field_type)))
                 })
-                .collect::<HashMap<_, _>>(),
+                .collect::<IndexMap<_, _>>(),
         )
     }
     /// Getter for default attributes

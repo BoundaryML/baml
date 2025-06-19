@@ -73,7 +73,13 @@ fn reassociate_type_attributes(field_attributes: &mut Vec<Attribute>, field_type
     *field_attributes = attrs_for_field;
 }
 
-const TYPE_ATTRIBUTE_NAMES: [&str; 4] = ["assert", "check", "stream.done", "stream.with_state"];
+const TYPE_ATTRIBUTE_NAMES: [&str; 5] = [
+    "assert",
+    "check",
+    "stream.done",
+    "stream.with_state",
+    "stream.not_null",
+];
 
 pub(crate) fn parse_type_expr(
     model_name: &Option<Identifier>,
