@@ -62,7 +62,12 @@ macro_rules! define_id {
                 let s = String::deserialize(deserializer)?;
                 match s.parse() {
                     Ok(id) => Ok($name(id)),
-                    Err(e) => Err(serde::de::Error::custom(e.to_string())),
+                    Err(e) => Err(serde::de::Error::custom(format!(
+                        "Failed to parse {:?} as {}: {}",
+                        s,
+                        $inner_name::TYPE,
+                        e
+                    ))),
                 }
             }
         }
