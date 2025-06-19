@@ -27,7 +27,7 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
 # #########################################################################
 
 class UseMyUnion(BaseModel):
-    u: typing.Optional[typing.Union[int, typing.List[typing.Optional["Recursive1"]], str]] = None
+    u: typing.Optional[typing.Union["Recursive1", int, str]] = None
 
 # #########################################################################
 # Generated type aliases (5)

@@ -60,7 +60,7 @@ export interface ExistingSystemComponent {
 }
 
 export interface UseMyUnion {
-  u?: number | Recursive1[] | string | null;
+  u?: Recursive1 | number | string | null;
 }
 
 export type MyUnion = Recursive1 | number | string | null;

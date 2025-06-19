@@ -31,6 +31,9 @@ impl TypeGeneric<type_meta::Base> {
     }
 
     pub fn optional(inner: TypeGeneric<type_meta::Base>) -> TypeGeneric<type_meta::Base> {
+        if inner.is_null() {
+            return inner;
+        }
         TypeGeneric::union(vec![inner, TypeGeneric::null()])
     }
 

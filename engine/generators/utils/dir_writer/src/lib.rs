@@ -182,6 +182,18 @@ pub trait LanguageFeatures: Default + Sized {
         collector.commit(&args.output_dir())
     }
 
+    fn generate_sdk_files_for_test<'a>(&'a self, ir: std::sync::Arc<IntermediateRepr>, args: &GeneratorArgs) -> Result<IndexMap<PathBuf, String>, anyhow::Error> {
+        let mut collector: FileCollector<'a, Self> = FileCollector::<'a, Self>::new();
+        collector.on_file_created.push(Box::new(|path, content| {
+            self.on_file_created(path, content)
+        }));
+        collector.on_file_finished.push(Box::new(|path, content| {
+            self.on_file_finished(path, content)
+        }));
+        self.generate_sdk_files(&mut collector, ir, args)?;
+        Ok(collector.files)
+    }
+
     fn generate_sdk_files(
         &self,
         collector: &mut FileCollector<Self>,

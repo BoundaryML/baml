@@ -44,6 +44,6 @@ export namespace partial_types {
     explanation?: string | null;
   }
   export interface UseMyUnion {
-    u?: number | Recursive1[] | string | null;
+    u?: Recursive1 | number | string | null;
   }
 }

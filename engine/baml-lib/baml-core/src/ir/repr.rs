@@ -2,8 +2,8 @@ use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
 use anyhow::{anyhow, Result};
-use baml_types::expr::Builtin;
 use baml_types::baml_value::TypeLookups;
+use baml_types::expr::Builtin;
 use baml_types::ir_type::ArrowGeneric;
 use baml_types::BamlMap;
 use baml_types::{
@@ -2463,7 +2463,6 @@ fn make_test_ir_and_diagnostics_from_dir(
     Ok((ir, diagnostics))
 }
 
-
 // Specialize generics.
 fn specialize_generics(expr: &Expr<ExprMetadata>, ctx: &mut HashMap<Name, Expr<ExprMetadata>>) {
     match expr {
@@ -2805,6 +2804,84 @@ mod tests {
 
         assert_eq!(constraints[2].level, ConstraintLevel::Check);
         assert_eq!(constraints[2].label, Some("gt_ten".to_string()));
+    }
+
+    #[test]
+    fn test_recursive_type_resolution_consistency() {
+        for _ in 0..1000 {
+            let ir = make_test_ir(
+                r##"
+                type MyUnion = Recursive1 | Nonrecursive1 | Nonrecursive2
+                type Recursive1 = int | Recursive1[]
+                type Nonrecursive1 = int | null
+                type Nonrecursive2 = (null | string) | null | (null | null)
+                type MyUnion2 = Recursive1 | Nonrecursive1 | Nonrecursive2
+                class UseMyUnion {
+                    u MyUnion
+                    u2 MyUnion2
+                }
+            "##,
+            )
+            .unwrap();
+
+            let class = ir.find_class("UseMyUnion").unwrap();
+            let field1 = class.find_field("u").unwrap();
+            let field1_type = &field1.elem().r#type.elem;
+
+            let field2 = class.find_field("u2").unwrap();
+            let field2_type = &field2.elem().r#type.elem;
+
+            // Both fields should have consistent type resolution for Recursive1
+            assert_eq!(
+                field1_type.to_string(),
+                "(Recursive1 | int | string | null)", // Union3IntOrRecursive1OrString
+                "field1 type resolution is inconsistent"
+            );
+            assert_eq!(
+                field2_type.to_string(),
+                "(Recursive1 | int | string | null)", // Union3IntOrRecursive1OrString
+                "field2 type resolution is inconsistent"
+            );
+        }
+    }
+
+    #[test]
+    fn test_recursive_type_resolution_consistency_with_different_top_level_names() {
+        for _ in 0..1000 {
+            let ir = make_test_ir(
+                r##"
+                type ZMyUnion = Recursive1 | Nonrecursive1 | Nonrecursive2
+                type Recursive1 = int | Recursive1[]
+                type Nonrecursive1 = int | null
+                type Nonrecursive2 = (null | string) | null | (null | null)
+                type MyUnion2 = Recursive1 | Nonrecursive1 | Nonrecursive2
+                class UseMyUnion {
+                    u ZMyUnion
+                    u2 MyUnion2
+                }
+            "##,
+            )
+            .unwrap();
+
+            let class = ir.find_class("UseMyUnion").unwrap();
+            let field1 = class.find_field("u").unwrap();
+            let field1_type = &field1.elem().r#type.elem;
+
+            let field2 = class.find_field("u2").unwrap();
+            let field2_type = &field2.elem().r#type.elem;
+
+            // Both fields should have consistent type resolution for Recursive1
+            assert_eq!(
+                field1_type.to_string(),
+                "(int | Recursive1[] | string | null)", // Union3IntOrRecursive1OrString
+                "field1 type resolution is inconsistent"
+            );
+            assert_eq!(
+                field2_type.to_string(),
+                "(Recursive1 | int | string | null)", // Union3IntOrRecursive1OrString
+                "field2 type resolution is inconsistent"
+            );
+        }
     }
 
     #[test]

@@ -84,7 +84,10 @@ pub(super) fn resolve_type_aliases(ctx: &mut Context<'_>) {
 
     // Resolve type aliases.
     // Cycles are already computed so this should not stack overflow.
-    for alias_id in ctx.types.type_alias_dependencies.keys() {
+    let mut aliases = ctx.types.type_alias_dependencies.keys().collect::<Vec<_>>();
+    aliases.sort_by_cached_key(|id| ctx.ast[**id].name().to_string());
+    
+    for alias_id in aliases {
         // We can ignore the error here because it's already reported in the
         // diagnostics at [`visit_type_alias`].
         if let Ok(resolved) = resolve_type_alias(&ctx.ast[*alias_id].value, &ctx) {

@@ -136,7 +136,7 @@ func (u ExistingSystemComponent) BamlEncodeName(builder *flatbuffers.Builder) fl
 }
 
 type UseMyUnion struct {
-	U *Union3IntOrListRecursive1OrString `json:"u"`
+	U *Union3IntOrRecursive1OrString `json:"u"`
 }
 
 func (c *UseMyUnion) Decode(holder cffi.CFFIValueClass) {
@@ -156,13 +156,13 @@ func (c *UseMyUnion) Decode(holder cffi.CFFIValueClass) {
 			switch key {
 
 			case "u":
-				c.U = func(param *cffi.CFFIValueHolder) *Union3IntOrListRecursive1OrString {
+				c.U = func(param *cffi.CFFIValueHolder) *Union3IntOrRecursive1OrString {
 					decoded := baml.Decode(param)
-					return func(result any) *Union3IntOrListRecursive1OrString {
+					return func(result any) *Union3IntOrRecursive1OrString {
 						if result == nil {
 							return nil
 						}
-						return (result).(*Union3IntOrListRecursive1OrString)
+						return (result).(*Union3IntOrRecursive1OrString)
 					}(decoded)
 				}(valueHolder)
 

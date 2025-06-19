@@ -12,6 +12,7 @@ pub struct TestStructure<L: TestLanguageFeatures> {
     ir: std::sync::Arc<IntermediateRepr>,
     generator: L,
     project_name: String,
+    persist: bool,
 }
 
 fn get_cargo_root() -> Result<PathBuf, anyhow::Error> {
@@ -19,41 +20,33 @@ fn get_cargo_root() -> Result<PathBuf, anyhow::Error> {
     Ok(PathBuf::from(cargo_root).join("../../..").canonicalize()?)
 }
 
+impl<L: TestLanguageFeatures> Drop for TestStructure<L> {
+    fn drop(&mut self) {
+        // delete src_dir if it exists
+        if self.src_dir.exists() && !self.persist {
+            let _ = std::fs::remove_dir_all(&self.src_dir);
+        }
+    }
+}
+
 impl<L: TestLanguageFeatures> TestStructure<L> {
-    fn new(dir: PathBuf, generator: L) -> Result<Self, anyhow::Error> {
+    fn new(dir: PathBuf, generator: L, persist: bool) -> Result<Self, anyhow::Error> {
         let project_name = dir.iter().last().expect("must have a folder name");
-        // Copy the dir to cargo_root/generators/languages/{generator::name}/tests/{dir_name}
+
         let cargo_root = get_cargo_root()?;
-        let test_dir = cargo_root
+        let base_test_dir = cargo_root
             .join("generators/languages")
             .join(L::test_name())
-            .join("generated_tests")
-            .join(project_name);
+            .join("generated_tests");
+        let test_dir = utils::unique_dir(&base_test_dir, project_name.to_string_lossy().as_ref(), persist);
+        std::fs::create_dir_all(&test_dir)?;
 
-        fn create_symlink(src: &PathBuf, dest: &PathBuf) -> Result<(), anyhow::Error> {
-            #[cfg(unix)]
-            std::os::unix::fs::symlink(src, dest)?;
-
-            #[cfg(windows)]
-            std::os::windows::fs::symlink_dir(src, dest)?;
-
-            Ok(())
-        }
-
-        fn copy_dir_recursive(src: &PathBuf, dest: &PathBuf) -> Result<(), anyhow::Error> {
-            std::fs::create_dir_all(dest)?;
-            for entry in std::fs::read_dir(src)? {
-                let entry = entry?;
-                let dest_path = dest.join(entry.file_name());
-                create_symlink(&entry.path(), &dest_path)?;
-            }
-            Ok(())
-        }
-
-        // clear test_dir
+        // clear test_dir only if it already exists (unlikely with unique_dir)
         let _ = std::fs::remove_dir_all(&test_dir);
-        copy_dir_recursive(&dir.join(L::test_name()), &test_dir)?;
-        create_symlink(&dir.join("baml_src"), &test_dir.join("baml_src"))?;
+
+        // copy language-specific sources + baml_src link
+        utils::copy_dir_flat(&dir.join(L::test_name()), &test_dir)?;
+        utils::create_symlink(&dir.join("baml_src"), &test_dir.join("baml_src"))?;
 
         let ir = make_test_ir_from_dir(&dir.join("baml_src"))?;
 
@@ -62,7 +55,69 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
             ir: std::sync::Arc::new(ir),
             generator,
             project_name: project_name.to_string_lossy().to_string(),
+            persist,
         })
+    }
+
+    pub fn ensure_consistent_codegen(&self) -> Result<(), anyhow::Error> {
+        // read all .baml_files in the test_dir
+        let baml_files = glob::glob(&self.src_dir.join("**/*.baml").to_str().unwrap())?;
+        let baml_files = baml_files
+            .into_iter()
+            .map(|b| match b {
+                Ok(b) => Ok((b.clone(), std::fs::read_to_string(b))),
+                Err(e) => Err(e),
+            })
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .map(|(b, content)| match content {
+                Ok(content) => Ok((
+                    b.strip_prefix(&self.src_dir).unwrap().to_path_buf(),
+                    content,
+                )),
+                Err(e) => Err(e),
+            })
+            .collect::<Result<BTreeMap<_, _>, _>>()?;
+
+        let generate_files = |baml_files: &BTreeMap<PathBuf, String>| -> Result<_, anyhow::Error> {
+            let client_type = baml_types::GeneratorOutputType::from_str(L::name())?;
+
+            let args = GeneratorArgs {
+                output_dir_relative_to_baml_src: self.src_dir.join("baml_client"),
+                baml_src_dir: self.src_dir.join("baml_src"),
+                inlined_file_map: baml_files.clone(),
+                version: env!("CARGO_PKG_VERSION").to_string(),
+                no_version_check: true,
+                default_client_mode: baml_types::GeneratorDefaultClientMode::Async,
+                on_generate: match L::test_name() {
+                    "go" => vec!["gofmt -w . && goimports -w . && go build".to_string()],
+                    "python" => vec!["ruff check --fix".to_string()],
+                    "typescript" => vec!["npx prettier --write .".to_string()],
+                    // "ruby" => vec!["bundle install".to_string(), "srb init".to_string(), "srb tc --typed=strict".to_string()],
+                    _ => vec![],
+                },
+                client_type,
+                client_package_name: Some(self.project_name.clone()),
+                module_format: None,
+                is_pydantic_2: None,
+            };
+            let files = self
+                .generator
+                .generate_sdk_files_for_test(self.ir.clone(), &args)?;
+            return Ok(files);
+        };
+
+        // run 100 times and ensure the files are the same
+        let generated_runs = (0..100)
+            .map(|_| generate_files(&baml_files))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // ensure the files are the same
+        for run in &generated_runs {
+            assert_eq!(run, &generated_runs[0]);
+        }
+
+        Ok(())
     }
 
     pub fn run(&self) -> Result<(), anyhow::Error> {
@@ -201,10 +256,11 @@ impl TestHarness {
     pub fn load_test<L: TestLanguageFeatures>(
         name: &str,
         generator: L,
+        persist: bool,
     ) -> Result<TestStructure<L>, anyhow::Error> {
         let cargo_root = get_cargo_root()?;
         let test_data_dir = cargo_root.join("generators/data").join(name);
-        let test_structure = TestStructure::new(test_data_dir, generator)?;
+        let test_structure = TestStructure::new(test_data_dir, generator, persist)?;
         Ok(test_structure)
     }
 }
@@ -212,3 +268,83 @@ impl TestHarness {
 // Include the generated macro from build.rs
 // this gives us: create_code_gen_test_suites!(LanguageFeatures)
 include!(concat!(env!("OUT_DIR"), "/generated_macro.rs"));
+
+mod utils {
+    // util.rs (put near the top of the same file or in a new private module)
+
+    use std::path::{Path, PathBuf};
+
+    pub fn unique_dir(base: &Path, project: &str, persist: bool) -> PathBuf {
+        if persist {
+            return base.join(project);
+        }
+
+        base.join(format!(
+            "{}_{}",
+            project,
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ))
+    }
+
+    pub fn create_symlink(src: &Path, dest: &Path) -> Result<(), anyhow::Error> {
+        if dest.exists() {
+            if dest.is_dir() && !dest.is_symlink() {
+                std::fs::remove_dir_all(dest)?;
+            } else {
+                std::fs::remove_file(dest)?;
+            }
+        }
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::symlink;
+            if symlink(src, dest).is_err() {
+                fallback_copy(src, dest)?;
+            }
+        }
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::{symlink_dir, symlink_file};
+            let md = std::fs::metadata(src)?;
+            let res = if md.is_dir() {
+                symlink_dir(src, dest)
+            } else {
+                symlink_file(src, dest)
+            };
+            if res.is_err() {
+                fallback_copy(src, dest)?;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn fallback_copy(src: &Path, dest: &Path) -> Result<(), anyhow::Error> {
+        if src.is_dir() {
+            std::fs::create_dir_all(dest)?;
+            for e in std::fs::read_dir(src)? {
+                let e = e?;
+                create_symlink(&e.path(), &dest.join(e.file_name()))?;
+            }
+        } else {
+            std::fs::copy(src, dest)?;
+        }
+        Ok(())
+    }
+
+    pub fn copy_dir_flat(src: &Path, dest: &Path) -> Result<(), anyhow::Error> {
+        if dest.exists() {
+            std::fs::remove_dir_all(dest).ok();
+        }
+        std::fs::create_dir_all(dest)?;
+        for entry in std::fs::read_dir(src)? {
+            let entry = entry?;
+            create_symlink(&entry.path(), &dest.join(entry.file_name()))?;
+        }
+        Ok(())
+    }
+}
