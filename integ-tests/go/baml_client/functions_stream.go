@@ -15,6 +15,7 @@ package baml_client
 
 import (
 	"context"
+	"fmt"
 
 	"example.com/integ-tests/baml_client/stream_types"
 	"example.com/integ-tests/baml_client/types"
@@ -54,6 +55,10 @@ func (*stream) AaaSamOutputFormat(ctx context.Context, recipe string, opts ...Ca
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)

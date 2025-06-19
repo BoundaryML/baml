@@ -5,16 +5,20 @@ import (
 	"encoding/json"
 	"fmt"
 	b "sample/baml_client"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
 func main() {
-	// result, err := b.Foo(context.Background(), 8192)
-	// if err != nil {
-	// 	panic(err)
-	// }
-	// fmt.Println(result)
+	collector := baml.NewCollector()
 
-	channel, err := b.Stream.Foo(context.Background(), 8192)
+	result, err := b.Foo(context.Background(), 8192, b.WithCollector(collector))
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(result)
+
+	channel, err := b.Stream.Foo(context.Background(), 8192, b.WithCollector(collector))
 	if err != nil {
 		panic(err)
 	}
@@ -35,4 +39,20 @@ func main() {
 			fmt.Println(string(str))
 		}
 	}
+
+	usage, err := collector.Usage()
+	if err != nil {
+		panic(err)
+	}
+	input_tokens, err := usage.InputTokens()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("input_tokens", input_tokens)
+
+	output_tokens, err := usage.OutputTokens()
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("output_tokens", output_tokens)
 }

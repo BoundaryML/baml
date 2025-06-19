@@ -435,6 +435,14 @@ func encodeFunctionArguments(builder *flatbuffers.Builder, functionArgumentsVal 
 		}
 	}
 
+	var collectorsOffset flatbuffers.UOffsetT
+	if functionArgumentsVal.Collectors != nil {
+		collectorsOffset, err = encodeCollectors(builder, functionArgumentsVal.Collectors)
+		if err != nil {
+			return 0, fmt.Errorf("encoding collectors: %w", err)
+		}
+	}
+
 	cffi.CFFIFunctionArgumentsStart(builder)
 	cffi.CFFIFunctionArgumentsAddKwargs(builder, kwargsOffset)
 	if clientRegistryOffset > 0 {
@@ -444,7 +452,27 @@ func encodeFunctionArguments(builder *flatbuffers.Builder, functionArgumentsVal 
 		cffi.CFFIFunctionArgumentsAddEnv(builder, envOffset)
 	}
 
+	if collectorsOffset > 0 {
+		cffi.CFFIFunctionArgumentsAddCollectors(builder, collectorsOffset)
+	}
+
 	return cffi.CFFIFunctionArgumentsEnd(builder), nil
+}
+
+func encodeCollectors(builder *flatbuffers.Builder, collectorsVal []Collector) (flatbuffers.UOffsetT, error) {
+	collectorsOffset := make([]flatbuffers.UOffsetT, 0, len(collectorsVal))
+	for _, collector := range collectorsVal {
+		cffi.CFFICollectorStart(builder)
+		cffi.CFFICollectorAddPointer(builder, collector.id())
+		collectorOffset := cffi.CFFICollectorEnd(builder)
+		collectorsOffset = append(collectorsOffset, collectorOffset)
+	}
+
+	cffi.CFFIFunctionArgumentsStartCollectorsVector(builder, len(collectorsOffset))
+	for i := len(collectorsOffset) - 1; i >= 0; i-- {
+		builder.PrependUOffsetT(collectorsOffset[i])
+	}
+	return builder.EndVector(len(collectorsOffset)), nil
 }
 
 func encodeClientRegistry(builder *flatbuffers.Builder, clientRegistryVal *ClientRegistry) (flatbuffers.UOffsetT, error) {

@@ -58,6 +58,10 @@ func (*stream) Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -125,6 +129,10 @@ func (*stream) Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)

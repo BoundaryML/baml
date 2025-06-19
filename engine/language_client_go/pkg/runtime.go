@@ -28,11 +28,12 @@ type BamlFunctionArguments struct {
 	Kwargs         map[string]any
 	ClientRegistry *ClientRegistry
 	Env            map[string]string
+	Collectors     []Collector
 }
 
 type ClientRegistry struct {
 	primary *string
-	clients ClientRegistryMap
+	clients clientRegistryMap
 }
 
 type clientProperty struct {
@@ -41,12 +42,12 @@ type clientProperty struct {
 	options     map[string]any
 }
 
-type ClientRegistryMap map[string]clientProperty
+type clientRegistryMap map[string]clientProperty
 
 func NewClientRegistry() *ClientRegistry {
 	return &ClientRegistry{
 		primary: nil,
-		clients: ClientRegistryMap{},
+		clients: clientRegistryMap{},
 	}
 }
 

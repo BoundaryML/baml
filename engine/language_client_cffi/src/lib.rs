@@ -1,20 +1,17 @@
 /// cbindgen:ignore
 mod ctypes;
 
+mod raw_ptr_wrapper;
+use std::ops::Deref;
 use std::{collections::HashMap, ffi::CStr, ptr::null, sync::Arc};
-
 use anyhow::Result;
-use baml_runtime::client_registry::ClientRegistry;
+use baml_runtime::tracingv2::storage::storage::{Collector, Usage};
 use baml_runtime::{BamlRuntime, FunctionResult};
 use once_cell::sync::{Lazy, OnceCell};
 
+
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
-struct BamlFunctionArguments {
-    kwargs: baml_types::BamlMap<String, BamlValue>,
-    client_registry: Option<ClientRegistry>,
-    env_vars: HashMap<String, String>,
-}
 
 #[no_mangle]
 pub extern "C" fn version() -> *const libc::c_char {
@@ -90,6 +87,9 @@ use std::os::raw::c_char;
 
 use baml_types::BamlValue;
 
+use crate::ctypes::BamlFunctionArguments;
+use crate::raw_ptr_wrapper::{UsageWrapper, CollectorWrapper};
+
 pub type CallbackFn = extern "C" fn(call_id: u32, is_done: i32, content: *const i8, length: usize);
 
 /// cbindgen:ignore
@@ -163,7 +163,13 @@ pub extern "C" fn call_function_from_c(
     length: usize,
     id: u32,
 ) -> *const libc::c_void {
-    match call_function_from_c_inner(runtime, function_name, encoded_args, length, id) {
+    match call_function_from_c_inner(
+        runtime,
+        function_name,
+        encoded_args,
+        length,
+        id,
+    ) {
         Ok(_) => null(),
         Err(e) => {
             Box::into_raw(Box::new(CString::new(e.to_string()).unwrap())) as *const libc::c_void
@@ -176,7 +182,7 @@ fn call_function_from_c_inner(
     function_name: *const c_char,
     encoded_args: *const libc::c_char,
     length: usize,
-    id: u32,
+    id: u32
 ) -> Result<()> {
     // Safety: assume that the pointers provided are valid.
     let runtime = unsafe { &*(runtime as *const BamlRuntime) };
@@ -191,8 +197,7 @@ fn call_function_from_c_inner(
 
     // Convert keyword arguments.
     let buffer = unsafe { std::slice::from_raw_parts(encoded_args as *const u8, length) };
-    let function_args = ctypes::buffer_to_cffi_function_arguments(buffer)?;
-    let env_vars = function_args.env_vars.clone();
+    let ctypes::BamlFunctionArguments { kwargs, client_registry, env_vars, collectors } = ctypes::buffer_to_cffi_function_arguments(buffer)?;
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
@@ -203,11 +208,11 @@ fn call_function_from_c_inner(
         let (result, _) = runtime
             .call_function(
                 func_name,
-                &function_args.kwargs,
+                &kwargs,
                 &ctx,
                 None,
-                function_args.client_registry.as_ref(),
-                None,
+                client_registry.as_ref(),
+                collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
                 env_vars,
             )
             .await;
@@ -255,17 +260,16 @@ fn call_function_stream_from_c_inner(
 
     // Convert keyword arguments.
     let buffer = unsafe { std::slice::from_raw_parts(encoded_args as *const u8, length) };
-    let function_args = ctypes::buffer_to_cffi_function_arguments(buffer)?;
-    let env_vars = function_args.env_vars.clone();
+    let BamlFunctionArguments{ kwargs, client_registry, env_vars, collectors } = ctypes::buffer_to_cffi_function_arguments(buffer)?;
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
     let mut stream = match runtime.stream_function(
         func_name,
-        &function_args.kwargs,
+        &kwargs,
         &ctx,
         None,
-        None,
-        None,
+        client_registry.as_ref(),
+        collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
         env_vars){
         Ok(stream) => stream,
         Err(e) => {
@@ -287,4 +291,99 @@ fn call_function_stream_from_c_inner(
 
 fn on_event(id: u32, result: FunctionResult, runtime: &BamlRuntime) {
     safe_trigger_callback(id, false, Ok(result), runtime);
+}
+
+#[no_mangle]
+pub extern "C" fn call_collector_function(
+    object: *const libc::c_void,
+    object_type: *const c_char,
+    function_name: *const c_char,
+) -> *const libc::c_void {
+    match call_collector_function_inner(object, object_type, function_name) {
+        Ok(result) => result,
+        Err(e) => {
+            Box::into_raw(Box::new(CString::new(e.to_string()).unwrap())) as *const libc::c_void
+        }
+    }
+}
+
+fn call_collector_function_inner(
+    object: *const libc::c_void,
+    object_type: *const c_char,
+    function_name: *const c_char,
+) -> Result<*const libc::c_void> {
+    let object_type = match unsafe { CStr::from_ptr(object_type) }.to_str() {
+        Ok(s) => s.to_owned(),
+        Err(_) => {
+            return Err(anyhow::anyhow!("Failed to convert object type to string"));
+        }
+    };
+
+    let function_name = match unsafe { CStr::from_ptr(function_name) }.to_str() {
+        Ok(s) => s.to_owned(),
+        Err(_) => {
+            return Err(anyhow::anyhow!("Failed to convert function name to string"));
+        }
+    };
+
+    if object.is_null() {
+        return match (object_type.as_str(), function_name.as_str()) {
+            ("collector", "new") => {
+                let collector = Collector::new(None);
+                Ok(CollectorWrapper::from_object(collector).send())
+            }
+            _ => Err(anyhow::anyhow!(
+                "Failed to call collector function: {}",
+                function_name
+            )),
+        };
+    }
+
+    match object_type.as_str() {
+        "collector" => {
+            let collector = CollectorWrapper::from_raw(object, true);
+
+            match function_name.as_str() {
+                "destroy" => {
+                    collector.destroy();
+                    // collector goes out of scope here
+                    Ok(null())
+                }
+                "usage" => {
+                    let logs = collector.function_logs();
+                    let usage = collector.usage();
+                    println!("logs: {:?}", logs);
+                    println!("usage: {:?}", usage);
+                    Ok(UsageWrapper::from_object(usage).send())
+                }
+                _ => Err(anyhow::anyhow!(
+                    "Failed to call function: {} on object type: {}",
+                    function_name,
+                    object_type
+                )),
+            }
+        }
+        "usage" => {
+            let usage = UsageWrapper::from_raw(object, true);
+            println!("usage: {:?}", usage.as_ref());
+            match function_name.as_str() {
+                "destroy" => {
+                    usage.destroy();
+                    Ok(null())
+                }
+                "input_tokens" => Ok(usage.input_tokens.unwrap_or_default() as *mut libc::c_void),
+                "output_tokens" => Ok(usage.output_tokens.unwrap_or_default() as *mut libc::c_void),
+                _ => Err(anyhow::anyhow!(
+                    "Failed to call function: {} on object type: {}",
+                    function_name,
+                    object_type
+                )),
+            }
+        }
+        _ => Err(anyhow::anyhow!(
+            "Failed to call function: {} on object type: {}",
+            function_name,
+            object_type
+        )),
+    }
 }

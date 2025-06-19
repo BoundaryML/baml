@@ -37,6 +37,10 @@ func Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (types.Union2Exam
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)
@@ -70,6 +74,10 @@ func Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (types.Union2Exam
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)

@@ -250,6 +250,12 @@ table CFFIFunctionArguments {
   kwargs: [CFFIMapEntry];
   client_registry: CFFIClientRegistry;
   env: [CFFIEnvVar];
+  collectors: [CFFICollector];
+}
+
+// Collectors are just pointers
+table CFFICollector {
+  pointer: long;
 }
 
 table CFFIClientRegistry {

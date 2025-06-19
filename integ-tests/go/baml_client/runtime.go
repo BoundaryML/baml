@@ -14,10 +14,10 @@
 package baml_client
 
 import (
-	"context"
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"os"
 	"strings"
+
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
 var bamlRuntime *baml.BamlRuntime
@@ -53,6 +53,7 @@ func init() {
 type callOption struct {
 	clientRegistry *baml.ClientRegistry
 	env            map[string]string
+	collectors     []baml.Collector
 }
 
 type CallOptionFunc func(*callOption)
@@ -68,5 +69,11 @@ func WithClientRegistry(clientRegistry *baml.ClientRegistry) CallOptionFunc {
 func WithEnv(env map[string]string) CallOptionFunc {
 	return func(o *callOption) {
 		o.env = env
+	}
+}
+
+func WithCollectors(collectors []baml.Collector) CallOptionFunc {
+	return func(o *callOption) {
+		o.collectors = collectors
 	}
 }

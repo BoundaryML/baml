@@ -5,10 +5,15 @@ use baml_types::{BamlMedia, BamlValue, BamlValueWithMeta, HasFieldType, ToUnionN
 #[allow(non_snake_case)]
 #[path = "cffi/cffi_generated.rs"]
 mod cffi_generated;
+mod traits;
+mod function_args;
+mod baml_value;
 
 use cffi_generated::cffi::*;
 
-use crate::BamlFunctionArguments;
+pub use function_args::BamlFunctionArguments;
+
+use crate::ctypes::traits::Decode;
 
 pub fn buffer_to_cffi_value_holder(buffer: &[u8]) -> Result<BamlValue> {
     let root = flatbuffers::root::<CFFIValueHolder>(buffer)?;
@@ -17,8 +22,7 @@ pub fn buffer_to_cffi_value_holder(buffer: &[u8]) -> Result<BamlValue> {
 
 pub fn buffer_to_cffi_function_arguments(buffer: &[u8]) -> Result<BamlFunctionArguments> {
     let root = flatbuffers::root::<CFFIValueHolder>(buffer)?;
-    let args = root.value_as_cffifunction_arguments().expect("Failed to convert CFFIValueHolder to CFFIFunctionArguments");
-    Ok(args.into())
+    BamlFunctionArguments::decode(root.value_as_cffifunction_arguments().expect("Failed to convert CFFIValueHolder to CFFIFunctionArguments"))
 }
 
 fn create_cffi_type_name<'a, 'b>(
@@ -37,77 +41,6 @@ fn create_cffi_type_name<'a, 'b>(
     )
 }
 
-
-impl From<cffi_generated::cffi::CFFIValueHolder<'_>> for BamlValue {
-    fn from(value: cffi_generated::cffi::CFFIValueHolder) -> Self {
-        let value_type = value.value_type();
-        match value_type {
-            CFFIValueUnion::NONE => BamlValue::Null,
-            CFFIValueUnion::CFFIValueString => value
-                .value_as_cffivalue_string()
-                .and_then(|s| s.value().map(|s| BamlValue::String(s.to_string())))
-                .expect("Failed to convert CFFIValueString to BamlValue"),
-            CFFIValueUnion::CFFIValueInt => value
-                .value_as_cffivalue_int()
-                .map(|i| BamlValue::Int(i.value()))
-                .expect("Failed to convert CFFIValueInt to BamlValue"),
-            CFFIValueUnion::CFFIValueFloat => value
-                .value_as_cffivalue_float()
-                .map(|f| BamlValue::Float(f.value()))
-                .expect("Failed to convert CFFIValueFloat to BamlValue"),
-            CFFIValueUnion::CFFIValueBool => value
-                .value_as_cffivalue_bool()
-                .map(|b| BamlValue::Bool(b.value()))
-                .expect("Failed to convert CFFIValueBool to BamlValue"),
-            CFFIValueUnion::CFFIValueList => value
-                .value_as_cffivalue_list()
-                .and_then(|l| l.values())
-                .map(|v| v.into_iter().map(|v| v.into()))
-                .map(|l| BamlValue::List(l.collect()))
-                .expect("Failed to convert CFFIValueList to BamlValue"),
-            CFFIValueUnion::CFFIValueMap => value
-                .value_as_cffivalue_map()
-                .and_then(|m| m.entries())
-                .map(|v| v.into_iter().map(|v| v.into()).collect())
-                .map(|kv| BamlValue::Map(kv))
-                .expect("Failed to convert CFFIValueMap to BamlValue"),
-            CFFIValueUnion::CFFIValueClass => value
-                .value_as_cffivalue_class()
-                .expect("Failed to convert CFFIValueClass to BamlValue")
-                .into(),
-            CFFIValueUnion::CFFIValueEnum => value
-                .value_as_cffivalue_enum()
-                .expect("Failed to convert CFFIValueEnum to BamlValue")
-                .into(),
-            CFFIValueUnion::CFFIValueMedia => value
-                .value_as_cffivalue_media()
-                .map(|m| BamlValue::Media(m.into()))
-                .expect("Failed to convert CFFIValueMedia to BamlValue"),
-            CFFIValueUnion::CFFIValueTuple => value
-                .value_as_cffivalue_tuple()
-                .expect("Failed to convert CFFIValueTuple to BamlValue")
-                .into(),
-            CFFIValueUnion::CFFIValueUnionVariant => value
-                .value_as_cffivalue_union_variant()
-                .expect("Failed to convert CFFIValueUnionVariant to BamlValue")
-                .into(),
-            CFFIValueUnion::CFFIValueChecked => value
-                .value_as_cffivalue_checked()
-                .expect("Failed to convert CFFIValueChecked to BamlValue")
-                .into(),
-            CFFIValueUnion::CFFIValueStreamingState => value
-                .value_as_cffivalue_streaming_state()
-                .expect("Failed to convert CFFIValueStreamingState to BamlValue")
-                .into(),
-            CFFIValueUnion::CFFIFunctionArguments => {
-                panic!("CFFIFunctionArguments is not supported in BamlValue");
-            }
-            other => {
-                panic!("Unsupported value type: {:?}", other);
-            }
-        }
-    }
-}
 
 impl From<CFFIMapEntry<'_>> for (String, BamlValue) {
     fn from(value: CFFIMapEntry) -> Self {
@@ -247,25 +180,6 @@ impl From<CFFIValueUnionVariant<'_>> for BamlValue {
             .value()
             .expect("Failed to have CFFIValueUnionVariant value")
             .into()
-    }
-}
-
-impl From<CFFIFunctionArguments<'_>> for BamlFunctionArguments {
-    fn from(value: CFFIFunctionArguments) -> Self {
-        let kwargs = value
-            .kwargs()
-            .map(|v| v.iter().map(|v| v.into()).collect())
-            .unwrap_or_default();
-        let client_registry = value.client_registry().map(|r| r.into());
-        let env_vars = value
-            .env()
-            .map(|e| e.iter().map(|v| v.into()).collect())
-            .unwrap_or_default();
-        BamlFunctionArguments {
-            kwargs,
-            client_registry,
-            env_vars,
-        }
     }
 }
 
