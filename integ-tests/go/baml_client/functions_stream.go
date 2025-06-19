@@ -15,7 +15,6 @@ package baml_client
 
 import (
 	"context"
-	"fmt"
 
 	"example.com/integ-tests/baml_client/stream_types"
 	"example.com/integ-tests/baml_client/types"
@@ -130,6 +129,10 @@ func (*stream) AliasThatPointsToRecursiveType(ctx context.Context, data types.Li
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -197,6 +200,10 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -268,6 +275,10 @@ func (*stream) AliasedInputClass(ctx context.Context, input types.InputClass, op
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -335,6 +346,10 @@ func (*stream) AliasedInputClass2(ctx context.Context, input types.InputClass, o
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -406,6 +421,10 @@ func (*stream) AliasedInputClassNested(ctx context.Context, input types.InputCla
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -473,6 +492,10 @@ func (*stream) AliasedInputEnum(ctx context.Context, input types.AliasedEnum, op
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -544,6 +567,10 @@ func (*stream) AliasedInputList(ctx context.Context, input []types.AliasedEnum, 
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -611,6 +638,10 @@ func (*stream) AllowedOptionals(ctx context.Context, optionals types.OptionalLis
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -682,6 +713,10 @@ func (*stream) AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (<
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -749,6 +784,10 @@ func (*stream) AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) 
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -820,6 +859,10 @@ func (*stream) AudioInputOpenai(ctx context.Context, aud any, prompt string, opt
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -887,6 +930,10 @@ func (*stream) BuildLinkedList(ctx context.Context, input []int64, opts ...CallO
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -958,6 +1005,10 @@ func (*stream) BuildTree(ctx context.Context, input types.BinaryNode, opts ...Ca
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -1025,6 +1076,10 @@ func (*stream) ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, 
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -1096,6 +1151,10 @@ func (*stream) ClassifyDynEnumTwo(ctx context.Context, input string, opts ...Cal
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -1163,6 +1222,10 @@ func (*stream) ClassifyMessage(ctx context.Context, input string, opts ...CallOp
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -1234,6 +1297,10 @@ func (*stream) ClassifyMessage2(ctx context.Context, input string, opts ...CallO
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -1301,6 +1368,10 @@ func (*stream) ClassifyMessage3(ctx context.Context, input string, opts ...CallO
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -1372,6 +1443,10 @@ func (*stream) Completion(ctx context.Context, prefix string, suffix string, lan
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -1439,6 +1514,10 @@ func (*stream) CustomTask(ctx context.Context, input string, opts ...CallOptionF
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -1510,6 +1589,10 @@ func (*stream) DescribeImage(ctx context.Context, img any, opts ...CallOptionFun
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -1577,6 +1660,10 @@ func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWit
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -1648,6 +1735,10 @@ func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWit
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -1715,6 +1806,10 @@ func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWit
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -1786,6 +1881,10 @@ func (*stream) DescribeMedia1599(ctx context.Context, img any, client_sector str
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -1853,6 +1952,10 @@ func (*stream) DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) 
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -1924,6 +2027,10 @@ func (*stream) DummyOutputFunction(ctx context.Context, input string, opts ...Ca
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -1991,6 +2098,10 @@ func (*stream) DynamicFunc(ctx context.Context, input types.DynamicClassOne, opt
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -2062,6 +2173,10 @@ func (*stream) DynamicInputOutput(ctx context.Context, input types.DynInputOutpu
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -2129,6 +2244,10 @@ func (*stream) DynamicListInputOutput(ctx context.Context, input []types.DynInpu
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -2200,6 +2319,10 @@ func (*stream) ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (<-cha
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -2267,6 +2390,10 @@ func (*stream) ExtractContactInfo(ctx context.Context, document string, opts ...
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -2338,6 +2465,10 @@ func (*stream) ExtractEntities(ctx context.Context, text string, opts ...CallOpt
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -2405,6 +2536,10 @@ func (*stream) ExtractHobby(ctx context.Context, text string, opts ...CallOption
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -2476,6 +2611,10 @@ func (*stream) ExtractNames(ctx context.Context, input string, opts ...CallOptio
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -2543,6 +2682,10 @@ func (*stream) ExtractPeople(ctx context.Context, text string, opts ...CallOptio
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -2614,6 +2757,10 @@ func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason type
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -2681,6 +2828,10 @@ func (*stream) ExtractResume(ctx context.Context, resume string, img *any, opts 
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -2752,6 +2903,10 @@ func (*stream) ExtractResume2(ctx context.Context, resume string, opts ...CallOp
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -2819,6 +2974,10 @@ func (*stream) FnClassOptionalOutput(ctx context.Context, input string, opts ...
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -2890,6 +3049,10 @@ func (*stream) FnClassOptionalOutput2(ctx context.Context, input string, opts ..
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -2957,6 +3120,10 @@ func (*stream) FnEnumListOutput(ctx context.Context, input string, opts ...CallO
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -3028,6 +3195,10 @@ func (*stream) FnEnumOutput(ctx context.Context, input string, opts ...CallOptio
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -3095,6 +3266,10 @@ func (*stream) FnLiteralClassInputOutput(ctx context.Context, input types.Litera
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -3166,6 +3341,10 @@ func (*stream) FnLiteralUnionClassInputOutput(ctx context.Context, input types.U
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -3233,6 +3412,10 @@ func (*stream) FnNamedArgsSingleStringOptional(ctx context.Context, myString *st
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -3304,6 +3487,10 @@ func (*stream) FnOutputBool(ctx context.Context, input string, opts ...CallOptio
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -3371,6 +3558,10 @@ func (*stream) FnOutputClass(ctx context.Context, input string, opts ...CallOpti
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -3442,6 +3633,10 @@ func (*stream) FnOutputClassList(ctx context.Context, input string, opts ...Call
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -3509,6 +3704,10 @@ func (*stream) FnOutputClassNested(ctx context.Context, input string, opts ...Ca
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -3580,6 +3779,10 @@ func (*stream) FnOutputClassWithEnum(ctx context.Context, input string, opts ...
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -3647,6 +3850,10 @@ func (*stream) FnOutputInt(ctx context.Context, input string, opts ...CallOption
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -3718,6 +3925,10 @@ func (*stream) FnOutputLiteralBool(ctx context.Context, input string, opts ...Ca
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -3785,6 +3996,10 @@ func (*stream) FnOutputLiteralInt(ctx context.Context, input string, opts ...Cal
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -3856,6 +4071,10 @@ func (*stream) FnOutputLiteralString(ctx context.Context, input string, opts ...
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -3923,6 +4142,10 @@ func (*stream) FnOutputStringList(ctx context.Context, input string, opts ...Cal
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -3994,6 +4217,10 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts .
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -4061,6 +4288,10 @@ func (*stream) FnTestClassAlias(ctx context.Context, input string, opts ...CallO
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -4132,6 +4363,10 @@ func (*stream) FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedA
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -4199,6 +4434,10 @@ func (*stream) GetDataType(ctx context.Context, text string, opts ...CallOptionF
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -4270,6 +4509,10 @@ func (*stream) GetOrderInfo(ctx context.Context, email types.Email, opts ...Call
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -4337,6 +4580,10 @@ func (*stream) GetQuery(ctx context.Context, query string, opts ...CallOptionFun
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -4408,6 +4655,10 @@ func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, 
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -4475,6 +4726,10 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -4546,6 +4801,10 @@ func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -4613,6 +4872,10 @@ func (*stream) JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, op
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -4684,6 +4947,10 @@ func (*stream) LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -4751,6 +5018,10 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...Call
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -4822,6 +5093,10 @@ func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) 
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -4889,6 +5164,10 @@ func (*stream) MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFun
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -4960,6 +5239,10 @@ func (*stream) MakeClassWithExternalDone(ctx context.Context, opts ...CallOption
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -5027,6 +5310,10 @@ func (*stream) MakeNestedBlockConstraint(ctx context.Context, opts ...CallOption
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -5098,6 +5385,10 @@ func (*stream) MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -5165,6 +5456,10 @@ func (*stream) MapAlias(ctx context.Context, m map[string][]string, opts ...Call
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -5236,6 +5531,10 @@ func (*stream) MergeAliasAttributes(ctx context.Context, money int64, opts ...Ca
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -5303,6 +5602,10 @@ func (*stream) MyFunc(ctx context.Context, input string, opts ...CallOptionFunc)
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -5374,6 +5677,10 @@ func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOr
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -5441,6 +5748,10 @@ func (*stream) NullLiteralClassHello(ctx context.Context, s string, opts ...Call
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -5512,6 +5823,10 @@ func (*stream) OpenAIWithAnthropicResponseHello(ctx context.Context, s string, o
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -5579,6 +5894,10 @@ func (*stream) OptionalTest_Function(ctx context.Context, input string, opts ...
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -5650,6 +5969,10 @@ func (*stream) PredictAge(ctx context.Context, name string, opts ...CallOptionFu
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -5717,6 +6040,10 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptio
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -5788,6 +6115,10 @@ func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIn
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -5855,6 +6186,10 @@ func (*stream) PromptTestClaude(ctx context.Context, input string, opts ...CallO
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -5926,6 +6261,10 @@ func (*stream) PromptTestClaudeChat(ctx context.Context, input string, opts ...C
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -5993,6 +6332,10 @@ func (*stream) PromptTestClaudeChatNoSystem(ctx context.Context, input string, o
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -6064,6 +6407,10 @@ func (*stream) PromptTestOpenAI(ctx context.Context, input string, opts ...CallO
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -6131,6 +6478,10 @@ func (*stream) PromptTestOpenAIChat(ctx context.Context, input string, opts ...C
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -6202,6 +6553,10 @@ func (*stream) PromptTestOpenAIChatNoSystem(ctx context.Context, input string, o
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -6269,6 +6624,10 @@ func (*stream) PromptTestStreaming(ctx context.Context, input string, opts ...Ca
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -6340,6 +6699,10 @@ func (*stream) RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne,
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -6407,6 +6770,10 @@ func (*stream) RecursiveClassWithAliasIndirection(ctx context.Context, cls types
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -6478,6 +6845,10 @@ func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnio
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -6545,6 +6916,10 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64,
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -6616,6 +6991,10 @@ func (*stream) ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallO
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -6683,6 +7062,10 @@ func (*stream) ReturnJsonEntry(ctx context.Context, s string, opts ...CallOption
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -6754,6 +7137,10 @@ func (*stream) ReturnMalformedConstraints(ctx context.Context, a int64, opts ...
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -6821,6 +7208,10 @@ func (*stream) SchemaDescriptions(ctx context.Context, input string, opts ...Cal
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -6892,6 +7283,10 @@ func (*stream) SimpleRecursiveListAlias(ctx context.Context, input types.Recursi
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -6959,6 +7354,10 @@ func (*stream) SimpleRecursiveMapAlias(ctx context.Context, input types.Recursiv
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -7030,6 +7429,10 @@ func (*stream) StreamBigNumbers(ctx context.Context, digits int64, opts ...CallO
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -7097,6 +7500,10 @@ func (*stream) StreamFailingAssertion(ctx context.Context, theme string, length 
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -7168,6 +7575,10 @@ func (*stream) StreamFailingCheck(ctx context.Context, theme string, length int6
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -7235,6 +7646,10 @@ func (*stream) StreamOneBigNumber(ctx context.Context, digits int64, opts ...Cal
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -7306,6 +7721,10 @@ func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...Ca
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -7373,6 +7792,10 @@ func (*stream) StreamingCompoundNumbers(ctx context.Context, digits int64, yappi
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -7444,6 +7867,10 @@ func (*stream) StructureDocument1559(ctx context.Context, document_txt string, o
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -7511,6 +7938,10 @@ func (*stream) TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDe
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -7582,6 +8013,10 @@ func (*stream) TellStory(ctx context.Context, story string, opts ...CallOptionFu
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -7649,6 +8084,10 @@ func (*stream) TestAnthropic(ctx context.Context, input string, opts ...CallOpti
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -7720,6 +8159,10 @@ func (*stream) TestAnthropicShorthand(ctx context.Context, input string, opts ..
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -7787,6 +8230,10 @@ func (*stream) TestAws(ctx context.Context, input string, opts ...CallOptionFunc
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -7858,6 +8305,10 @@ func (*stream) TestAwsClaude37(ctx context.Context, input string, opts ...CallOp
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -7925,6 +8376,10 @@ func (*stream) TestAwsInferenceProfile(ctx context.Context, input string, opts .
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -7996,6 +8451,10 @@ func (*stream) TestAwsInvalidAccessKey(ctx context.Context, input string, opts .
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -8063,6 +8522,10 @@ func (*stream) TestAwsInvalidProfile(ctx context.Context, input string, opts ...
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -8134,6 +8597,10 @@ func (*stream) TestAwsInvalidRegion(ctx context.Context, input string, opts ...C
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -8201,6 +8668,10 @@ func (*stream) TestAwsInvalidSessionToken(ctx context.Context, input string, opt
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -8272,6 +8743,10 @@ func (*stream) TestAzure(ctx context.Context, input string, opts ...CallOptionFu
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -8339,6 +8814,10 @@ func (*stream) TestAzureFailure(ctx context.Context, input string, opts ...CallO
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -8410,6 +8889,10 @@ func (*stream) TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ..
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -8477,6 +8960,10 @@ func (*stream) TestAzureO1WithMaxCompletionTokens(ctx context.Context, input str
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -8548,6 +9035,10 @@ func (*stream) TestAzureO1WithMaxTokens(ctx context.Context, input string, opts 
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -8615,6 +9106,10 @@ func (*stream) TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ..
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -8686,6 +9181,10 @@ func (*stream) TestAzureO3WithMaxCompletionTokens(ctx context.Context, input str
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -8753,6 +9252,10 @@ func (*stream) TestAzureWithMaxTokens(ctx context.Context, input string, opts ..
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -8824,6 +9327,10 @@ func (*stream) TestCaching(ctx context.Context, input string, not_cached string,
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -8891,6 +9398,10 @@ func (*stream) TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -8962,6 +9473,10 @@ func (*stream) TestFallbackStrategy(ctx context.Context, input string, opts ...C
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -9029,6 +9544,10 @@ func (*stream) TestFallbackToShorthand(ctx context.Context, input string, opts .
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -9100,6 +9619,10 @@ func (*stream) TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts 
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -9167,6 +9690,10 @@ func (*stream) TestFnNamedArgsSingleClass(ctx context.Context, myArg types.Named
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -9238,6 +9765,10 @@ func (*stream) TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -9305,6 +9836,10 @@ func (*stream) TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, 
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -9376,6 +9911,10 @@ func (*stream) TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts .
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -9443,6 +9982,10 @@ func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap 
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -9514,6 +10057,10 @@ func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap ma
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -9581,6 +10128,10 @@ func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -9652,6 +10203,10 @@ func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string,
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -9719,6 +10274,10 @@ func (*stream) TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArr
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -9790,6 +10349,10 @@ func (*stream) TestFnNamedArgsSingleStringList(ctx context.Context, myArg []stri
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -9857,6 +10420,10 @@ func (*stream) TestGemini(ctx context.Context, input string, opts ...CallOptionF
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -9928,6 +10495,10 @@ func (*stream) TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFu
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -9995,6 +10566,10 @@ func (*stream) TestGeminiSystem(ctx context.Context, input string, opts ...CallO
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -10066,6 +10641,10 @@ func (*stream) TestGeminiSystemAsChat(ctx context.Context, input string, opts ..
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -10133,6 +10712,10 @@ func (*stream) TestGroq(ctx context.Context, input string, opts ...CallOptionFun
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -10204,6 +10787,10 @@ func (*stream) TestImageInput(ctx context.Context, img any, opts ...CallOptionFu
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -10271,6 +10858,10 @@ func (*stream) TestImageInputAnthropic(ctx context.Context, img any, opts ...Cal
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -10342,6 +10933,10 @@ func (*stream) TestImageListInput(ctx context.Context, imgs []any, opts ...CallO
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -10409,6 +11004,10 @@ func (*stream) TestMemory(ctx context.Context, input string, opts ...CallOptionF
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -10480,6 +11079,10 @@ func (*stream) TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArg
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -10547,6 +11150,10 @@ func (*stream) TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts .
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -10618,6 +11225,10 @@ func (*stream) TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ..
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -10685,6 +11296,10 @@ func (*stream) TestNamedArgsLiteralString(ctx context.Context, myString string, 
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -10756,6 +11371,10 @@ func (*stream) TestOllama(ctx context.Context, input string, opts ...CallOptionF
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -10823,6 +11442,10 @@ func (*stream) TestOllamaHaiku(ctx context.Context, input string, opts ...CallOp
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -10894,6 +11517,10 @@ func (*stream) TestOpenAI(ctx context.Context, input string, opts ...CallOptionF
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -10961,6 +11588,10 @@ func (*stream) TestOpenAIDummyClient(ctx context.Context, input string, opts ...
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -11032,6 +11663,10 @@ func (*stream) TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...Ca
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -11099,6 +11734,10 @@ func (*stream) TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...C
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -11170,6 +11809,10 @@ func (*stream) TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...C
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -11237,6 +11880,10 @@ func (*stream) TestOpenAILegacyProvider(ctx context.Context, input string, opts 
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -11308,6 +11955,10 @@ func (*stream) TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts .
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -11375,6 +12026,10 @@ func (*stream) TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input st
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -11446,6 +12101,10 @@ func (*stream) TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -11513,6 +12172,10 @@ func (*stream) TestOpenAIShorthand(ctx context.Context, input string, opts ...Ca
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -11584,6 +12247,10 @@ func (*stream) TestOpenAIWithFinishReasonError(ctx context.Context, input string
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -11651,6 +12318,10 @@ func (*stream) TestOpenAIWithMaxTokens(ctx context.Context, input string, opts .
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -11722,6 +12393,10 @@ func (*stream) TestOpenAIWithNullMaxTokens(ctx context.Context, input string, op
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -11789,6 +12464,10 @@ func (*stream) TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input stri
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -11860,6 +12539,10 @@ func (*stream) TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (<
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -11927,6 +12610,10 @@ func (*stream) TestRetryExponential(ctx context.Context, opts ...CallOptionFunc)
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -11998,6 +12685,10 @@ func (*stream) TestRoundRobinStrategy(ctx context.Context, input string, opts ..
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -12065,6 +12756,10 @@ func (*stream) TestSingleFallbackClient(ctx context.Context, opts ...CallOptionF
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -12136,6 +12831,10 @@ func (*stream) TestThinking(ctx context.Context, input string, opts ...CallOptio
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -12203,6 +12902,10 @@ func (*stream) TestUniverseQuestion(ctx context.Context, question types.Universe
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -12274,6 +12977,10 @@ func (*stream) TestVertex(ctx context.Context, input string, opts ...CallOptionF
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -12341,6 +13048,10 @@ func (*stream) TestVertexClaude(ctx context.Context, input string, opts ...CallO
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -12412,6 +13123,10 @@ func (*stream) TestVertexWithSystemInstructions(ctx context.Context, opts ...Cal
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -12479,6 +13194,10 @@ func (*stream) UnionTest_Function(ctx context.Context, input types.Union2BoolOrS
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -12550,6 +13269,10 @@ func (*stream) UseBlockConstraint(ctx context.Context, inp types.BlockConstraint
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -12617,6 +13340,10 @@ func (*stream) UseMaintainFieldOrder(ctx context.Context, input types.MaintainFi
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)
@@ -12688,6 +13415,10 @@ func (*stream) UseMalformedConstraints(ctx context.Context, a types.MalformedCon
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -12755,6 +13486,10 @@ func (*stream) UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlo
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)

@@ -14,10 +14,10 @@
 package baml_client
 
 import (
+	"context"
+	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"os"
 	"strings"
-
-	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 )
 
 var bamlRuntime *baml.BamlRuntime
@@ -72,8 +72,25 @@ func WithEnv(env map[string]string) CallOptionFunc {
 	}
 }
 
+// Add collector to the specific function call.
+func WithCollector(collector baml.Collector) CallOptionFunc {
+	return func(o *callOption) {
+		if o.collectors == nil {
+			o.collectors = []baml.Collector{}
+		}
+		o.collectors = append(o.collectors, collector)
+	}
+}
+
+// Add multiple collectors to the specific function call.
 func WithCollectors(collectors []baml.Collector) CallOptionFunc {
 	return func(o *callOption) {
-		o.collectors = collectors
+		if collectors == nil {
+			return
+		}
+		if o.collectors == nil {
+			o.collectors = []baml.Collector{}
+		}
+		o.collectors = append(o.collectors, collectors...)
 	}
 }
