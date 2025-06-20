@@ -22,6 +22,7 @@ pub use ui::ui_control_plane_projects::{
     CreateProject, CreateProjectRequest, CreateProjectResponse, ListProjects, ListProjectsRequest,
     ListProjectsResponse, Project, UpdateProject, UpdateProjectRequest, UpdateProjectResponse,
 };
+pub use ui::ui_dashboard::{GetDashboardData, GetDashboardDataRequest, GetDashboardDataResponse};
 pub use ui::ui_function_calls::{
     ListFunctionCalls, ListFunctionCallsRequest, ListFunctionCallsResponse,
 };
