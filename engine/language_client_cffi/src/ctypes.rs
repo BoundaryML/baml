@@ -15,7 +15,6 @@ mod function_args;
 mod traits;
 
 use cffi_generated::cffi::*;
-
 pub use function_args::BamlFunctionArguments;
 
 use crate::ctypes::traits::Decode;

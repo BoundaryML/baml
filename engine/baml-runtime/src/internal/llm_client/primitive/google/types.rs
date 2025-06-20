@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -340,8 +341,9 @@ pub struct UsageMetaData {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::Error;
+
+    use super::*;
 
     #[test]
     fn test_deserialization() {

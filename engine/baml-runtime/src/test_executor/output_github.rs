@@ -8,9 +8,8 @@ impl GithubTestExecutionStatusRenderer {
 
 use std::collections::BTreeMap;
 
-use crate::TestStatus;
-
 use super::{RenderTestExecutionStatus, TestExecutionStatus, TestExecutionStatusMap};
+use crate::TestStatus;
 
 impl RenderTestExecutionStatus for GithubTestExecutionStatusRenderer {
     fn render_progress(&self, test_status_map: &TestExecutionStatusMap) {}

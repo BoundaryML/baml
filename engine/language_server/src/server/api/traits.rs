@@ -2,15 +2,16 @@
 
 use std::sync::{Arc, Mutex};
 
-use crate::baml_project::Project;
-use crate::server::client::{Notifier, Requester};
-use crate::session::{DocumentSnapshot, Session};
-
 // use crate::baml_project::ProjectDatabase;
 use lsp_types::notification::Notification as LSPNotification;
 use lsp_types::request::Request;
 
 use super::notifications::DidSaveTextDocument;
+use crate::{
+    baml_project::Project,
+    server::client::{Notifier, Requester},
+    session::{DocumentSnapshot, Session},
+};
 
 /// A supertrait for any server request handler.
 pub(super) trait RequestHandler {

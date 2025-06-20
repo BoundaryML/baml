@@ -1,10 +1,11 @@
-use super::repr::{Class, Enum, EnumValue, ExprFunction, Field, Node, NodeAttributes};
-use crate::{ir::repr::IntermediateRepr, Configuration};
 use baml_types::{
     expr::{Builtin, Expr, ExprMetadata},
     Arrow, FieldType,
 };
 use internal_baml_diagnostics::Span;
+
+use super::repr::{Class, Enum, EnumValue, ExprFunction, Field, Node, NodeAttributes};
+use crate::{ir::repr::IntermediateRepr, Configuration};
 
 pub mod functions {
     pub const FETCH_VALUE: &str = "std::fetch_value";

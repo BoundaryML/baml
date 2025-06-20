@@ -2,12 +2,11 @@
 mod ctypes;
 
 mod raw_ptr_wrapper;
+use std::{collections::HashMap, ffi::CStr, ops::Deref, ptr::null, sync::Arc};
+
 use anyhow::Result;
-use baml_runtime::tracingv2::storage::storage::Collector;
-use baml_runtime::{BamlRuntime, FunctionResult};
+use baml_runtime::{tracingv2::storage::storage::Collector, BamlRuntime, FunctionResult};
 use once_cell::sync::{Lazy, OnceCell};
-use std::ops::Deref;
-use std::{collections::HashMap, ffi::CStr, ptr::null, sync::Arc};
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -80,13 +79,14 @@ pub extern "C" fn invoke_runtime_cli(args: *const *const libc::c_char) -> libc::
     }
 }
 
-use std::ffi::CString;
-use std::os::raw::c_char;
+use std::{ffi::CString, os::raw::c_char};
 
 use baml_types::BamlValue;
 
-use crate::ctypes::BamlFunctionArguments;
-use crate::raw_ptr_wrapper::{CollectorWrapper, UsageWrapper};
+use crate::{
+    ctypes::BamlFunctionArguments,
+    raw_ptr_wrapper::{CollectorWrapper, UsageWrapper},
+};
 
 pub type CallbackFn = extern "C" fn(call_id: u32, is_done: i32, content: *const i8, length: usize);
 

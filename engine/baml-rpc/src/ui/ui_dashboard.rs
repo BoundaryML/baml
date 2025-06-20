@@ -1,8 +1,8 @@
-use crate::base::EpochMsTimestamp;
-use crate::rpc::ApiEndpoint;
 use baml_ids::ProjectId;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+
+use crate::{base::EpochMsTimestamp, rpc::ApiEndpoint};
 
 /**
  * interface Expression<T> {

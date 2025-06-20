@@ -1,7 +1,8 @@
+use std::str::FromStr;
+
 use baml_types::LiteralValue;
 use indexmap::IndexMap;
 use minijinja::machinery::ast;
-use std::str::FromStr;
 
 use super::{
     pretty_print::pretty_print,

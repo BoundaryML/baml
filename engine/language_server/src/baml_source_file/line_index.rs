@@ -1,14 +1,18 @@
-use std::fmt;
-use std::fmt::{Debug, Formatter};
-use std::num::{NonZeroUsize, ParseIntError};
-use std::ops::Deref;
-use std::str::FromStr;
-use std::sync::Arc;
+use std::{
+    fmt,
+    fmt::{Debug, Formatter},
+    num::{NonZeroUsize, ParseIntError},
+    ops::Deref,
+    str::FromStr,
+    sync::Arc,
+};
 
-use crate::baml_text_size::{TextLen, TextRange, TextSize};
 use serde::{Deserialize, Serialize};
 
-use crate::baml_source_file::SourceLocation;
+use crate::{
+    baml_source_file::SourceLocation,
+    baml_text_size::{TextLen, TextRange, TextSize},
+};
 
 /// Index for fast [byte offset](TextSize) to [`SourceLocation`] conversions.
 ///

@@ -1,20 +1,21 @@
 // This module helps resolve baml values with attached streaming state
 // in the context of the streaming behavior associated with their types.
 
-use crate::deserializer::coercer::ParsingError;
-use crate::{BamlValueWithFlags, Flag};
-use indexmap::{IndexMap, IndexSet};
-use internal_baml_core::ir::ir_helpers::infer_type_with_meta;
-use internal_baml_core::ir::repr::{IntermediateRepr, Walker};
-use internal_baml_core::ir::{Field, IRHelper, IRHelperExtended, IRSemanticStreamingHelper};
+use std::collections::HashSet;
 
+use anyhow::{Context, Error};
 use baml_types::{
     BamlMap, BamlValueWithMeta, Completion, CompletionState, FieldType, ResponseCheck, TypeValue,
 };
-
-use anyhow::{Context, Error};
-use std::collections::HashSet;
+use indexmap::{IndexMap, IndexSet};
+use internal_baml_core::ir::{
+    ir_helpers::infer_type_with_meta,
+    repr::{IntermediateRepr, Walker},
+    Field, IRHelper, IRHelperExtended, IRSemanticStreamingHelper,
+};
 use thiserror;
+
+use crate::{deserializer::coercer::ParsingError, BamlValueWithFlags, Flag};
 
 #[derive(Debug, thiserror::Error)]
 pub enum StreamingError {
@@ -349,9 +350,8 @@ mod tests {
     use baml_types::type_meta::base::TypeMeta;
     use internal_baml_core::ir::repr::make_test_ir;
 
-    use crate::deserializer::{deserialize_flags::DeserializerConditions, types::ValueWithFlags};
-
     use super::*;
+    use crate::deserializer::{deserialize_flags::DeserializerConditions, types::ValueWithFlags};
 
     fn mk_null() -> BamlValueWithFlags {
         BamlValueWithFlags::Null(

@@ -1,7 +1,6 @@
-use crate::generated_types::TypeAliasPy;
-use crate::ir_to_py;
-use crate::package::CurrentRenderPackage;
 use internal_baml_core::ir::TypeAlias;
+
+use crate::{generated_types::TypeAliasPy, ir_to_py, package::CurrentRenderPackage};
 
 pub fn ir_type_alias_to_py<'a>(
     alias: &TypeAlias,

@@ -1,19 +1,27 @@
-use crate::errors::{BamlError, BamlInvalidArgumentError};
-use crate::parse_py_type::parse_py_type;
-use crate::types::function_result_stream::{FunctionResultStream, SyncFunctionResultStream};
-use crate::types::function_results::{pythonize_strict, FunctionResult};
-use crate::types::runtime_ctx_manager::RuntimeContextManager;
-use crate::types::trace_stats::TraceStats;
-use crate::types::type_builder::TypeBuilder;
-use crate::types::{ClientRegistry, Collector, HTTPRequest};
-use baml_runtime::runtime_interface::ExperimentalTracingInterface;
-use baml_runtime::BamlRuntime as CoreBamlRuntime;
-use pyo3::prelude::{pymethods, PyResult};
-use pyo3::types::{PyAnyMethods, PyList};
-use pyo3::{pyclass, Bound, IntoPyObjectExt, PyObject, PyRef, Python};
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
+
+use baml_runtime::{
+    runtime_interface::ExperimentalTracingInterface, BamlRuntime as CoreBamlRuntime,
+};
+use pyo3::{
+    prelude::{pymethods, PyResult},
+    pyclass,
+    types::{PyAnyMethods, PyList},
+    Bound, IntoPyObjectExt, PyObject, PyRef, Python,
+};
+
+use crate::{
+    errors::{BamlError, BamlInvalidArgumentError},
+    parse_py_type::parse_py_type,
+    types::{
+        function_result_stream::{FunctionResultStream, SyncFunctionResultStream},
+        function_results::{pythonize_strict, FunctionResult},
+        runtime_ctx_manager::RuntimeContextManager,
+        trace_stats::TraceStats,
+        type_builder::TypeBuilder,
+        ClientRegistry, Collector, HTTPRequest,
+    },
+};
 
 crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe);
 

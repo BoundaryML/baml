@@ -1,6 +1,7 @@
+use std::sync::{Arc, Weak};
+
 use lsp_server as lsp;
 use lsp_types::{notification::Notification, request::Request};
-use std::sync::{Arc, Weak};
 
 type ConnectionSender = crossbeam::channel::Sender<lsp::Message>;
 type ConnectionReceiver = crossbeam::channel::Receiver<lsp::Message>;

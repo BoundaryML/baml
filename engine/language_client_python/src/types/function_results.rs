@@ -1,12 +1,13 @@
 use baml_types::{BamlValueWithMeta, ResponseCheck};
 use jsonish::{ResponseBamlValue, ResponseValueMeta};
-use pyo3::prelude::{pymethods, PyResult};
-use pyo3::types::{PyAnyMethods, PyDict, PyModule, PyTuple, PyType};
-use pyo3::{Bound, IntoPyObject, IntoPyObjectExt, Py, PyAny, PyErr, PyObject, Python};
-
-use crate::errors::BamlError;
+use pyo3::{
+    prelude::{pymethods, PyResult},
+    types::{PyAnyMethods, PyDict, PyModule, PyTuple, PyType},
+    Bound, IntoPyObject, IntoPyObjectExt, Py, PyAny, PyErr, PyObject, Python,
+};
 
 use super::{BamlAudioPy, BamlImagePy};
+use crate::errors::BamlError;
 
 crate::lang_wrapper!(FunctionResult, baml_runtime::FunctionResult);
 

@@ -1,9 +1,10 @@
+use std::{collections::HashMap, sync::Arc};
+
 use anyhow::Result;
 use baml_ids::FunctionCallId;
 use baml_types::{BamlValue, EvaluationContext, UnresolvedValue};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::FieldType;
-use std::{collections::HashMap, sync::Arc};
 use thiserror::Error;
 
 use crate::{internal::llm_client::llm_provider::LLMProvider, tracing::BamlTracer};

@@ -1,7 +1,9 @@
-use crate::generated_types::{ClassPy, FieldPy};
 use internal_baml_core::ir::{Class, Field};
 
-use crate::package::CurrentRenderPackage;
+use crate::{
+    generated_types::{ClassPy, FieldPy},
+    package::CurrentRenderPackage,
+};
 
 pub fn ir_class_to_py<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -> ClassPy<'a> {
     ClassPy {

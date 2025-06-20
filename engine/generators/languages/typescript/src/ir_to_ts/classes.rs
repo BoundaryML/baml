@@ -1,7 +1,9 @@
-use crate::generated_types::{ClassTS, FieldTS};
 use internal_baml_core::ir::{Class, Field};
 
-use crate::package::CurrentRenderPackage;
+use crate::{
+    generated_types::{ClassTS, FieldTS},
+    package::CurrentRenderPackage,
+};
 
 pub fn ir_class_to_ts<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -> ClassTS<'a> {
     ClassTS {

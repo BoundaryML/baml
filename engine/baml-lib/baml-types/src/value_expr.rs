@@ -1,13 +1,14 @@
-use anyhow::Result;
-use itertools::Itertools;
 use std::{
     collections::{HashMap, HashSet},
     str::FromStr,
 };
 
-use crate::JinjaExpression;
+use anyhow::Result;
 use indexmap::{IndexMap, IndexSet};
+use itertools::Itertools;
 use secrecy::{ExposeSecret, SecretString};
+
+use crate::JinjaExpression;
 
 #[derive(Debug, Clone)]
 pub enum Resolvable<Id, Meta> {

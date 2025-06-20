@@ -1,3 +1,5 @@
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_identifier::parse_identifier,
@@ -16,7 +18,6 @@ use crate::{
     },
     unreachable_rule,
 };
-use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub fn parse_expr_fn(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<expr::ExprFn> {
     assert_correct_parser!(token, Rule::expr_fn);

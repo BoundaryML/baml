@@ -2,9 +2,10 @@
 
 use std::iter::Peekable;
 
-use crate::jsonish::Value;
 use anyhow::Result;
 use baml_types::CompletionState;
+
+use crate::jsonish::Value;
 
 /* Try and see if there is a json object somewhere in the string
  * Could be a "[...] some text" or "{...} some text" or even a:

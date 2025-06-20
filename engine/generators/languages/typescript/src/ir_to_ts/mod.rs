@@ -1,11 +1,13 @@
-use crate::package::Package;
-use crate::r#type::{LiteralValue, MediaTypeTS, TypeMetaTS, TypeTS, TypeWrapper};
 use baml_types::{
     baml_value::TypeLookups,
     ir_type::{Type, TypeStreaming},
-    type_meta::base::TypeMeta,
-    type_meta::stream::TypeMetaStreaming,
+    type_meta::{base::TypeMeta, stream::TypeMetaStreaming},
     BamlMediaType, ConstraintLevel, TypeValue,
+};
+
+use crate::{
+    package::Package,
+    r#type::{LiteralValue, MediaTypeTS, TypeMetaTS, TypeTS, TypeWrapper},
 };
 
 pub mod classes;

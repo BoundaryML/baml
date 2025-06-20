@@ -1,8 +1,7 @@
 use minijinja::machinery::ast::{self, Spanned, Stmt, UnaryOpKind};
 
-use crate::evaluate_type::types::Type;
-
 use super::{expr::evaluate_type, types::PredefinedTypes, TypeError};
+use crate::evaluate_type::types::Type;
 
 fn track_walk(node: &ast::Stmt<'_>, state: &mut PredefinedTypes) {
     match node {
@@ -279,9 +278,8 @@ mod tests {
     use ast::{Expr, Spanned, Var};
     use minijinja::machinery::Span;
 
-    use crate::JinjaContext;
-
     use super::*;
+    use crate::JinjaContext;
 
     #[test]
     fn truthy_union() {

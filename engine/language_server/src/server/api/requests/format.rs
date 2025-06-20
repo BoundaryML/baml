@@ -1,12 +1,20 @@
-use crate::baml_project::position_utils::full_document_range;
-use crate::server::api::traits::{RequestHandler, SyncRequestHandler};
-use crate::server::api::ResultExt;
-use crate::server::client::Requester;
-use crate::server::{client::Notifier, Result};
-use crate::{DocumentKey, Session};
+use std::path::PathBuf;
+
 use internal_baml_core::internal_baml_ast::{format_schema, FormatOptions};
 use lsp_types::{request, DocumentFormattingParams, TextEdit};
-use std::path::PathBuf;
+
+use crate::{
+    baml_project::position_utils::full_document_range,
+    server::{
+        api::{
+            traits::{RequestHandler, SyncRequestHandler},
+            ResultExt,
+        },
+        client::{Notifier, Requester},
+        Result,
+    },
+    DocumentKey, Session,
+};
 pub(crate) struct DocumentFormatting;
 
 impl RequestHandler for DocumentFormatting {

@@ -1,5 +1,6 @@
-use crate::Span;
 use colored::{ColoredString, Colorize};
+
+use crate::Span;
 
 pub trait DiagnosticColorer {
     fn title(&self) -> &'static str;

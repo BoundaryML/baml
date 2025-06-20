@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use pyo3::prelude::{pymethods, PyResult};
-use pyo3::{PyObject, PyRefMut, Python};
+use pyo3::{
+    prelude::{pymethods, PyResult},
+    PyObject, PyRefMut, Python,
+};
 
+use super::{function_results::FunctionResult, runtime_ctx_manager::RuntimeContextManager};
 use crate::errors::BamlError;
-
-use super::function_results::FunctionResult;
-use super::runtime_ctx_manager::RuntimeContextManager;
 
 crate::lang_wrapper!(
     FunctionResultStream,

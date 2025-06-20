@@ -1,10 +1,11 @@
-use crate::Result;
 use baml_runtime::type_builder::{self, WithMeta};
 use baml_types::BamlValue;
 use magnus::{
     class, function, method, scan_args::scan_args, try_convert::TryConvertOwned, Module, Object,
     RModule, Value,
 };
+
+use crate::Result;
 
 #[magnus::wrap(class = "Baml::Ffi::TypeBuilder", free_immediately, size)]
 pub(crate) struct TypeBuilder {

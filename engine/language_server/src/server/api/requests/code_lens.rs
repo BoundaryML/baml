@@ -1,15 +1,21 @@
-use crate::baml_project::Project;
-use crate::server::api::traits::{RequestHandler, SyncRequestHandler};
-use crate::server::api::ResultExt;
-use crate::server::client::Requester;
-use crate::server::{client::Notifier, Result};
-use crate::DocumentKey;
-use crate::Session;
+use std::{collections::HashMap, path::PathBuf};
+
 use baml_lsp_types::BamlSpan;
 use baml_runtime::InternalRuntimeInterface;
 use lsp_types::{request, CodeLensParams, Command, Position, Range};
-use std::collections::HashMap;
-use std::path::PathBuf;
+
+use crate::{
+    baml_project::Project,
+    server::{
+        api::{
+            traits::{RequestHandler, SyncRequestHandler},
+            ResultExt,
+        },
+        client::{Notifier, Requester},
+        Result,
+    },
+    DocumentKey, Session,
+};
 
 pub struct CodeLens;
 

@@ -1,7 +1,7 @@
-use crate::jsonish::Value;
+use anyhow::Result;
 
 use super::{entry, ParseOptions};
-use anyhow::Result;
+use crate::jsonish::Value;
 
 pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
     // Find all balanced JSON objects but w/o any fixes.
@@ -93,9 +93,9 @@ fn complete_stack_head(stack: &mut Vec<Value>) {
 #[cfg(test)]
 mod test {
     use baml_types::CompletionState;
+    use test_log::test;
 
     use super::*;
-    use test_log::test;
 
     #[test]
     fn test_parse() -> Result<()> {

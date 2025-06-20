@@ -4,9 +4,8 @@ use internal_baml_ast::ast::{
 };
 use internal_baml_jinja_types::{PredefinedTypes, Type};
 
-use crate::types::TemplateStringProperties;
-
 use super::Walker;
+use crate::types::TemplateStringProperties;
 
 /// An `enum` declaration in the schema.
 pub type TemplateStringWalker<'db> = Walker<'db, ast::TemplateStringId>;

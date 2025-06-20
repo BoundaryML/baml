@@ -1,30 +1,31 @@
 //! Data model, state management, and configuration resolution.
 
-use anyhow::Context;
+use std::{
+    collections::HashMap,
+    ops::{Deref, DerefMut},
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+    time::Instant,
+};
+
+use anyhow::{anyhow, Context};
 use index::DocumentController;
 use itertools::any;
-use serde_json::Value;
-use std::collections::HashMap;
-use std::ops::{Deref, DerefMut};
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-use std::time::Instant;
-
-use anyhow::anyhow;
 use lsp_types::{ClientCapabilities, TextDocumentContentChangeEvent, Url};
+use serde_json::Value;
 
-use crate::baml_project::file_utils::find_top_level_parent;
-use crate::baml_project::{BamlProject, Project};
-use crate::edit::{DocumentKey, DocumentVersion};
+pub(crate) use self::{capabilities::ResolvedClientCapabilities, settings::AllSettings};
+pub use self::{
+    index::DocumentQuery,
+    settings::{BamlSettings, ClientSettings},
+};
+use crate::{
+    baml_project::{file_utils::find_top_level_parent, BamlProject, Project},
+    edit::{DocumentKey, DocumentVersion},
+    server::client::Notifier,
+};
 // use crate::system::{url_to_any_system_path, AnySystemPath, LSPSystem};
 use crate::{PositionEncoding, TextDocument};
-
-pub(crate) use self::capabilities::ResolvedClientCapabilities;
-pub use self::index::DocumentQuery;
-pub(crate) use self::settings::AllSettings;
-pub use self::settings::BamlSettings;
-pub use self::settings::ClientSettings;
-use crate::server::client::Notifier;
 
 mod capabilities;
 pub mod index;
@@ -405,14 +406,20 @@ impl DocumentSnapshot {
 
 #[cfg(test)]
 mod tests {
-    use super::*; // Import items from outer module (Session, Project, etc.)
-    use crate::baml_project::{BamlProject, Project};
-    use crate::logging::{init_logging, LogLevel};
-    use crate::session::settings::ClientSettings;
-    use crate::PositionEncoding;
+    use std::{
+        path::PathBuf,
+        sync::{Arc, Mutex},
+    };
+
     use lsp_types::ClientCapabilities;
-    use std::path::PathBuf;
-    use std::sync::{Arc, Mutex};
+
+    use super::*; // Import items from outer module (Session, Project, etc.)
+    use crate::{
+        baml_project::{BamlProject, Project},
+        logging::{init_logging, LogLevel},
+        session::settings::ClientSettings,
+        PositionEncoding,
+    };
 
     // Minimal setup for Session::new
     fn create_test_session() -> Session {

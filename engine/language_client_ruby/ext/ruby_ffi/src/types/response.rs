@@ -1,7 +1,7 @@
-use crate::Result;
 use magnus::{class, method, Error, Module, RModule, Ruby};
 
 use super::request::HTTPBody;
+use crate::Result;
 
 crate::lang_wrapper!(
     HTTPResponse,

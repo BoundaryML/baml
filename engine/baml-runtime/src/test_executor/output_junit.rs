@@ -1,5 +1,6 @@
-use junit_report::{Report, TestCase, TestSuite};
 use std::{collections::BTreeMap, fs::File, time::Duration};
+
+use junit_report::{Report, TestCase, TestSuite};
 
 use super::{RenderTestExecutionStatus, TestExecutionStatus, TestExecutionStatusMap};
 use crate::TestStatus;

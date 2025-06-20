@@ -1,7 +1,6 @@
-use crate::generated_types::TypeAliasTS;
-use crate::ir_to_ts;
-use crate::package::CurrentRenderPackage;
 use internal_baml_core::ir::TypeAlias;
+
+use crate::{generated_types::TypeAliasTS, ir_to_ts, package::CurrentRenderPackage};
 
 pub fn ir_type_alias_to_ts<'a>(
     alias: &TypeAlias,

@@ -4,9 +4,8 @@ use baml_ids::{FunctionCallId, HttpRequestId};
 use baml_types::tracing::events::{LLMUsage, LoggedLLMResponse, TraceData, TraceEvent};
 use web_time::SystemTime;
 
-use crate::internal::llm_client::LLMResponse;
-
 use super::interface::TraceEventWithMeta;
+use crate::internal::llm_client::LLMResponse;
 
 /// Takes an `LLMResponse` plus some IDs and context info,
 /// returns the appropriate TraceEvent populated with

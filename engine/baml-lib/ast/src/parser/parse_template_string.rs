@@ -1,3 +1,5 @@
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_comments::*,
@@ -7,7 +9,6 @@ use super::{
     Rule,
 };
 use crate::ast::*;
-use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub(crate) fn parse_template_string(
     pair: Pair<'_>,

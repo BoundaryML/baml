@@ -1,7 +1,8 @@
+use std::collections::HashMap;
+
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_types::BamlValue;
 use napi_derive::napi;
-use std::collections::HashMap;
 
 use super::runtime_ctx_manager::RuntimeContextManager;
 use crate::{errors::invalid_argument_error, BamlRuntime};

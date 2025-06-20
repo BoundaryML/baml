@@ -1,12 +1,14 @@
+use std::{
+    ops::DerefMut,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
+
 use anyhow::Result;
 use notify_debouncer_full::{new_debouncer, notify::*};
-use std::ops::DerefMut;
-use std::path::PathBuf;
-use std::time::{Duration, Instant};
-
-use crate::{cli::generate::GenerateArgs, BamlRuntime};
 
 use super::serve::Server;
+use crate::{cli::generate::GenerateArgs, BamlRuntime};
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct DevArgs {

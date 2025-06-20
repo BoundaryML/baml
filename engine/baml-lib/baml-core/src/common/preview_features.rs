@@ -1,5 +1,6 @@
-use serde::{Serialize, Serializer};
 use std::fmt;
+
+use serde::{Serialize, Serializer};
 
 /// A set of preview features.
 pub type PreviewFeatures = enumflags2::BitFlags<PreviewFeature>;

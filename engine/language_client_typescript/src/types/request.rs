@@ -1,9 +1,8 @@
 use napi::{bindgen_prelude::Env, JsArrayBuffer, JsObject, JsUnknown, NapiValue};
 use napi_derive::napi;
 
-use crate::errors::from_anyhow_error;
-
 use super::log_collector::serde_value_to_js;
+use crate::errors::from_anyhow_error;
 
 crate::lang_wrapper!(
     HTTPRequest,

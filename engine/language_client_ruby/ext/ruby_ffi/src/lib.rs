@@ -1,15 +1,13 @@
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
+
 use baml_runtime::BamlRuntime;
 use baml_types::BamlValue;
-use magnus::{class, function, method, prelude::*, Error, RArray, RHash, RModule, Ruby};
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Arc;
-use types::log_collector::Collector;
-use types::request::HTTPRequest;
-
 use function_result::FunctionResult;
 use function_result_stream::FunctionResultStream;
-use types::runtime_ctx_manager::RuntimeContextManager;
+use magnus::{class, function, method, prelude::*, Error, RArray, RHash, RModule, Ruby};
+use types::{
+    log_collector::Collector, request::HTTPRequest, runtime_ctx_manager::RuntimeContextManager,
+};
 
 mod function_result;
 mod function_result_stream;

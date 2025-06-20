@@ -1,12 +1,16 @@
+use std::{
+    cmp::Ordering,
+    fmt::{Debug, Display, Formatter},
+    sync::{Arc, OnceLock},
+};
+
 use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
-use std::fmt::{Debug, Display, Formatter};
-use std::sync::{Arc, OnceLock};
 
+pub use crate::baml_source_file::{
+    line_index::{LineIndex, OneIndexed},
+    line_ranges::LineRanges,
+};
 use crate::baml_text_size::{Ranged, TextRange, TextSize};
-
-pub use crate::baml_source_file::line_index::{LineIndex, OneIndexed};
-pub use crate::baml_source_file::line_ranges::LineRanges;
 // pub use crate::baml_source_file::newlines::{
 //     find_newline, Line, LineEnding, NewlineWithTrailingNewline, UniversalNewlineIterator,
 //     UniversalNewlines,

@@ -2,12 +2,12 @@ mod ir_features;
 mod publisher;
 pub(crate) mod runtime_interface;
 
-use anyhow::Result;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
 
+use anyhow::Result;
 pub(super) use publisher::AstSignatureWrapper;
 
 cfg_if::cfg_if!(
@@ -18,13 +18,14 @@ cfg_if::cfg_if!(
     }
 );
 
+use std::sync::Arc;
+
 use internal_baml_core::{
     internal_baml_diagnostics::{Diagnostics, SourceFile},
     internal_baml_parser_database::ParserDatabase,
     ir::repr::IntermediateRepr,
     validate,
 };
-use std::sync::Arc;
 
 use crate::internal::llm_client::{llm_provider::LLMProvider, retry_policy::CallablePolicy};
 

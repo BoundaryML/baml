@@ -1,3 +1,5 @@
+use std::{convert::Infallible, time::Duration};
+
 use axum::{
     extract::{self},
     response::{
@@ -6,7 +8,6 @@ use axum::{
     },
 };
 use futures::stream;
-use std::{convert::Infallible, time::Duration};
 use tokio_stream::StreamExt;
 
 #[derive(serde::Deserialize)]

@@ -1,5 +1,6 @@
-use super::*;
 use baml_types::type_meta::base::TypeMeta;
+
+use super::*;
 
 const ENUM_FILE: &str = r#"
 // Enums

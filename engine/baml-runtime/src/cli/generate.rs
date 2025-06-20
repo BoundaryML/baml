@@ -1,7 +1,9 @@
-use crate::{baml_src_files, BamlRuntime};
+use std::path::PathBuf;
+
 use anyhow::{Context, Result};
 use internal_baml_core::configuration::GeneratorDefaultClientMode;
-use std::path::PathBuf;
+
+use crate::{baml_src_files, BamlRuntime};
 
 #[derive(clap::Args, Debug)]
 pub struct GenerateArgs {

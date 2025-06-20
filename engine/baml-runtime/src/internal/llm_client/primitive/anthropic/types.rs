@@ -191,8 +191,9 @@ pub struct DeltaUsage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use anyhow::Result;
+
+    use super::*;
 
     #[test]
     fn deserialize() -> Result<()> {

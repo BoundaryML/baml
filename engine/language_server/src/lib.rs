@@ -1,9 +1,10 @@
 #![allow(dead_code)]
 
+use std::num::NonZeroUsize;
+
 use anyhow::Context;
 pub use edit::{DocumentKey, PositionEncoding, TextDocument};
 pub use session::{ClientSettings, DocumentQuery, DocumentSnapshot, Session};
-use std::num::NonZeroUsize;
 
 use crate::server::Server;
 

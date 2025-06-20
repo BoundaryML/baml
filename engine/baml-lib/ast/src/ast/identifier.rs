@@ -1,5 +1,6 @@
-use super::{Span, WithName, WithSpan};
 use std::fmt::Display;
+
+use super::{Span, WithName, WithSpan};
 
 /// An identifier the refers to a field or type in a different location.
 #[derive(Debug, Clone, PartialEq)]

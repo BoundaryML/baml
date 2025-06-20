@@ -1,15 +1,21 @@
-use super::InternalBamlRuntime;
-use crate::{internal::ir_features::WithInternal, tracingv2::publisher::TypeLookup};
-use baml_rpc::ast::{ast_node_id::AstNodeId, tops::BamlFunctionId};
-use baml_rpc::BamlTypeId;
+use std::{
+    collections::HashMap,
+    hash::{DefaultHasher, Hash, Hasher},
+    path::PathBuf,
+    sync::Arc,
+};
+
+use baml_rpc::{
+    ast::{ast_node_id::AstNodeId, tops::BamlFunctionId},
+    BamlTypeId,
+};
 use baml_types::FieldType;
 use cowstr::CowStr;
 use internal_baml_core::ir::ir_hasher;
 use serde::Serialize;
-use std::hash::DefaultHasher;
-use std::hash::{Hash, Hasher};
 
-use std::{collections::HashMap, path::PathBuf, sync::Arc};
+use super::InternalBamlRuntime;
+use crate::{internal::ir_features::WithInternal, tracingv2::publisher::TypeLookup};
 
 /// Type alias for a value with its dependencies
 pub type WithDependency<T> = (Arc<T>, Arc<Vec<Arc<BamlTypeId>>>);
@@ -267,8 +273,9 @@ impl SignatureExt for internal_baml_core::ir::ir_hasher::Signature {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::time::Instant;
+
+    use super::*;
 
     /// Creates fake file content of specified size in bytes
     fn create_fake_content(size_bytes: usize) -> String {

@@ -1,5 +1,6 @@
-use super::{Expression, Span, WithSpan};
 use std::fmt::{self, Display, Formatter};
+
+use super::{Expression, Span, WithSpan};
 
 /// An opaque identifier for a value in an AST enum. Use the
 /// `r#enum[enum_value_id]` syntax to resolve the id to an `ast::EnumValue`.

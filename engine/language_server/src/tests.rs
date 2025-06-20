@@ -1,15 +1,14 @@
 #[cfg(test)]
 mod tests {
 
+    use std::{num::NonZeroUsize, thread};
+
     use crossbeam_channel::{Receiver, Sender};
     use log::LevelFilter;
-    use serde_json::json;
-    use std::num::NonZeroUsize;
-    use std::thread;
-
-    use crate::server::connection::ConnectionInitializer;
-    use crate::server::Server;
     use lsp_server::Message;
+    use serde_json::json;
+
+    use crate::server::{connection::ConnectionInitializer, Server};
 
     pub struct TestServer {
         pub thread_join_handle: thread::JoinHandle<()>,

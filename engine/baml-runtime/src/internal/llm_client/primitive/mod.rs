@@ -6,16 +6,11 @@ use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker};
 use internal_baml_jinja::RenderedChatMessage;
 use internal_llm_client::{AllowedRoleMetadata, ClientProvider, OpenAIClientProviderVariant};
 
-use crate::{
-    client_registry::ClientProperty, internal::prompt_renderer::PromptRenderer,
-    runtime_interface::InternalClientLookup, RenderCurlSettings, RuntimeContext,
-};
-
+pub(crate) use self::request::{json_body, json_headers, JsonBodyInput};
 use self::{
     anthropic::AnthropicClient, aws::AwsClient, google::GoogleAIClient, openai::OpenAIClient,
     request::RequestBuilder, vertex::VertexClient,
 };
-
 use super::{
     orchestrator::{
         ExecutionScope, IterOrchestrator, OrchestrationScope, OrchestrationState, OrchestratorNode,
@@ -27,8 +22,10 @@ use super::{
     },
     LLMResponse,
 };
-
-pub(crate) use self::request::{json_body, json_headers, JsonBodyInput};
+use crate::{
+    client_registry::ClientProperty, internal::prompt_renderer::PromptRenderer,
+    runtime_interface::InternalClientLookup, RenderCurlSettings, RuntimeContext,
+};
 
 mod anthropic;
 mod aws;
@@ -352,10 +349,10 @@ impl LLMPrimitiveProvider {
 
 #[cfg(test)]
 mod tests {
-    use crate::internal::llm_client::traits::WithClient;
+    use anyhow::Result;
 
     use super::request::RequestBuilder;
-    use anyhow::Result;
+    use crate::internal::llm_client::traits::WithClient;
 
     pub struct MockClient {
         model_features: crate::internal::llm_client::ModelFeatures,

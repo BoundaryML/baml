@@ -1,7 +1,6 @@
 use anyhow::Result;
 
 use super::api_wrapper::{core_types::LogSchema, APIWrapper, BoundaryAPI};
-
 use crate::TraceStats;
 
 pub(super) struct NonThreadedTracer {

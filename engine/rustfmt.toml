@@ -1,5 +1,7 @@
-# Uncomment when stabilized.
+# Just for import grouping. There are some bugs related to comments above
+# or next to import statements, but we don't have many of those.
+unstable_features = true
 
-# group_imports = "StdExternalCrate"
-# imports_granularity = "Crate"
-# overflow_delimited_expr = true
+group_imports = "StdExternalCrate"
+imports_granularity = "Crate"
+overflow_delimited_expr = true

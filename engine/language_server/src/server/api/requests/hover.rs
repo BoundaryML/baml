@@ -1,9 +1,16 @@
-use crate::server::api::traits::{RequestHandler, SyncRequestHandler};
-use crate::server::api::ResultExt;
-use crate::server::client::Requester;
-use crate::server::{client::Notifier, Result};
-use crate::{DocumentKey, Session};
 use lsp_types::{self as types, request as req, HoverParams, TextDocumentItem};
+
+use crate::{
+    server::{
+        api::{
+            traits::{RequestHandler, SyncRequestHandler},
+            ResultExt,
+        },
+        client::{Notifier, Requester},
+        Result,
+    },
+    DocumentKey, Session,
+};
 
 pub(crate) struct Hover;
 

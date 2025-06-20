@@ -1,15 +1,14 @@
-use crate::r#type::{
-    convert_ir_type, AdditionalProperties, OpenApiMeta, TypeOpenApi, TypePrimitive,
-};
-use crate::{
-    builtin_schemas, ComponentRequestBody, Components, FunctionName, MediaTypeSchema,
-    OpenApiSchema, Path, PathRequestBody, Response, TypeName,
-};
+pub use class::{convert_ir_class, convert_ir_enum};
+pub use function::{convert_ir_function, FunctionOpenApi};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::repr;
 
-pub use class::{convert_ir_class, convert_ir_enum};
-pub use function::{convert_ir_function, FunctionOpenApi};
+use crate::{
+    builtin_schemas,
+    r#type::{convert_ir_type, AdditionalProperties, OpenApiMeta, TypeOpenApi, TypePrimitive},
+    ComponentRequestBody, Components, FunctionName, MediaTypeSchema, OpenApiSchema, Path,
+    PathRequestBody, Response, TypeName,
+};
 
 pub struct OpenApiUserData {
     pub types: IndexMap<TypeName, TypeOpenApi>,
@@ -198,8 +197,9 @@ mod class {
 }
 
 mod function {
-    use super::*;
     use internal_baml_core::ir::repr;
+
+    use super::*;
 
     pub struct FunctionOpenApi {
         pub name: String,
@@ -261,8 +261,9 @@ mod function {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use internal_baml_core::ir::repr::make_test_ir;
+
+    use super::*;
 
     #[test]
     pub fn basic_example() {

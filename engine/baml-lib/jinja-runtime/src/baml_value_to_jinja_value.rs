@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use baml_types::EvaluationContext;
 use indexmap::IndexMap;
-use internal_baml_core::ir::repr::IntermediateRepr;
-use internal_baml_core::ir::IRHelper;
+use internal_baml_core::ir::{repr::IntermediateRepr, IRHelper};
 use minijinja::value::{Enumerator, Object, ObjectRepr};
 
 use crate::{BamlMedia, BamlValue};

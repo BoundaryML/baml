@@ -1,12 +1,10 @@
 use std::collections::HashSet;
 
-use crate::validate::validation_pipeline::context::Context;
-
+use internal_baml_ast::ast::{FieldType, TypeExpId, WithIdentifier, WithName, WithSpan};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 
-use internal_baml_ast::ast::{FieldType, TypeExpId, WithIdentifier, WithName, WithSpan};
-
 use super::types::validate_type;
+use crate::validate::validation_pipeline::context::Context;
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
     let mut defined_types = internal_baml_jinja_types::PredefinedTypes::default(

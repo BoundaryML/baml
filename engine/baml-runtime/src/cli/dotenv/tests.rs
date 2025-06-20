@@ -1,14 +1,12 @@
 #[cfg(test)]
 mod tests {
-    use crate::cli::dotenv::{dotenv, load_env_file, load_env_from_string};
+    use std::{env, fs::write, io::Write, path::PathBuf};
+
+    use anyhow::Result;
+    use tempfile::NamedTempFile;
 
     use super::*;
-    use anyhow::Result;
-    use std::env;
-    use std::fs::write;
-    use std::io::Write;
-    use std::path::PathBuf;
-    use tempfile::NamedTempFile;
+    use crate::cli::dotenv::{dotenv, load_env_file, load_env_from_string};
 
     // Helper to create temp file with content
     fn create_env_file(content: &str) -> Result<PathBuf> {

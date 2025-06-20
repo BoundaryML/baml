@@ -1,9 +1,8 @@
-use anyhow::Result;
 use std::sync::Arc;
 
+use anyhow::Result;
 use baml_ids::FunctionCallId;
-use baml_rpc::ast::tops::BamlFunctionId;
-use baml_rpc::BamlTypeId;
+use baml_rpc::{ast::tops::BamlFunctionId, BamlTypeId};
 use baml_types::HasFieldType;
 
 use crate::tracingv2::storage::interface::TraceEventWithMeta;

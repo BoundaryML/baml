@@ -11,13 +11,12 @@ mod template_strings;
 mod tests;
 mod types;
 
+use std::collections::HashSet;
+
 use baml_types::GeneratorOutputType;
 
-use crate::{configuration::Generator, validate::generator_loader::load_generators_from_ast};
-
 use super::context::Context;
-
-use std::collections::HashSet;
+use crate::{configuration::Generator, validate::generator_loader::load_generators_from_ast};
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
     enums::validate(ctx);

@@ -1,6 +1,5 @@
-use crate::ir_type::UnionTypeViewGeneric;
-
 use super::{type_meta, ConstraintLevel, TypeGeneric, TypeStreaming};
+use crate::ir_type::UnionTypeViewGeneric;
 
 impl std::fmt::Display for TypeStreaming {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

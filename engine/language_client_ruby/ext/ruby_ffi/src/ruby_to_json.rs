@@ -1,16 +1,17 @@
+use std::result::Result;
+
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta, ResponseCheck};
 use indexmap::IndexMap;
+use jsonish::{ResponseBamlValue, ResponseValueMeta};
 use magnus::{
     prelude::*, typed_data::Obj, value::Value, Error, Float, Integer, IntoValue, RArray, RClass,
     RHash, RModule, RString, Ruby, Symbol, TypedData,
 };
-use std::result::Result;
 
 use crate::types::{
     self,
     media::{Audio, Image},
 };
-use jsonish::{ResponseBamlValue, ResponseValueMeta};
 
 struct SerializationError {
     position: Vec<String>,

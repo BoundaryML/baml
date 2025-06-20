@@ -1,5 +1,19 @@
 use std::{collections::HashMap, sync::Arc};
 
+use anyhow::{Context, Result};
+use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use baml_types::{
+    tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, TraceEvent},
+    BamlMap,
+};
+use bytes::Bytes;
+use http::Response as HttpResponse;
+use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
+pub use internal_llm_client::ResponseType;
+use reqwest::{header::HeaderMap, Response, StatusCode};
+use serde::de::DeserializeOwned;
+use serde_json::json;
+
 use crate::{
     internal::llm_client::{
         traits::{HttpContext, WithClient},
@@ -7,19 +21,6 @@ use crate::{
     },
     tracingv2::storage::storage::BAML_TRACER,
 };
-use anyhow::{Context, Result};
-use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
-use baml_types::tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, TraceEvent};
-use baml_types::BamlMap;
-use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
-pub use internal_llm_client::ResponseType;
-use reqwest::{header::HeaderMap, Response, StatusCode};
-
-use serde::de::DeserializeOwned;
-use serde_json::json;
-
-use bytes::Bytes;
-use http::Response as HttpResponse;
 
 #[derive(Debug)]
 pub struct LoggedHttpResponse {

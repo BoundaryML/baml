@@ -1,9 +1,12 @@
-use super::PositionEncoding;
 use lsp_types as types;
+
+use super::PositionEncoding;
 // use ruff_notebook::NotebookIndex;
 use crate::baml_source_file::OneIndexed;
-use crate::baml_source_file::{LineIndex, SourceLocation};
-use crate::baml_text_size::{TextRange, TextSize};
+use crate::{
+    baml_source_file::{LineIndex, SourceLocation},
+    baml_text_size::{TextRange, TextSize},
+};
 
 // pub(crate) struct NotebookRange {
 //     pub(crate) cell: notebook::CellId,

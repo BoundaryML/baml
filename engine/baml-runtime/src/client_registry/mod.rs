@@ -1,11 +1,10 @@
 // This is designed to build any type of client, not just primitives
+use std::{collections::HashMap, str::FromStr, sync::Arc};
+
 use anyhow::{Context, Result};
+use baml_types::{BamlMap, BamlValue};
 pub use internal_llm_client::ClientProvider;
 use internal_llm_client::{ClientSpec, PropertyHandler, UnresolvedClientProperty};
-use std::sync::Arc;
-use std::{collections::HashMap, str::FromStr};
-
-use baml_types::{BamlMap, BamlValue};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{internal::llm_client::llm_provider::LLMProvider, RuntimeContext};
@@ -138,9 +137,11 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use serde_json;
     use std::collections::HashMap;
+
+    use serde_json;
+
+    use super::*;
 
     #[test]
     fn test_each_provider() {

@@ -1,8 +1,8 @@
-use anyhow::{Context, Result};
-use internal_llm_client::vertex::ResolvedGcpAuthStrategy;
 use std::{future::Future, pin::Pin, sync::Arc};
 
+use anyhow::{Context, Result};
 use gcp_auth::{Error, Token, TokenProvider};
+use internal_llm_client::vertex::ResolvedGcpAuthStrategy;
 
 pub enum VertexAuth {
     CustomServiceAccount(gcp_auth::CustomServiceAccount),

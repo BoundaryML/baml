@@ -1,6 +1,7 @@
 use std::{
     cell::RefCell,
     collections::{BTreeMap, BTreeSet},
+    io::Write,
     iter,
     time::Duration,
 };
@@ -10,7 +11,6 @@ use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
 use super::{RenderTestExecutionStatus, TestExecutionStatus, TestExecutionStatusMap};
 use crate::TestStatus;
-use std::io::Write;
 
 pub(super) struct PrettyTestExecutionStatusRenderer {
     multi_progress: MultiProgress,

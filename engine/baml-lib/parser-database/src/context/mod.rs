@@ -1,12 +1,11 @@
 use internal_baml_ast::ast::{Argument, ArgumentId, Attribute};
 use internal_baml_diagnostics::{DatamodelWarning, Span};
 
+use self::attributes::AttributesValidationState;
 use crate::{
     ast, ast::WithName, interner::StringInterner, names::Names, types::Types, DatamodelError,
     Diagnostics, StringId,
 };
-
-use self::attributes::AttributesValidationState;
 
 mod attributes;
 

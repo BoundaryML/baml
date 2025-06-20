@@ -4,9 +4,8 @@ use internal_baml_core::ir::scope_diagnostics::ScopeStack;
 use serde::Serialize;
 use serde_json::json;
 
-use crate::{errors::ExposedError, internal::llm_client::LLMResponse};
-
 use super::json_response::Json;
+use crate::{errors::ExposedError, internal::llm_client::LLMResponse};
 
 /// The concrete HTTP error type that we return to our users if something goes wrong.
 /// See https://docs.boundaryml.com/get-started/debugging/exception-handling for

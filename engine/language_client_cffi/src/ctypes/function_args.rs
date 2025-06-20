@@ -1,9 +1,12 @@
-use crate::ctypes::cffi_generated::cffi::{CFFICollector, CFFIFunctionArguments};
-use baml_runtime::client_registry::ClientRegistry;
-use baml_types::BamlValue;
 use std::collections::HashMap;
 
-use crate::raw_ptr_wrapper::CollectorWrapper;
+use baml_runtime::client_registry::ClientRegistry;
+use baml_types::BamlValue;
+
+use crate::{
+    ctypes::cffi_generated::cffi::{CFFICollector, CFFIFunctionArguments},
+    raw_ptr_wrapper::CollectorWrapper,
+};
 
 pub struct BamlFunctionArguments {
     pub kwargs: baml_types::BamlMap<String, BamlValue>,

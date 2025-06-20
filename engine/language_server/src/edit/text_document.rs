@@ -1,9 +1,10 @@
-use crate::baml_source_file::{LineIndex, OneIndexed};
 use lsp_types::{Range, TextDocumentContentChangeEvent};
 
-use crate::PositionEncoding;
-
 use super::RangeExt;
+use crate::{
+    baml_source_file::{LineIndex, OneIndexed},
+    PositionEncoding,
+};
 
 pub(crate) type DocumentVersion = i32;
 
@@ -149,8 +150,9 @@ impl TextDocument {
 
 #[cfg(test)]
 mod tests {
-    use crate::{PositionEncoding, TextDocument};
     use lsp_types::{Position, TextDocumentContentChangeEvent};
+
+    use crate::{PositionEncoding, TextDocument};
 
     #[test]
     fn redo_edit() {

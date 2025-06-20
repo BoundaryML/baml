@@ -1,3 +1,6 @@
+use baml_types::JinjaExpression;
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_expr::{
@@ -8,8 +11,6 @@ use super::{
     Rule,
 };
 use crate::{assert_correct_parser, ast::*, unreachable_rule};
-use baml_types::JinjaExpression;
-use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub(crate) fn parse_expression(
     token: Pair<'_>,
@@ -370,10 +371,13 @@ pub fn parse_class_constructor(token: Pair<'_>, diagnostics: &mut Diagnostics) -
 
 #[cfg(test)]
 mod tests {
-    use super::super::{BAMLParser, Rule};
-    use super::*;
     use internal_baml_diagnostics::{Diagnostics, SourceFile};
     use pest::{consumes_to, parses_to, Parser};
+
+    use super::{
+        super::{BAMLParser, Rule},
+        *,
+    };
 
     #[test]
     fn array_trailing_comma() {

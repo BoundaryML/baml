@@ -1,10 +1,11 @@
+use internal_baml_diagnostics::Diagnostics;
+
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_expression::parse_expression,
     Rule,
 };
 use crate::ast::{self, Identifier};
-use internal_baml_diagnostics::Diagnostics;
 
 pub(crate) fn parse_arguments_list(
     token: Pair<'_>,

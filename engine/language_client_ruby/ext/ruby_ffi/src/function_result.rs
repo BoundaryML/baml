@@ -2,8 +2,7 @@ use magnus::{
     class, exception::runtime_error, method, prelude::*, value::Value, Error, RModule, Ruby,
 };
 
-use crate::ruby_to_json;
-use crate::Result;
+use crate::{ruby_to_json, Result};
 
 #[magnus::wrap(class = "Baml::Ffi::FunctionResult", free_immediately, size)]
 pub struct FunctionResult {

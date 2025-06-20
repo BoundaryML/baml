@@ -1,8 +1,11 @@
 use baml_runtime::{
     errors::ExposedError, internal::llm_client::LLMResponse, scope_diagnostics::ScopeStack,
 };
-use pyo3::types::{PyAnyMethods, PyModule, PyModuleMethods};
-use pyo3::{create_exception, pymodule, Bound, PyErr, PyResult, Python};
+use pyo3::{
+    create_exception, pymodule,
+    types::{PyAnyMethods, PyModule, PyModuleMethods},
+    Bound, PyErr, PyResult, Python,
+};
 
 create_exception!(baml_py, BamlError, pyo3::exceptions::PyException);
 // Existing exception definitions

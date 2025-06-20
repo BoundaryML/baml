@@ -1,17 +1,16 @@
 use std::collections::HashSet;
 
-use crate::{
-    AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes,
-    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
-};
 use anyhow::Result;
-
 use baml_derive::BamlHash;
 use baml_types::{GetEnvVar, StringOr, UnresolvedValue};
 use either::Either;
 use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
+use crate::{
+    AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes,
+    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
+};
 
 #[derive(Debug, Clone, BamlHash)]
 enum UnresolvedGcpAuthStrategy<Meta> {

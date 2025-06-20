@@ -1,11 +1,13 @@
 // use moniker::{Binder, BoundTerm, Scope, Var};
-use std::collections::HashSet;
-use std::collections::VecDeque;
-use std::sync::Arc;
+use std::{
+    collections::{HashSet, VecDeque},
+    sync::Arc,
+};
 
-use crate::{ir_type::FieldType, BamlMap, BamlValueWithMeta};
 use internal_baml_diagnostics::Span;
 use itertools::join;
+
+use crate::{ir_type::FieldType, BamlMap, BamlValueWithMeta};
 
 /// A BAML expression term.
 /// T is the type of the metadata.

@@ -1,20 +1,17 @@
+use std::time::Duration;
+
 use anyhow::{Context, Result};
 use axum::{extract::Query, routing::get, Router};
 use base64::{engine::general_purpose, Engine as _};
 use derive_more::Constructor;
-use dialoguer::theme::ColorfulTheme;
-use dialoguer::Confirm;
+use dialoguer::{theme::ColorfulTheme, Confirm};
 use etcetera::AppStrategy;
 use indexmap::IndexMap;
-use rand::distributions::Alphanumeric;
-use rand::{thread_rng, Rng};
+use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use reqwest::RequestBuilder;
-use serde::Deserialize;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
-use std::time::Duration;
-use tokio::net::TcpListener;
-use tokio::sync::mpsc;
+use tokio::{net::TcpListener, sync::mpsc};
 use web_time::SystemTime;
 
 fn app_strategy() -> Result<impl AppStrategy> {

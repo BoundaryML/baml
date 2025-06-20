@@ -1,7 +1,9 @@
 use std::collections::VecDeque;
 
 use anyhow::Result;
+use baml_types::{BamlMap, CompletionState, FieldType, LiteralValue, TypeValue};
 
+use super::{ParsingContext, ParsingError, TypeCoercer};
 use crate::{
     deserializer::{
         deserialize_flags::{DeserializerConditions, Flag},
@@ -9,9 +11,6 @@ use crate::{
     },
     jsonish,
 };
-use baml_types::{BamlMap, CompletionState, FieldType, LiteralValue, TypeValue};
-
-use super::{ParsingContext, ParsingError, TypeCoercer};
 
 pub(super) fn coerce_map(
     ctx: &ParsingContext,

@@ -1,13 +1,14 @@
-use itertools::Itertools;
 use std::collections::HashSet;
 
-use internal_baml_ast::ast::{ClassConstructor, ClassConstructorField, Expression, Stmt};
-use internal_baml_ast::ast::{WithName, WithSpan};
+use internal_baml_ast::ast::{
+    ClassConstructor, ClassConstructorField, Expression, Stmt, WithName, WithSpan,
+};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
+use itertools::Itertools;
 
-use crate::ir;
-use crate::ir::builtin::is_builtin_identifier;
-use crate::validate::validation_pipeline::context::Context;
+use crate::{
+    ir, ir::builtin::is_builtin_identifier, validate::validation_pipeline::context::Context,
+};
 
 /// Builtin functions.
 ///

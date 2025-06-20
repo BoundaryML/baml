@@ -1,9 +1,5 @@
 mod render_output_format;
 pub(crate) mod scoped_ir;
-use internal_llm_client::ClientSpec;
-use jsonish::{BamlValueWithFlags, ResponseBamlValue};
-use render_output_format::render_output_format;
-
 use anyhow::Result;
 use baml_types::{BamlValue, FieldType, TypeValue};
 use internal_baml_core::{
@@ -17,11 +13,13 @@ use internal_baml_jinja::{
     types::OutputFormatContent, RenderContext, RenderContext_Client, RenderedPrompt,
     TemplateStringMacro,
 };
+use internal_llm_client::ClientSpec;
+use jsonish::{BamlValueWithFlags, ResponseBamlValue};
+use render_output_format::render_output_format;
 use scoped_ir::ScopedIr;
 
-use crate::{runtime_context::RuntimeClassOverride, RuntimeContext};
-
 use super::llm_client::parsed_value_to_response;
+use crate::{runtime_context::RuntimeClassOverride, RuntimeContext};
 
 #[derive(Debug)]
 pub struct PromptRenderer {

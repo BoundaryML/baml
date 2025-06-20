@@ -1,5 +1,7 @@
-use crate::package::CurrentRenderPackage;
-use crate::r#type::{SerializeType, TypeRb};
+use crate::{
+    package::CurrentRenderPackage,
+    r#type::{SerializeType, TypeRb},
+};
 
 mod class {
     use super::*;

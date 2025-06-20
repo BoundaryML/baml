@@ -4,8 +4,6 @@ mod output_junit;
 mod output_pretty;
 mod test_execution_args;
 
-pub use test_execution_args::TestFilter;
-
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     ops::Deref,
@@ -15,10 +13,10 @@ use std::{
 
 use anyhow::Result;
 use baml_types::BamlValue;
-use futures::future::join_all;
-use futures::join;
+use futures::{future::join_all, join};
 use internal_baml_core::ir::repr::IntermediateRepr;
 use regex::Regex;
+pub use test_execution_args::TestFilter;
 use tokio::sync::{Mutex, MutexGuard};
 
 use crate::{BamlRuntime, TestResponse, TestStatus};

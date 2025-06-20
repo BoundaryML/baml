@@ -1,9 +1,11 @@
-use crate::PreviewFeature;
+use std::path::PathBuf;
+
 pub use baml_types::{GeneratorDefaultClientMode, GeneratorOutputType};
 use bstd::ProjectFqn;
 use derive_builder::Builder;
 use enumflags2::BitFlags;
-use std::path::PathBuf;
+
+use crate::PreviewFeature;
 
 #[derive(Debug)]
 pub struct Configuration {

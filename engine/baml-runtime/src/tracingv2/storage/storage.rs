@@ -5,19 +5,24 @@
 //! for a single FunctionCallId, even if multiple Collectors or FunctionLogs want it.
 //! It uses manual reference counting (`inc_ref` / `dec_ref`) to free memory for
 //! a FunctionCallId as soon as there are no more "owners."
-use baml_ids::{FunctionCallId, HttpRequestId};
-use baml_types::tracing::events::{
-    FunctionEnd, FunctionStart, HTTPRequest, HTTPResponse, LoggedLLMRequest, LoggedLLMResponse,
-    TraceData, TraceEvent,
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    hash::Hash,
+    sync::{Arc, Mutex},
 };
-use baml_types::HasFieldType;
+
+use baml_ids::{FunctionCallId, HttpRequestId};
+use baml_types::{
+    tracing::events::{
+        FunctionEnd, FunctionStart, HTTPRequest, HTTPResponse, LoggedLLMRequest, LoggedLLMResponse,
+        TraceData, TraceEvent,
+    },
+    HasFieldType,
+};
 use indexmap::{IndexMap, IndexSet};
 use once_cell::sync::Lazy;
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::hash::Hash;
-use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 use super::interface::TraceEventWithMeta;

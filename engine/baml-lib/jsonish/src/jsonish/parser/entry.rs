@@ -1,5 +1,7 @@
 use anyhow::Result;
+use baml_types::CompletionState;
 
+use super::ParseOptions;
 use crate::jsonish::{
     parser::{
         fixing_parser,
@@ -9,9 +11,6 @@ use crate::jsonish::{
     value::Fixes,
     Value,
 };
-use baml_types::CompletionState;
-
-use super::ParseOptions;
 
 pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
     log::debug!("Parsing:\n{:?}\n-------\n{}\n-------", options, str);
@@ -227,9 +226,10 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
+    use baml_types::CompletionState;
+
     use super::*;
     use crate::jsonish::Value;
-    use baml_types::CompletionState;
 
     fn to_any_of(inner: Value, s: &str) -> Value {
         Value::AnyOf(vec![inner], s.to_string())

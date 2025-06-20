@@ -1,23 +1,22 @@
-use anyhow::Result;
-use baml_types::expr::VarIndex;
-use baml_types::ir_type::ArrowGeneric;
-use baml_types::{type_meta::base::TypeMeta, TypeValue};
-use std::collections::HashMap;
-use std::sync::Arc;
+use std::{collections::HashMap, sync::Arc};
 
-use crate::ir::builtin::builtin_ir;
-use crate::ir::ir_helpers::item_type;
-use crate::ir::IntermediateRepr;
-use crate::ir::{repr::initial_context, IRHelper};
-use crate::validate::validation_pipeline::context::Context;
-use crate::Configuration;
+use anyhow::Result;
 use baml_types::{
-    expr::{Expr, ExprMetadata},
-    Arrow, BamlValueWithMeta, FieldType,
+    expr::{Expr, ExprMetadata, VarIndex},
+    ir_type::ArrowGeneric,
+    type_meta::base::TypeMeta,
+    Arrow, BamlValueWithMeta, FieldType, TypeValue,
 };
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
-use crate::ir::IRHelperExtended;
+use crate::{
+    ir::{
+        builtin::builtin_ir, ir_helpers::item_type, repr::initial_context, IRHelper,
+        IRHelperExtended, IntermediateRepr,
+    },
+    validate::validation_pipeline::context::Context,
+    Configuration,
+};
 
 /// Check the types of all expressions in the IR.
 /// It relies on the types previously inferred and added to the expression metadata.

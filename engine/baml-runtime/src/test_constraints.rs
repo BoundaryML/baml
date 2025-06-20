@@ -1,11 +1,11 @@
-use baml_types::{BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, ResponseCheck};
-use internal_baml_core::ir::jinja_helpers::{evaluate_predicate, render_expression};
-use jsonish::BamlValueWithFlags;
+use std::{collections::HashMap, fmt};
 
 use anyhow::Result;
+use baml_types::{BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, ResponseCheck};
 use indexmap::IndexMap;
+use internal_baml_core::ir::jinja_helpers::{evaluate_predicate, render_expression};
+use jsonish::BamlValueWithFlags;
 use minijinja;
-use std::{collections::HashMap, fmt};
 
 use crate::internal::llm_client::LLMCompleteResponse;
 
@@ -228,14 +228,15 @@ fn step_constraints(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::internal::llm_client::{LLMCompleteResponse, LLMCompleteResponseMetadata};
+    use std::collections::HashMap;
+
     use baml_types::{
         BamlValueWithMeta, Constraint, ConstraintLevel, JinjaExpression, ResponseCheck,
     };
     use internal_baml_jinja::RenderedPrompt;
 
-    use std::collections::HashMap;
+    use super::*;
+    use crate::internal::llm_client::{LLMCompleteResponse, LLMCompleteResponseMetadata};
 
     /// Construct a value to use as a test fixture.
     /// It aims to combine a mix of:

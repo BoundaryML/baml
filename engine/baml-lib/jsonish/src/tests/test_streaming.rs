@@ -1,5 +1,4 @@
 use super::*;
-
 use crate::helpers::load_test_ir;
 
 const NUMBERS: &str = r#"

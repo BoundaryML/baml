@@ -4,13 +4,20 @@ mod to_baml_arg;
 
 use std::collections::HashSet;
 
+use anyhow::Result;
+use baml_types::{
+    BamlMap, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, LiteralValue,
+    TypeValue, UnionType,
+};
 use indexmap::IndexMap;
 use internal_baml_ast::ast::{WithIdentifier, WithSpan};
 use internal_baml_diagnostics::Span;
 use internal_baml_parser_database::walkers::ExprFnWalker;
 use itertools::Itertools;
+pub use to_baml_arg::ArgCoercer;
 
 use self::scope_diagnostics::ScopeStack;
+use super::{repr, ExprFunctionNode};
 use crate::{
     error_not_found,
     ir::{
@@ -19,15 +26,6 @@ use crate::{
         TypeAlias,
     },
 };
-
-use anyhow::Result;
-use baml_types::{
-    BamlMap, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, LiteralValue,
-    TypeValue, UnionType,
-};
-pub use to_baml_arg::ArgCoercer;
-
-use super::{repr, ExprFunctionNode};
 
 pub type FunctionWalker<'a> = Walker<'a, &'a FunctionNode>;
 pub type ExprFunctionWalker<'a> = Walker<'a, &'a ExprFunctionNode>;
@@ -1113,12 +1111,13 @@ pub fn infer_type_with_meta<T>(value: &BamlValueWithMeta<T>) -> Option<FieldType
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_types::{
         BamlMedia, BamlMediaContent, BamlMediaType, BamlValue, Constraint, ConstraintLevel,
         FieldType, JinjaExpression, MediaBase64, TypeValue,
     };
     use repr::make_test_ir;
+
+    use super::*;
 
     fn int_type() -> FieldType {
         FieldType::Primitive(TypeValue::Int, Default::default())
@@ -1505,8 +1504,10 @@ mod tests {
 // refactored to match the `is_subtype` changes. Do something with this.
 #[cfg(test)]
 mod subtype_tests {
-    use baml_types::BamlMediaType;
-    use baml_types::{type_meta::base::StreamingBehavior, type_meta::base::TypeMeta};
+    use baml_types::{
+        type_meta::base::{StreamingBehavior, TypeMeta},
+        BamlMediaType,
+    };
     use minijinja::machinery::ast::Expr;
     use repr::make_test_ir;
 

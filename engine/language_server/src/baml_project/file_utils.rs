@@ -1,7 +1,8 @@
-use std::collections::HashSet;
-use std::fs;
-use std::io;
-use std::path::{Path, PathBuf};
+use std::{
+    collections::HashSet,
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 use lsp_types::{TextDocumentItem, Url};
 

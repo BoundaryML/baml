@@ -1,6 +1,7 @@
-use std::ops::Deref;
-use std::sync::atomic::AtomicBool;
-use std::sync::Arc;
+use std::{
+    ops::Deref,
+    sync::{atomic::AtomicBool, Arc},
+};
 
 use baml_runtime::tracingv2::storage::storage::{Collector, Usage};
 

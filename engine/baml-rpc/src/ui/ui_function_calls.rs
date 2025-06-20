@@ -1,12 +1,10 @@
-use crate::base::EpochMsTimestamp;
-use crate::rpc::ApiEndpoint;
-use crate::ProjectId;
+use std::{fmt, fmt::Display};
+
 use serde::{Deserialize, Serialize};
-use std::fmt;
-use std::fmt::Display;
 use ts_rs::TS;
 
 use super::ui_types;
+use crate::{base::EpochMsTimestamp, rpc::ApiEndpoint, ProjectId};
 
 // TODO: Add support for `in`, `exists`, `contains` operators
 #[derive(Debug, Deserialize, Serialize, TS, Clone)]

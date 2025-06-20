@@ -8,7 +8,6 @@ use std::{
     sync::Arc,
 };
 
-use crate::parser::{BAMLParser, Rule};
 use anyhow::{anyhow, Context, Result};
 use pest::{
     iterators::{Pair, Pairs},
@@ -16,6 +15,8 @@ use pest::{
 };
 use pretty::RcDoc;
 use regex::Regex;
+
+use crate::parser::{BAMLParser, Rule};
 
 pub struct FormatOptions {
     pub indent_width: isize,

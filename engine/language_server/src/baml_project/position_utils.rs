@@ -1,6 +1,7 @@
+use std::cmp;
+
 use lsp_types::{Position, Range, TextDocumentItem};
 use regex::Regex;
-use std::cmp;
 
 const MAX_SAFE_CHAR: u32 = std::u32::MAX; // You can adjust this to mimic your TS MAX_SAFE_VALUE_i32
 

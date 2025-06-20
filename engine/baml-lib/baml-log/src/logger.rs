@@ -1,12 +1,14 @@
+use std::{
+    collections::{HashMap, HashSet},
+    env,
+    fmt::{self, Display},
+    io::{self, Write},
+    str::FromStr,
+    sync::{Once, RwLock},
+};
+
 use colored::*;
 use lazy_static::lazy_static;
-use std::collections::HashMap;
-use std::collections::HashSet;
-use std::env;
-use std::fmt::{self, Display};
-use std::io::{self, Write};
-use std::str::FromStr;
-use std::sync::{Once, RwLock};
 use thiserror::Error;
 
 /// Static initialization guard

@@ -1,10 +1,13 @@
-use crate::cli::dotenv;
-use crate::test_executor::TestExecutor;
-use crate::{test_executor::TestFilter, BamlRuntime};
+use std::{collections::HashMap, path::PathBuf};
+
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
-use std::collections::HashMap;
-use std::path::PathBuf;
+
+use crate::{
+    cli::dotenv,
+    test_executor::{TestExecutor, TestFilter},
+    BamlRuntime,
+};
 
 #[derive(Args, Clone, Debug)]
 pub struct TestArgs {

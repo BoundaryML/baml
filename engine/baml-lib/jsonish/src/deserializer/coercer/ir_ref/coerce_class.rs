@@ -3,14 +3,15 @@ use baml_types::{BamlMap, Constraint};
 use internal_baml_core::ir::FieldType;
 use internal_baml_jinja::types::{Class, Name};
 
+use super::ParsingContext;
 use crate::deserializer::{
-    coercer::field_type::validate_asserts,
-    coercer::{array_helper, run_user_checks, DefaultValue, ParsingError, TypeCoercer},
+    coercer::{
+        array_helper, field_type::validate_asserts, run_user_checks, DefaultValue, ParsingError,
+        TypeCoercer,
+    },
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
 };
-
-use super::ParsingContext;
 
 // Name, type, description, streaming_needed.
 type FieldValue = (Name, FieldType, Option<String>, bool);

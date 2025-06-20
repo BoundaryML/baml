@@ -1,5 +1,6 @@
-use baml_types::tracing::events::TraceEvent;
 use std::sync::Arc;
+
+use baml_types::tracing::events::TraceEvent;
 
 pub type TraceEventWithMeta = TraceEvent<'static, baml_types::FieldType>;
 

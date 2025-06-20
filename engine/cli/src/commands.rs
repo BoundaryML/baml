@@ -1,8 +1,6 @@
 use anyhow::Result;
-use baml_runtime::cli::RuntimeCliDefaults;
+use baml_runtime::{cli::RuntimeCliDefaults, BamlRuntime};
 use clap::{Parser, Subcommand};
-
-use baml_runtime::BamlRuntime;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "A CLI tool for working with BAML. Learn more at https://docs.boundaryml.com.", long_about = None)]

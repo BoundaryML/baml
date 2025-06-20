@@ -4,9 +4,8 @@ use pyo3::{
     Py, PyObject, PyResult, Python,
 };
 
-use crate::errors::BamlError;
-
 use super::log_collector::serde_value_to_py;
+use crate::errors::BamlError;
 
 crate::lang_wrapper!(
     HTTPRequest,

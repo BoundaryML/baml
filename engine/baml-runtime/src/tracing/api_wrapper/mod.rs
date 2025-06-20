@@ -6,10 +6,9 @@ pub(crate) mod core_types;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::{json, Value};
 
-use crate::request::create_tracing_client;
-
 pub(super) use self::api_interface::{BoundaryAPI, BoundaryTestAPI};
 use self::core_types::{TestCaseStatus, UpdateTestCase};
+use crate::request::create_tracing_client;
 
 #[derive(Debug, Clone)]
 pub struct APIWrapper {

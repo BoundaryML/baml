@@ -2,11 +2,8 @@ mod arg_validation;
 mod error;
 mod json_response;
 mod ping;
-use error::BamlError;
-use generators_lib::GeneratorArgs;
-use indexmap::IndexMap;
-use json_response::Json;
-use std::collections::HashMap;
+use core::pin::Pin;
+use std::{collections::HashMap, path::PathBuf, sync::Arc, task::Poll};
 
 use anyhow::{Context, Result};
 use arg_validation::BamlServeValidate;
@@ -25,14 +22,18 @@ use axum_extra::{
     TypedHeader,
 };
 use baml_types::{
-    expr::Expr, expr::ExprMetadata, BamlValue, GeneratorDefaultClientMode, GeneratorOutputType,
+    expr::{Expr, ExprMetadata},
+    BamlValue, GeneratorDefaultClientMode, GeneratorOutputType,
 };
-use core::pin::Pin;
+use error::BamlError;
 use futures::Stream;
+use generators_lib::GeneratorArgs;
+use generators_openapi::OpenApiSchema;
+use indexmap::IndexMap;
+use json_response::Json;
 use jsonish::ResponseBamlValue;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::{path::PathBuf, sync::Arc, task::Poll};
 use tokio::{net::TcpListener, sync::RwLock};
 use tokio_stream::StreamExt;
 
@@ -40,7 +41,6 @@ use crate::{
     client_registry::ClientRegistry, errors::ExposedError, internal::llm_client::LLMResponse,
     BamlRuntime, FunctionResult, RuntimeContextManager,
 };
-use generators_openapi::OpenApiSchema;
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct ServeArgs {
@@ -703,9 +703,8 @@ mod tests {
     use baml_types::BamlMap;
     use internal_llm_client::{ClientProvider, OpenAIClientProviderVariant};
 
-    use crate::client_registry::ClientProperty;
-
     use super::*;
+    use crate::client_registry::ClientProperty;
 
     #[test]
     fn test_parse_baml_options() {

@@ -1,5 +1,6 @@
-use baml_types::GeneratorOutputType;
 use std::collections::{HashMap, HashSet};
+
+use baml_types::GeneratorOutputType;
 
 // This list of keywords was copied from
 // https://www.w3schools.com/python/python_ref_keywords.asp

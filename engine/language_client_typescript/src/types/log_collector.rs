@@ -4,12 +4,11 @@ use std::{
 };
 
 use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
-use napi_derive::napi;
-
 use napi::{
     bindgen_prelude::*, Env, JsBoolean, JsNull, JsNumber, JsObject, JsString, JsUndefined,
     JsUnknown, Result,
 };
+use napi_derive::napi;
 use serde_json::Value as JsonValue;
 
 use super::{request::HTTPRequest, response::HTTPResponse};

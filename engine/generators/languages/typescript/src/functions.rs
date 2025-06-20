@@ -1,6 +1,7 @@
+use std::fmt;
+
 use askama::Template;
 use baml_types::GeneratorDefaultClientMode;
-use std::fmt;
 
 use crate::{
     package::CurrentRenderPackage,

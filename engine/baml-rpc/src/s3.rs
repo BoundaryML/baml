@@ -1,7 +1,6 @@
+use baml_ids::ProjectId;
 use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
-
-use baml_ids::ProjectId;
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct S3UploadMetadata {
@@ -22,9 +21,10 @@ impl S3UploadMetadata {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use anyhow::Result;
     use serde_json::{self, json};
+
+    use super::*;
 
     #[test]
     fn test_s3_upload_metadata_deserialization() -> Result<()> {

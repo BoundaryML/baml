@@ -2,14 +2,17 @@ use std::collections::HashMap;
 
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_types::BamlValue;
-use pyo3::prelude::{pymethods, PyResult};
-use pyo3::{IntoPyObjectExt, PyObject, Python};
-
-use crate::errors::{BamlError, BamlInvalidArgumentError};
-use crate::parse_py_type::parse_py_type;
+use pyo3::{
+    prelude::{pymethods, PyResult},
+    IntoPyObjectExt, PyObject, Python,
+};
 
 use super::runtime_ctx_manager::RuntimeContextManager;
-use crate::runtime::BamlRuntime;
+use crate::{
+    errors::{BamlError, BamlInvalidArgumentError},
+    parse_py_type::parse_py_type,
+    runtime::BamlRuntime,
+};
 
 crate::lang_wrapper!(BamlSpan,
   Option<baml_runtime::tracing::TracingCall>,

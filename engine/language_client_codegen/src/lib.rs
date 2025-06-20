@@ -1,3 +1,8 @@
+use std::{
+    collections::{BTreeMap, HashSet},
+    path::{Path, PathBuf},
+};
+
 use anyhow::{Context, Result};
 use baml_types::{Constraint, ConstraintLevel, FieldType};
 use indexmap::IndexMap;
@@ -6,10 +11,6 @@ use internal_baml_core::{
     ir::repr::IntermediateRepr,
 };
 use regex::Regex;
-use std::{
-    collections::{BTreeMap, HashSet},
-    path::{Path, PathBuf},
-};
 use sugar_path::SugarPath;
 use version_check::{check_version, GeneratorType, VersionCheckMode};
 
@@ -276,8 +277,9 @@ fn field_type_attributes(field_type: &FieldType) -> Option<TypeCheckAttributes> 
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use internal_baml_core::ir::repr::make_test_ir;
+
+    use super::*;
 
     /// Utility function for creating test fixtures.
     fn mk_tc_attrs(names: &[&str]) -> TypeCheckAttributes {

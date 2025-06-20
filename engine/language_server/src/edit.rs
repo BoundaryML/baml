@@ -2,10 +2,11 @@
 mod range;
 mod text_document;
 
+use std::path::{Path, PathBuf};
+
 use lsp_types::{PositionEncodingKind, Url};
 pub(crate) use range::RangeExt;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
 pub(crate) use text_document::DocumentVersion;
 pub use text_document::TextDocument;
 
@@ -124,9 +125,11 @@ impl TryFrom<&lsp_types::PositionEncodingKind> for PositionEncoding {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::{Path, PathBuf};
+
     use url::Url;
+
+    use super::*;
 
     #[test]
     fn parse_windows_path() {

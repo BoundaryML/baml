@@ -1,5 +1,7 @@
-use crate::package::CurrentRenderPackage;
-use crate::r#type::{SerializeType, TypePy};
+use crate::{
+    package::CurrentRenderPackage,
+    r#type::{SerializeType, TypePy},
+};
 
 mod class {
     use super::*;

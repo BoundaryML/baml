@@ -1,14 +1,13 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use baml_types::BamlMap;
+use serde::Deserialize;
+use serde_json::Value;
 
 use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta};
 use crate::internal::llm_client::{
     primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse,
     LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
 };
-use anyhow::Context;
-use serde::Deserialize;
-use serde_json::Value;
 
 fn to_prompt(
     prompt: either::Either<&String, &[internal_baml_jinja::RenderedChatMessage]>,
@@ -150,11 +149,11 @@ pub fn scan_openai_response_stream(
 
 #[cfg(test)]
 mod tests {
-    use crate::internal::llm_client::primitive::tests::MockClient;
-
-    use super::*;
     use pretty_assertions::assert_eq;
     use web_time::Duration;
+
+    use super::*;
+    use crate::internal::llm_client::primitive::tests::MockClient;
     const RESPONSE: &str = r#"
 {
   "id": "chatcmpl-B7rcnRIX2lh1okEeeIrCtzLppkaSw",

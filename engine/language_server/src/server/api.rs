@@ -1,7 +1,8 @@
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::{
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
-use crate::{server::schedule::Task, session::Session};
 use diagnostics::{file_diagnostics, project_diagnostics};
 use log::info;
 use lsp_server;
@@ -11,6 +12,8 @@ use lsp_types::{
 };
 use serde::{Deserialize, Serialize};
 use url::Url;
+
+use crate::{server::schedule::Task, session::Session};
 
 mod diagnostics;
 pub(crate) mod notifications;
@@ -24,10 +27,8 @@ use self::traits::{
     BackgroundDocumentNotificationHandler, NotificationHandler, RequestHandler,
     SyncNotificationHandler,
 };
-
 use super::{
-    client::Responder,
-    client::{Notifier, Requester},
+    client::{Notifier, Requester, Responder},
     schedule::BackgroundSchedule,
     Result,
 };

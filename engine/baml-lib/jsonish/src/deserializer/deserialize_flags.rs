@@ -1,5 +1,6 @@
-use super::{coercer::ParsingError, types::BamlValueWithFlags};
 use baml_types::{Constraint, ConstraintLevel, JinjaExpression};
+
+use super::{coercer::ParsingError, types::BamlValueWithFlags};
 
 #[derive(Debug, Clone)]
 pub enum Flag {

@@ -1,5 +1,7 @@
-use crate::package::CurrentRenderPackage;
-use crate::r#type::{SerializeType, TypeGo};
+use crate::{
+    package::CurrentRenderPackage,
+    r#type::{SerializeType, TypeGo},
+};
 
 mod filters {
     // This filter does not have extra arguments

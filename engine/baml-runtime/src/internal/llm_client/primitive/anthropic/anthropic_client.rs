@@ -1,19 +1,10 @@
-use crate::internal::llm_client::{
-    primitive::request::ResponseType,
-    traits::{
-        CompletionToProviderBody, HttpContext, ToProviderMessage, ToProviderMessageExt,
-        WithClientProperties,
-    },
-    ResolveMediaUrls,
-};
-use indexmap::IndexMap;
-use secrecy::{ExposeSecret, SecretString};
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use baml_types::{ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
+use indexmap::IndexMap;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{
     ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
@@ -22,28 +13,28 @@ use internal_llm_client::{
     anthropic::ResolvedAnthropic, AllowedRoleMetadata, ClientProvider, ResolvedClientProperty,
     RolesSelection, SupportedRequestModes, UnresolvedClientProperty,
 };
+use secrecy::{ExposeSecret, SecretString};
+use serde_json::json;
 
+use super::types::MessageChunk;
 use crate::{
     client_registry::ClientProperty,
     internal::llm_client::{
         primitive::{
             anthropic::types::AnthropicMessageResponse,
-            request::{make_parsed_request, make_request, RequestBuilder},
+            request::{make_parsed_request, make_request, RequestBuilder, ResponseType},
         },
         traits::{
-            SseResponseTrait, StreamResponse, WithChat, WithClient, WithNoCompletion,
-            WithRetryPolicy, WithStreamChat,
+            CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse,
+            ToProviderMessage, ToProviderMessageExt, WithChat, WithClient, WithClientProperties,
+            WithNoCompletion, WithRetryPolicy, WithStreamChat,
         },
         ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
-        ModelFeatures,
+        ModelFeatures, ResolveMediaUrls,
     },
     request::create_client,
+    RuntimeContext,
 };
-use serde_json::json;
-
-use crate::RuntimeContext;
-
-use super::types::MessageChunk;
 
 // represents client that interacts with the Anthropic API
 pub struct AnthropicClient {

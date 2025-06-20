@@ -1,7 +1,6 @@
-use crate::generated_types::TypeAliasGo;
-use crate::ir_to_go;
-use crate::package::CurrentRenderPackage;
 use internal_baml_core::ir::TypeAlias;
+
+use crate::{generated_types::TypeAliasGo, ir_to_go, package::CurrentRenderPackage};
 
 pub fn ir_type_alias_to_go<'a>(
     alias: &TypeAlias,

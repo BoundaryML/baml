@@ -16,11 +16,10 @@ use base64::{
 use js_sys::{Array, Object, Uint8Array};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use thiserror::Error;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{window, CryptoKey, SubtleCrypto};
-
-use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum JwtError {

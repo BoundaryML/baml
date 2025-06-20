@@ -1,15 +1,17 @@
+use std::{
+    collections::BTreeMap,
+    io::ErrorKind,
+    path::{Path, PathBuf},
+    thread::sleep,
+    time::Duration,
+};
+
 use anyhow::Result;
 use indexmap::IndexMap;
-use internal_baml_core::configuration::GeneratorDefaultClientMode;
-use internal_baml_core::configuration::GeneratorOutputType;
-use internal_baml_core::configuration::ModuleFormat;
+use internal_baml_core::configuration::{
+    GeneratorDefaultClientMode, GeneratorOutputType, ModuleFormat,
+};
 pub use internal_baml_core::ir::repr::IntermediateRepr;
-use std::collections::BTreeMap;
-use std::io::ErrorKind;
-use std::path::Path;
-use std::path::PathBuf;
-use std::thread::sleep;
-use std::time::Duration;
 
 pub struct GeneratorArgs {
     /// Output directory for the generated client, relative to baml_src

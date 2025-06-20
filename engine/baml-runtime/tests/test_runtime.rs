@@ -4,22 +4,19 @@
 #[cfg(feature = "internal")]
 #[cfg(not(feature = "skip-integ-tests"))]
 mod internal_tests {
-    use std::any;
-    use std::collections::HashMap;
-    use std::sync::Arc;
-
-    use baml_ids::FunctionCallId;
-    use baml_runtime::BamlRuntime;
-    use std::sync::Once;
-
-    // use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
-    use baml_runtime::InternalRuntimeInterface;
-    use baml_types::BamlValue;
-
-    use baml_runtime::{
-        internal::llm_client::LLMResponse, DiagnosticsError, IRHelper, RenderedPrompt,
+    use std::{
+        any,
+        collections::HashMap,
+        sync::{Arc, Once},
     };
 
+    use baml_ids::FunctionCallId;
+    // use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
+    use baml_runtime::InternalRuntimeInterface;
+    use baml_runtime::{
+        internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
+    };
+    use baml_types::BamlValue;
     use wasm_bindgen_test::*;
 
     #[tokio::test]

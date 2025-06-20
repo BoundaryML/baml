@@ -1,6 +1,6 @@
-use anyhow::Result;
 use std::collections::HashSet;
 
+use anyhow::Result;
 use baml_types::{GetEnvVar, StringOr};
 
 #[derive(Clone, Debug, Hash, Eq, PartialEq)]

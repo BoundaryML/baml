@@ -5,6 +5,7 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::{BamlValueWithFlags, ResponseBamlValue};
 use web_time::Duration;
 
+use super::{OrchestrationScope, OrchestratorNodeIterator};
 use crate::{
     internal::{
         llm_client::{
@@ -16,8 +17,6 @@ use crate::{
     },
     RuntimeContext,
 };
-
-use super::{OrchestrationScope, OrchestratorNodeIterator};
 
 pub(super) struct CtxWithHttpRequestId<'a> {
     runtime_context: &'a RuntimeContext,

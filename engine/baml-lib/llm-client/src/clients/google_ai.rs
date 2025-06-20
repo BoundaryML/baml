@@ -1,16 +1,15 @@
 use std::collections::HashSet;
 
-use crate::{AllowedRoleMetadata, SupportedRequestModes, UnresolvedAllowedRoleMetadata};
-use crate::{
-    FinishReasonFilter, RolesSelection, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
-};
 use anyhow::Result;
-
 use baml_derive::BamlHash;
 use baml_types::{ApiKeyWithProvenance, EvaluationContext, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
+use crate::{
+    AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes,
+    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
+};
 
 #[derive(Debug, Clone, BamlHash)]
 pub struct UnresolvedGoogleAI<Meta> {

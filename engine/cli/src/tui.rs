@@ -1,7 +1,7 @@
+use std::{borrow::Cow, future::Future};
+
 use anyhow::Result;
 use indicatif::{ProgressBar, ProgressStyle};
-use std::borrow::Cow;
-use std::future::Future;
 
 pub trait FutureWithProgress<T> {
     async fn with_progress_spinner(

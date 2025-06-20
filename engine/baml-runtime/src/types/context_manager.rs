@@ -1,19 +1,18 @@
 use std::{
     collections::HashMap,
+    fmt,
     sync::{Arc, Mutex},
 };
 
 use anyhow::{Context, Result};
 use baml_ids::FunctionCallId;
 use baml_types::{tracing::events::TraceEvent, BamlValue};
-use std::fmt;
 
+use super::runtime_context::BamlSrcReader;
 use crate::{
     client_registry::ClientRegistry, tracing::BamlTracer, tracingv2::storage::storage::BAML_TRACER,
     type_builder::TypeBuilder, CallCtx, RuntimeContext,
 };
-
-use super::runtime_context::BamlSrcReader;
 pub type BamlContext = (
     uuid::Uuid,
     String,

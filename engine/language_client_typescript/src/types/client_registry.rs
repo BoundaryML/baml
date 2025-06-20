@@ -2,12 +2,10 @@ use std::str::FromStr;
 
 use baml_runtime::client_registry;
 use client_registry::ClientProvider;
-use napi::Env;
-use napi::JsObject;
+use napi::{Env, JsObject};
 use napi_derive::napi;
 
-use crate::errors::invalid_argument_error;
-use crate::parse_ts_types;
+use crate::{errors::invalid_argument_error, parse_ts_types};
 
 crate::lang_wrapper!(ClientRegistry, client_registry::ClientRegistry);
 

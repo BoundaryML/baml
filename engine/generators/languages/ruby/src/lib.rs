@@ -195,8 +195,9 @@ mod generated_tests {
 mod tests {
     #[test]
     fn test_name() {
-        use dir_writer::LanguageFeatures;
         use std::str::FromStr;
+
+        use dir_writer::LanguageFeatures;
 
         let gen_type = baml_types::GeneratorOutputType::from_str(crate::RbLanguageFeatures::name())
             .expect("RbLanguageFeatures name should be a valid GeneratorOutputType");

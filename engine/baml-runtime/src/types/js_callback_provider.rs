@@ -166,8 +166,9 @@ impl Clone for JsCallbackProvider {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::json;
+
+    use super::*;
 
     #[test]
     fn test_aws_cred_result_deserialize_ok() {

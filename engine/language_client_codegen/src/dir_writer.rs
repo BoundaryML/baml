@@ -1,11 +1,13 @@
+use std::{
+    io::ErrorKind,
+    path::{Path, PathBuf},
+    thread::sleep,
+    time::Duration,
+};
+
 use anyhow::Result;
 use indexmap::IndexMap;
 use internal_baml_core::ir::repr::IntermediateRepr;
-use std::io::ErrorKind;
-use std::path::Path;
-use std::path::PathBuf;
-use std::thread::sleep;
-use std::time::Duration;
 
 use crate::GeneratorArgs;
 

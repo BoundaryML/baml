@@ -1,14 +1,13 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use baml_types::BamlMap;
+use serde::Deserialize;
+use serde_json::Value;
 
 use super::types::{AnthropicMessageContent, AnthropicMessageResponse, MessageChunk};
 use crate::internal::llm_client::{
     primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse,
     LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
 };
-use anyhow::Context;
-use serde::Deserialize;
-use serde_json::Value;
 
 fn to_prompt(
     prompt: either::Either<&String, &[internal_baml_jinja::RenderedChatMessage]>,
@@ -180,11 +179,11 @@ pub fn scan_anthropic_response_stream(
 
 #[cfg(test)]
 mod tests {
-    use crate::internal::llm_client::primitive::tests::MockClient;
-
-    use super::*;
     use pretty_assertions::assert_eq;
     use web_time::Duration;
+
+    use super::*;
+    use crate::internal::llm_client::primitive::tests::MockClient;
 
     const RESPONSE: &str = r#"
 {"id":"msg_01TmchHftFKihgeV7Zy9vCvZ","type":"message","role":"assistant","model":"claude-3-5-sonnet-20241022","content":[{"type":"text","text":"{\n  \"isCompanyPost\": false,\n  \"companyName\": null,\n  \"stage\": null,\n  \"engineeringAssessment\": \"UNKNOWN\",\n  \"teamMembers\": [],\n  \"technicalHighlights\": []\n}\n\nNotes:\n- This is a general discussion post asking for programming book recommendations\n- Not a company/startup related post\n- No technical signals or team information can be extracted\n- Cannot make engineering assessment as this is just a question\n\nThis appears to be a learning/discussion oriented post rather than a startup/company related post, so most of the structured fields are null or empty. The post doesn't contain any analyzable technical due diligence information."}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":321,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":158}}

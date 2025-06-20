@@ -1,9 +1,7 @@
 use std::borrow::Cow;
 
-use baml_rpc::runtime_api;
-use baml_rpc::NarrowingType;
-use baml_types::Constraint;
-use baml_types::{BamlValueWithMeta, HasFieldType};
+use baml_rpc::{runtime_api, NarrowingType};
+use baml_types::{BamlValueWithMeta, Constraint, HasFieldType};
 
 use super::{IntoRpcEvent, TypeLookup};
 

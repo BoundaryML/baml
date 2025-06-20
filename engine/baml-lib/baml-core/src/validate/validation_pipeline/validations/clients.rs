@@ -1,11 +1,10 @@
 use anyhow::Result;
 use baml_types::StringOr;
+use internal_baml_ast::ast::Expression;
 use internal_baml_diagnostics::{DatamodelError, Span};
 use internal_llm_client::{ClientProvider, ClientSpec, PropertyHandler, StrategyClientProperty};
 
 use crate::validate::validation_pipeline::context::Context;
-
-use internal_baml_ast::ast::Expression;
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
     let valid_clients = ctx.db.valid_client_names();

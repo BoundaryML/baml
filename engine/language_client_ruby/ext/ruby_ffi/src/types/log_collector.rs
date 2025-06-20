@@ -1,19 +1,21 @@
-use std::str::FromStr;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::{
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
 
-use crate::Result;
 use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
-use magnus::scan_args::get_kwargs;
 use magnus::{
-    class, function, method, scan_args::scan_args, try_convert::TryConvertOwned, Error,
-    IntoValueFromNative, Module, Object, RArray, RModule, Ruby, Value,
+    class, function, method,
+    scan_args::{get_kwargs, scan_args},
+    try_convert::TryConvertOwned,
+    Error, IntoValueFromNative, Module, Object, RArray, RModule, Ruby, Value,
 };
 
 use super::{
     request::{HTTPBody, HTTPRequest},
     response::HTTPResponse,
 };
+use crate::Result;
 
 crate::lang_wrapper!(
     Collector,

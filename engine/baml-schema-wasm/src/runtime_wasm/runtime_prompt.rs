@@ -3,12 +3,12 @@ use std::collections::HashMap;
 use baml_runtime::{
     internal::llm_client::orchestrator::OrchestrationScope, ChatMessagePart, RenderedPrompt,
 };
+use baml_types::{BamlMediaContent, BamlMediaType, MediaBase64};
 use internal_llm_client::AllowedRoleMetadata;
 use serde_json::json;
+use wasm_bindgen::prelude::*;
 
 use crate::runtime_wasm::ToJsValue;
-use baml_types::{BamlMediaContent, BamlMediaType, MediaBase64};
-use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen(getter_with_clone)]
 pub struct WasmScope {

@@ -1,6 +1,4 @@
-use std::env;
-use std::fs;
-use std::path::Path;
+use std::{env, fs, path::Path};
 
 fn main() {
     let out_dir = env::var_os("OUT_DIR").unwrap();

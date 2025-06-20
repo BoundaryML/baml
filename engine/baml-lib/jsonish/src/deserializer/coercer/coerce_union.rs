@@ -1,9 +1,8 @@
 use anyhow::Result;
 use internal_baml_core::ir::FieldType;
 
-use crate::deserializer::{coercer::array_helper, types::BamlValueWithFlags};
-
 use super::{ParsingContext, ParsingError, TypeCoercer};
+use crate::deserializer::{coercer::array_helper, types::BamlValueWithFlags};
 
 pub(super) fn coerce_union(
     ctx: &ParsingContext,
