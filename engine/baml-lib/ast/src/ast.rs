@@ -25,8 +25,7 @@ pub use argument::{Argument, ArgumentId, ArgumentsList};
 pub use assignment::Assignment;
 pub use attribute::{Attribute, AttributeContainer, AttributeId};
 pub use config::ConfigBlockProperty;
-pub use expr::ExprFn;
-pub use expr::TopLevelAssignment;
+pub use expr::{ExprFn, TopLevelAssignment};
 pub use expression::{
     ClassConstructor, ClassConstructorField, Expression, ExpressionBlock, RawString, Stmt,
 };
