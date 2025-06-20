@@ -1,7 +1,7 @@
 use itertools::Itertools;
 use std::collections::HashSet;
 
-use internal_baml_diagnostics::DatamodelError;
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
 // use internal_baml_schema_ast::ast::expr;
 use internal_baml_schema_ast::ast::{ClassConstructor, ClassConstructorField, Expression, Stmt};
 use internal_baml_schema_ast::ast::{WithName, WithSpan};
@@ -53,6 +53,10 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
     });
 
     for expr_fn in ctx.db.walk_expr_fns() {
+        ctx.push_warning(DatamodelWarning::new(
+            "Workflow functions are experimental, and will break in the future.".to_string(),
+            expr_fn.name_span().clone(),
+        ));
         if taken_names.contains(expr_fn.name()) {
             ctx.push_error(DatamodelError::new_validation_error(
                 "Expr function name must be unique",
@@ -81,6 +85,10 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
 
     for toplevel_assignment in ctx.db.walk_toplevel_assignments() {
         let scope: HashSet<String> = taken_names.clone();
+        ctx.push_warning(DatamodelWarning::new(
+            "Variable assignment is experimental, and will break in the future.".to_string(),
+            toplevel_assignment.expr().span().clone(),
+        ));
         validate_stmt(
             ctx,
             &toplevel_assignment.top_level_assignment().stmt,
