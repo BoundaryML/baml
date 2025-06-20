@@ -54,11 +54,9 @@ jobs:
         run: pnpm biome ci . --organize-imports-enabled=false
         working-directory: typescript
       - name: Check Rust Lint
-        run: >
-          cargo fmt --check --
-            --config imports_granularity="Crate"
-            --config group_imports="StdExternalCrate"
-            --config overflow_delimited_expr=true
+        # rustfmt can only run unstable features on stable toolchains if passed
+        # through CLI. We don't want to download 2 toolchains just for this.
+        run: cargo fmt --check -- --config imports_granularity="Crate" --config group_imports="StdExternalCrate" --config overflow_delimited_expr=true
         working-directory: engine
   test_node_generator:
     runs-on: ubuntu-latest
