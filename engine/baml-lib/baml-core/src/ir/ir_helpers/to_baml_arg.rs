@@ -453,14 +453,17 @@ mod tests {
         )
         .unwrap();
         let value = BamlValue::Int(1);
-        let type_ = FieldType::Primitive(TypeValue::Int, TypeMeta {
-            constraints: vec![Constraint {
-                level: ConstraintLevel::Assert,
-                expression: JinjaExpression("this.length() > 0".to_string()),
-                label: Some("foo".to_string()),
-            }],
-            streaming_behavior: StreamingBehavior::default(),
-        });
+        let type_ = FieldType::Primitive(
+            TypeValue::Int,
+            TypeMeta {
+                constraints: vec![Constraint {
+                    level: ConstraintLevel::Assert,
+                    expression: JinjaExpression("this.length() > 0".to_string()),
+                    label: Some("foo".to_string()),
+                }],
+                streaming_behavior: StreamingBehavior::default(),
+            },
+        );
         let arg_coercer = ArgCoercer {
             span_path: None,
             allow_implicit_cast_to_string: true,

@@ -59,9 +59,10 @@ fn test_evaluate_bool() {
 #[test]
 fn test_evaluate_string() {
     let mut types = PredefinedTypes::default(JinjaContext::Prompt);
-    assert_eq!(assert_fails_to!("ok ~ 1.1", &types), vec![
-        "Variable `ok` does not exist. Did you mean one of these: `_`, `ctx`?"
-    ]);
+    assert_eq!(
+        assert_fails_to!("ok ~ 1.1", &types),
+        vec!["Variable `ok` does not exist. Did you mean one of these: `_`, `ctx`?"]
+    );
     types.add_variable("ok", Type::String);
     assert_eq!(assert_evaluates_to!("ok ~ 1.1", &types), Type::String);
 }
@@ -69,18 +70,20 @@ fn test_evaluate_string() {
 #[test]
 fn test_evaluate_setting() {
     let mut types = PredefinedTypes::default(JinjaContext::Prompt);
-    assert_eq!(assert_fails_to!("bar.f.g", &types), vec![
-        "Variable `bar` does not exist. Did you mean one of these: `_`, `ctx`?"
-    ]);
+    assert_eq!(
+        assert_fails_to!("bar.f.g", &types),
+        vec!["Variable `bar` does not exist. Did you mean one of these: `_`, `ctx`?"]
+    );
 
     types.add_class(
         "Foo",
         vec![("food".into(), Type::Float)].into_iter().collect(),
     );
     types.add_variable("bar", Type::ClassRef("Foo".into()));
-    assert_eq!(assert_fails_to!("bar.f", &types), vec![
-        "class Foo (bar) does not have a property 'f'"
-    ]);
+    assert_eq!(
+        assert_fails_to!("bar.f", &types),
+        vec!["class Foo (bar) does not have a property 'f'"]
+    );
 
     types.add_class("Foo", vec![("f".into(), Type::Int)].into_iter().collect());
     assert_eq!(assert_evaluates_to!("bar.f", &types), Type::Int);
@@ -148,17 +151,20 @@ fn test_call_function() {
     types.add_function("SomeFunc", Type::Float, vec![("arg".into(), Type::Bool)]);
 
     assert_eq!(assert_evaluates_to!("SomeFunc(true)", &types), Type::Float);
-    assert_eq!(assert_fails_to!("SomeFunc(arg=1)", &types), vec![
-        "Function 'SomeFunc' expects argument 'arg' to be of type bool, but got literal[1]"
-    ]);
+    assert_eq!(
+        assert_fails_to!("SomeFunc(arg=1)", &types),
+        vec!["Function 'SomeFunc' expects argument 'arg' to be of type bool, but got literal[1]"]
+    );
 
-    types.add_function("AnotherFunc", Type::Float, vec![
-        ("arg".into(), Type::Bool),
-        ("arg2".into(), Type::String),
-    ]);
-    assert_eq!(assert_fails_to!("AnotherFunc(true)", &types), vec![
-        "Function 'AnotherFunc' expects 2 arguments, but got 1"
-    ]);
+    types.add_function(
+        "AnotherFunc",
+        Type::Float,
+        vec![("arg".into(), Type::Bool), ("arg2".into(), Type::String)],
+    );
+    assert_eq!(
+        assert_fails_to!("AnotherFunc(true)", &types),
+        vec!["Function 'AnotherFunc' expects 2 arguments, but got 1"]
+    );
 
     assert_eq!(
         assert_fails_to!("AnotherFunc(arg='true', arg2='1')", &types),
@@ -180,11 +186,15 @@ fn test_call_function() {
         Type::Float
     );
 
-    types.add_function("AnotherFunc", Type::Float, vec![
-        ("arg".into(), Type::Bool),
-        ("arg2".into(), Type::String),
-        ("arg3".into(), Type::Number),
-    ]);
+    types.add_function(
+        "AnotherFunc",
+        Type::Float,
+        vec![
+            ("arg".into(), Type::Bool),
+            ("arg2".into(), Type::String),
+            ("arg3".into(), Type::Number),
+        ],
+    );
 
     assert_eq!(
         assert_fails_to!("AnotherFunc(true, arg2='1')", &types),
@@ -204,13 +214,17 @@ fn test_call_function() {
         ]
     );
 
-    types.add_function("TakesLiteralFoo", Type::Float, vec![(
-        "arg".to_string(),
-        Type::Union(vec![
-            Type::Literal(LiteralValue::String("Foo".to_string())),
-            Type::Literal(LiteralValue::String("Bar".to_string())),
-        ]),
-    )]);
+    types.add_function(
+        "TakesLiteralFoo",
+        Type::Float,
+        vec![(
+            "arg".to_string(),
+            Type::Union(vec![
+                Type::Literal(LiteralValue::String("Foo".to_string())),
+                Type::Literal(LiteralValue::String("Bar".to_string())),
+            ]),
+        )],
+    );
 
     assert_eq!(
         assert_evaluates_to!("TakesLiteralFoo('Foo')", &types),
@@ -289,7 +303,8 @@ fn sum_filter() {
     //     assert_evaluates_to!(r#"[1.1,2,3]|sum"#, types),
     //     Type::Float
     // );
-    assert_eq!(assert_fails_to!(r#"["hi", 1]|sum"#, types), vec![
-        r#"'[hi,1]' is a list[(literal["hi"] | literal[1])], expected (int|float)[]"#
-    ]);
+    assert_eq!(
+        assert_fails_to!(r#"["hi", 1]|sum"#, types),
+        vec![r#"'[hi,1]' is a list[(literal["hi"] | literal[1])], expected (int|float)[]"#]
+    );
 }

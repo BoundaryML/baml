@@ -88,8 +88,9 @@ impl OpenApiUserData {
                             .map(|(name, is_optional, ty)| (name, is_optional, ty))
                             .collect();
                         properties.sort_by_key(|(name, _, _)| name.clone());
-                        let component_request_body = ComponentRequestBody {
-                            content: vec![("application/json".to_string(), MediaTypeSchema {
+                        let component_request_body =
+                            ComponentRequestBody {
+                                content: vec![("application/json".to_string(), MediaTypeSchema {
                                 schema: TypeOpenApi::Inline {
                                     r#type: TypePrimitive::Object {
                                         properties: IndexMap::from_iter(
@@ -128,10 +129,10 @@ impl OpenApiUserData {
                                     }, // TODO: Correct?
                                 },
                             })]
-                            .into_iter()
-                            .collect(),
-                            required: true,
-                        };
+                                .into_iter()
+                                .collect(),
+                                required: true,
+                            };
                         (name.clone(), component_request_body)
                     })
                     .collect(),
@@ -237,15 +238,18 @@ mod function {
                 ref_: format!("#/components/requestBodies/{}", name.0),
             },
 
-            responses: IndexMap::from_iter(vec![("200", Response {
-                description: "Successful operation".to_string(),
-                content: IndexMap::from_iter(vec![(
-                    "application/json".to_string(),
-                    MediaTypeSchema {
-                        schema: response_type,
-                    },
-                )]),
-            })]),
+            responses: IndexMap::from_iter(vec![(
+                "200",
+                Response {
+                    description: "Successful operation".to_string(),
+                    content: IndexMap::from_iter(vec![(
+                        "application/json".to_string(),
+                        MediaTypeSchema {
+                            schema: response_type,
+                        },
+                    )]),
+                },
+            )]),
             operation_id: function.name.clone(),
         };
         IndexMap::from_iter(vec![("post".to_string(), path)])

@@ -204,11 +204,18 @@ pub fn project_diagnostics(
     if let Ok(generators) = guard.baml_project.list_generators() {
         for gen in generators.into_iter() {
             if let Some(message) = guard.baml_project.check_version(&gen, false) {
-                if let Some(range) = span_to_range(&guard, &root_path, &Span {
-                    file: SourceFile::new_static(PathBuf::from(gen.span.file_path.clone()), &""),
-                    start: gen.span.start,
-                    end: gen.span.end,
-                }) {
+                if let Some(range) = span_to_range(
+                    &guard,
+                    &root_path,
+                    &Span {
+                        file: SourceFile::new_static(
+                            PathBuf::from(gen.span.file_path.clone()),
+                            &"",
+                        ),
+                        start: gen.span.start,
+                        end: gen.span.end,
+                    },
+                ) {
                     let diagnostic = Diagnostic {
                         range,
                         message,
@@ -249,11 +256,15 @@ pub fn project_diagnostics(
         if let Ok(generators) = guard.list_generators() {
             // Need to list generators again to get their spans
             for gen in &generators {
-                if let Some(range) = span_to_range(&guard, &root_path, &Span {
-                    file: SourceFile::new_static(PathBuf::from(gen.span.file_path.clone()), ""),
-                    start: gen.span.start,
-                    end: gen.span.end,
-                }) {
+                if let Some(range) = span_to_range(
+                    &guard,
+                    &root_path,
+                    &Span {
+                        file: SourceFile::new_static(PathBuf::from(gen.span.file_path.clone()), ""),
+                        start: gen.span.start,
+                        end: gen.span.end,
+                    },
+                ) {
                     let diagnostic = Diagnostic {
                         range,
                         message: message.clone(),

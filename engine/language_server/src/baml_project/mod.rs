@@ -627,11 +627,14 @@ impl BamlRuntimeExt for BamlRuntime {
                             f.inputs().iter().for_each(|(param_name, t)| {
                                 if !params.iter().any(|p| p.name == *param_name) && !t.is_optional()
                                 {
-                                    params.insert(0, BamlParam {
-                                        name: param_name.to_string(),
-                                        value: None,
-                                        error: Some("Missing parameter".to_string()),
-                                    });
+                                    params.insert(
+                                        0,
+                                        BamlParam {
+                                            name: param_name.to_string(),
+                                            value: None,
+                                            error: Some("Missing parameter".to_string()),
+                                        },
+                                    );
                                 }
                             });
 

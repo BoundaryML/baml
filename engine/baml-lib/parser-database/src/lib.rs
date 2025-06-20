@@ -668,9 +668,10 @@ mod test {
 
     #[test]
     fn find_basic_map_structural_cycle() -> Result<(), Diagnostics> {
-        assert_structural_alias_cycles("type RecursiveMap = map<string, RecursiveMap>", &[&[
-            "RecursiveMap",
-        ]])
+        assert_structural_alias_cycles(
+            "type RecursiveMap = map<string, RecursiveMap>",
+            &[&["RecursiveMap"]],
+        )
     }
 
     #[test]

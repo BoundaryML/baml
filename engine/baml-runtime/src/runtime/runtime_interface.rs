@@ -182,12 +182,14 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
     ) -> Result<(RenderedPrompt, OrchestrationScope, AllowedRoleMetadata)> {
         let func = self.get_function(function_name)?;
         let function_params = func.inputs();
-        let baml_args = self
-            .ir()
-            .check_function_params(&function_params, params, ArgCoercer {
+        let baml_args = self.ir().check_function_params(
+            &function_params,
+            params,
+            ArgCoercer {
                 span_path: None,
                 allow_implicit_cast_to_string: false,
-            })?;
+            },
+        )?;
 
         let renderer = PromptRenderer::from_function(&func, self.ir(), ctx)?;
 
@@ -320,10 +322,14 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
                 }
 
                 self.ir()
-                    .check_function_params(&function_params, &params, ArgCoercer {
-                        span_path: span.map(|s| s.file.path_buf().clone()),
-                        allow_implicit_cast_to_string: true,
-                    })
+                    .check_function_params(
+                        &function_params,
+                        &params,
+                        ArgCoercer {
+                            span_path: span.map(|s| s.file.path_buf().clone()),
+                            allow_implicit_cast_to_string: true,
+                        },
+                    )
                     .map(|bv| bv.into_iter().map(|(k, v)| (k, v.value())).collect())
             }
             Err(e) => Err(anyhow::anyhow!("Unable to resolve test params: {:?}", e)),

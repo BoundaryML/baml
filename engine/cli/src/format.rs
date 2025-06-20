@@ -39,10 +39,13 @@ impl FormatArgs {
 
         for path in paths.iter() {
             let source = fs::read_to_string(&path)?;
-            match format_schema(&source, FormatOptions {
-                indent_width: 2,
-                fail_on_unhandled_rule: false,
-            }) {
+            match format_schema(
+                &source,
+                FormatOptions {
+                    indent_width: 2,
+                    fail_on_unhandled_rule: false,
+                },
+            ) {
                 Ok(formatted) => {
                     if self.dry_run {
                         println!("{}", formatted);

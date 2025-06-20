@@ -27,10 +27,13 @@ use crate::{
 };
 
 pub fn load_test_ir(file_content: &str) -> IntermediateRepr {
-    let mut schema = validate(&PathBuf::from("./baml_src"), vec![SourceFile::from((
-        PathBuf::from("./baml_src/example.baml"),
-        file_content.to_string(),
-    ))]);
+    let mut schema = validate(
+        &PathBuf::from("./baml_src"),
+        vec![SourceFile::from((
+            PathBuf::from("./baml_src/example.baml"),
+            file_content.to_string(),
+        ))],
+    );
     match schema.diagnostics.to_result() {
         Ok(_) => {}
         Err(e) => {

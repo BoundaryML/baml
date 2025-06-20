@@ -132,14 +132,17 @@ impl TryFrom<(Arc<InternalBamlRuntime>, HashMap<String, String>)> for AstSignatu
                     .iter()
                     .filter_map(|dep_name| name_to_baml_type_id_map.get(dep_name).cloned())
                     .collect::<Vec<Arc<BamlTypeId>>>();
-                (name, FunctionSignatureWithDependencies {
-                    function_id: (
-                        Arc::new(BamlFunctionId(func_sig.signature.clone_into_ast_node_id())),
-                        Arc::new(dependencies),
-                    ),
-                    inputs: func_sig.inputs.clone(),
-                    output: func_sig.output.clone(),
-                })
+                (
+                    name,
+                    FunctionSignatureWithDependencies {
+                        function_id: (
+                            Arc::new(BamlFunctionId(func_sig.signature.clone_into_ast_node_id())),
+                            Arc::new(dependencies),
+                        ),
+                        inputs: func_sig.inputs.clone(),
+                        output: func_sig.output.clone(),
+                    },
+                )
             })
             .collect();
 
@@ -152,15 +155,18 @@ impl TryFrom<(Arc<InternalBamlRuntime>, HashMap<String, String>)> for AstSignatu
                     .iter()
                     .filter_map(|dep_name| name_to_baml_type_id_map.get(dep_name).cloned())
                     .collect::<Vec<Arc<BamlTypeId>>>();
-                (name.clone(), TypeWithDependencies {
-                    type_id: (
-                        Arc::new(BamlTypeId(type_node_sig.signature.clone_into_ast_node_id())),
-                        Arc::new(dependencies),
-                    ),
-                    field_type: type_node_sig.field_type.clone(),
-                    class_fields: Some(class_details.fields.clone()),
-                    enum_values: None,
-                })
+                (
+                    name.clone(),
+                    TypeWithDependencies {
+                        type_id: (
+                            Arc::new(BamlTypeId(type_node_sig.signature.clone_into_ast_node_id())),
+                            Arc::new(dependencies),
+                        ),
+                        field_type: type_node_sig.field_type.clone(),
+                        class_fields: Some(class_details.fields.clone()),
+                        enum_values: None,
+                    },
+                )
             })
             .chain(
                 ir_signature
@@ -173,17 +179,20 @@ impl TryFrom<(Arc<InternalBamlRuntime>, HashMap<String, String>)> for AstSignatu
                             .iter()
                             .filter_map(|dep_name| name_to_baml_type_id_map.get(dep_name).cloned())
                             .collect::<Vec<Arc<BamlTypeId>>>();
-                        (name.clone(), TypeWithDependencies {
-                            type_id: (
-                                Arc::new(BamlTypeId(
-                                    type_node_sig.signature.clone_into_ast_node_id(),
-                                )),
-                                Arc::new(dependencies),
-                            ),
-                            field_type: type_node_sig.field_type.clone(),
-                            class_fields: None,
-                            enum_values: Some(enum_details.values.clone()),
-                        })
+                        (
+                            name.clone(),
+                            TypeWithDependencies {
+                                type_id: (
+                                    Arc::new(BamlTypeId(
+                                        type_node_sig.signature.clone_into_ast_node_id(),
+                                    )),
+                                    Arc::new(dependencies),
+                                ),
+                                field_type: type_node_sig.field_type.clone(),
+                                class_fields: None,
+                                enum_values: Some(enum_details.values.clone()),
+                            },
+                        )
                     }),
             )
             .chain(
@@ -197,17 +206,20 @@ impl TryFrom<(Arc<InternalBamlRuntime>, HashMap<String, String>)> for AstSignatu
                             .iter()
                             .filter_map(|dep_name| name_to_baml_type_id_map.get(dep_name).cloned())
                             .collect::<Vec<Arc<BamlTypeId>>>();
-                        (name.clone(), TypeWithDependencies {
-                            type_id: (
-                                Arc::new(BamlTypeId(
-                                    type_node_sig.signature.clone_into_ast_node_id(),
-                                )),
-                                Arc::new(dependencies),
-                            ),
-                            field_type: type_node_sig.field_type.clone(),
-                            class_fields: None,
-                            enum_values: None,
-                        })
+                        (
+                            name.clone(),
+                            TypeWithDependencies {
+                                type_id: (
+                                    Arc::new(BamlTypeId(
+                                        type_node_sig.signature.clone_into_ast_node_id(),
+                                    )),
+                                    Arc::new(dependencies),
+                                ),
+                                field_type: type_node_sig.field_type.clone(),
+                                class_fields: None,
+                                enum_values: None,
+                            },
+                        )
                     }),
             )
             .collect();

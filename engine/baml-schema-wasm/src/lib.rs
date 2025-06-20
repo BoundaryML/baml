@@ -16,10 +16,13 @@ pub fn version() -> String {
 #[wasm_bindgen]
 pub fn format_document(path: String, text: String) -> Option<String> {
     log::info!("Trying to format document (rust): {}", path);
-    match format_schema(&text, FormatOptions {
-        indent_width: 2,
-        fail_on_unhandled_rule: false,
-    }) {
+    match format_schema(
+        &text,
+        FormatOptions {
+            indent_width: 2,
+            fail_on_unhandled_rule: false,
+        },
+    ) {
         Ok(formatted) => {
             log::info!("Formatted document: {}", formatted);
             Some(formatted)

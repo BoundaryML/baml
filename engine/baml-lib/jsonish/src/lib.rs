@@ -101,10 +101,13 @@ impl serde::Serialize for SerializeResponseBamlValue<'_> {
                 let new_items = items
                     .into_iter()
                     .map(|(k, v)| {
-                        (k.clone(), SerializeResponseBamlValue {
-                            value: &v,
-                            serialize_mode: serialize_mode.clone(),
-                        })
+                        (
+                            k.clone(),
+                            SerializeResponseBamlValue {
+                                value: &v,
+                                serialize_mode: serialize_mode.clone(),
+                            },
+                        )
                     })
                     .collect::<IndexMap<std::string::String, SerializeResponseBamlValue<'_>>>();
                 serialize_with_meta(&new_items, &meta, serialize_mode, serializer)
@@ -129,10 +132,13 @@ impl serde::Serialize for SerializeResponseBamlValue<'_> {
                                 (SerializeMode::Partial, true) => SerializeMode::Final,
                                 (SerializeMode::Partial, false) => SerializeMode::Partial,
                             };
-                        (k, SerializeResponseBamlValue {
-                            value: v,
-                            serialize_mode: subvalue_serialize_mode,
-                        })
+                        (
+                            k,
+                            SerializeResponseBamlValue {
+                                value: v,
+                                serialize_mode: subvalue_serialize_mode,
+                            },
+                        )
                     })
                     .collect::<IndexMap<_, _>>();
                 serialize_with_meta(&new_fields, &meta, serialize_mode, serializer)

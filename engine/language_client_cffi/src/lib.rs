@@ -65,9 +65,12 @@ pub extern "C" fn invoke_runtime_cli(args: *const *const libc::c_char) -> libc::
             vec
         }
     };
-    match baml_cli::run_cli(args_vec, baml_runtime::RuntimeCliDefaults {
-        output_type: baml_types::GeneratorOutputType::Go,
-    }) {
+    match baml_cli::run_cli(
+        args_vec,
+        baml_runtime::RuntimeCliDefaults {
+            output_type: baml_types::GeneratorOutputType::Go,
+        },
+    ) {
         Ok(exit_code) => exit_code.into(),
         Err(e) => {
             baml_log::error!("{}", e);

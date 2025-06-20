@@ -116,10 +116,16 @@ where
             for (k, v) in kvs {
                 let mut prefix = prefix.clone();
                 prefix.push(k.clone());
-                match pyobject_to_json(v, py, to_type, prefix, match handle_unknown_types {
-                    UnknownTypeHandler::Error => &UnknownTypeHandler::Ignore,
-                    t => t,
-                }) {
+                match pyobject_to_json(
+                    v,
+                    py,
+                    to_type,
+                    prefix,
+                    match handle_unknown_types {
+                        UnknownTypeHandler::Error => &UnknownTypeHandler::Ignore,
+                        t => t,
+                    },
+                ) {
                     Ok(Some(v)) => {
                         obj.insert(k, v);
                     }
@@ -139,10 +145,16 @@ where
             for (k, v) in kvs {
                 let mut prefix = prefix.clone();
                 prefix.push(k.clone());
-                match pyobject_to_json(v, py, to_type, prefix, match handle_unknown_types {
-                    UnknownTypeHandler::Error => &UnknownTypeHandler::Ignore,
-                    t => t,
-                }) {
+                match pyobject_to_json(
+                    v,
+                    py,
+                    to_type,
+                    prefix,
+                    match handle_unknown_types {
+                        UnknownTypeHandler::Error => &UnknownTypeHandler::Ignore,
+                        t => t,
+                    },
+                ) {
                     Ok(Some(v)) => {
                         obj.insert(k, v);
                     }

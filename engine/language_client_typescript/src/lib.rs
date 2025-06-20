@@ -13,9 +13,12 @@ use tracing_subscriber::{self, EnvFilter};
 
 #[napi(js_name = "invoke_runtime_cli")]
 pub fn run_cli(env: Env, params: Vec<String>) -> napi::Result<i32> {
-    let exit_code = baml_cli::run_cli(params, baml_runtime::RuntimeCliDefaults {
-        output_type: baml_types::GeneratorOutputType::Typescript,
-    })?;
+    let exit_code = baml_cli::run_cli(
+        params,
+        baml_runtime::RuntimeCliDefaults {
+            output_type: baml_types::GeneratorOutputType::Typescript,
+        },
+    )?;
 
     Ok(exit_code.into())
 }

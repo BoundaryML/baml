@@ -139,12 +139,15 @@ impl FunctionResultStream {
             Err(e) => log::debug!("Error during logging: {}", e),
         }
 
-        let trace_event = TraceEvent::new_function_end(call_stack, match &res {
-            Ok(result) => Ok(baml_types::BamlValueWithMeta::<FieldType>::Null(
-                FieldType::null(),
-            )),
-            Err(e) => Err(e.into_baml_error()),
-        });
+        let trace_event = TraceEvent::new_function_end(
+            call_stack,
+            match &res {
+                Ok(result) => Ok(baml_types::BamlValueWithMeta::<FieldType>::Null(
+                    FieldType::null(),
+                )),
+                Err(e) => Err(e.into_baml_error()),
+            },
+        );
         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
         (res, curr_call_id)

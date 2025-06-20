@@ -67,20 +67,26 @@ fn parse_as_function_call(
                 });
             match items {
                 Some(x) => x,
-                None => (Type::Unknown, vec![TypeError::new_invalid_type(
-                    &expr.expr,
-                    t,
-                    "function",
-                    expr.span(),
-                )]),
+                None => (
+                    Type::Unknown,
+                    vec![TypeError::new_invalid_type(
+                        &expr.expr,
+                        t,
+                        "function",
+                        expr.span(),
+                    )],
+                ),
             }
         }
-        _ => (Type::Unknown, vec![TypeError::new_invalid_type(
-            &expr.expr,
-            t,
-            "function",
-            expr.span(),
-        )]),
+        _ => (
+            Type::Unknown,
+            vec![TypeError::new_invalid_type(
+                &expr.expr,
+                t,
+                "function",
+                expr.span(),
+            )],
+        ),
     }
 }
 
