@@ -3,11 +3,8 @@
 
 // @generated
 
-use core::mem;
-use core::cmp::Ordering;
 
 extern crate flatbuffers;
-use self::flatbuffers::{EndianScalar, Follow};
 
 #[allow(unused_imports, dead_code)]
 pub mod cffi {
