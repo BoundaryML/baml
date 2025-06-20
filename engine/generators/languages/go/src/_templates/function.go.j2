@@ -1,0 +1,43 @@
+{% if let Some(doc) = fn.documentation -%}
+{{ crate::utils::prefix_lines(doc, "/// ") }}
+{%- endif %}
+func {{ fn.name }}(ctx context.Context{% for (name, go_type) in fn.args -%}
+        , {{name}} {{go_type.serialize_type(pkg)}}
+        {%- endfor %}, opts ...CallOptionFunc) ({{ fn.return_type.serialize_type(pkg) }}, error) {
+
+    var callOpts callOption
+    for _, opt := range opts {
+        opt(&callOpts)
+    }
+
+    args := baml.BamlFunctionArguments{
+        Kwargs: map[string]any{ {% for (name, go_type) in fn.args -%}"{{name}}": {{name}},{% endfor %} },
+        Env: getEnvVars(callOpts.env),
+    }
+
+    if callOpts.clientRegistry != nil {
+        args.ClientRegistry = callOpts.clientRegistry
+    }
+
+    if callOpts.collectors != nil {
+        args.Collectors = callOpts.collectors
+    }
+
+    encoded, err := baml.EncodeRoot(args)
+    if err != nil {
+        panic(err)
+    }
+
+    result, err := bamlRuntime.CallFunction(ctx, "{{ fn.name }}", encoded)
+    if err != nil {
+        return {{ fn.return_type.zero_value(pkg) }}, err
+    }
+
+    if result.Error != nil {
+        return {{ fn.return_type.zero_value(pkg) }}, result.Error
+    }
+
+    casted := {{ fn.return_type.cast_from_function("result.Data", pkg) }}
+
+    return casted, nil
+}

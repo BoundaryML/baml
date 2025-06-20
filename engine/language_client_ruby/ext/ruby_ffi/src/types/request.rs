@@ -19,34 +19,34 @@ impl HTTPRequest {
     pub fn to_s(&self) -> String {
         format!(
             "HTTPRequest(url={}, method={}, headers={}, body={})",
-            self.inner.url,
-            self.inner.method,
-            serde_json::to_string_pretty(&self.inner.headers).unwrap_or_default(),
-            serde_json::to_string_pretty(&self.inner.body.as_serde_value()).unwrap_or_default()
+            self.inner.url(),
+            self.inner.method(),
+            serde_json::to_string_pretty(&self.inner.headers()).unwrap_or_default(),
+            serde_json::to_string_pretty(&self.inner.body().as_serde_value()).unwrap_or_default()
         )
     }
 
     pub fn id(&self) -> String {
-        self.inner.id.to_string()
+        self.inner.id().to_string()
     }
 
     pub fn url(&self) -> String {
-        self.inner.url.clone()
+        self.inner.url().to_string()
     }
 
     pub fn method(&self) -> String {
-        self.inner.method.clone()
+        self.inner.method().to_string()
     }
 
     pub fn headers(ruby: &Ruby, rb_self: &Self) -> Result<magnus::Value> {
         // Convert headers to Ruby hash
-        serde_magnus::serialize(&rb_self.inner.headers)
+        serde_magnus::serialize(&rb_self.inner.headers())
             .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
     }
 
     pub fn body(&self) -> HTTPBody {
         // TODO: Avoid clone.
-        HTTPBody::from(self.inner.body.clone())
+        HTTPBody::from(self.inner.body().clone())
     }
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {

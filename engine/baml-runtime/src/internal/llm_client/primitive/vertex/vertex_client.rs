@@ -3,7 +3,8 @@ use crate::internal::llm_client::primitive::anthropic::{self, AnthropicClient};
 use crate::internal::llm_client::primitive::request::ResponseType;
 use crate::internal::llm_client::primitive::stream_request::make_stream_request;
 use crate::internal::llm_client::traits::{
-    CompletionToProviderBody, ToProviderMessage, ToProviderMessageExt, WithClientProperties,
+    CompletionToProviderBody, HttpContext, ToProviderMessage, ToProviderMessageExt,
+    WithClientProperties,
 };
 use crate::internal::llm_client::ResolveMediaUrls;
 #[cfg(target_arch = "wasm32")]
@@ -25,7 +26,6 @@ use crate::{
     request::create_client,
 };
 use anyhow::{Context, Result};
-use baml_types::tracing::events::HttpRequestId;
 use chrono::{Duration, Utc};
 use futures::StreamExt;
 #[cfg(not(target_arch = "wasm32"))]
@@ -130,9 +130,8 @@ impl WithNoCompletion for VertexClient {}
 impl WithStreamChat for VertexClient {
     async fn stream_chat(
         &self,
-        ctx: &RuntimeContext,
+        ctx: &impl HttpContext,
         prompt: &[RenderedChatMessage],
-        http_request_id: HttpRequestId,
     ) -> StreamResponse {
         //incomplete, streaming response object is returned
         make_stream_request(
@@ -141,7 +140,6 @@ impl WithStreamChat for VertexClient {
             Some(self.properties.model.clone()),
             ResponseType::Vertex,
             ctx,
-            http_request_id,
         )
         .await
     }
@@ -220,14 +218,22 @@ impl RequestBuilder for VertexClient {
 
         let base_url = match &self.properties.base_url_or_location {
             BaseUrlOrLocation::BaseUrl(base_url) => base_url.to_string(),
-            BaseUrlOrLocation::Location(location) => format!(
-                "https://{location}-aiplatform.googleapis.com/v1/projects/{project_id}/locations/{location}/publishers/google/models",
-                location = location,
-                project_id = match self.properties.project_id.as_ref() {
-                    Some(project_id) => project_id.to_string(),
-                    None => vertex_auth.project_id().await?.to_string(),
-                }
-            ),
+            BaseUrlOrLocation::Location(location) => {
+                let domain = if location == "global" {
+                    "aiplatform.googleapis.com".to_string()
+                } else {
+                    format!("{location}-aiplatform.googleapis.com")
+                };
+                format!(
+                    "https://{domain}/v1/projects/{project_id}/locations/{location}/publishers/google/models",
+                    domain = domain,
+                    location = location,
+                    project_id = match self.properties.project_id.as_ref() {
+                        Some(project_id) => project_id.to_string(),
+                        None => vertex_auth.project_id().await?.to_string(),
+                    }
+                )
+            },
         };
 
         let baml_original_url = format!(
@@ -295,12 +301,7 @@ impl RequestBuilder for VertexClient {
 }
 
 impl WithChat for VertexClient {
-    async fn chat(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &[RenderedChatMessage],
-        http_request_id: HttpRequestId,
-    ) -> LLMResponse {
+    async fn chat(&self, ctx: &impl HttpContext, prompt: &[RenderedChatMessage]) -> LLMResponse {
         let model_name = self.properties.model.clone();
         //non-streaming, complete response is returned
         make_parsed_request(
@@ -313,7 +314,6 @@ impl WithChat for VertexClient {
                 None => ResponseType::Vertex,
             },
             ctx,
-            http_request_id,
         )
         .await
     }

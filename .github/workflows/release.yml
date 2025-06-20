@@ -69,7 +69,7 @@ jobs:
 
   build-typescript-release:
     uses: ./.github/workflows/build-typescript-release.reusable.yaml
-  
+
   build-cli:
     needs: determine-version
     uses: ./.github/workflows/build-cli-release.reusable.yaml
@@ -79,14 +79,17 @@ jobs:
 
   # This job now calls the reusable workflow which contains the matrix strategy
   build-vscode-reusable: # Renamed job for clarity
-    needs: [ determine-version, build-cli ]
+    needs: [determine-version, build-cli]
     uses: ./.github/workflows/build-vscode-release.reusable.yaml
     with:
       # No artifact_name needed here anymore
       version: ${{ needs.determine-version.outputs.version_string }}
       # Pass the boolean output directly
       is_release_build: ${{ needs.determine-version.outputs.is_release_tag == 'true' }}
-  
+
+  build-jetbrains-release:
+    uses: ./.github/workflows/build-jetbrains-release.reusable.yaml
+
   # Kick off integration tests when we build everything.
   # This does not yet succeed/pass consistently, or even run everything, but it's a good start.
   integ-tests:
@@ -103,9 +106,9 @@ jobs:
       - build-typescript-release
       - build-cli
       - build-vscode-reusable # Depends on the job calling the reusable workflow
+      - build-jetbrains-release
     steps:
       - run: echo "::do-nothing::" >/dev/null
-      
 
   publish-to-pypi:
     environment: release
@@ -129,8 +132,8 @@ jobs:
           set -euo pipefail
           ls dist/
           wheel_count=$(ls dist/*.whl 2>/dev/null | wc -l)
-          if [ "$wheel_count" -lt 7 ]; then
-            echo "Error: Expected at least 7 wheels, but found $wheel_count"
+          if [ "$wheel_count" -lt 8 ]; then
+            echo "Error: Expected at least 8 wheels, but found $wheel_count"
             exit 1
           fi
           echo "Found $wheel_count wheels"
@@ -223,8 +226,6 @@ jobs:
             gem push $i
           done
 
-
-
   publish-to-open-vsx:
     environment: release
     needs: [determine-version, all-builds] # Also need determine-version for the condition
@@ -291,6 +292,39 @@ jobs:
         env:
           VSCE_PAT: ${{ secrets.VSCODE_PAT }}
 
+  publish-to-jetbrains-marketplace:
+    environment: release
+    needs: [determine-version, all-builds] # Also need determine-version for the condition
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./jetbrains
+    steps:
+      # We need checkout, java, and gradle because there's no CLI for publishing
+      # to JetBrains Marketplace, just a gradle task in the project.
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 23
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Download extension zips
+        uses: actions/download-artifact@v4
+        with:
+          pattern: baml-jetbrains-zip-*
+          path: ./jetbrains/build/distributions/
+          merge-multiple: true
+
+      - name: List downloaded extension zips
+        run: ls -al ./jetbrains/build/distributions/
+
+      - name: Publish to JetBrains Marketplace
+        working-directory: ./jetbrains
+        run: ./gradlew publishPlugin
+        env:
+          INTELLIJ_PLATFORM_PUBLISH_TOKEN: ${{ secrets.SAM_INTELLIJ_PLATFORM_PUBLISH_TOKEN }}
+
   publish-to-github:
     environment: release
     permissions:
@@ -308,9 +342,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           # Match artifacts starting with 'baml-cli-'
-          pattern: baml-cli-* 
+          pattern: baml-cli-*
           # Download into this directory
-          path: cli-artifacts 
+          path: cli-artifacts
           merge-multiple: true # Merge artifacts from different OS/arch into the path
 
       # Download all CFFI library artifacts produced by the build-cli job
@@ -318,9 +352,9 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           # Match artifacts starting with 'libbaml-cffi-'
-          pattern: libbaml-cffi-* 
+          pattern: libbaml-cffi-*
           # Download into a separate directory
-          path: cffi-artifacts 
+          path: cffi-artifacts
           merge-multiple: true # Merge artifacts from different OS into the path
 
       - name: List downloaded CLI artifacts

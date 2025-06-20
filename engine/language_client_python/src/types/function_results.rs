@@ -60,6 +60,7 @@ fn pythonize_checks<'a>(
     py: Python<'a>,
     types_module: &Bound<'_, PyModule>,
     checks: &[ResponseCheck],
+    model_validate_method: &str,
 ) -> PyResult<Bound<'a, PyDict>> {
     let dict = PyDict::new(py);
     let check_class = types_module.getattr("Check")?;
@@ -76,7 +77,7 @@ fn pythonize_checks<'a>(
             check_properties_dict.set_item("expression", expression)?;
             check_properties_dict.set_item("status", status)?;
             let check_instance =
-                check_class.call_method("model_validate", (check_properties_dict,), None)?;
+                check_class.call_method(model_validate_method, (check_properties_dict,), None)?;
             dict.set_item(name, check_instance)?;
             PyResult::Ok(())
         },
@@ -94,6 +95,17 @@ pub(crate) fn pythonize_strict(
 ) -> PyResult<PyObject> {
     let allow_partials = allow_partials && !parsed.0.meta().2.required_done;
     let meta = parsed.0.meta().clone();
+
+    let is_pydantic_2 = { 
+        let pydantic =  py.import("pydantic")?;
+        let pydantic_version = pydantic.getattr("version")?;
+        let pydantic_version = pydantic_version.getattr("VERSION")?;
+        let pydantic_version = pydantic_version.call_method("__str__", (), None)?;
+        let pydantic_version = pydantic_version.extract::<String>()?;
+        pydantic_version.split(".").next().unwrap_or("0") >= "2"
+    };
+    let model_validate_method = if is_pydantic_2 { "model_validate" } else { "parse_obj" };
+
     let py_value_without_constraints = match parsed.0 {
         BamlValueWithMeta::String(val, _) => val.into_py_any(py),
         BamlValueWithMeta::Int(val, _) => val.into_py_any(py),
@@ -197,7 +209,7 @@ pub(crate) fn pythonize_strict(
                 // classes inheriting `BaseModel`, which probably incurs some
                 // performance penalty. So we should consider testing whether
                 // the field is a `Checked` before doing a `model_dump`.
-                let value_model = value.call_method0(py, "model_dump");
+                let value_model = value.call_method0(py, if is_pydantic_2 { "model_dump" } else { "dict" });
                 match value_model {
                     Err(_) => {
                         properties_dict.set_item(key, value)?;
@@ -234,10 +246,10 @@ pub(crate) fn pythonize_strict(
             };
 
             let instance =
-                match class_type.call_method("model_validate", (properties_dict.clone(),), None) {
+                match class_type.call_method(model_validate_method, (properties_dict.clone(),), None) {
                     Ok(x) => Ok(x),
                     Err(original_error) => match backup_class_type.call_method(
-                        "model_validate",
+                        model_validate_method,
                         (properties_dict.clone(),),
                         None,
                     ) {
@@ -262,7 +274,7 @@ pub(crate) fn pythonize_strict(
 
     let value_with_possible_checks = if !checks.is_empty() {
         // Generate the Python checks
-        let python_checks = pythonize_checks(py, cls_module, &checks).expect("pythonize_checks");
+        let python_checks = pythonize_checks(py, cls_module, &checks, model_validate_method).expect("pythonize_checks");
 
         // Get the type of the original value
         let value_type = py_value_without_constraints.bind(py).get_type();
@@ -295,8 +307,8 @@ pub(crate) fn pythonize_strict(
 
         // Validate the model with the constructed type
         let checked_instance = class_checked_type
-            .call_method("model_validate", (properties_dict.clone(),), None)
-            .expect("model_validate");
+            .call_method(model_validate_method, (properties_dict.clone(),), None)
+            .expect(model_validate_method);
 
         Ok::<Py<PyAny>, PyErr>(checked_instance.into())
     } else {
@@ -322,8 +334,8 @@ pub(crate) fn pythonize_strict(
             .expect("__class_getitem__ for streaming");
 
         let streaming_state_instance = class_completion_state_type
-            .call_method("model_validate", (properties_dict.clone(),), None)
-            .expect("model_validate for streaming");
+            .call_method(model_validate_method, (properties_dict.clone(),), None)
+            .expect(model_validate_method);
 
         Ok::<Py<PyAny>, PyErr>(streaming_state_instance.into())
     } else {

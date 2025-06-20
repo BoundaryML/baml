@@ -1,0 +1,41 @@
+import typing
+from baml_py import type_builder
+from baml_py import baml_py
+from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
+
+class TypeBuilder(type_builder.TypeBuilder):
+    def __init__(self):
+        super().__init__(classes=set(
+          [{% for cls in classes %}"{{cls.name}}",{% endfor %}]
+        ), enums=set(
+          [{% for enum_ in enums %}"{{enum_.name}}",{% endfor %}]
+        ), runtime=DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME)
+
+    # #########################################################################
+    # Generated enums {{ enums.len() }}
+    # #########################################################################
+{% for enum_ in enums %}
+{{ enum_.to_type_builder_property().render()?|indent(4, true) }}
+{% endfor %}
+
+    # #########################################################################
+    # Generated classes {{ classes.len() }}
+    # #########################################################################
+{% for cls in classes %}
+{{ cls.to_type_builder_property().render()?|indent(4, true) }}
+{% endfor %}
+
+
+# #########################################################################
+# Generated enums {{ enums.len() }}
+# #########################################################################
+{% for enum_ in enums %}
+{{ enum_.to_type_builder_object().render()? }}
+{% endfor %}
+
+# #########################################################################
+# Generated classes {{ classes.len() }}
+# #########################################################################
+{% for cls in classes %}
+{{ cls.to_type_builder_object().render()? }}
+{% endfor %}

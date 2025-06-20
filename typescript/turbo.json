@@ -41,16 +41,16 @@
       "cache": false
     },
     "baml-client": {
-      "dependsOn": ["@gloo-ai/baml-language-server#build", "@gloo-ai/web-panel#build", "@baml/common#build"],
+      "dependsOn": ["@gloo-ai/web-panel#build", "@baml/common#build"],
+      "outputs": ["out/**"]
+    },
+    "baml-client#build:release": {
+      "dependsOn": ["@gloo-ai/web-panel#build", "@baml/common#build"],
       "outputs": ["out/**"]
     },
     "lint": {},
     "clean": {
       "cache": false
-    },
-    "baml-client#build": {
-      "dependsOn": ["@gloo-ai/baml-language-server#build"],
-      "outputs": ["out/**"]
     },
     "baml#vscode:package": {
       "dependsOn": ["baml-client#build"],

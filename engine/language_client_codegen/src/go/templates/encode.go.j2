@@ -13,12 +13,15 @@ type BamlEncoder interface {
 }
 
 var typeMap = map[string]reflect.Type{
+  // classes
   {% for class in classes %}
   "{{ class.name }}": reflect.TypeOf(types.{{ class.name }}{}),
   {% endfor %}
+  // enums
   {% for enum in enums %}
   "{{ enum.name }}": reflect.TypeOf(types.{{ enum.name}}("")),
   {% endfor %}
+  // unions
   {% for union in unions %}
   "{{ union.name }}": reflect.TypeOf(types.{{ union.name }}{}),
   {% endfor %}

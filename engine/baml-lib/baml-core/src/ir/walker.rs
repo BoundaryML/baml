@@ -1,5 +1,5 @@
 use anyhow::Result;
-use baml_types::{BamlValue, EvaluationContext, UnresolvedValue};
+use baml_types::{BamlValue, EvaluationContext, type_meta::base::StreamingBehavior, UnresolvedValue};
 use indexmap::{IndexMap, IndexSet};
 
 use internal_baml_diagnostics::Span;
@@ -9,10 +9,12 @@ use internal_llm_client::ClientSpec;
 
 use std::collections::HashSet;
 
-use super::{
-    repr::{self, ExprFunction, FunctionConfig, TypeBuilderEntry, WithRepr}, Class, Client, Enum, EnumValue, ExprFunctionNode, Field, FieldType, FunctionNode, IRHelper, Impl, RetryPolicy, TemplateString, TestCase, TypeAlias, Walker
-};
 use crate::ir::jinja_helpers::render_expression;
+use crate::ir::{
+    repr::{self, ExprFunction, FunctionConfig, Node, TypeBuilderEntry, WithRepr},
+    Class, Client, Enum, EnumValue, ExprFunctionNode, Field, FieldType, Function, FunctionNode,
+    IRHelper, Impl, IntermediateRepr, RetryPolicy, TemplateString, TestCase, TypeAlias, Walker,
+};
 
 impl<'a> Walker<'a, &'a ExprFunctionNode> {
     pub fn name(&self) -> &'a str {
@@ -39,7 +41,7 @@ impl<'a> Walker<'a, &'a ExprFunctionNode> {
     pub fn find_test(
         &'a self,
         test_name: &str,
-    ) -> Option<Walker<'a, (&'a ExprFunctionNode, &'a TestCase)>>{
+    ) -> Option<Walker<'a, (&'a ExprFunctionNode, &'a TestCase)>> {
         self.walk_tests().find(|t| t.item.1.elem.name == test_name)
     }
 }
@@ -145,8 +147,8 @@ impl<'a> Walker<'a, &'a Enum> {
     pub fn alias(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
         self.item
             .attributes
-            .get("alias")
-            .map(|v| v.resolve_string(ctx))
+            .alias()
+            .map(|v| v.resolve(ctx))
             .transpose()
     }
 
@@ -180,11 +182,7 @@ impl<'a> Walker<'a, &'a Enum> {
 
 impl<'a> Walker<'a, &'a EnumValue> {
     pub fn skip(&self, ctx: &EvaluationContext<'_>) -> Result<bool> {
-        self.item
-            .attributes
-            .get("skip")
-            .map(|v| v.resolve_bool(ctx))
-            .unwrap_or(Ok(false))
+        Ok(self.item.attributes.skip())
     }
 
     pub fn name(&'a self) -> &'a str {
@@ -194,16 +192,16 @@ impl<'a> Walker<'a, &'a EnumValue> {
     pub fn alias(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
         self.item
             .attributes
-            .get("alias")
-            .map(|v| v.resolve_string(ctx))
+            .alias()
+            .map(|v| v.resolve(ctx))
             .transpose()
     }
 
     pub fn description(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
         self.item
             .attributes
-            .get("description")
-            .map(|v| v.resolve_string(ctx))
+            .description()
+            .map(|v| v.resolve(ctx))
             .transpose()
     }
 }
@@ -220,30 +218,29 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a Impl)> {
     pub fn elem(&self) -> &'a repr::Implementation {
         &self.item.1.elem
     }
-
 }
 
-impl<'a> Walker<'a, (&'a ExprFunctionNode, &'a TestCase )> {
+impl<'a> Walker<'a, (&'a ExprFunctionNode, &'a TestCase)> {
     pub fn matches(&self, function_name: &str, test_name: &str) -> bool {
         self.item.0.elem.name == function_name && self.item.1.elem.name == test_name
     }
-    
+
     pub fn name(&self) -> String {
         format!("{}::{}", self.item.0.elem.name, self.item.1.elem.name)
     }
-    
+
     pub fn args(&self) -> &IndexMap<String, UnresolvedValue<()>> {
         &self.item.1.elem.args
     }
-    
+
     pub fn test_case(&self) -> &repr::TestCase {
         &self.item.1.elem
     }
-    
+
     pub fn span(&self) -> Option<&crate::Span> {
         self.item.1.attributes.span.as_ref()
     }
-    
+
     pub fn test_case_params(
         &self,
         ctx: &EvaluationContext<'_>,
@@ -253,9 +250,6 @@ impl<'a> Walker<'a, (&'a ExprFunctionNode, &'a TestCase )> {
             .map(|(k, v)| Ok((k.clone(), v.resolve_serde::<BamlValue>(ctx))))
             .collect()
     }
-    
-    
-    
 }
 
 impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {
@@ -320,17 +314,13 @@ impl<'a> Walker<'a, &'a Class> {
     pub fn alias(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
         self.item
             .attributes
-            .get("alias")
-            .map(|v| v.resolve_string(ctx))
+            .alias()
+            .map(|v| v.resolve(ctx))
             .transpose()
     }
 
-    pub fn streaming_done(&self) -> bool {
-        self.item.attributes.get("stream.done").is_some()
-    }
-
-    pub fn streaming_state(&self) -> bool {
-        self.item.attributes.get("stream.with_state").is_some()
+    pub fn streaming_behavior(&self) -> StreamingBehavior {
+        self.item.attributes.streaming_behavior()
     }
 
     pub fn walk_fields(&'a self) -> impl Iterator<Item = Walker<'a, &'a Field>> {
@@ -380,11 +370,11 @@ impl<'a> Walker<'a, &'a TypeAlias> {
 }
 
 impl<'a> Walker<'a, &'a Client> {
-    pub fn elem(&'a self) -> &'a repr::Client {
+    pub fn elem(&self) -> &'a repr::Client {
         &self.item.elem
     }
 
-    pub fn name(&'a self) -> &'a str {
+    pub fn name(&self) -> &'a str {
         &self.elem().name
     }
 
@@ -406,7 +396,7 @@ impl<'a> Walker<'a, &'a Client> {
 }
 
 impl<'a> Walker<'a, &'a RetryPolicy> {
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &'a str {
         &self.elem().name.0
     }
 
@@ -465,32 +455,49 @@ impl<'a> Walker<'a, &'a Field> {
     pub fn alias(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
         self.item
             .attributes
-            .get("alias")
-            .map(|v| v.resolve_string(ctx))
+            .alias()
+            .map(|v| v.resolve(ctx))
             .transpose()
     }
 
     pub fn description(&self, ctx: &EvaluationContext<'_>) -> Result<Option<String>> {
         self.item
             .attributes
-            .get("description")
-            .map(|v| v.resolve_string(ctx))
+            .description()
+            .map(|v| v.resolve(ctx))
             .transpose()
     }
 
-    pub fn streaming_done(&self) -> bool {
-        self.item.attributes.get("stream.done").is_some()
-    }
-
-    pub fn streaming_needed(&self) -> bool {
-        self.item.attributes.get("stream.not_null").is_some()
-    }
-
-    pub fn streaming_state(&self) -> bool {
-        self.item.attributes.get("stream.with_state").is_some()
+    pub fn streaming_behavior(&self) -> StreamingBehavior {
+        self.item.attributes.streaming_behavior()
     }
 
     pub fn span(&self) -> Option<&crate::Span> {
         self.item.attributes.span.as_ref()
+    }
+}
+
+pub struct ExprFnAsFunctionWalker<'ir> {
+    pub ir: &'ir IntermediateRepr,
+    pub functions: Vec<FunctionNode>,
+}
+
+impl<'ir> ExprFnAsFunctionWalker<'ir> {
+    pub fn new(ir: &'ir IntermediateRepr) -> Self {
+        let functions = ir.expr_fns_as_functions();
+        Self { ir, functions }
+    }
+
+    pub fn walk_functions(&'ir self) -> impl Iterator<Item = Walker<'ir, &'ir FunctionNode>> {
+        self.functions.iter().map(|f| Walker {
+            ir: self.ir,
+            item: f,
+        })
+    }
+}
+
+impl<'ir> Walker<'ir, &'ir ExprFnAsFunctionWalker<'ir>> {
+    pub fn walk_functions(&'ir self) -> impl Iterator<Item = Walker<'ir, &'ir FunctionNode>> {
+        self.item.walk_functions()
     }
 }

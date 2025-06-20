@@ -161,7 +161,7 @@ impl FunctionResult {
 #[derive(Debug)]
 pub struct TestResponse {
     pub function_response: FunctionResult,
-    pub function_span: Option<uuid::Uuid>,
+    pub function_call: baml_ids::FunctionCallId,
     pub constraints_result: TestConstraintsResult,
 }
 
@@ -277,7 +277,10 @@ impl std::fmt::Display for TestFailReason<'_> {
             Self::TestLLMFailure(r) => write!(f, "{}", r),
             Self::TestParseFailure(e) => write!(f, "{}", e),
             Self::TestFinishReasonFailed(e) => write!(f, "{}", e),
-            Self::TestConstraintsFailure { checks, failed_assert } => {
+            Self::TestConstraintsFailure {
+                checks,
+                failed_assert,
+            } => {
                 for (check, pass) in checks {
                     write!(f, "{} - {}", check, if *pass { "passed" } else { "failed" })?;
                 }

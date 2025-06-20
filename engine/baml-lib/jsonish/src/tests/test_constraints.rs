@@ -15,7 +15,7 @@ test_deserializer_with_expected_score!(
     test_class_failing_one_check,
     CLASS_FOO_INT_STRING,
     r#"{"age": 11, "name": "Greg"}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     1
 );
 
@@ -23,7 +23,7 @@ test_deserializer_with_expected_score!(
     test_class_failing_two_checks,
     CLASS_FOO_INT_STRING,
     r#"{"age": 21, "name": "Grog"}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     1
 );
 
@@ -31,14 +31,14 @@ test_failing_deserializer!(
     test_class_failing_assert,
     CLASS_FOO_INT_STRING,
     r#"{"age": -1, "name": "Sam"}"#,
-    FieldType::Class("Foo".to_string())
+    FieldType::class("Foo")
 );
 
 test_failing_deserializer!(
     test_class_multiple_failing_asserts,
     CLASS_FOO_INT_STRING,
     r#"{"age": -1, "name": ""}"#,
-    FieldType::Class("Foo".to_string())
+    FieldType::class("Foo")
 );
 
 const UNION_WITH_CHECKS: &str = r#"
@@ -60,7 +60,7 @@ test_deserializer_with_expected_score!(
     test_union_decision_from_check,
     UNION_WITH_CHECKS,
     r#"{"bar": 5, "things":[]}"#,
-    FieldType::Class("Either".to_string()),
+    FieldType::class("Either"),
     3
 );
 
@@ -68,7 +68,7 @@ test_deserializer_with_expected_score!(
     test_union_decision_from_check_no_good_answer,
     UNION_WITH_CHECKS,
     r#"{"bar": 15, "things":[]}"#,
-    FieldType::Class("Either".to_string()),
+    FieldType::class("Either"),
     3
 );
 
@@ -76,7 +76,7 @@ test_failing_deserializer!(
     test_union_decision_in_list,
     UNION_WITH_CHECKS,
     r#"{"bar": 1, "things":[{"bar": 25}, {"bar": 35}, {"bar": 15}, {"bar": 15}]}"#,
-    FieldType::Class("Either".to_string())
+    FieldType::class("Either")
 );
 
 const MAP_WITH_CHECKS: &str = r#"
@@ -89,7 +89,7 @@ test_deserializer_with_expected_score!(
     test_map_with_check,
     MAP_WITH_CHECKS,
     r#"{"foo": {"hello": 10, "there":13}}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     2
 );
 
@@ -97,7 +97,7 @@ test_deserializer_with_expected_score!(
     test_map_with_check_fails,
     MAP_WITH_CHECKS,
     r#"{"foo": {"hello": 11, "there":13}}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     2
 );
 
@@ -115,7 +115,7 @@ test_deserializer_with_expected_score!(
     test_nested_class_constraints,
     NESTED_CLASS_CONSTRAINTS,
     r#"{"inner": {"value": 15}}"#,
-    FieldType::Class("Outer".to_string()),
+    FieldType::class("Outer"),
     1
 );
 
@@ -137,14 +137,14 @@ test_failing_deserializer!(
     test_block_level_assert_failure,
     BLOCK_LEVEL,
     r#"{"foo": -1}"#,
-    FieldType::Class("Foo".to_string())
+    FieldType::class("Foo")
 );
 
 test_deserializer!(
     test_block_level_check_failure,
     BLOCK_LEVEL,
     r#"{"foo": 1}"#,
-    FieldType::Class("Foo".to_string()),
+    FieldType::class("Foo"),
     {"foo": 1}
 );
 
@@ -152,7 +152,7 @@ test_failing_deserializer!(
     test_block_level_enum_assert_failure,
     BLOCK_LEVEL,
     r#"THREE"#,
-    FieldType::Enum("MyEnum".to_string())
+    FieldType::r#enum("MyEnum")
 );
 
 const MULTIPLE_BLOCK_LEVEL_CONSTRAINTS: &str = r#"
@@ -167,5 +167,5 @@ test_failing_deserializer!(
     test_multiple_block_level_constraints,
     MULTIPLE_BLOCK_LEVEL_CONSTRAINTS,
     r#"{"foo": 1}"#,
-    FieldType::Class("Foo".to_string())
+    FieldType::class("Foo")
 );

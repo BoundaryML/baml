@@ -11,6 +11,19 @@ macro_rules! blog {
     };
 }
 
+#[macro_export]
+macro_rules! bfatal_once {
+    ($($arg:tt)*) => {
+        $crate::log_internal_once(
+            $crate::Level::Fatal,
+            &format!($($arg)*),
+            Some(module_path!()),
+            Some(file!()),
+            Some(line!())
+        )
+    };
+}
+
 /// Log a message at the ERROR level
 #[macro_export]
 macro_rules! berror {

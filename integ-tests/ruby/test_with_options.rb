@@ -9,24 +9,24 @@ b = Baml.Client
 describe "with_options" do
   before do
     # Ensure collector is empty before each test
-    if Baml::Collector.respond_to?(:__function_span_count)
-      assert_equal 0, Baml::Collector.__function_span_count, "Expected no active function spans at the start"
+    if Baml::Collector.respond_to?(:__function_call_count)
+      assert_equal 0, Baml::Collector.__function_call_count, "Expected no active function spans at the start"
     end
   end
 
   after do
     # Force garbage collection and verify all spans are cleaned up
     GC.start
-    if Baml::Collector.respond_to?(:__function_span_count)
-      assert_equal 0, Baml::Collector.__function_span_count,
+    if Baml::Collector.respond_to?(:__function_call_count)
+      assert_equal 0, Baml::Collector.__function_call_count,
                    "Expected no active function spans after forcing GC"
     end
   end
 
   it "should_test_with_options_logger_sync_call" do
-    if Baml::Collector.respond_to?(:__function_span_count)
-      puts "### function_span_count #{Baml::Collector.__function_span_count}"
-      assert_equal 0, Baml::Collector.__function_span_count, "Expected no function spans before test starts"
+    if Baml::Collector.respond_to?(:__function_call_count)
+      puts "### function_call_count #{Baml::Collector.__function_call_count}"
+      assert_equal 0, Baml::Collector.__function_call_count, "Expected no function spans before test starts"
     end
 
     # Create a collector
@@ -68,9 +68,9 @@ describe "with_options" do
 
     # Force garbage collection to check whether function spans remain
     GC.start
-    if Baml::Collector.respond_to?(:__function_span_count)
+    if Baml::Collector.respond_to?(:__function_call_count)
       # Still not collected because it's in use
-      assert Baml::Collector.__function_span_count > 0, "Expected some function spans to remain in memory"
+      assert Baml::Collector.__function_call_count > 0, "Expected some function spans to remain in memory"
     end
   end
 

@@ -114,7 +114,7 @@ impl BamlRuntime {
             .into()
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors, env_vars))]
     fn call_function(
         &self,
         py: Python<'_>,
@@ -124,6 +124,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: &Bound<'_, PyList>,
+        env_vars: HashMap<String, String>,
     ) -> PyResult<PyObject> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -150,7 +151,6 @@ impl BamlRuntime {
             })
             .collect::<Vec<_>>();
 
-        // let collector = collector.map(|c| c.inner.clone());
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let (result, _) = baml_runtime
                 .call_function(
@@ -160,6 +160,7 @@ impl BamlRuntime {
                     tb.as_ref(),
                     cb.as_ref(),
                     Some(collector_list),
+                    env_vars,
                 )
                 .await;
 
@@ -170,7 +171,7 @@ impl BamlRuntime {
         .map(pyo3::Bound::into)
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, collectors, env_vars))]
     fn call_function_sync(
         &self,
         function_name: String,
@@ -179,6 +180,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: &Bound<'_, PyList>,
+        env_vars: HashMap<String, String>,
     ) -> PyResult<FunctionResult> {
         let Some(args) = parse_py_type(args, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -212,6 +214,7 @@ impl BamlRuntime {
                     tb.as_ref(),
                     cb.as_ref(),
                     Some(collector_list),
+                    env_vars,
                 )
             })
         });
@@ -221,7 +224,7 @@ impl BamlRuntime {
             .map_err(BamlError::from_anyhow)
     }
 
-    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors))]
+    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars))]
     fn stream_function(
         &self,
         py: Python<'_>,
@@ -232,6 +235,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: &Bound<'_, PyList>,
+        env_vars: HashMap<String, String>,
     ) -> PyResult<FunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -260,6 +264,7 @@ impl BamlRuntime {
                 tb.map(|tb| tb.inner.clone()).as_ref(),
                 cb.map(|cb| cb.inner.clone()).as_ref(),
                 Some(collector_list),
+                env_vars.clone(),
             )
             .map_err(BamlError::from_anyhow)?;
 
@@ -268,10 +273,11 @@ impl BamlRuntime {
             on_event,
             tb.map(|tb| tb.inner.clone()),
             cb.map(|cb| cb.inner.clone()),
+            env_vars,
         ))
     }
 
-    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors))]
+    #[pyo3(signature = (function_name, args, on_event, ctx, tb, cb, collectors, env_vars))]
     fn stream_function_sync(
         &self,
         py: Python<'_>,
@@ -282,6 +288,7 @@ impl BamlRuntime {
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
         collectors: &Bound<'_, PyList>,
+        env_vars: HashMap<String, String>,
     ) -> PyResult<SyncFunctionResultStream> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
             return Err(BamlInvalidArgumentError::new_err(
@@ -310,6 +317,7 @@ impl BamlRuntime {
                 tb.map(|tb| tb.inner.clone()).as_ref(),
                 cb.map(|cb| cb.inner.clone()).as_ref(),
                 Some(collector_list),
+                env_vars.clone(),
             )
             .map_err(BamlError::from_anyhow)?;
 
@@ -318,10 +326,11 @@ impl BamlRuntime {
             on_event,
             tb.map(|tb| tb.inner.clone()),
             cb.map(|cb| cb.inner.clone()),
+            env_vars,
         ))
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb, stream))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, env_vars, stream))]
     fn build_request(
         &self,
         py: Python<'_>,
@@ -330,6 +339,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        env_vars: HashMap<String, String>,
         stream: bool,
     ) -> PyResult<PyObject> {
         let Some(args) = parse_py_type(args.into_bound(py).into_py_any(py)?, false)? else {
@@ -356,6 +366,7 @@ impl BamlRuntime {
                     &ctx_manager,
                     type_builder.as_ref(),
                     client_registry.as_ref(),
+                    env_vars,
                     stream,
                 )
                 .await
@@ -365,7 +376,7 @@ impl BamlRuntime {
         .map(pyo3::Bound::into)
     }
 
-    #[pyo3(signature = (function_name, args, ctx, tb, cb, stream))]
+    #[pyo3(signature = (function_name, args, ctx, tb, cb, env_vars, stream))]
     fn build_request_sync(
         &self,
         py: Python<'_>,
@@ -374,6 +385,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        env_vars: HashMap<String, String>,
         stream: bool,
     ) -> PyResult<HTTPRequest> {
         let Some(args) = parse_py_type(args, false)? else {
@@ -401,6 +413,7 @@ impl BamlRuntime {
                 type_builder.as_ref(),
                 client_registry.as_ref(),
                 stream,
+                env_vars,
             )
         });
 
@@ -409,7 +422,7 @@ impl BamlRuntime {
             .map_err(BamlError::from_anyhow)
     }
 
-    #[pyo3(signature = (function_name, llm_response, enum_module, cls_module, partial_cls_module, allow_partials, ctx, tb, cb))]
+    #[pyo3(signature = (function_name, llm_response, enum_module, cls_module, partial_cls_module, allow_partials, ctx, tb, cb, env_vars ))]
     fn parse_llm_response(
         &self,
         py: Python<'_>,
@@ -422,6 +435,7 @@ impl BamlRuntime {
         ctx: &RuntimeContextManager,
         tb: Option<&TypeBuilder>,
         cb: Option<&ClientRegistry>,
+        env_vars: HashMap<String, String>,
     ) -> PyResult<PyObject> {
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
@@ -441,6 +455,7 @@ impl BamlRuntime {
                 &ctx_mng,
                 tb.as_ref(),
                 cb.as_ref(),
+                env_vars,
             )
             .map_err(BamlError::from_anyhow)?;
 

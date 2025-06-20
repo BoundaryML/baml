@@ -1,13 +1,14 @@
-import { b, b_sync } from './test-setup';
-import { BamlRuntime, Collector, FunctionLog, Usage } from '@boundaryml/baml';
+import { traceAsync } from "../baml_client/tracing";
+import { b, b_sync } from "./test-setup";
+import { BamlRuntime, Collector, FunctionLog, Usage } from "@boundaryml/baml";
 
 async function gc() {
   global.gc!();
   // allows node to run finalizers
-  await new Promise(resolve => setTimeout(resolve, 0));
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
-describe('Collector Tests', () => {
+describe("Collector Tests", () => {
   beforeEach(() => {
     // Ensure collector is empty before each test
     expect(Collector.__functionSpanCount()).toBe(0);
@@ -19,10 +20,8 @@ describe('Collector Tests', () => {
     expect(Collector.__functionSpanCount()).toBe(0);
   });
 
-
-
-  it('should collect logs for non-streaming calls', async () => {
-    console.log("### function_span_count", Collector.__functionSpanCount());
+  it("should collect logs for non-streaming calls", async () => {
+    console.log("### function_call_count", Collector.__functionSpanCount());
     // Should be garbage collected
     expect(Collector.__functionSpanCount()).toBe(0);
 
@@ -31,7 +30,6 @@ describe('Collector Tests', () => {
     expect(functionLogs.length).toBe(0);
 
     await b.TestOpenAIGPT4oMini("hi there", { collector });
-
 
     const updatedLogs = collector.logs;
     expect(updatedLogs.length).toBe(1);
@@ -66,7 +64,7 @@ describe('Collector Tests', () => {
 
     const body = request?.body.json();
 
-    expect(typeof body).toBe('object');
+    expect(typeof body).toBe("object");
     expect(body.messages).toBeDefined();
     expect(body.messages[0].content).not.toBeNull();
     expect(body.model).toBe("gpt-4o-mini");
@@ -112,8 +110,7 @@ describe('Collector Tests', () => {
     expect(Collector.__functionSpanCount()).toBeGreaterThan(0);
   });
 
-
-  it('should handle streaming calls correctly', async () => {
+  it("should handle streaming calls correctly", async () => {
     const collector = new Collector("my-collector");
     const functionLogs = collector.logs;
     expect(functionLogs.length).toBe(0);
@@ -157,7 +154,7 @@ describe('Collector Tests', () => {
     // Verify request
     const request = call.httpRequest;
     expect(request).not.toBeNull();
-    expect(typeof request?.body).toBe('object');
+    expect(typeof request?.body).toBe("object");
     expect((request?.body.json()).messages).toBeDefined();
 
     // For streaming, httpResponse might be null since it's streaming
@@ -183,7 +180,7 @@ describe('Collector Tests', () => {
     expect(Collector.__functionSpanCount()).toBeGreaterThan(0);
   });
 
-  it('should track cumulative usage across multiple calls', async () => {
+  it("should track cumulative usage across multiple calls", async () => {
     const collector = new Collector("my-collector");
 
     // First call
@@ -203,13 +200,16 @@ describe('Collector Tests', () => {
 
     // Capture usage after second call and verify it's the sum of both calls
     const secondCallUsage = updatedLogs[1].usage;
-    const totalInput = (firstCallUsage?.inputTokens ?? 0) + (secondCallUsage?.inputTokens ?? 0);
-    const totalOutput = (firstCallUsage?.outputTokens ?? 0) + (secondCallUsage?.outputTokens ?? 0);
+    const totalInput =
+      (firstCallUsage?.inputTokens ?? 0) + (secondCallUsage?.inputTokens ?? 0);
+    const totalOutput =
+      (firstCallUsage?.outputTokens ?? 0) +
+      (secondCallUsage?.outputTokens ?? 0);
     expect(collector.usage.inputTokens).toBe(totalInput);
     expect(collector.usage.outputTokens).toBe(totalOutput);
   });
 
-  it('should support multiple collectors', async () => {
+  it("should support multiple collectors", async () => {
     const coll1 = new Collector("collector-1");
     const coll2 = new Collector("collector-2");
 
@@ -226,8 +226,12 @@ describe('Collector Tests', () => {
     const usageFirstCallColl2 = logs2[0].usage;
 
     // Verify both collectors have the exact same usage for the first call
-    expect(usageFirstCallColl1.inputTokens).toBe(usageFirstCallColl2.inputTokens);
-    expect(usageFirstCallColl1.outputTokens).toBe(usageFirstCallColl2.outputTokens);
+    expect(usageFirstCallColl1.inputTokens).toBe(
+      usageFirstCallColl2.inputTokens,
+    );
+    expect(usageFirstCallColl1.outputTokens).toBe(
+      usageFirstCallColl2.outputTokens,
+    );
 
     // Also check that the collector-level usage matches the single call usage for each collector
     expect(coll1.usage.inputTokens).toBe(usageFirstCallColl1.inputTokens);
@@ -246,8 +250,12 @@ describe('Collector Tests', () => {
 
     // Verify coll1 usage is now the sum of both calls
     const usageSecondCallColl1 = updatedLogs1[1].usage;
-    const totalInput = (usageFirstCallColl1?.inputTokens ?? 0) + (usageSecondCallColl1?.inputTokens ?? 0);
-    const totalOutput = (usageFirstCallColl1?.outputTokens ?? 0) + (usageSecondCallColl1?.outputTokens ?? 0);
+    const totalInput =
+      (usageFirstCallColl1?.inputTokens ?? 0) +
+      (usageSecondCallColl1?.inputTokens ?? 0);
+    const totalOutput =
+      (usageFirstCallColl1?.outputTokens ?? 0) +
+      (usageSecondCallColl1?.outputTokens ?? 0);
     expect(coll1.usage.inputTokens).toBe(totalInput);
     expect(coll1.usage.outputTokens).toBe(totalOutput);
 
@@ -256,13 +264,13 @@ describe('Collector Tests', () => {
     expect(coll2.usage.outputTokens).toBe(usageFirstCallColl2.outputTokens);
   });
 
-  it('should handle parallel async calls correctly', async () => {
+  it("should handle parallel async calls correctly", async () => {
     const collector = new Collector("parallel-collector");
 
     // Execute two calls in parallel
     await Promise.all([
       b.TestOpenAIGPT4oMini("call #1", { collector }),
-      b.TestOpenAIGPT4oMini("call #2", { collector })
+      b.TestOpenAIGPT4oMini("call #2", { collector }),
     ]);
     console.log("------------------------- ended parallel calls");
 
@@ -284,13 +292,15 @@ describe('Collector Tests', () => {
     expect(usageCall2).not.toBeNull();
 
     // Verify that total collector usage equals the sum of the two logs
-    const totalInput = (usageCall1?.inputTokens ?? 0) + (usageCall2?.inputTokens ?? 0);
-    const totalOutput = (usageCall1?.outputTokens ?? 0) + (usageCall2?.outputTokens ?? 0);
+    const totalInput =
+      (usageCall1?.inputTokens ?? 0) + (usageCall2?.inputTokens ?? 0);
+    const totalOutput =
+      (usageCall1?.outputTokens ?? 0) + (usageCall2?.outputTokens ?? 0);
     expect(collector.usage.inputTokens).toBe(totalInput);
     expect(collector.usage.outputTokens).toBe(totalOutput);
   });
 
-  it('should handle sync calls correctly', async () => {
+  it("should handle sync calls correctly", async () => {
     const collector = new Collector("sync-collector");
     const result = b_sync.TestOpenAIGPT4oMini("sync call", { collector });
 
@@ -301,5 +311,23 @@ describe('Collector Tests', () => {
     expect(logs[0].usage).not.toBeNull();
   });
 
+  it("should handle multiple async calls with nested gathers", async () => {
+    const collector = new Collector("my-collector");
+    console.log("blabla");
 
+    async function gatherBatch2() {
+      await traceAsync("traceAsyncparent", () =>
+        b.TestOpenAIGPT4oMini("hi there", { collector }),
+      )();
+    }
+
+    async function gatherBatch1() {
+      return await Promise.all([gatherBatch2()]);
+    }
+
+    await gatherBatch1();
+
+    // expect(collector.usage.inputTokens).toBeGreaterThan(0);
+    // expect(collector.usage.outputTokens).toBeGreaterThan(0);
+  });
 });

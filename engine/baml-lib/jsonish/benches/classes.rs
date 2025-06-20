@@ -6,7 +6,7 @@ use baml_types::FieldType;
 pub fn bench_complex_classes(c: &mut Criterion) {
     let mut group = c.benchmark_group("complex_classes");
     
-    let target = FieldType::Class("Book".to_string());
+    let target = FieldType::class("Book");
     let of = Builder::new(target.clone()).build();
     
     group.bench_function("full_book", |b| b.iter(|| from_str(

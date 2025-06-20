@@ -2,13 +2,13 @@ use std::collections::HashMap;
 
 use crate::{
     internal::llm_client::{
-        traits::{StreamResponse, WithClient},
+        traits::{HttpContext, StreamResponse, WithClient},
         ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
     },
     RuntimeContext,
 };
 use anyhow::{Context, Result};
-use baml_types::{tracing::events::HttpRequestId, BamlMap};
+use baml_types::BamlMap;
 use eventsource_stream::Eventsource;
 use futures::{StreamExt, TryStreamExt};
 use internal_baml_jinja::RenderedChatMessage;
@@ -31,23 +31,14 @@ pub async fn make_stream_request(
     prompt: either::Either<&String, &[RenderedChatMessage]>,
     model_name: Option<String>,
     response_type: ResponseType,
-    runtime_context: &RuntimeContext,
-    http_request_id: HttpRequestId,
+    runtime_context: &impl HttpContext,
 ) -> StreamResponse {
-    let (request_id, start_time_system, start_time_instant, built_req) =
-        build_and_log_outbound_request(
-            client,
-            prompt,
-            true,
-            true,
-            runtime_context,
-            http_request_id,
-        )
-        .await?;
+    let (start_time_system, start_time_instant, built_req) =
+        build_and_log_outbound_request(client, prompt, true, true, runtime_context).await?;
+
     let resp = match execute_request(
         client,
         built_req,
-        request_id,
         prompt,
         start_time_system,
         start_time_instant,

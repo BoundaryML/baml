@@ -46,7 +46,7 @@ pub(crate) fn parse_named_argument_list(
                 Rule::identifier => {
                     name = Some(parse_identifier(arg, diagnostics));
                 }
-                Rule::colon => {}
+                Rule::COLON => {}
                 Rule::field_type | Rule::field_type_chain => {
                     match parse_function_arg(arg, diagnostics) {
                         Ok(t) => r#type = Some(t),

@@ -1,3 +1,4 @@
+use baml_derive::BamlHash;
 use ouroboros::self_referencing;
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::hash::Hash;
@@ -83,7 +84,10 @@ pub(super) fn resolve_type_aliases(ctx: &mut Context<'_>) {
 
     // Resolve type aliases.
     // Cycles are already computed so this should not stack overflow.
-    for alias_id in ctx.types.type_alias_dependencies.keys() {
+    let mut aliases = ctx.types.type_alias_dependencies.keys().collect::<Vec<_>>();
+    aliases.sort_by_cached_key(|id| ctx.ast[**id].name().to_string());
+    
+    for alias_id in aliases {
         // We can ignore the error here because it's already reported in the
         // diagnostics at [`visit_type_alias`].
         if let Ok(resolved) = resolve_type_alias(&ctx.ast[*alias_id].value, &ctx) {
@@ -217,7 +221,7 @@ pub struct RetryPolicy {
     pub options: Option<IndexMap<String, (Span, UnresolvedValue<Span>)>>,
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[derive(Debug, Clone, Copy, serde::Serialize, Hash)]
 /// The strategy to use for retrying a request.
 pub enum RetryPolicyStrategy {
     /// Constant delay.
@@ -226,18 +230,19 @@ pub enum RetryPolicyStrategy {
     ExponentialBackoff(ExponentialBackoffStrategy),
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[derive(Debug, Clone, Copy, serde::Serialize, Hash)]
 /// The strategy to use for retrying a request.
 pub struct ContantDelayStrategy {
     /// The delay in milliseconds.
     pub delay_ms: u32,
 }
 
-#[derive(Debug, Clone, Copy, serde::Serialize)]
+#[derive(Debug, Clone, Copy, serde::Serialize, BamlHash)]
 /// The strategy to use for retrying a request.
 pub struct ExponentialBackoffStrategy {
     /// The delay in milliseconds.
     pub delay_ms: u32,
+    #[baml_safe_hash]
     /// The multiplier.
     pub multiplier: f32,
     /// The maximum delay in milliseconds.

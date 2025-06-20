@@ -23,6 +23,10 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
     ) -> Result<()> {
         tracing::info!("Did save text document---------");
         let url = params.text_document.uri;
+        if !url.to_string().contains("baml_src") {
+            return Ok(());
+        }
+
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;

@@ -7,7 +7,7 @@ use crate::ast::Span;
 use bstd::dedent;
 use std::fmt;
 
-use super::{ArgumentsList, Identifier, WithName, WithSpan};
+use super::{app::App, ArgumentsList, Identifier, WithName, WithSpan};
 use baml_types::JinjaExpression;
 
 #[derive(Debug, Clone)]
@@ -113,11 +113,24 @@ pub enum Expression {
     Lambda(ArgumentsList, Box<ExpressionBlock>, Span),
     /// Function Application
     /// TODO: Function should be an Expression, not an Identifier.
-    FnApp(Identifier, Vec<Expression>, Span),
+    App(App),
     /// A class constructor, e.g. `MyClass { x = 1, y = 2 }`.
     ClassConstructor(ClassConstructor, Span),
     /// An expression block, e.g. `{ let x = 1; x + 2 }`.
     ExprBlock(ExpressionBlock, Span),
+    /// An if expression, e.g. `if x == 1 { "one" } else { "not one" }`.
+    If(
+        Box<Expression>,
+        Box<Expression>,
+        Option<Box<Expression>>,
+        Span,
+    ),
+    ForLoop {
+        identifier: Identifier,
+        iterator: Box<Expression>,
+        body: ExpressionBlock,
+        span: Span,
+    },
 }
 
 impl fmt::Display for Expression {
@@ -164,9 +177,9 @@ impl fmt::Display for Expression {
             Expression::Lambda(args, body, _span) => {
                 write!(f, "{} => {}", args, body)
             }
-            Expression::FnApp(name, args, _span) => {
-                write!(f, "{name}(")?;
-                for arg in args {
+            Expression::App(app) => {
+                write!(f, "{}(", app.name)?;
+                for arg in &app.args {
                     write!(f, "{arg},")?; // TODO: Drop the comma for the last argument.
                 }
                 write!(f, ")")?;
@@ -179,6 +192,18 @@ impl fmt::Display for Expression {
                 }
                 write!(f, "{}", block.expr)?;
                 write!(f, "}}")
+            }
+            Expression::If(cond, then, else_, _span) => match else_ {
+                Some(else_) => write!(f, "if {cond} {{ {then} }} else {{ {else_} }}"),
+                None => write!(f, "if {cond} {{ {then} }}"),
+            },
+            Expression::ForLoop {
+                identifier,
+                iterator,
+                body,
+                ..
+            } => {
+                write!(f, "for ({identifier} in {iterator}) {{ {body} }}")
             }
         }
     }
@@ -212,6 +237,7 @@ impl Expression {
             }
         }
     }
+
     pub fn as_array(&self) -> Option<(&[Expression], &Span)> {
         match self {
             Expression::Array(arr, span) => Some((arr, span)),
@@ -291,8 +317,10 @@ impl Expression {
             Self::Array(_, span) => span,
             Self::ClassConstructor(_, span) => span,
             Self::Lambda(_, _, span) => span,
-            Self::FnApp(_, _, span) => span,
+            Self::App(app) => app.span(),
             Self::ExprBlock(_, span) => span,
+            Self::If(_, _, _, span) => span,
+            Self::ForLoop { span, .. } => span,
         }
     }
 
@@ -319,8 +347,10 @@ impl Expression {
             Expression::Array(_, _) => "array",
             Expression::ClassConstructor(cc, _) => cc.class_name.name(),
             Expression::Lambda(_, _, _) => "function",
-            Expression::FnApp(_, _, _) => "function_application",
+            Expression::App(_) => "function_application",
             Expression::ExprBlock(_, _) => "expression_block",
+            Expression::If(_, _, _, _) => "if_expression",
+            Expression::ForLoop { .. } => "for_loop",
         }
     }
 
@@ -387,14 +417,20 @@ impl Expression {
                 body1.assert_eq_up_to_span(body2);
             }
             (Lambda(_, _, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
-            (FnApp(name1, args1, _), FnApp(name2, args2, _)) => {
-                name1.assert_eq_up_to_span(name2);
-                assert_eq!(args1.len(), args2.len());
-                for (arg1, arg2) in args1.iter().zip(args2.iter()) {
+            (App(app1), App(app2)) => {
+                app1.name.assert_eq_up_to_span(&app2.name);
+
+                assert_eq!(app1.type_args.len(), app2.type_args.len());
+                for (type_arg1, type_arg2) in app1.type_args.iter().zip(app2.type_args.iter()) {
+                    type_arg1.assert_eq_up_to_span(type_arg2);
+                }
+
+                assert_eq!(app1.args.len(), app2.args.len());
+                for (arg1, arg2) in app1.args.iter().zip(app2.args.iter()) {
                     arg1.assert_eq_up_to_span(arg2);
                 }
             }
-            (FnApp(_, _, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (App(_), _) => panic!("Types do not match: {self:?} and {other:?}"),
             (ExprBlock(block1, _), ExprBlock(block2, _)) => {
                 for (stmt1, stmt2) in block1.stmts.iter().zip(block2.stmts.iter()) {
                     stmt1.assert_eq_up_to_span(stmt2);
@@ -402,6 +438,33 @@ impl Expression {
                 block1.expr.assert_eq_up_to_span(&block2.expr);
             }
             (ExprBlock(_, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (If(cond1, then1, else1, _), If(cond2, then2, else2, _)) => {
+                cond1.assert_eq_up_to_span(cond2);
+                then1.assert_eq_up_to_span(then2);
+                if let (Some(else1), Some(else2)) = (else1, else2) {
+                    else1.assert_eq_up_to_span(else2);
+                }
+            }
+            (If(_, _, _, _), _) => panic!("Types do not match: {self:?} and {other:?}"),
+            (
+                ForLoop {
+                    identifier: id1,
+                    iterator: it1,
+                    body: d1,
+                    ..
+                },
+                ForLoop {
+                    identifier: id2,
+                    iterator: it2,
+                    body: d2,
+                    ..
+                },
+            ) => {
+                id1.assert_eq_up_to_span(&id2);
+                it1.assert_eq_up_to_span(&it2);
+                d1.assert_eq_up_to_span(&d2);
+            }
+            (ForLoop { .. }, _) => panic!("Types do not match: {self:?} and {other:?}"),
         }
     }
 
@@ -490,8 +553,10 @@ impl Expression {
                 ))
             }
             Expression::Lambda(_arg_names, _body, _span) => todo!(),
-            Expression::FnApp(_, _, _) => None,  // Is this right?
+            Expression::App(_) => None,          // Is this right?
             Expression::ExprBlock(_, _) => None, // Is this right?
+            Expression::If(_, _, _, _) => None,
+            Expression::ForLoop { .. } => None,
         }
     }
 }
@@ -515,9 +580,7 @@ impl ClassConstructor {
         self.fields
             .iter()
             .zip(other.fields.iter())
-            .for_each(|(a, b)| {
-                a.assert_eq_up_to_span(b);
-            });
+            .for_each(|(a, b)| a.assert_eq_up_to_span(b));
     }
 }
 

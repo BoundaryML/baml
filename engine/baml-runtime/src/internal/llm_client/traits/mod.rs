@@ -14,10 +14,7 @@ pub use self::{
 use super::{primitive::request::RequestBuilder, LLMResponse, ModelFeatures};
 use crate::{internal::llm_client::ResolveMediaUrls, RenderCurlSettings};
 use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
-use baml_types::{
-    tracing::events::HttpRequestId, BamlMedia, BamlMediaContent, BamlMediaType, BamlValue,
-    MediaBase64, MediaUrl,
-};
+use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue, MediaBase64, MediaUrl};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use futures::stream::StreamExt;
 use infer;
@@ -27,6 +24,11 @@ use internal_baml_jinja::{RenderContext_Client, RenderedPrompt};
 
 use shell_escape::escape;
 use std::borrow::Cow;
+
+pub trait HttpContext {
+    fn http_request_id(&self) -> &baml_ids::HttpRequestId;
+    fn runtime_context(&self) -> &RuntimeContext;
+}
 
 // #[enum_dispatch]
 
@@ -46,12 +48,7 @@ pub trait WithClientProperties {
 
 pub trait WithSingleCallable {
     #[allow(async_fn_in_trait)]
-    async fn single_call(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-        http_request_id: HttpRequestId,
-    ) -> LLMResponse;
+    async fn single_call(&self, ctx: &impl HttpContext, prompt: &RenderedPrompt) -> LLMResponse;
 }
 
 pub trait WithClient {
@@ -164,24 +161,19 @@ where
     T: WithClient + WithChat + WithCompletion + WithClientProperties,
 {
     #[allow(async_fn_in_trait)]
-    async fn single_call(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-        http_request_id: HttpRequestId,
-    ) -> LLMResponse {
+    async fn single_call(&self, ctx: &impl HttpContext, prompt: &RenderedPrompt) -> LLMResponse {
         match prompt {
             RenderedPrompt::Chat(chat) => match process_media_urls(
                 self.model_features().resolve_audio_urls,
                 self.model_features().resolve_image_urls,
                 true,
                 None,
-                ctx,
+                ctx.runtime_context(),
                 chat,
             )
             .await
             {
-                Ok(messages) => self.chat(ctx, &messages, http_request_id).await,
+                Ok(messages) => self.chat(ctx, &messages).await,
                 Err(e) => LLMResponse::InternalFailure(format!("Error occurred:\n\n{:?}", e)),
             },
 
@@ -359,12 +351,7 @@ pub type StreamResponse =
 pub trait WithStreamable {
     /// Retries are not supported for streaming calls.
     #[allow(async_fn_in_trait)]
-    async fn stream(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-        http_request_id: HttpRequestId,
-    ) -> StreamResponse;
+    async fn stream(&self, ctx: &impl HttpContext, prompt: &RenderedPrompt) -> StreamResponse;
 }
 
 impl<T> WithStreamable for T
@@ -377,12 +364,7 @@ where
         + WithCompletion,
 {
     #[allow(async_fn_in_trait)]
-    async fn stream(
-        &self,
-        ctx: &RuntimeContext,
-        prompt: &RenderedPrompt,
-        http_request_id: HttpRequestId,
-    ) -> StreamResponse {
+    async fn stream(&self, ctx: &impl HttpContext, prompt: &RenderedPrompt) -> StreamResponse {
         let prompt = {
             if let RenderedPrompt::Chat(ref chat) = prompt {
                 match process_media_urls(
@@ -390,7 +372,7 @@ where
                     self.model_features().resolve_image_urls,
                     true,
                     None,
-                    ctx,
+                    ctx.runtime_context(),
                     chat,
                 )
                 .await
@@ -411,9 +393,9 @@ where
         match prompt {
             RenderedPrompt::Chat(p) => {
                 if self.supports_streaming() {
-                    self.stream_chat(ctx, p, http_request_id).await
+                    self.stream_chat(ctx, p).await
                 } else {
-                    let res = self.chat(ctx, p, http_request_id).await;
+                    let res = self.chat(ctx, p).await;
                     Ok(Box::pin(futures::stream::once(async move { res })))
                 }
             }

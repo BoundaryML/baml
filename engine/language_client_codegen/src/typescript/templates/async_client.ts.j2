@@ -20,6 +20,7 @@ type BamlCallOptions = {
   tb?: TypeBuilder
   clientRegistry?: ClientRegistry
   collector?: Collector | Collector[]
+  env?: Record<string, string | undefined>
 }
 
 export class BamlAsyncClient {
@@ -77,6 +78,7 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
       const raw = await this.runtime.callFunction(
         "{{fn.name}}",
         {
@@ -88,6 +90,7 @@ export class BamlAsyncClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        env,
       )
       return raw.parsed(false) as {{fn.return_type}}
     } catch (error) {
@@ -105,7 +108,7 @@ class BamlStreamClient {
   constructor(runtime: BamlRuntime, ctxManager: BamlCtxManager, bamlOptions?: BamlCallOptions) {
     this.runtime = runtime
     this.ctxManager = ctxManager
-    this.bamlOptions = bamlOptions || {}
+    this.bamlOptions = bamlOptions || { env: { ...process.env } }
   }
 
   {% for fn in funcs %}
@@ -113,11 +116,12 @@ class BamlStreamClient {
       {% for (name, optional, type) in fn.args -%}
       {{name}}{% if optional %}?{% endif %}: {{type}},
       {%- endfor %}
-      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[] }
+      __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
   ): BamlStream<{{ fn.partial_return_type }}, {{ fn.return_type }}> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
+      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
       const raw = this.runtime.streamFunction(
         "{{fn.name}}",
         {
@@ -130,6 +134,7 @@ class BamlStreamClient {
         options.tb?.__tb(),
         options.clientRegistry,
         collector,
+        env,
       )
       return new BamlStream<{{ fn.partial_return_type }}, {{ fn.return_type }}>(
         raw,

@@ -3,20 +3,18 @@ use super::{
     parse_identifier::parse_identifier,
     Rule,
 };
-use crate::ast::ArgumentsList;
-use crate::parser::{
-    parse_expression::parse_expression, parse_identifier,
-    parse_named_args_list::parse_named_argument_list,
-};
 use crate::{
     assert_correct_parser,
-    ast::{expr::ExprFn, ExpressionBlock, *},
-    parser::parse_arguments::parse_arguments_list,
+    ast::{
+        self, expr::ExprFn, App, ArgumentsList, Expression, ExpressionBlock, Stmt,
+        TopLevelAssignment, *,
+    },
+    parser::{
+        parse_arguments::parse_arguments_list, parse_expression::parse_expression,
+        parse_field::parse_field_type_chain, parse_identifier,
+        parse_named_args_list::parse_named_argument_list, parse_types::parse_field_type,
+    },
     unreachable_rule,
-};
-use crate::{
-    ast::{self, Expression, Stmt, TopLevelAssignment},
-    parser::{parse_field::parse_field_type_chain, parse_types::parse_field_type},
 };
 use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
@@ -37,7 +35,7 @@ pub fn parse_expr_fn(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<e
         (Some(return_type), function_body)
     } else {
         diagnostics.push_error(DatamodelError::new_static(
-            "fn must have a return type: e.g. fn Foo() -> int",
+            "function must have a return type: e.g. function Foo() -> int",
             span.clone(),
         ));
         let function_body = parse_function_body(arrow_or_body, diagnostics);
@@ -80,12 +78,12 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
     let maybe_body = match rhs.as_rule() {
         Rule::expr_block => {
             let block_span = diagnostics.span(rhs.as_span());
-            eprintln!("parsing expr_block");
+            // eprintln!("parsing expr_block");
             let maybe_expr_block = parse_expr_block(rhs, diagnostics);
             maybe_expr_block.map(|expr_block| Expression::ExprBlock(expr_block, block_span))
         }
         Rule::expression => {
-            eprintln!("parsing expr");
+            // eprintln!("parsing expr");
             let maybe_expr = parse_expression(rhs, diagnostics);
             maybe_expr
         }
@@ -162,19 +160,61 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
     })
 }
 
+fn parse_fn_args(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Vec<Expression> {
+    assert_correct_parser!(token, Rule::fn_args);
+
+    token
+        .into_inner()
+        .filter_map(|item| parse_expression(item, diagnostics))
+        .collect()
+}
+
 pub fn parse_fn_app(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
     assert_correct_parser!(token, Rule::fn_app);
+
     let span = diagnostics.span(token.as_span());
     let mut tokens = token.into_inner();
+
     let fn_name = parse_identifier(tokens.next()?, diagnostics);
-    let mut args = Vec::new();
-    for item in tokens {
-        let maybe_arg = parse_expression(item, diagnostics);
-        if let Some(arg) = maybe_arg {
-            args.push(arg);
-        }
-    }
-    Some(Expression::FnApp(fn_name, args, span))
+
+    let args = parse_fn_args(tokens.next()?, diagnostics);
+
+    Some(Expression::App(App {
+        name: fn_name,
+        type_args: vec![],
+        args,
+        span,
+    }))
+}
+
+/// Parse function application with generic type arguments.
+///
+/// Grammar rules for this one are a little bit more complicated than for
+/// normal functions so can't reuse parse_fn_app easily.
+pub fn parse_generic_fn_app(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
+    assert_correct_parser!(token, Rule::generic_fn_app);
+
+    let span = diagnostics.span(token.as_span());
+    let mut tokens = token.into_inner();
+
+    // Grab name from generic_fn_app_identifier rule.
+    let fn_name = parse_identifier(tokens.next()?.into_inner().next()?, diagnostics);
+
+    // Move into generic_fn_app_args rule.
+    tokens = tokens.next()?.into_inner();
+
+    // Parse type argument. Only one for now.
+    let type_arg = parse_field_type_chain(tokens.next()?, diagnostics)?;
+
+    // Parse arguments.
+    let args = parse_fn_args(tokens.next()?, diagnostics);
+
+    Some(Expression::App(App {
+        name: fn_name,
+        type_args: vec![type_arg],
+        args,
+        span,
+    }))
 }
 
 pub fn parse_lambda(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
@@ -194,4 +234,34 @@ pub fn parse_function_body(
     diagnostics: &mut Diagnostics,
 ) -> Option<ExpressionBlock> {
     parse_expr_block(token, diagnostics)
+}
+
+pub fn parse_if_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
+    assert_correct_parser!(token, Rule::if_expression);
+    let span = diagnostics.span(token.as_span());
+    let mut tokens = token.into_inner();
+    let condition = parse_expression(tokens.next()?, diagnostics)?;
+    let then_branch = parse_expression(tokens.next()?, diagnostics)?;
+    let else_branch = parse_expression(tokens.next()?, diagnostics);
+    Some(Expression::If(
+        Box::new(condition),
+        Box::new(then_branch),
+        else_branch.map(Box::new),
+        span,
+    ))
+}
+
+pub fn parse_for_loop(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<Expression> {
+    assert_correct_parser!(token, Rule::for_loop);
+    let span = diagnostics.span(token.as_span());
+    let mut tokens = token.into_inner();
+    let identifier = parse_identifier(tokens.next()?, diagnostics);
+    let iterator = parse_expression(tokens.next()?, diagnostics)?;
+    let body = parse_expr_block(tokens.next()?, diagnostics)?;
+    Some(Expression::ForLoop {
+        identifier,
+        iterator: Box::new(iterator),
+        body,
+        span,
+    })
 }

@@ -92,8 +92,9 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'ir crate::GeneratorArgs)> for RubyCl
                     .map(|c| {
                         let (_function, _impl_) = c.item;
                         let return_type = f.elem().output();
-                        let done = ir.distribute_metadata(&return_type).1 .1.done;
-                        let state = ir.distribute_metadata(&return_type).1 .1.state;
+                        let metadata = return_type.meta();
+                        let done = metadata.streaming_behavior.done;
+                        let state = metadata.streaming_behavior.state;
                         let partial_return_type = match (done, state) {
                             (false, false) => return_type.to_partial_type_ref(ir, true),
                             (true, false) => format!("T.nilable({})", return_type.to_type_ref()),

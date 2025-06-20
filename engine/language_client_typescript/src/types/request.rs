@@ -17,44 +17,41 @@ crate::lang_wrapper!(HTTPBody, baml_types::tracing::events::HTTPBody, clone_safe
 impl HTTPRequest {
     #[napi(getter)]
     pub fn id(&self) -> String {
-        self.inner.id.to_string()
+        self.inner.id().to_string()
     }
 
     #[napi(getter)]
     pub fn body(&self) -> HTTPBody {
         // TODO: Avoid clone.
-        HTTPBody::from(self.inner.body.clone())
+        HTTPBody::from(self.inner.body().clone())
     }
 
     #[napi]
     pub fn to_string(&self) -> String {
         format!(
             "HTTPRequest(url={}, method={}, headers={}, body={})",
-            self.inner.url,
-            self.inner.method,
-            serde_json::to_string_pretty(&self.inner.headers).unwrap(),
-            serde_json::to_string_pretty(&self.inner.body.as_serde_value()).unwrap()
+            self.inner.url(),
+            self.inner.method(),
+            serde_json::to_string_pretty(&self.inner.headers()).unwrap(),
+            serde_json::to_string_pretty(&self.inner.body().as_serde_value()).unwrap()
         )
     }
 
     #[napi(getter)]
     pub fn url(&self) -> String {
-        self.inner.url.clone()
+        self.inner.url().to_string()
     }
 
     #[napi(getter)]
     pub fn method(&self) -> String {
-        self.inner.method.clone()
+        self.inner.method().to_string()
     }
 
     #[napi(getter)]
     pub fn headers(&self, env: Env) -> napi::Result<JsObject> {
         let mut obj = env.create_object()?;
-        if let Some(headers) = self.inner.headers.as_object() {
-            for (k, v) in headers {
-                let js_value = serde_value_to_js(env, v)?;
-                obj.set_named_property(k, js_value)?;
-            }
+        for (k, v) in self.inner.headers() {
+            obj.set_named_property(k, v)?;
         }
         Ok(obj)
     }

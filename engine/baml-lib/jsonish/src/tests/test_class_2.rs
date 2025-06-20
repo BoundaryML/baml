@@ -1,4 +1,4 @@
-use baml_types::FieldType;
+use baml_types::{FieldType};
 
 use super::*;
 
@@ -46,7 +46,7 @@ test_deserializer!(
       route: /
 }  
   "#,
-  FieldType::Class("PageTask".to_string()),
+  FieldType::class("PageTask"),
   {
     "type": "page",
     "name": "HomePage",
@@ -69,9 +69,9 @@ test_deserializer!(
     }
   ]"#,
   FieldType::union(vec![
-    FieldType::Class("ServerActionTask".to_string()),
-    FieldType::Class("PageTask".to_string()),
-    FieldType::Class("ComponentTask".to_string()),
+    FieldType::class("ServerActionTask"),
+    FieldType::class("PageTask"),
+    FieldType::class("ComponentTask"),
   ]).as_list(),
   [
     {
@@ -101,9 +101,9 @@ test_deserializer!(
     }
   ]"#,
   FieldType::union(vec![
-    FieldType::Class("ServerActionTask".to_string()),
-    FieldType::Class("PageTask".to_string()),
-    FieldType::Class("ComponentTask".to_string()),
+    FieldType::class("ServerActionTask"),
+    FieldType::class("PageTask"),
+    FieldType::class("ComponentTask"),
   ]).as_list(),
   [
     {
@@ -147,9 +147,9 @@ test_deserializer!(
     }
   ]"#,
   FieldType::union(vec![
-    FieldType::Class("ServerActionTask".to_string()),
-    FieldType::Class("PageTask".to_string()),
-    FieldType::Class("ComponentTask".to_string()),
+    FieldType::class("ServerActionTask"),
+    FieldType::class("PageTask"),
+    FieldType::class("ComponentTask"),
   ]).as_list(),
   [
     {
@@ -207,9 +207,9 @@ test_deserializer!(
     }
   ]"#,
   FieldType::union(vec![
-    FieldType::Class("ServerActionTask".to_string()),
-    FieldType::Class("PageTask".to_string()),
-    FieldType::Class("ComponentTask".to_string()),
+    FieldType::class("ServerActionTask"),
+    FieldType::class("PageTask"),
+    FieldType::class("ComponentTask"),
   ]).as_list(),
   [
     {
@@ -416,9 +416,9 @@ Actions:
 ]
   "###,
   FieldType::union(vec![
-    FieldType::Class("ServerActionTask".to_string()),
-    FieldType::Class("PageTask".to_string()),
-    FieldType::Class("ComponentTask".to_string()),
+    FieldType::class("ServerActionTask"),
+    FieldType::class("PageTask"),
+    FieldType::class("ComponentTask"),
   ]).as_list(),
   [
     {

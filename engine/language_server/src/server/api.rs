@@ -134,6 +134,10 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                         .map_err(|e| anyhow::anyhow!("Failed to parse JSON: {e}"))?;
                     let url = Url::parse(&params.project_id)
                         .map_err(|e| anyhow::anyhow!("Failed to parse URL: {e}"))?;
+                    if !url.to_string().contains("baml_src") {
+                        return Ok(());
+                    }
+
                     let project = session
                         .get_or_create_project(&url.to_file_path().unwrap())
                         .expect("Already checked for project's existence");

@@ -15,22 +15,20 @@ module Baml
   #   end
   # end
 
-  module StreamState
-    class StreamState < T::Struct
-      extend T::Sig
+  class StreamState < T::Struct
+    extend T::Sig
 
-      extend T::Generic
+    extend T::Generic
 
-      Value = type_member
+    Value = type_member
 
-      const :value, Value
-      const :state, Symbol
+    const :value, Value
+    const :state, Symbol
 
-      def initialize(props)
-        super(value: props[:value], state: props[:state])
-      end
-
+    def initialize(props)
+      super(value: props[:value], state: props[:state])
     end
+
   end
 
   class BamlStream

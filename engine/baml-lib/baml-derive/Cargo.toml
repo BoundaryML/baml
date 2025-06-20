@@ -1,0 +1,16 @@
+[package]
+edition = "2021"
+name = "baml-derive"
+version.workspace = true
+authors.workspace = true
+license-file.workspace = true
+description = "Derive macros for BAML"
+
+
+[lib]
+proc-macro = true
+
+[dependencies]
+quote = "1"
+syn = { version = "2", features = ["full"] }
+proc-macro2 = "1"

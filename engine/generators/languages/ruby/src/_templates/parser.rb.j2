@@ -1,0 +1,42 @@
+import typing
+import typing_extensions
+import baml_py
+
+from . import stream_types, types
+from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
+
+class LlmResponseParser:
+    __options: DoNotUseDirectlyCallManager
+
+    def __init__(self, options: DoNotUseDirectlyCallManager):
+        self.__options = options
+
+    {% for func in functions -%}
+    def {{ func.name }}(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> {{func.return_type.serialize_type(pkg)}}:
+        {% if let Some(docstring) = func.documentation -%}
+        {{crate::utils::prefix_lines(docstring, "# ")}}
+        {% endif -%}
+        result = self.__options.merge_options(baml_options).parse_response(function_name="{{ func.name }}", llm_response=llm_response, mode="request")
+        return typing.cast({{func.return_type.serialize_type(pkg)}}, result)
+
+    {% endfor %}
+
+class LlmStreamParser:
+    __options: DoNotUseDirectlyCallManager
+
+    def __init__(self, options: DoNotUseDirectlyCallManager):
+        self.__options = options
+
+    {% for func in functions -%}
+    def {{ func.name }}(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> {{func.stream_return_type.serialize_type(pkg)}}:
+        {% if let Some(docstring) = func.documentation -%}
+        {{crate::utils::prefix_lines(docstring, "# ")}}
+        {% endif -%}
+        result = self.__options.merge_options(baml_options).parse_response(function_name="{{ func.name }}", llm_response=llm_response, mode="stream")
+        return typing.cast({{func.stream_return_type.serialize_type(pkg)}}, result)
+
+    {% endfor %}

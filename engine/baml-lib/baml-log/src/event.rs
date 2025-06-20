@@ -6,7 +6,7 @@
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// use baml_log::event;
 /// use baml_log::Level;
 /// use serde::Serialize;

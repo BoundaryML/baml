@@ -1,5 +1,5 @@
 import { useAtom, useAtomValue } from 'jotai'
-import { ctxAtom, runtimeAtom } from '../../atoms'
+import { ctxAtom, envVarsAtom, runtimeAtom } from '../../atoms'
 import { selectionAtom } from '../atoms'
 import useSWR from 'swr'
 import { Loader } from './components'
@@ -14,6 +14,7 @@ type CurlResult = string | undefined | Error
 const baseCurlAtom = atom<Promise<CurlResult>>(async (get) => {
   const rt = get(runtimeAtom).rt
   const ctx = get(ctxAtom)
+  const envVars = get(envVarsAtom)
   const { selectedFn, selectedTc } = get(selectionAtom)
 
   if (!selectedFn || !rt || !selectedTc || !ctx) {
@@ -21,7 +22,7 @@ const baseCurlAtom = atom<Promise<CurlResult>>(async (get) => {
   }
 
   try {
-    return await selectedFn.render_raw_curl_for_test(rt, selectedTc.name, ctx, false, false, findMediaFile)
+    return await selectedFn.render_raw_curl_for_test(rt, selectedTc.name, ctx, false, false, findMediaFile, envVars)
   } catch (error) {
     return error as Error
   }

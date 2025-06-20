@@ -8,7 +8,6 @@ import "C"
 
 import (
 	"context"
-	"fmt"
 	"math/rand"
 	"sync"
 	"unsafe"
@@ -37,8 +36,8 @@ type ResultCallback struct {
 	Error         error
 	HasStreamData bool
 	HasData       bool
-	StreamData    *any
-	Data          *any
+	StreamData    any
+	Data          any
 }
 
 type CallbackData struct {
@@ -59,7 +58,6 @@ func SetTypeMap(t TypeMap) {
 
 //export error_callback
 func error_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.int) {
-	fmt.Println("Error callback")
 	callbackMutex.RLock()
 	id_uint := uint32(id)
 	callback, exists := dynamicCallbacks[id_uint]
@@ -100,9 +98,9 @@ func trigger_callback(id C.uint32_t, isDone C.int, content *C.int8_t, length C.i
 
 		var res ResultCallback
 		if isDone == 1 {
-			res = ResultCallback{HasData: true, Data: &decoded_data}
+			res = ResultCallback{HasData: true, Data: decoded_data}
 		} else {
-			res = ResultCallback{HasStreamData: true, StreamData: &decoded_data}
+			res = ResultCallback{HasStreamData: true, StreamData: decoded_data}
 		}
 
 		force_close := false

@@ -873,6 +873,56 @@ export function useAudioInput(
   return useBamlAction(action, props as HookInput)
 }
 /**
+ * A specialized hook for the AudioInputOpenai BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - aud: Audio
+ *
+ * - prompt: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useAudioInputOpenai({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useAudioInputOpenai({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useAudioInputOpenai(props: HookInput<'AudioInputOpenai', { stream: false }>): HookOutput<'AudioInputOpenai', { stream: false }>
+export function useAudioInputOpenai(props?: HookInput<'AudioInputOpenai', { stream?: true }>): HookOutput<'AudioInputOpenai', { stream: true }>
+export function useAudioInputOpenai(
+  props: HookInput<'AudioInputOpenai', { stream?: boolean }> = {},
+): HookOutput<'AudioInputOpenai', { stream: true }> | HookOutput<'AudioInputOpenai', { stream: false }> {
+  let action: ServerAction = Actions.AudioInputOpenai;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.AudioInputOpenai;
+  }
+  return useBamlAction(action, props as HookInput)
+}
+/**
  * A specialized hook for the BuildLinkedList BAML function that supports both streaming and non‑streaming responses.
  *
  * **Input Types:**
@@ -3527,6 +3577,54 @@ export function useJsonTypeAliasCycle(
   let action: ServerAction = Actions.JsonTypeAliasCycle;
   if (isStreamingProps(props)) {
     action = StreamingActions.JsonTypeAliasCycle;
+  }
+  return useBamlAction(action, props as HookInput)
+}
+/**
+ * A specialized hook for the LLMEcho BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useLLMEcho({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useLLMEcho({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useLLMEcho(props: HookInput<'LLMEcho', { stream: false }>): HookOutput<'LLMEcho', { stream: false }>
+export function useLLMEcho(props?: HookInput<'LLMEcho', { stream?: true }>): HookOutput<'LLMEcho', { stream: true }>
+export function useLLMEcho(
+  props: HookInput<'LLMEcho', { stream?: boolean }> = {},
+): HookOutput<'LLMEcho', { stream: true }> | HookOutput<'LLMEcho', { stream: false }> {
+  let action: ServerAction = Actions.LLMEcho;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.LLMEcho;
   }
   return useBamlAction(action, props as HookInput)
 }
@@ -7939,6 +8037,102 @@ export function useTestOpenAIGPT4oMini(
   let action: ServerAction = Actions.TestOpenAIGPT4oMini;
   if (isStreamingProps(props)) {
     action = StreamingActions.TestOpenAIGPT4oMini;
+  }
+  return useBamlAction(action, props as HookInput)
+}
+/**
+ * A specialized hook for the TestOpenAIGPT4oMini2 BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestOpenAIGPT4oMini2({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestOpenAIGPT4oMini2({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestOpenAIGPT4oMini2(props: HookInput<'TestOpenAIGPT4oMini2', { stream: false }>): HookOutput<'TestOpenAIGPT4oMini2', { stream: false }>
+export function useTestOpenAIGPT4oMini2(props?: HookInput<'TestOpenAIGPT4oMini2', { stream?: true }>): HookOutput<'TestOpenAIGPT4oMini2', { stream: true }>
+export function useTestOpenAIGPT4oMini2(
+  props: HookInput<'TestOpenAIGPT4oMini2', { stream?: boolean }> = {},
+): HookOutput<'TestOpenAIGPT4oMini2', { stream: true }> | HookOutput<'TestOpenAIGPT4oMini2', { stream: false }> {
+  let action: ServerAction = Actions.TestOpenAIGPT4oMini2;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestOpenAIGPT4oMini2;
+  }
+  return useBamlAction(action, props as HookInput)
+}
+/**
+ * A specialized hook for the TestOpenAIGPT4oMini3 BAML function that supports both streaming and non‑streaming responses.
+ *
+ * **Input Types:**
+ *
+ * - input: string
+ *
+ *
+ * **Return Type:**
+ * - **Non‑streaming:** string
+ * - **Streaming Partial:** string
+ * - **Streaming Final:** string
+ *
+ * **Usage Patterns:**
+ * 1. **Non‑streaming (Default)**
+ *    - Best for quick responses and simple UI updates.
+ * 2. **Streaming**
+ *    - Ideal for long‑running operations or real‑time feedback.
+ *
+ * **Edge Cases:**
+ * - Ensure robust error handling via `onError`.
+ * - Handle cases where partial data may be incomplete or missing.
+ *
+ * @example
+ * ```tsx
+ * // Basic non‑streaming usage:
+ * const { data, error, isLoading, mutate } = useTestOpenAIGPT4oMini3({ stream: false});
+ *
+ * // Streaming usage:
+ * const { data, streamData, isLoading, error, mutate } = useTestOpenAIGPT4oMini3({
+ *   stream: true | undefined,
+ *   onStreamData: (partial) => console.log('Partial update:', partial),
+ *   onFinalData: (final) => console.log('Final result:', final),
+ *   onError: (err) => console.error('Error:', err),
+ * });
+ * ```
+ */
+export function useTestOpenAIGPT4oMini3(props: HookInput<'TestOpenAIGPT4oMini3', { stream: false }>): HookOutput<'TestOpenAIGPT4oMini3', { stream: false }>
+export function useTestOpenAIGPT4oMini3(props?: HookInput<'TestOpenAIGPT4oMini3', { stream?: true }>): HookOutput<'TestOpenAIGPT4oMini3', { stream: true }>
+export function useTestOpenAIGPT4oMini3(
+  props: HookInput<'TestOpenAIGPT4oMini3', { stream?: boolean }> = {},
+): HookOutput<'TestOpenAIGPT4oMini3', { stream: true }> | HookOutput<'TestOpenAIGPT4oMini3', { stream: false }> {
+  let action: ServerAction = Actions.TestOpenAIGPT4oMini3;
+  if (isStreamingProps(props)) {
+    action = StreamingActions.TestOpenAIGPT4oMini3;
   }
   return useBamlAction(action, props as HookInput)
 }

@@ -1,4 +1,5 @@
 mod ir_features;
+mod publisher;
 pub(crate) mod runtime_interface;
 
 use anyhow::Result;
@@ -6,6 +7,8 @@ use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
+
+pub(super) use publisher::AstSignatureWrapper;
 
 cfg_if::cfg_if!(
     if #[cfg(target_arch = "wasm32")] {
@@ -25,13 +28,33 @@ use std::sync::Arc;
 
 use crate::internal::llm_client::{llm_provider::LLMProvider, retry_policy::CallablePolicy};
 
+// A cached client contains provider and other related stuff(env vars, etc)
+// This exists because we want to avoid creating a new provider for every request
+// Add more fields here which are cache-specific to avoid percolating them inside the provider
+#[derive(Clone)]
+pub struct CachedClient {
+    pub provider: Arc<LLMProvider>,
+    pub env_vars: HashMap<String, String>,
+} 
+
+impl CachedClient {
+    pub fn new(provider: Arc<LLMProvider>, env_vars: HashMap<String, String>) -> Self {
+        Self { provider, env_vars }
+    }
+
+    pub fn has_env_vars_changed(&self, new_env_vars: &HashMap<String, String>) -> bool {
+        self.env_vars.iter().any(|(k, v)| new_env_vars.get(k).map_or(false, |v2| v2 != v))
+    }
+}
+
 #[derive(Clone)]
 pub struct InternalBamlRuntime {
     pub ir: Arc<IntermediateRepr>,
     pub db: ParserDatabase,
     pub diagnostics: Diagnostics,
-    clients: DashMap<String, Arc<LLMProvider>>,
+    clients: DashMap<String, CachedClient>,
     retry_policies: DashMap<String, CallablePolicy>,
+    source_files: Vec<SourceFile>,
 }
 
 impl InternalBamlRuntime {
@@ -48,7 +71,7 @@ impl InternalBamlRuntime {
                 )))
             })
             .collect::<Result<Vec<_>>>()?;
-        let mut schema = validate(&PathBuf::from(directory), contents);
+        let mut schema = validate(&PathBuf::from(directory), contents.clone());
         schema.diagnostics.to_result()?;
 
         let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
@@ -58,11 +81,12 @@ impl InternalBamlRuntime {
             diagnostics: schema.diagnostics,
             clients: Default::default(),
             retry_policies: Default::default(),
+            source_files: contents,
         })
     }
 
     pub(super) fn from_files(directory: &Path, files: Vec<PathBuf>) -> Result<Self> {
-        let contents = files
+        let contents: Vec<SourceFile> = files
             .iter()
             .map(|path| match std::fs::read_to_string(path) {
                 Ok(contents) => Ok(SourceFile::from((path.clone(), contents))),
@@ -70,7 +94,7 @@ impl InternalBamlRuntime {
             })
             .filter_map(|res| res.ok())
             .collect();
-        let mut schema = validate(directory, contents);
+        let mut schema = validate(directory, contents.clone());
         schema.diagnostics.to_result()?;
 
         let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
@@ -81,6 +105,7 @@ impl InternalBamlRuntime {
             diagnostics: schema.diagnostics,
             clients: Default::default(),
             retry_policies: Default::default(),
+            source_files: contents,
         })
     }
 }

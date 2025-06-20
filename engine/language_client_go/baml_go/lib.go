@@ -33,7 +33,7 @@ import (
 import "C"
 
 const (
-	VERSION            = "0.87.2"
+	VERSION            = "0.90.1"
 	githubRepo         = "boundaryml/baml"
 	bamlCacheDirEnvVar = "BAML_CACHE_DIR"
 	bamlLibraryPathEnv = "BAML_LIBRARY_PATH"
@@ -143,6 +143,7 @@ func initializeBaml() error {
 		lib.registerFn("register_callbacks")
 		lib.registerFn("call_function_from_c")
 		lib.registerFn("call_function_stream_from_c")
+		lib.registerFn("call_collector_function")
 	}()
 
 	if symbolLookupErr != nil {
@@ -186,6 +187,8 @@ func (l *library) registerFn(fnName string) {
 		C.SetCallFunctionFromCFn(fnPtr)
 	case "call_function_stream_from_c":
 		C.SetCallFunctionStreamFromCFn(fnPtr)
+	case "call_collector_function":
+		C.SetCallCollectorFunctionFn(fnPtr)
 	default:
 		panic(fmt.Sprintf("internal error: attempted to register unknown function '%s'", fnName))
 	}

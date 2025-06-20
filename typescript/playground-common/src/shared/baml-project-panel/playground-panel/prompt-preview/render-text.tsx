@@ -49,15 +49,43 @@ export const RenderPromptPart: React.FC<{
 
     try {
       let result = text
+      // Store all matches and their replacements. We want to avoid replacing
+      // already replaced chunks. The regex below could match parts of the <mark>
+      // tag that we use to highlight the text, so we need to apply replacements
+      // once we know all their locations.
+      const replacements: { start: number; end: number; replacement: string }[] = []
+
       highlightChunks.forEach((chunk) => {
         if (!chunk) return
         if (chunk.length > 30000) return
         const regex = new RegExp(`(${chunk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`, 'g')
-        result = result.replace(
-          regex,
-          '<mark class="bg-yellow-100/70 text-yellow-900 dark:bg-yellow-800/30 dark:text-yellow-100 rounded-sm px-0.5">$1</mark>',
-        )
+        let match
+        while ((match = regex.exec(text)) !== null) {
+          const start = match.index
+          const end = start + match[0].length
+          // Check if this range overlaps with any existing replacement
+          const hasOverlap = replacements.some(
+            (r) => (start >= r.start && start < r.end) || (end > r.start && end <= r.end),
+          )
+
+          if (!hasOverlap) {
+            replacements.push({
+              start,
+              end,
+              replacement: `<mark class="bg-yellow-100/70 text-yellow-900 dark:bg-yellow-800/30 dark:text-yellow-100 rounded-sm px-0.5">${match[0]}</mark>`,
+            })
+          }
+        }
       })
+
+      // Sort replacements in reverse order to maintain correct indices
+      replacements.sort((a, b) => b.start - a.start)
+
+      // Apply all replacements
+      for (const { start, end, replacement } of replacements) {
+        result = result.slice(0, start) + replacement + result.slice(end)
+      }
+
       return result
     } catch (e) {
       console.error('Error highlighting text', e)
@@ -88,8 +116,9 @@ export const RenderPromptPart: React.FC<{
         </div>
       )}
       <ScrollArea className='relative flex-1 p-2 pb-6 bg-muted/50 dark:bg-slate-900' type='always'>
+        {/* This should match the ParsedResponseRenderer max-h- as well */}
         <pre
-          className={`whitespace-pre-wrap text-xs  ${isFullTextVisible ? 'max-h-fit' : 'max-h-64'}`}
+          className={`whitespace-pre-wrap text-xs  ${isFullTextVisible ? 'max-h-[500px]' : 'max-h-64'}`}
           dangerouslySetInnerHTML={{ __html: renderContent }}
         />
 

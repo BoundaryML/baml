@@ -9,7 +9,7 @@ macro_rules! assert_evaluates_to {
         let parsed = minijinja::machinery::parse(
             $expr,
             "prompt",
-            minijinja::machinery::SyntaxConfig::default(),
+            minijinja::syntax::SyntaxConfig::default(),
             // TODO: this is not entirely great, but good enough for this use case.
             Default::default(),
         );
@@ -30,7 +30,7 @@ macro_rules! assert_fails_to {
         let parsed = minijinja::machinery::parse(
             $expr,
             "prompt",
-            minijinja::machinery::SyntaxConfig::default(),
+            minijinja::syntax::SyntaxConfig::default(),
             // TODO: this is not entirely great, but good enough for this use case.
             Default::default(),
         );

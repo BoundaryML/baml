@@ -228,6 +228,27 @@ export const AudioInput = async (
 };
 
 /**
+ * Executes the "AudioInputOpenai" BAML action.
+ *
+ * This server action calls the underlying BAML function "AudioInputOpenai"
+ * with the specified parameters.
+ *
+ * @param { Audio } aud - Input parameter.
+ * @param { string } prompt - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const AudioInputOpenai = async (
+  aud: Audio,
+  prompt: string,
+): Promise<string> => {
+  return b.AudioInputOpenai(
+    aud,
+    prompt,
+  );
+};
+
+/**
  * Executes the "BuildLinkedList" BAML action.
  *
  * This server action calls the underlying BAML function "BuildLinkedList"
@@ -1240,6 +1261,24 @@ export const JsonTypeAliasCycle = async (
   input: JsonValue,
 ): Promise<JsonValue> => {
   return b.JsonTypeAliasCycle(
+    input,
+  );
+};
+
+/**
+ * Executes the "LLMEcho" BAML action.
+ *
+ * This server action calls the underlying BAML function "LLMEcho"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const LLMEcho = async (
+  input: string,
+): Promise<string> => {
+  return b.LLMEcho(
     input,
   );
 };
@@ -2890,6 +2929,42 @@ export const TestOpenAIGPT4oMini = async (
   input: string,
 ): Promise<string> => {
   return b.TestOpenAIGPT4oMini(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIGPT4oMini2" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIGPT4oMini2"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIGPT4oMini2 = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIGPT4oMini2(
+    input,
+  );
+};
+
+/**
+ * Executes the "TestOpenAIGPT4oMini3" BAML action.
+ *
+ * This server action calls the underlying BAML function "TestOpenAIGPT4oMini3"
+ * with the specified parameters.
+ *
+ * @param { string } input - Input parameter.
+ *
+ * @returns {Promise<string>} A promise that resolves with the result of the action.
+ */
+export const TestOpenAIGPT4oMini3 = async (
+  input: string,
+): Promise<string> => {
+  return b.TestOpenAIGPT4oMini3(
     input,
   );
 };

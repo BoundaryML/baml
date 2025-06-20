@@ -1,0 +1,63 @@
+name: Bug report
+description: Create a report to help us improve
+labels: ["bug"]
+body:
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: What happened?
+      description: A clear and concise description of what the bug is.
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant log output or stack trace
+      description: |
+        Please copy and paste any relevant log output.
+        Add the full stack trace if available.
+        If possible, run the failing task with `--stacktrace` flag.
+        
+        *This will be automatically formatted into code, so there is no need for backticks.*
+      render: shell
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: Steps to reproduce the behavior – provide your build configuration.
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: Gradle IntelliJ Plugin version
+      placeholder: 1.16.0
+    validations:
+      required: true
+
+  - type: input
+    id: gradle
+    attributes:
+      label: Gradle version
+      placeholder: 8.2.1
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating System
+      options:
+        - macOS
+        - Linux
+        - Windows
+
+  - type: input
+    id: url
+    attributes:
+      label: Link to build, i.e. failing GitHub Action job
+      placeholder: https://github.com/username/project/actions/runs/1234567890

@@ -69,3 +69,11 @@ function StreamingCompoundNumbers(digits: int, yapping: bool) -> CompoundBigNumb
     {{ctx.output_format}}
   "#
 }
+
+test StreamingCompoundNumbers {
+  functions [StreamingCompoundNumbers]
+  args {
+    digits 10
+    yapping true
+  }
+}

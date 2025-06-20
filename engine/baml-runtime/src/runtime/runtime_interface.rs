@@ -1,10 +1,11 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use super::InternalBamlRuntime;
 use crate::internal::llm_client::traits::WithClientProperties;
 use crate::internal::llm_client::LLMResponse;
+use crate::runtime::CachedClient;
 use crate::tracingv2::storage::storage::{Collector, BAML_TRACER};
 use crate::type_builder::TypeBuilder;
+use crate::InternalBamlRuntime;
 use crate::RuntimeContextManager;
 use crate::{
     client_registry::ClientProperty,
@@ -24,13 +25,10 @@ use crate::{
     runtime_interface::{InternalClientLookup, RuntimeConstructor},
     tracing::BamlTracer,
     FunctionResult, FunctionResultStream, InternalRuntimeInterface, RenderCurlSettings,
-    RuntimeContext, RuntimeInterface,
+    RuntimeContext,
 };
 use anyhow::{Context, Result};
-use baml_types::tracing::events::{
-    BamlOptions, ContentId, FunctionEnd, FunctionId, FunctionStart, TraceData, TraceEvent,
-    TraceLevel,
-};
+use baml_types::tracing::events::{FunctionEnd, FunctionStart, TraceData, TraceEvent};
 
 use baml_types::{BamlMap, BamlValue, Constraint, EvaluationContext};
 use internal_baml_core::ir::repr::{Node, TypeBuilderEntry};
@@ -45,6 +43,15 @@ use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
 
 impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
     // Gets a top-level client/strategy by name
+    // There are two types of clients:
+    // 1. Shorthand clients (e.g. `openai/gpt-4`)
+    // 2. Named clients (e.g. `my_custom_client`)
+    //
+    // For named clients, we first check if the client is cached in the RuntimeContext.
+    // If it is, we return the cached client.
+    // If it is not, we get the client from the IR and cache it.
+    //
+    // For shorthand clients, we parse the client spec and return a new LLMProvider.
     fn get_llm_provider(
         &'a self,
         client_spec: &ClientSpec,
@@ -76,17 +83,38 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                 #[cfg(not(target_arch = "wasm32"))]
                 let clients = &self.clients;
 
-                if let Some(client) = clients.get(client_name) {
-                    Ok(client.clone())
-                } else {
-                    let walker = self
-                        .ir()
-                        .find_client(client_name)
-                        .context(format!("Could not find client with name: {}", client_name))?;
-                    let client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
-                    clients.insert(client_name.into(), client.clone());
-                    Ok(client)
+                // if a client exists, check if the env vars have changed
+                if clients.contains_key(client_name) {
+                    // make sure to clone the client to avoid holding a lock, otherwise dashmap will deadlock!
+                    let client = clients.get(client_name).map(|c| c.clone()).unwrap();
+                    // if the env vars haven't changed, return the cached client
+                    if !client.has_env_vars_changed(ctx.env_vars()) {
+                        return Ok(client.provider.clone());
+                    } else {
+                        // if the env vars have changed, remove the client from the cache, and create a new one.
+                        clients.remove(client_name);
+                    }
                 }
+
+                // Either client doesn't exist or env vars have changed, anyway, create a new one.
+                let walker = self
+                    .ir()
+                    .find_client(client_name)
+                    .context(format!("Could not find client with name: {}", client_name))?;
+                // Get required env vars from the client walker
+                let new_client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
+                // Only store the required env vars
+                let filtered_env_vars = ctx
+                    .env_vars()
+                    .iter()
+                    .filter(|(k, _)| walker.required_env_vars().contains(*k))
+                    .map(|(k, v)| (k.clone(), v.clone()))
+                    .collect();
+                clients.insert(
+                    client_name.into(),
+                    CachedClient::new(new_client.clone(), filtered_env_vars),
+                );
+                Ok(new_client)
             }
         }
     }
@@ -152,7 +180,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         params: &BamlMap<String, BamlValue>,
         node_index: Option<usize>,
     ) -> Result<(RenderedPrompt, OrchestrationScope, AllowedRoleMetadata)> {
-        let func = self.get_function(function_name, ctx)?;
+        let func = self.get_function(function_name)?;
         let function_params = func.inputs();
         let baml_args = self.ir().check_function_params(
             &function_params,
@@ -180,6 +208,9 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
             ));
         }
 
+        // TODO: remove this clone, it's only here because we're being lazy about the type tree beneath render_prompt
+        let baml_args =
+            BamlValue::Map(baml_args.into_iter().map(|(k, v)| (k, v.value())).collect());
         let node = selected.swap_remove(node_index);
         return node
             .provider
@@ -196,7 +227,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         render_settings: RenderCurlSettings,
         node_index: Option<usize>,
     ) -> Result<String> {
-        let func = self.get_function(function_name, ctx)?;
+        let func = self.get_function(function_name)?;
 
         let renderer = PromptRenderer::from_function(&func, self.ir(), ctx)?;
 
@@ -222,11 +253,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
             .await
     }
 
-    fn get_function<'ir>(
-        &'ir self,
-        function_name: &str,
-        _ctx: &RuntimeContext,
-    ) -> Result<FunctionWalker<'ir>> {
+    fn get_function<'ir>(&'ir self, function_name: &str) -> Result<FunctionWalker<'ir>> {
         let walker = self.ir().find_function(function_name)?;
         Ok(walker)
     }
@@ -252,7 +279,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         ctx: &RuntimeContext,
         strict: bool,
     ) -> Result<BamlMap<String, BamlValue>> {
-        let maybe_test_and_params = self.get_function(function_name, ctx).and_then(|func| {
+        let maybe_test_and_params = self.get_function(function_name).and_then(|func| {
             let test = self.ir().find_test(&func, test_name)?;
             let test_case_params = test.test_case_params(&ctx.eval_ctx(strict))?;
             let inputs = func.inputs().clone();
@@ -294,17 +321,16 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
                     ));
                 }
 
-                let baml_args = self.ir().check_function_params(
-                    &function_params,
-                    &params,
-                    ArgCoercer {
-                        span_path: span.map(|s| s.file.path_buf().clone()),
-                        allow_implicit_cast_to_string: true,
-                    },
-                )?;
-                baml_args
-                    .as_map_owned()
-                    .context("Test params must be a map")
+                self.ir()
+                    .check_function_params(
+                        &function_params,
+                        &params,
+                        ArgCoercer {
+                            span_path: span.map(|s| s.file.path_buf().clone()),
+                            allow_implicit_cast_to_string: true,
+                        },
+                    )
+                    .map(|bv| bv.into_iter().map(|(k, v)| (k, v.value())).collect())
             }
             Err(e) => Err(anyhow::anyhow!("Unable to resolve test params: {:?}", e)),
         }
@@ -316,7 +342,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         test_name: &str,
         ctx: &RuntimeContext,
     ) -> Result<Vec<Constraint>> {
-        let func = self.get_function(function_name, ctx)?;
+        let func = self.get_function(function_name)?;
         let walker = self.ir().find_test(&func, test_name)?;
         Ok(walker.item.1.elem.constraints.clone())
     }
@@ -325,9 +351,8 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         &self,
         function_name: &str,
         test_name: &str,
-        ctx: &RuntimeContextManager,
     ) -> Result<Option<TypeBuilder>> {
-        let func = self.get_function(function_name, &ctx.create_ctx(None, None, None)?)?;
+        let func = self.get_function(function_name)?;
         let test = self.ir().find_test(&func, test_name)?;
 
         if test.type_builder_contents().is_empty() {
@@ -369,7 +394,7 @@ impl RuntimeConstructor for InternalBamlRuntime {
             })
             .collect::<Result<Vec<_>>>()?;
         let directory = PathBuf::from(root_path);
-        let mut schema = validate(&directory, contents);
+        let mut schema = validate(&directory, contents.clone());
         schema.diagnostics.to_result()?;
 
         let ir = IntermediateRepr::from_parser_database(&schema.db, schema.configuration)?;
@@ -382,215 +407,12 @@ impl RuntimeConstructor for InternalBamlRuntime {
             diagnostics: schema.diagnostics,
             clients: Default::default(),
             retry_policies: Default::default(),
+            source_files: contents,
         })
     }
 
     #[cfg(not(target_arch = "wasm32"))]
     fn from_directory(dir: &std::path::Path) -> Result<InternalBamlRuntime> {
         InternalBamlRuntime::from_files(dir, crate::baml_src_files(&dir.to_path_buf())?)
-    }
-}
-
-impl RuntimeInterface for InternalBamlRuntime {
-    async fn call_function_impl(
-        &self,
-        function_name: String,
-        params: &BamlMap<String, BamlValue>,
-        ctx: RuntimeContext,
-    ) -> Result<crate::FunctionResult> {
-        let local_span_id = ctx.span_id.clone();
-        let local_function_name = function_name.clone();
-
-        if let Some(span_id) = ctx.span_id {
-            let trace_event = TraceEvent {
-                span_id: FunctionId(span_id.to_string()),
-                event_id: ContentId(uuid::Uuid::new_v4().to_string()),
-                span_chain: vec![],
-                timestamp: web_time::SystemTime::now(),
-                callsite: function_name.clone(),
-                verbosity: TraceLevel::Info,
-                content: TraceData::FunctionStart(FunctionStart {
-                    name: function_name.clone(),
-                    // TODO:
-                    args: vec![],
-                    //  TODO!
-                    options: BamlOptions {
-                        type_builder: None,
-                        client_registry: None,
-                    },
-                }),
-                // TODO: send separately?
-                tags: Default::default(),
-            };
-            BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
-        } else {
-            log::warn!(
-                "No span id found for function while emitting logs: {}. Log event may be dropped.",
-                function_name
-            );
-        }
-
-        let func = match self.get_function(&function_name, &ctx) {
-            Ok(func) => func,
-            Err(e) => {
-            return Ok(FunctionResult::new(
-                OrchestrationScope::default(),
-                LLMResponse::UserFailure(format!(
-                    "BAML function {function_name} does not exist in baml_src/ (did you typo it?): {:?}",
-                    e
-                )),
-                None,
-            ))
-            }
-        };
-
-        let future = async {
-            let baml_args = self.ir().check_function_params(
-                &func.inputs(),
-                params,
-                ArgCoercer {
-                    span_path: None,
-                    allow_implicit_cast_to_string: false,
-                },
-            )?;
-
-            let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
-            let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
-
-            // Now actually execute the code.
-            let (history, _) =
-                orchestrate_call(orchestrator, self.ir(), &ctx, &renderer, &baml_args, |s| {
-                    renderer.parse(self.ir(), &ctx, s, false)
-                })
-                .await;
-
-            FunctionResult::new_chain(history)
-        };
-        let baml_args = self.ir().check_function_params(
-            func.inputs(),
-            params,
-            ArgCoercer {
-                span_path: None,
-                allow_implicit_cast_to_string: false,
-            },
-        )?;
-        let baml_args = match self.ir().check_function_params(
-            &func.inputs(),
-            &params,
-            ArgCoercer {
-                span_path: None,
-                allow_implicit_cast_to_string: false,
-            },
-        ) {
-            Ok(args) => args,
-            Err(e) => {
-                return Ok(FunctionResult::new(
-                    OrchestrationScope::default(),
-                    LLMResponse::UserFailure(format!(
-                        "Failed while validating args for {function_name}: {:?}",
-                        e
-                    )),
-                    None,
-                ))
-            }
-        };
-
-        let result = future.await;
-
-        let end_time = web_time::SystemTime::now();
-        if let Some(span_id) = ctx.span_id {
-            BAML_TRACER.lock().unwrap().put(Arc::new(TraceEvent {
-                span_id: FunctionId(span_id.to_string()),
-                event_id: ContentId(uuid::Uuid::new_v4().to_string()),
-                span_chain: vec![],
-                timestamp: end_time,
-                callsite: function_name.clone(),
-                verbosity: TraceLevel::Info,
-                content: TraceData::FunctionEnd(FunctionEnd {
-                    // TODO: add the result here
-                    result: Ok(baml_types::BamlValue::Null),
-                }),
-                tags: Default::default(),
-            }));
-        } else {
-            log::warn!(
-                "No span id found for function while emitting logs: {}. Log event may be dropped.",
-                function_name
-            );
-        }
-
-        result
-    }
-
-    // Note that this only returns a FunctionResultStream object,
-    // but does not actually start the stream.
-    // The stream is started when one calls functionResultStream.run()
-    fn stream_function_impl(
-        &self,
-        function_name: String,
-        params: &BamlMap<String, BamlValue>,
-        tracer: Arc<BamlTracer>,
-        ctx: RuntimeContext,
-        #[cfg(not(target_arch = "wasm32"))] tokio_runtime: Arc<tokio::runtime::Runtime>,
-        collectors: Vec<Arc<Collector>>,
-    ) -> Result<FunctionResultStream> {
-        let is_expr_fn = self.get_expr_function(&function_name, &ctx).is_ok();
-        if is_expr_fn {
-            let func = self.get_expr_function(&function_name, &ctx)?;
-            let renderer = PromptRenderer::mk_fake();
-            let orchestrator = vec![];
-            let baml_args = self
-                .ir
-                .check_function_params(
-                    &func.inputs(),
-                    params,
-                    ArgCoercer {
-                        span_path: None,
-                        allow_implicit_cast_to_string: false,
-                    },
-                )?
-                .as_map_owned()
-                .ok_or(anyhow::anyhow!("Failed to check function params."))?;
-            Ok(FunctionResultStream {
-                function_name,
-                ir: self.ir.clone(),
-                params: baml_args,
-                orchestrator,
-                tracer,
-                renderer,
-                #[cfg(not(target_arch = "wasm32"))]
-                tokio_runtime,
-                collectors,
-            })
-        } else {
-            let func = self.get_function(&function_name, &ctx)?;
-            let renderer = PromptRenderer::from_function(&func, self.ir(), &ctx)?;
-            let orchestrator = self.orchestration_graph(renderer.client_spec(), &ctx)?;
-            let Some(baml_args) = self
-                .ir
-                .check_function_params(
-                    &func.inputs(),
-                    params,
-                    ArgCoercer {
-                        span_path: None,
-                        allow_implicit_cast_to_string: false,
-                    },
-                )?
-                .as_map_owned()
-            else {
-                anyhow::bail!("Expected parameters to be a map for: {}", function_name);
-            };
-            Ok(FunctionResultStream {
-                function_name,
-                ir: self.ir.clone(),
-                params: baml_args,
-                orchestrator,
-                tracer,
-                renderer,
-                #[cfg(not(target_arch = "wasm32"))]
-                tokio_runtime,
-                collectors,
-            })
-        }
     }
 }

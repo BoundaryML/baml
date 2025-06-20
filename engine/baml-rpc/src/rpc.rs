@@ -14,8 +14,9 @@ pub trait GetEndpoint {
 
 /// Trait for POST endpoints that have an associated request body and response.
 pub trait ApiEndpoint {
-    type Request: Serialize;
-    type Response: DeserializeOwned;
+    type Request<'a>: Serialize;
+    type Response<'a>: DeserializeOwned;
+
     const PATH: &'static str;
 
     /// Returns the endpoint path (e.g., "/users/42").

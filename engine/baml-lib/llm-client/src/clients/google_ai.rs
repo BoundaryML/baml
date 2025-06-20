@@ -6,21 +6,24 @@ use crate::{
 };
 use anyhow::Result;
 
+use baml_derive::BamlHash;
 use baml_types::{ApiKeyWithProvenance, EvaluationContext, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlHash)]
 pub struct UnresolvedGoogleAI<Meta> {
     api_key: StringOr,
     base_url: UnresolvedUrl,
+    #[baml_safe_hash]
     headers: IndexMap<String, StringOr>,
     role_selection: UnresolvedRolesSelection,
     model: Option<StringOr>,
     allowed_metadata: UnresolvedAllowedRoleMetadata,
     supported_request_modes: SupportedRequestModes,
     finish_reason_filter: UnresolvedFinishReasonFilter,
+    #[baml_safe_hash]
     properties: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
 }
 

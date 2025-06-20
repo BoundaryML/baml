@@ -1,76 +1,135 @@
-use std::fmt;
-use std::sync::Arc;
-
-use crate::BamlValue;
 use anyhow::Result;
-use serde::{Deserialize, Serialize, Serializer};
+use std::{collections::HashMap, sync::Arc};
 
-// TODO: use a prefixed UUID type for this
-type SpanId = String;
+use crate::{BamlMap, BamlMedia, BamlValueWithMeta, HasFieldType};
+use baml_ids::{FunctionCallId, FunctionEventId, HttpRequestId};
+use serde::{Deserialize, Serialize};
 
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub struct FunctionId(pub SpanId);
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub struct ContentId(pub SpanId);
-
-#[derive(Clone, PartialEq, Eq, Hash, Debug, Serialize, Deserialize)]
-pub struct HttpRequestId(pub SpanId);
-
-impl fmt::Display for HttpRequestId {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.0)
-    }
-}
+pub use super::errors::BamlError;
 
 pub type TraceTags = serde_json::Map<String, serde_json::Value>;
 
 // THESE ARE NOT CLONEABLE!!
-#[derive(Debug, Serialize, Deserialize)]
-pub struct TraceEvent {
+#[derive(Debug)]
+pub struct TraceEvent<'a, T: HasFieldType> {
     /*
-     * (span_id, content_span_id) is a unique identifier for a log event
-     * The query (span_id, *) gets all logs for a function call
+     * (call_id, function_event_id) is a unique identifier for a log event
+     * The query (call_id, *) gets all logs for a function call
      */
-    pub span_id: FunctionId,
+    pub call_id: FunctionCallId,
     // a unique identifier for this particular content
-    pub event_id: ContentId,
+    pub function_event_id: FunctionEventId,
 
     // The content of the log
-    pub content: TraceData,
+    pub content: TraceData<'a, T>,
 
-    // The chain of spans that lead to this log event
-    // Includes span_id at the last position (content_span_id is not included)
-    pub span_chain: Vec<FunctionId>,
+    // The chain of calls that lead to this log event
+    // Includes call_id at the last position (function_event_id is not included)
+    pub call_stack: Vec<FunctionCallId>,
 
     // The timestamp of the log
-    // idk what this does yet #[serde(with = "timestamp_serde")]
-    #[serde(with = "timestamp_serde")]
     pub timestamp: web_time::SystemTime,
-
-    /// human-readable callsite identifier, e.g. "ExtractResume" or "openai/gpt-4o/chat"
-    pub callsite: String,
-
-    /// verbosity level
-    #[serde(with = "level_serde")]
-    pub verbosity: TraceLevel,
-
-    pub tags: TraceTags,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-#[serde(tag = "type", content = "data")]
-pub enum TraceData {
-    LogMessage {
-        msg: String,
-    },
+impl<'a, T: HasFieldType> TraceEvent<'a, T> {
+    fn from_existing_call(
+        call_stack: Vec<FunctionCallId>,
+        content: TraceData<'a, T>,
+    ) -> Result<Self> {
+        let Some(last_call_id) = call_stack.last() else {
+            return Err(anyhow::anyhow!("Call stack is empty"));
+        };
+        Ok(Self {
+            call_id: last_call_id.clone(),
+            function_event_id: FunctionEventId::new(),
+            content,
+            call_stack,
+            timestamp: web_time::SystemTime::now(),
+        })
+    }
+
+    pub fn new_set_tags(call_stack: Vec<FunctionCallId>, tags: TraceTags) -> Self {
+        Self::from_existing_call(call_stack, TraceData::SetTags(tags))
+            .expect("Failed to create set tags event")
+    }
+
+    pub fn new_function_start(
+        // Already has the new call_id of the function
+        call_stack: Vec<FunctionCallId>,
+        function_name: String,
+        args: Vec<(String, BamlValueWithMeta<T>)>,
+        options: EvaluationContext,
+        function_type: FunctionType,
+        is_stream: bool,
+    ) -> Self {
+        Self::from_existing_call(
+            call_stack,
+            TraceData::FunctionStart(FunctionStart {
+                name: function_name,
+                is_stream,
+                args,
+                options,
+                function_type,
+            }),
+        )
+        .expect("Failed to create function start event")
+    }
+
+    pub fn new_function_end(
+        call_stack: Vec<FunctionCallId>,
+        result: Result<BamlValueWithMeta<T>, BamlError<'a>>,
+    ) -> Self {
+        Self::from_existing_call(
+            call_stack,
+            TraceData::FunctionEnd(match result {
+                Ok(value) => FunctionEnd::Success(value),
+                Err(e) => FunctionEnd::Error(e),
+            }),
+        )
+        .expect("Failed to create function end event")
+    }
+
+    pub fn new_llm_request(
+        call_stack: Vec<FunctionCallId>,
+        request: Arc<LoggedLLMRequest>,
+    ) -> Self {
+        Self::from_existing_call(call_stack, TraceData::LLMRequest(request))
+            .expect("Failed to create LLM request event")
+    }
+
+    pub fn new_llm_response(
+        call_stack: Vec<FunctionCallId>,
+        response: Arc<LoggedLLMResponse>,
+    ) -> Self {
+        Self::from_existing_call(call_stack, TraceData::LLMResponse(response))
+            .expect("Failed to create LLM response event")
+    }
+
+    pub fn new_raw_llm_request(call_stack: Vec<FunctionCallId>, request: Arc<HTTPRequest>) -> Self {
+        Self::from_existing_call(call_stack, TraceData::RawLLMRequest(request))
+            .expect("Failed to create raw LLM request event")
+    }
+
+    pub fn new_raw_llm_response(
+        call_stack: Vec<FunctionCallId>,
+        response: Arc<HTTPResponse>,
+    ) -> Self {
+        Self::from_existing_call(call_stack, TraceData::RawLLMResponse(response))
+            .expect("Failed to create raw LLM response event")
+    }
+}
+
+// DO NOT CLONE!
+#[derive(Debug)]
+pub enum TraceData<'a, T: HasFieldType> {
     // All functions, including non-LLM ones
     // All start events
-    FunctionStart(FunctionStart),
+    FunctionStart(FunctionStart<T>),
     // All end events
-    FunctionEnd(FunctionEnd),
+    FunctionEnd(FunctionEnd<'a, T>),
 
     // The rest are intermediate events that happen between start and end
+    SetTags(TraceTags),
 
     // LLM request
     LLMRequest(Arc<LoggedLLMRequest>),
@@ -85,42 +144,58 @@ pub enum TraceData {
     LLMResponse(Arc<LoggedLLMResponse>),
     // ----
 
-    // We don't want to store the parsed LLM response in the log event
-    // as we have it in FunctionEnd
-    #[serde(deserialize_with = "deserialize_ok", serialize_with = "serialize_ok")]
-    Parsed(Result<()>),
+    // In the future, we can send more metadata, like parsing information.
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct BamlOptions {
-    pub type_builder: Option<serde_json::Value>,
-    pub client_registry: Option<serde_json::Value>,
+impl<'a, T: HasFieldType> TraceData<'a, T> {
+    pub fn type_name(&self) -> &'static str {
+        match self {
+            Self::FunctionStart(_) => "FunctionStart",
+            Self::FunctionEnd(_) => "FunctionEnd",
+            Self::LLMRequest(_) => "LLMRequest",
+            Self::RawLLMRequest(_) => "RawLLMRequest",
+            Self::RawLLMResponse(_) => "RawLLMResponse",
+            Self::LLMResponse(_) => "LLMResponse",
+            Self::SetTags(_) => "SetTags",
+        }
+    }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct FunctionStart {
+#[derive(Debug, Serialize, Deserialize, Default)]
+pub struct EvaluationContext {
+    pub tags: TraceTags,
+    // TODO(hellovai): add this
+    // pub type_builder: Option<TypeBuilderValue>,
+    // pub client_registry: Option<ClientRegistryValue>,
+}
+
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum FunctionType {
+    BamlLlm,
+    // BamlExternal, // extern function in baml
+    // Baml // a function that is defined in baml, but not a baml llm function
+    Native, // python or TS function we are @tracing.
+}
+
+#[derive(Debug)]
+pub struct FunctionStart<T: HasFieldType> {
     pub name: String,
-    pub args: Vec<BamlValue>,
-    pub options: BamlOptions,
+    pub function_type: FunctionType,
+    pub is_stream: bool,
+    pub args: Vec<(String, BamlValueWithMeta<T>)>,
+    pub options: EvaluationContext,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
-pub struct FunctionEnd {
-    #[serde(deserialize_with = "deserialize_ok", serialize_with = "serialize_ok")]
-    pub result: Result<BamlValue, anyhow::Error>,
-    // Everything below is duplicated from the start event
-    // to deal with the case where the log is dropped.
-    // P2: as we can for now assume logs are not dropped,
-
-    // pub name: String,
-    // pub start_timestamp: web_time::Instant,
-    // pub start_args: Vec<BamlValue>,
+#[derive(Debug)]
+pub enum FunctionEnd<'a, T: HasFieldType> {
+    Success(BamlValueWithMeta<T>),
+    Error(BamlError<'a>),
 }
 
 // LLM specific events
 
 // TODO: fix this.
-pub type Prompt = serde_json::Value;
 
 // #[derive(Debug, Serialize, Deserialize)]
 // pub enum LLMClientName {
@@ -129,22 +204,52 @@ pub type Prompt = serde_json::Value;
 // }
 
 #[derive(Debug, Serialize, Deserialize)]
+pub struct LLMChatMessage {
+    pub role: String,
+    pub content: Vec<LLMChatMessagePart>,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+pub enum LLMChatMessagePart {
+    Text(String),
+    Media(BamlMedia),
+    WithMeta(Box<LLMChatMessagePart>, HashMap<String, serde_json::Value>),
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct LoggedLLMRequest {
     pub request_id: HttpRequestId,
     pub client_name: String,
     pub client_provider: String,
-    pub params: serde_json::Value,
-    pub prompt: Prompt,
+    pub params: BamlMap<String, serde_json::Value>,
+    pub prompt: Vec<LLMChatMessage>,
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone)]
 pub struct HTTPBody {
     raw: Vec<u8>,
 }
 
-// TODO: Cache parsed JSON and UTF-8 text in order to avoid parsing the bytes
-// on every access (not trivial because we'd need &mut self or interior
-// mutability).
+impl std::fmt::Debug for HTTPBody {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let preview = if self.raw.len() <= 100 {
+            // If small enough, show as UTF-8 text if possible
+            match std::str::from_utf8(&self.raw) {
+                Ok(text) => format!("\"{}\"", text.escape_debug()),
+                Err(_) => format!("{:?}", self.raw),
+            }
+        } else {
+            // For larger bodies, show length and preview
+            match std::str::from_utf8(&self.raw[..100.min(self.raw.len())]) {
+                Ok(text) => format!("\"{}...\" ({} bytes)", text.escape_debug(), self.raw.len()),
+                Err(_) => format!("[{} bytes]", self.raw.len()),
+            }
+        };
+
+        f.debug_struct("HTTPBody").field("raw", &preview).finish()
+    }
+}
+
 impl HTTPBody {
     pub fn new(body: Vec<u8>) -> Self {
         Self { raw: body }
@@ -181,14 +286,133 @@ impl HTTPBody {
     }
 }
 
+pub fn redact_headers(headers: HashMap<String, String>) -> HashMap<String, String> {
+    headers
+        .into_iter()
+        .map(|(key, value)| {
+            let key_lower = key.to_lowercase();
+            let sensitive_keywords = [
+                "authorization",
+                "cookie",
+                "set-cookie",
+                "key",
+                "secret",
+                "token",
+                "credential",
+                "session",
+                "auth",
+            ];
+
+            // tokens is usually for input and output tokens
+            if key_lower.contains("ratelimit") || key_lower.contains("tokens") {
+                (key, value)
+            } else if sensitive_keywords
+                .iter()
+                .any(|&keyword| key_lower.contains(keyword))
+            {
+                (key, "REDACTED".to_string())
+            } else {
+                (key, value)
+            }
+        })
+        .collect()
+}
+
+fn serialize_redacted_headers<S>(
+    headers: &HashMap<String, String>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let redacted = redact_headers(headers.clone());
+    redacted.serialize(serializer)
+}
+
+fn serialize_redacted_optional_headers<S>(
+    headers: &Option<HashMap<String, String>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match headers {
+        Some(h) => {
+            let redacted = redact_headers(h.clone());
+            Some(redacted).serialize(serializer)
+        }
+        None => None::<HashMap<String, String>>.serialize(serializer),
+    }
+}
+
+fn deserialize_headers<'de, D>(deserializer: D) -> Result<HashMap<String, String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    // When deserializing, we get the redacted version, but we treat it as the "original"
+    // since we can't recover the original values from redacted data
+    HashMap::<String, String>::deserialize(deserializer)
+}
+
+fn deserialize_optional_headers<'de, D>(
+    deserializer: D,
+) -> Result<Option<HashMap<String, String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    // When deserializing, we get the redacted version, but we treat it as the "original"
+    // since we can't recover the original values from redacted data
+    Option::<HashMap<String, String>>::deserialize(deserializer)
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HTTPRequest {
     // since LLM requests could be made in parallel, we need to match the response to the request
     pub id: HttpRequestId,
     pub url: String,
     pub method: String,
-    pub headers: serde_json::Value,
+    #[serde(serialize_with = "serialize_redacted_headers")]
+    #[serde(deserialize_with = "deserialize_headers")]
+    headers: HashMap<String, String>,
     pub body: HTTPBody,
+}
+
+impl HTTPRequest {
+    pub fn new(
+        id: HttpRequestId,
+        url: String,
+        method: String,
+        headers: HashMap<String, String>,
+        body: HTTPBody,
+    ) -> Self {
+        Self {
+            id,
+            url,
+            method,
+            headers,
+            body,
+        }
+    }
+
+    pub fn id(&self) -> &HttpRequestId {
+        &self.id
+    }
+
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    pub fn method(&self) -> &str {
+        &self.method
+    }
+
+    pub fn headers(&self) -> &HashMap<String, String> {
+        &self.headers
+    }
+
+    pub fn body(&self) -> &HTTPBody {
+        &self.body
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -196,14 +420,41 @@ pub struct HTTPResponse {
     // since LLM requests could be made in parallel, we need to match the response to the request
     pub request_id: HttpRequestId,
     pub status: u16,
-    pub headers: serde_json::Value,
+    #[serde(serialize_with = "serialize_redacted_optional_headers")]
+    #[serde(deserialize_with = "deserialize_optional_headers")]
+    headers: Option<HashMap<String, String>>,
     pub body: HTTPBody,
+}
+
+impl HTTPResponse {
+    pub fn new(
+        request_id: HttpRequestId,
+        status: u16,
+        headers: Option<HashMap<String, String>>,
+        body: HTTPBody,
+    ) -> Self {
+        Self {
+            request_id,
+            status,
+            headers,
+            body,
+        }
+    }
+
+    pub fn headers(&self) -> Option<&HashMap<String, String>> {
+        self.headers.as_ref()
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoggedLLMResponse {
     /// Since LLM requests could be made in parallel, we need to match the response to the request.
     pub request_id: HttpRequestId,
+
+    // List of the client stack used by the LLM function to get the response, e.g. if a roundrobin
+    // client "MyRoundrobin" wraps a fallback client "MyFallback" wraps an openai client "MyOpenai"
+    // then the client stack would be ["MyRoundrobin", "MyFallback", "MyOpenai"]
+    pub client_stack: Vec<String>,
 
     /// If available, fully qualified model name. None in failure cases or unknown state.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -226,6 +477,45 @@ pub struct LoggedLLMResponse {
     pub error_message: Option<String>,
 }
 
+impl LoggedLLMResponse {
+    pub fn new_success(
+        request_id: HttpRequestId,
+        model: String,
+        finish_reason: Option<String>,
+        usage: LLMUsage,
+        raw_text_output: String,
+        client_stack: Vec<String>,
+    ) -> Self {
+        Self {
+            request_id,
+            client_stack,
+            model: Some(model),
+            finish_reason,
+            usage: Some(usage),
+            raw_text_output: Some(raw_text_output),
+            error_message: None,
+        }
+    }
+
+    pub fn new_failure(
+        request_id: HttpRequestId,
+        error_message: String,
+        model: Option<String>,
+        finish_reason: Option<String>,
+        client_stack: Vec<String>,
+    ) -> Self {
+        Self {
+            request_id,
+            client_stack,
+            model,
+            finish_reason,
+            usage: None,
+            raw_text_output: None,
+            error_message: Some(error_message),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LLMUsage {
     pub input_tokens: Option<u64>,
@@ -233,114 +523,97 @@ pub struct LLMUsage {
     pub total_tokens: Option<u64>,
 }
 
-/// -------------------------------------------------------------------------
-///
-/// Helper deserializer for our Result types.
-///
-/// This assumes that the incoming JSON always represents the Ok variant.
-/// (If you need to support error variants, you will have to expand this logic.)
-///
-use serde::Deserializer;
-fn deserialize_ok<'de, D, T>(deserializer: D) -> Result<Result<T, anyhow::Error>, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    T::deserialize(deserializer).map(Ok)
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use baml_ids::HttpRequestId;
 
-fn serialize_ok<S, T>(value: &Result<T, anyhow::Error>, serializer: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-    T: Serialize,
-{
-    match value {
-        Ok(v) => v.serialize(serializer),
-        Err(err) => Err(serde::ser::Error::custom(format!("Error: {}", err))),
-    }
-}
+    #[test]
+    fn test_headers_redaction_in_serialization() {
+        let mut headers = HashMap::new();
+        headers.insert(
+            "authorization".to_string(),
+            "Bearer secret-token".to_string(),
+        );
+        headers.insert("content-type".to_string(), "application/json".to_string());
+        headers.insert("x-api-key".to_string(), "secret-key".to_string());
 
-mod timestamp_serde {
-    use serde::{Deserializer, Serializer};
-    use web_time::{Duration, SystemTime};
+        let request = HTTPRequest::new(
+            HttpRequestId::new(),
+            "https://api.example.com".to_string(),
+            "POST".to_string(),
+            headers.clone(),
+            HTTPBody::new(b"test body".to_vec()),
+        );
 
-    pub fn serialize<S>(time: &SystemTime, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        // Convert to duration since Unix epoch, then to i64 milliseconds
-        let dur = time
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .map_err(serde::ser::Error::custom)?;
-        let millis = dur.as_millis() as i64;
-        serializer.serialize_i64(millis)
-    }
+        // Test that .headers() returns original headers
+        let actual_headers = request.headers();
+        assert_eq!(
+            actual_headers.get("authorization"),
+            Some(&"Bearer secret-token".to_string())
+        );
+        assert_eq!(
+            actual_headers.get("content-type"),
+            Some(&"application/json".to_string())
+        );
+        assert_eq!(
+            actual_headers.get("x-api-key"),
+            Some(&"secret-key".to_string())
+        );
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<SystemTime, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        // Read the i64 milliseconds, convert back to SystemTime
-        let millis: i64 = serde::Deserialize::deserialize(deserializer)?;
-        Ok(SystemTime::UNIX_EPOCH + Duration::from_millis(millis as u64))
-    }
-}
+        // Test that serialization redacts sensitive headers
+        let serialized = serde_json::to_string(&request).unwrap();
+        assert!(serialized.contains("REDACTED"));
+        assert!(!serialized.contains("secret-token"));
+        assert!(!serialized.contains("secret-key"));
+        assert!(serialized.contains("application/json")); // non-sensitive header should remain
 
-// Add this helper module for tracing::Level serialization
-mod level_serde {
-    use super::TraceLevel;
-    use serde::{Deserializer, Serializer};
+        // Test deserialization works
+        let deserialized: HTTPRequest = serde_json::from_str(&serialized).unwrap();
 
-    pub fn serialize<S>(level: &TraceLevel, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_u32(*level as u32)
+        // After deserialization, we can't recover original values
+        assert_eq!(
+            deserialized.headers().get("authorization"),
+            Some(&"REDACTED".to_string())
+        );
+        assert_eq!(
+            deserialized.headers().get("x-api-key"),
+            Some(&"REDACTED".to_string())
+        );
+        assert_eq!(
+            deserialized.headers().get("content-type"),
+            Some(&"application/json".to_string())
+        );
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<TraceLevel, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let level_num: u32 = serde::Deserialize::deserialize(deserializer)?;
-        match level_num {
-            100 => Ok(TraceLevel::Trace),
-            200 => Ok(TraceLevel::Debug),
-            300 => Ok(TraceLevel::Info),
-            400 => Ok(TraceLevel::Warn),
-            500 => Ok(TraceLevel::Error),
-            600 => Ok(TraceLevel::Fatal),
-            _ => Err(serde::de::Error::custom(format!(
-                "Invalid trace level: {}",
-                level_num
-            ))),
-        }
-    }
-}
+    #[test]
+    fn test_response_headers_redaction_in_serialization() {
+        let mut headers = HashMap::new();
+        headers.insert("set-cookie".to_string(), "session=abc123".to_string());
+        headers.insert("content-length".to_string(), "100".to_string());
 
-// unused yet
-// use like this:
-//  #[serde(with = "level_serde")]
-//  pub verbosity: TraceLevel,
-#[repr(usize)]
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-pub enum TraceLevel {
-    Trace = 100,
-    Debug = 200,
-    Info = 300,
-    Warn = 400,
-    Error = 500,
-    Fatal = 600,
-}
+        let response = HTTPResponse::new(
+            HttpRequestId::new(),
+            200,
+            Some(headers.clone()),
+            HTTPBody::new(b"response body".to_vec()),
+        );
 
-impl Into<TraceLevel> for tracing_core::Level {
-    fn into(self) -> TraceLevel {
-        match self {
-            tracing_core::Level::TRACE => TraceLevel::Trace,
-            tracing_core::Level::DEBUG => TraceLevel::Debug,
-            tracing_core::Level::INFO => TraceLevel::Info,
-            tracing_core::Level::WARN => TraceLevel::Warn,
-            tracing_core::Level::ERROR => TraceLevel::Error,
-        }
+        // Test that .headers() returns original headers
+        let actual_headers = response.headers().unwrap();
+        assert_eq!(
+            actual_headers.get("set-cookie"),
+            Some(&"session=abc123".to_string())
+        );
+        assert_eq!(
+            actual_headers.get("content-length"),
+            Some(&"100".to_string())
+        );
+
+        // Test that serialization redacts sensitive headers
+        let serialized = serde_json::to_string(&response).unwrap();
+        assert!(serialized.contains("REDACTED"));
+        assert!(!serialized.contains("session=abc123"));
+        assert!(serialized.contains("100")); // non-sensitive header should remain
     }
 }

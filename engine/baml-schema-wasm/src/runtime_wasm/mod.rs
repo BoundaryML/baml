@@ -7,11 +7,11 @@ use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
 use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
 use baml_runtime::internal::prompt_renderer::PromptRenderer;
+use baml_runtime::internal_baml_diagnostics::SerializedSpan;
 use baml_runtime::BamlSrcReader;
 use baml_runtime::FunctionResult;
 use baml_runtime::InternalRuntimeInterface;
 use baml_runtime::RenderCurlSettings;
-use baml_runtime::SerializedSpan;
 use baml_runtime::{
     internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
 };
@@ -428,9 +428,10 @@ impl WasmTestResponses {
 
 #[wasm_bindgen]
 #[derive(Debug)]
+#[allow(dead_code)]
 pub struct WasmTestResponse {
     test_response: anyhow::Result<baml_runtime::TestResponse>,
-    span: Option<uuid::Uuid>,
+    span: Option<String>,
     tracing_project_id: Option<String>,
     func_test_pair: WasmFunctionTestPair,
 }
@@ -670,7 +671,7 @@ impl WasmTestResponse {
             LLMResponse::LLMFailure(f) => f.start_time,
             _ => anyhow::bail!("Test has no start time"),
         };
-        let start_time = time::OffsetDateTime::from_unix_timestamp(
+        let _start_time = time::OffsetDateTime::from_unix_timestamp(
             start_time
                 .duration_since(web_time::UNIX_EPOCH)?
                 .as_secs()
@@ -678,21 +679,23 @@ impl WasmTestResponse {
         )?
         .format(&time::format_description::well_known::Rfc3339)?;
 
-        let event_span_id = self
-            .span
-            .as_ref()
-            .ok_or(anyhow::anyhow!("Test has no span ID"))?
-            .to_string();
-        let subevent_span_id = test_response
-            .function_span
-            .as_ref()
-            .ok_or(anyhow::anyhow!("Function call has no span ID"))?
-            .to_string();
+        // TODO: update this.
+        // let event_span_id = self
+        //     .span
+        //     .as_ref()
+        //     .ok_or(anyhow::anyhow!("Test has no span ID"))?
+        //     .to_string();
+        // let subevent_span_id = test_response
+        //     .function_call
+        //     .as_ref()
+        //     .ok_or(anyhow::anyhow!("Function call has no span ID"))?
+        //     .to_string();
 
-        Ok(format!(
-            "https://app.boundaryml.com/dashboard/projects/{}/drilldown?start_time={start_time}&eid={event_span_id}&s_eid={subevent_span_id}&test=false&onlyRootEvents=true",
-            self.tracing_project_id.as_ref().ok_or(anyhow::anyhow!("No project ID specified"))?
-        ))
+        // Ok(format!(
+        //     "https://app.boundaryml.com/dashboard/projects/{}/drilldown?start_time={start_time}&eid={event_span_id}&s_eid={subevent_span_id}&test=false&onlyRootEvents=true",
+        //     self.tracing_project_id.as_ref().ok_or(anyhow::anyhow!("No project ID specified"))?
+        // ))
+        Ok("https://app.boundaryml.com/dashboard/projects/".to_string())
     }
 
     #[wasm_bindgen]
@@ -835,7 +838,7 @@ fn get_dummy_value(
 ) -> Option<String> {
     let indent_str = "  ".repeat(indent);
     match t {
-        baml_runtime::FieldType::Primitive(t) => {
+        baml_runtime::FieldType::Primitive(t, _) => {
             let dummy = match t {
                 TypeValue::String => {
                     if allow_multiline {
@@ -861,11 +864,11 @@ fn get_dummy_value(
 
             Some(dummy)
         }
-        baml_runtime::FieldType::Literal(_) => None,
-        baml_runtime::FieldType::Enum(_) => None,
-        baml_runtime::FieldType::Class(_) => None,
-        baml_runtime::FieldType::RecursiveTypeAlias(_) => None,
-        baml_runtime::FieldType::List(item) => {
+        baml_runtime::FieldType::Literal(_, _) => None,
+        baml_runtime::FieldType::Enum { .. } => None,
+        baml_runtime::FieldType::Class { .. } => None,
+        baml_runtime::FieldType::RecursiveTypeAlias{ .. } => None,
+        baml_runtime::FieldType::List(item, _) => {
             let dummy = get_dummy_value(indent + 1, allow_multiline, item);
             // Repeat it 2 times
             match dummy {
@@ -883,7 +886,7 @@ fn get_dummy_value(
                 _ => None,
             }
         }
-        baml_runtime::FieldType::Map(k, v) => {
+        baml_runtime::FieldType::Map(k, v, _) => {
             let dummy_k = get_dummy_value(indent, false, k);
             let dummy_v = get_dummy_value(indent + 1, allow_multiline, v);
             match (dummy_k, dummy_v) {
@@ -902,11 +905,13 @@ fn get_dummy_value(
                 _ => None,
             }
         }
-        baml_runtime::FieldType::Union(fields) => fields
+
+        baml_runtime::FieldType::Union(fields, _) => fields
+            .iter_include_null()
             .iter()
             .filter_map(|f| get_dummy_value(indent, allow_multiline, f))
             .next(),
-        baml_runtime::FieldType::Tuple(vals) => {
+        baml_runtime::FieldType::Tuple(vals, _) => {
             let dummy = vals
                 .iter()
                 .filter_map(|f| get_dummy_value(0, false, f))
@@ -914,11 +919,7 @@ fn get_dummy_value(
                 .join(", ");
             Some(format!("({},)", dummy))
         }
-        baml_runtime::FieldType::Optional(_) => None,
-        baml_runtime::FieldType::Arrow(_) => None,
-        baml_runtime::FieldType::WithMetadata { base, .. } => {
-            get_dummy_value(indent, allow_multiline, base)
-        }
+        baml_runtime::FieldType::Arrow(..) => None,
     }
 }
 
@@ -952,10 +953,6 @@ impl WasmRuntime {
             .into_iter()
             .map(|g| g.into())
             .collect())
-    }
-
-    pub fn env_vars(&self) -> &HashMap<String, String> {
-        &self.runtime.env_vars()
     }
 }
 
@@ -1572,6 +1569,7 @@ impl WasmRuntime {
         function_test_pairs: js_sys::Array,
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
+        env: js_sys::Object,
     ) -> Result<WasmTestResponses, JsValue> {
         // Create a vector to store all test futures
         let mut test_futures = Vec::new();
@@ -1612,18 +1610,37 @@ impl WasmRuntime {
 
                     // Reference to the runtime
                     let rt = &self.runtime;
+                    let entries = js_sys::Object::entries(&env);
+                    let mut env_vars = HashMap::new();
+                    for entry in entries.iter() {
+                        let arr = entry.dyn_into::<js_sys::Array>().unwrap();
+                        let key = arr.get(0).as_string().unwrap();
+                        let value = arr.get(1).as_string().unwrap_or_default();
+                        env_vars.insert(key, value);
+                    }
 
                     // Create a future for this test
                     let future = async move {
                         let (test_response, span) = rt
-                            .run_test(&function_name, &test_name, &ctx, Some(cb), None)
+                            .run_test(
+                                &function_name,
+                                &test_name,
+                                &ctx,
+                                Some(cb),
+                                None,
+                                env_vars.clone(),
+                            )
                             .await;
 
                         // Return WasmTestResponse for this test
                         WasmTestResponse {
                             test_response,
-                            span,
-                            tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
+                            span: Some(span.to_string()),
+                            tracing_project_id: rt
+                                .tracer_wrapper
+                                .get_or_create_tracer(&env_vars)
+                                .tracing_project_id(),
+                            // tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
                             func_test_pair: WasmFunctionTestPair {
                                 function_name: function_name.clone(),
                                 test_name: test_name.clone(),
@@ -1725,6 +1742,7 @@ impl WasmFunction {
         test_name: String,
         wasm_call_context: &WasmCallContext,
         get_baml_src_cb: js_sys::Function,
+        env: js_sys::Object,
     ) -> JsResult<WasmPrompt> {
         let context_manager = rt.runtime.create_ctx_manager(
             BamlValue::String("wasm".to_string()),
@@ -1734,11 +1752,25 @@ impl WasmFunction {
         let test_type_builder = rt
             .runtime
             .internal()
-            .get_test_type_builder(&self.name, &test_name, &context_manager)
+            .get_test_type_builder(&self.name, &test_name)
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
+        let entries = js_sys::Object::entries(&env);
+        let mut env_vars = HashMap::new();
+        for entry in entries.iter() {
+            let arr = entry.dyn_into::<js_sys::Array>().unwrap();
+            let key = arr.get(0).as_string().unwrap();
+            let value = arr.get(1).as_string().unwrap_or_default();
+            env_vars.insert(key, value);
+        }
+
         let ctx = context_manager
-            .create_ctx(test_type_builder.as_ref(), None, None)
+            .create_ctx(
+                test_type_builder.as_ref(),
+                None,
+                env_vars,
+                vec![baml_ids::FunctionCallId::new()],
+            )
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let params = rt
@@ -1778,6 +1810,7 @@ impl WasmFunction {
         stream: bool,
         expand_images: bool,
         get_baml_src_cb: js_sys::Function,
+        env: js_sys::Object,
     ) -> Result<String, wasm_bindgen::JsError> {
         let context_manager = rt.runtime.create_ctx_manager(
             BamlValue::String("wasm".to_string()),
@@ -1787,11 +1820,25 @@ impl WasmFunction {
         let test_type_builder = rt
             .runtime
             .internal()
-            .get_test_type_builder(&self.name, &test_name, &context_manager)
+            .get_test_type_builder(&self.name, &test_name)
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
+        let entries = js_sys::Object::entries(&env);
+        let mut env_vars = HashMap::new();
+        for entry in entries.iter() {
+            let arr = entry.dyn_into::<js_sys::Array>().unwrap();
+            let key = arr.get(0).as_string().unwrap();
+            let value = arr.get(1).as_string().unwrap_or_default();
+            env_vars.insert(key, value);
+        }
+
         let ctx = context_manager
-            .create_ctx(test_type_builder.as_ref(), None, None)
+            .create_ctx(
+                test_type_builder.as_ref(),
+                None,
+                env_vars,
+                vec![baml_ids::FunctionCallId::new()],
+            )
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let params = rt
@@ -1838,6 +1885,7 @@ impl WasmFunction {
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
         on_expr_event: js_sys::Function,
+        env: js_sys::Object,
     ) -> Result<WasmTestResponse, JsValue> {
         let rt = &rt.runtime;
         let function_name = self.name.clone();
@@ -1881,17 +1929,37 @@ impl WasmFunction {
         // Create your evaluation context, etc.
         let ctx = rt.create_ctx_manager_for_wasm(js_fn_to_baml_src_reader(get_baml_src_cb));
 
+        let entries = js_sys::Object::entries(&env);
+        let mut env_vars = HashMap::new();
+        for entry in entries.iter() {
+            let arr = entry.dyn_into::<js_sys::Array>().unwrap();
+            let key = arr.get(0).as_string().unwrap();
+            let value = arr.get(1).as_string().unwrap_or_default();
+            env_vars.insert(key, value);
+        }
+
         // Pass the sender to run_test_with_expr_events
         let (test_response, span) = rt
-            .run_test_with_expr_events(&function_name, &test_name, &ctx, Some(cb), Some(tx), None)
+            .run_test_with_expr_events(
+                &function_name,
+                &test_name,
+                &ctx,
+                Some(cb),
+                Some(tx),
+                None,
+                env_vars.clone(),
+            )
             .await;
 
         log::info!("test_response: {:#?}", test_response);
 
         Ok(WasmTestResponse {
             test_response,
-            span,
-            tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
+            span: Some(span.to_string()),
+            tracing_project_id: rt
+                .tracer_wrapper
+                .get_or_create_tracer(&env_vars)
+                .tracing_project_id(),
             func_test_pair: WasmFunctionTestPair {
                 function_name,
                 test_name,
@@ -1906,6 +1974,7 @@ impl WasmFunction {
         test_name: String,
         on_partial_response: js_sys::Function,
         get_baml_src_cb: js_sys::Function,
+        env: js_sys::Object,
     ) -> Result<WasmTestResponse, JsValue> {
         let rt = &rt.runtime;
         let function_name = self.name.clone();
@@ -1930,17 +1999,35 @@ impl WasmFunction {
         // Create your evaluation context, etc.
         let ctx = rt.create_ctx_manager_for_wasm(js_fn_to_baml_src_reader(get_baml_src_cb));
 
+        let entries = js_sys::Object::entries(&env);
+        let mut env_vars = HashMap::new();
+        for entry in entries.iter() {
+            let arr = entry.dyn_into::<js_sys::Array>().unwrap();
+            let key = arr.get(0).as_string().unwrap();
+            let value = arr.get(1).as_string().unwrap_or_default();
+            env_vars.insert(key, value);
+        }
         // Now pass collector_arc to your runtime's run_test
         let (test_response, span) = rt
-            .run_test(&function_name, &test_name, &ctx, Some(cb), None)
+            .run_test(
+                &function_name,
+                &test_name,
+                &ctx,
+                Some(cb),
+                None,
+                env_vars.clone(),
+            )
             .await;
 
         log::info!("test_response: {:#?}", test_response);
 
         Ok(WasmTestResponse {
             test_response,
-            span,
-            tracing_project_id: rt.env_vars().get("BOUNDARY_PROJECT_ID").cloned(),
+            span: Some(span.to_string()),
+            tracing_project_id: rt
+                .tracer_wrapper
+                .get_or_create_tracer(&env_vars)
+                .tracing_project_id(),
             func_test_pair: WasmFunctionTestPair {
                 function_name,
                 test_name,

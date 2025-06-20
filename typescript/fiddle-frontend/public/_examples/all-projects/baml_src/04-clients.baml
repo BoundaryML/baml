@@ -40,7 +40,7 @@ client<llm> Claude {
 client<llm> Gemini {
   provider google-ai
   options {
-    model "gemini-1.5-pro-001"
+    model "gemini-1.5-pro"
     api_key env.GOOGLE_API_KEY
   }
 }

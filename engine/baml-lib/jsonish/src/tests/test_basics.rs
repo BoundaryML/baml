@@ -150,7 +150,7 @@ test_deserializer!(
     test_string_to_float_from_comma_separated,
     "",
     "1 cup unsalted butter, room temperature",
-    FieldType::Primitive(TypeValue::Float),
+    FieldType::float(),
     1.0
 );
 
@@ -649,8 +649,8 @@ Then would add a summary of sorts.
 );
 
 test_deserializer!(
-  test_whitespace_in_keys_preserved,
-  r#"
+    test_whitespace_in_keys_preserved,
+    r#"
   class Test {
       answer Answer
   }
@@ -659,9 +659,9 @@ test_deserializer!(
       content float
   }
   "#,
-  r#"{" answer ": {" content ": 78.54}}"#,
-  FieldType::string(),
-  r#"{" answer ": {" content ": 78.54}}"#
+    r#"{" answer ": {" content ": 78.54}}"#,
+    FieldType::string(),
+    r#"{" answer ": {" content ": 78.54}}"#
 );
 
 // This test verifies that when using class deserialization,
@@ -1004,7 +1004,7 @@ Here are the seven creative headings along with their descriptions and Python fu
   ]
 }
   "#.trim(),
-  baml_types::FieldType::Class("Headings".into()),
+  baml_types::FieldType::class("Headings"),
 
   {
     "headings": [
@@ -1033,7 +1033,7 @@ test_deserializer!(
   ]
 }
   "#.trim(),
-  baml_types::FieldType::Class("Headings".into()),
+  baml_types::FieldType::class("Headings"),
 
   {
     "headings": [

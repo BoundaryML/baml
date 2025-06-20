@@ -609,6 +609,8 @@ navigation:
             path: 03-reference/baml-cli/init.mdx
           - page: generate
             path: 03-reference/baml-cli/generate.mdx
+          - page: test
+            path: 03-reference/baml-cli/test.mdx
           - page: serve
             path: 03-reference/baml-cli/serve.mdx
           - page: dev
@@ -739,6 +741,9 @@ navigation:
           - page: "Azure AI Foundary (openai-generic)"
             slug: azure-ai-foundary
             path: 03-reference/baml/clients/providers/azure-ai-foundary.mdx
+          - page: "Cerebras (openai-generic)"
+            slug: cerebras
+            path: 03-reference/baml/clients/providers/cerebras.mdx
           - page: "Groq (openai-generic)"
             slug: groq
             path: 03-reference/baml/clients/providers/groq.mdx
@@ -760,6 +765,9 @@ navigation:
           - page: "OpenRouter (openai-generic)"
             slug: openrouter
             path: 03-reference/baml/clients/providers/openrouter.mdx
+          - page: "Tinfoil (openai-generic)"
+            slug: tinfoil
+            path: 03-reference/baml/clients/providers/tinfoil.mdx
           - page: "TogetherAI (openai-generic)"
             slug: together
             path: 03-reference/baml/clients/providers/together.mdx
@@ -804,20 +812,20 @@ navigation:
             path: 03-reference/vscode-ext/enablePlaygroundProxy.mdx
           - page: baml.syncExtensionToGeneratorVersion
             path: 03-reference/vscode-ext/syncExtensionToGeneratorVersion.mdx
-      - section: Boundary Extraction API
-        contents:
-          - api: API Reference
-            layout:
-              - POST /extract
-              - page: Extraction Examples
-                path: 03-reference/extract/examples.mdx
-            slug: extract
-            summary: 03-reference/extract/summary.mdx
-            display-errors: true
-      - section: Boundary Cloud API
-        contents:
-          - page: Limits
-            path: 03-reference/cloud/limits.mdx
+      # - section: Boundary Extraction API
+      #   contents:
+      #     - api: API Reference
+      #       layout:
+      #         - POST /extract
+      #         - page: Extraction Examples
+      #           path: 03-reference/extract/examples.mdx
+      #       slug: extract
+      #       summary: 03-reference/extract/summary.mdx
+      #       display-errors: true
+      # - section: Boundary Cloud API
+      #   contents:
+      #     - page: Limits
+      #       path: 03-reference/cloud/limits.mdx
 
       # - section: "baml_client: Python"
       #   contents:

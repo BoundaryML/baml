@@ -19,6 +19,10 @@ impl SyncRequestHandler for Hover {
         params: HoverParams,
     ) -> Result<Option<types::Hover>> {
         let url = &params.text_document_position_params.text_document.uri;
+        if !url.to_string().contains("baml_src") {
+            return Ok(None);
+        }
+
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;

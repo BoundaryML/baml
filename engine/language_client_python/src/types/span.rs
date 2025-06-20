@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use baml_runtime::runtime_interface::ExperimentalTracingInterface;
 use baml_types::BamlValue;
 use pyo3::prelude::{pymethods, PyResult};
@@ -10,7 +12,7 @@ use super::runtime_ctx_manager::RuntimeContextManager;
 use crate::runtime::BamlRuntime;
 
 crate::lang_wrapper!(BamlSpan,
-  Option<Option<baml_runtime::tracing::TracingSpan>>,
+  Option<baml_runtime::tracing::TracingCall>,
   no_from,
   rt: std::sync::Arc<baml_runtime::BamlRuntime>
 );
@@ -24,6 +26,7 @@ impl BamlSpan {
         function_name: &str,
         args: PyObject,
         ctx: &RuntimeContextManager,
+        env_vars: HashMap<String, String>,
     ) -> PyResult<Self> {
         let args = parse_py_type(args.into_bound(py).into_py_any(py)?, true)?
             .unwrap_or(BamlValue::Map(Default::default()));
@@ -33,7 +36,7 @@ impl BamlSpan {
 
         let span = runtime
             .inner
-            .start_span(function_name, args_map, &ctx.inner);
+            .start_call(function_name, args_map, &ctx.inner, &env_vars);
 
         log::trace!("Starting span: {:#?} for {:?}\n", span, function_name);
         Ok(Self {
@@ -48,18 +51,19 @@ impl BamlSpan {
         py: Python<'_>,
         result: PyObject,
         ctx: &RuntimeContextManager,
+        env_vars: HashMap<String, String>,
     ) -> PyResult<Option<String>> {
         log::trace!("Finishing span: {:?}", self.inner);
         let result = parse_py_type(result.into_bound(py).into_py_any(py)?, true)?;
 
-        let span = self
+        let call = self
             .inner
             .take()
             .ok_or_else(|| BamlError::new_err("Span already finished"))?;
 
         self.rt
-            .finish_span(span, result, &ctx.inner)
+            .finish_call(call, result, &ctx.inner, &env_vars)
             .map_err(BamlError::from_anyhow)
-            .map(|u| u.map(|id| id.to_string()))
+            .map(|u| Some(u.to_string()))
     }
 }

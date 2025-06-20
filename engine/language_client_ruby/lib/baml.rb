@@ -19,8 +19,6 @@ module Baml
   Checked = Baml::Checks::Checked
   Check = Baml::Checks::Check
 
-  # Reexport StreamState.
-  StreamState = Baml::StreamState::StreamState
 
   # Dynamically + idempotently define Baml::TypeConverter
   # NB: this does not respect raise_coercion_error = false

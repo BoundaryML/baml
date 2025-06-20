@@ -23,7 +23,7 @@ module Baml
         {% for (name, type) in fn.args -%}
         {{name}}: {{type}},
         {%- endfor %}
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def {{fn.name}}(
@@ -36,8 +36,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("{{fn.name}} may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -50,7 +50,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        false
+        baml_options[:env] || ENV.to_h,
+        false,
       )
     end
 
@@ -73,7 +74,7 @@ module Baml
         {% for (name, type) in fn.args -%}
         {{name}}: {{type}},
         {%- endfor %}
-        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry)]
+        baml_options: T::Hash[Symbol, T.any(Baml::TypeBuilder, Baml::ClientRegistry, T::Hash[Symbol, String])]
       ).returns(Baml::Ffi::HTTPRequest)
     }
     def {{fn.name}}(
@@ -86,8 +87,8 @@ module Baml
       if varargs.any?
         raise ArgumentError.new("{{fn.name}} may only be called with keyword arguments")
       end
-      if (baml_options.keys - [:client_registry, :tb]).any?
-        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb): #{baml_options.keys - [:client_registry, :tb]}")
+      if (baml_options.keys - [:client_registry, :tb, :env]).any?
+        raise ArgumentError.new("Received unknown keys in baml_options (valid keys: :client_registry, :tb, :env): #{baml_options.keys - [:client_registry, :tb, :env]}")
       end
 
       @runtime.build_request(
@@ -100,7 +101,8 @@ module Baml
         @ctx_manager,
         baml_options[:tb]&.instance_variable_get(:@registry),
         baml_options[:client_registry],
-        true
+        baml_options[:env] || ENV.to_h,
+        true,
       )
     end
 

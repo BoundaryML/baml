@@ -1,16 +1,10 @@
-from typing import Any, Dict, List, Optional, Union, TypedDict, Type, Literal, cast
-from typing_extensions import NotRequired
+from typing import Dict, List, Optional, Union, cast
+from typing_extensions import Literal
 
 import baml_py
 
-from . import types, partial_types
+from . import _baml
 from .types import Checked, Check
-from .type_builder import TypeBuilder
-
-
-class BamlCallOptions(TypedDict, total=False):
-    tb: NotRequired[TypeBuilder]
-    client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
 
 
 class LlmResponseParser:
@@ -25,7 +19,7 @@ class LlmResponseParser:
     def {{ fn.name }}(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> {{fn.return_type}}:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -34,16 +28,19 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
+
       parsed = self.__runtime.parse_llm_response(
         "{{fn.name}}",
         llm_response,
-        types,
-        types,
-        partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        env,
       )
 
       return cast({{fn.return_type}}, parsed)
@@ -62,7 +59,7 @@ class LlmStreamParser:
     def {{ fn.name }}(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> {{fn.partial_return_type}}:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -71,16 +68,19 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
+
       parsed = self.__runtime.parse_llm_response(
         "{{fn.name}}",
         llm_response,
-        types,
-        types,
-        partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,
         __cr__,
+        env,
       )
 
       return cast({{fn.partial_return_type}}, parsed)

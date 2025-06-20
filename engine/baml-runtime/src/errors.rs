@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use crate::internal::llm_client::ErrorCode;
 
 #[derive(Clone)]
@@ -57,7 +59,11 @@ impl std::fmt::Display for ExposedError {
                 message,
                 status_code,
             } => {
-                write!(f, "LLM client \"{}\" failed with status code: {}\nMessage: {}", client_name, status_code, message)
+                write!(
+                    f,
+                    "LLM client \"{}\" failed with status code: {}\nMessage: {}",
+                    client_name, status_code, message
+                )
             }
         }
     }
@@ -66,5 +72,57 @@ impl std::fmt::Display for ExposedError {
 impl std::fmt::Debug for ExposedError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_fmt(format_args!("{}", self))
+    }
+}
+
+pub(crate) trait IntoBamlError {
+    fn into_baml_error<'a, 'b>(&'a self) -> baml_types::tracing::events::BamlError<'b>;
+}
+
+impl<'a> IntoBamlError for &'a anyhow::Error {
+    fn into_baml_error<'b>(&self) -> baml_types::tracing::events::BamlError<'b> {
+        // print as the downcast_ref of whatever error actually is
+        if let Some(er) = self.downcast_ref::<ExposedError>() {
+            return match er {
+                ExposedError::ValidationError {
+                    prompt,
+                    message,
+                    raw_output: raw_response,
+                } => baml_types::tracing::events::BamlError::Validation {
+                    raw_output: Cow::Owned(raw_response.clone()),
+                    message: Cow::Owned(message.clone()),
+                    prompt: Cow::Owned(prompt.clone()),
+                },
+                ExposedError::FinishReasonError {
+                    prompt,
+                    message,
+                    raw_output: raw_response,
+                    finish_reason,
+                } => baml_types::tracing::events::BamlError::ClientFinishReason {
+                    finish_reason: match finish_reason {
+                        Some(finish_reason) => Cow::Owned(finish_reason.clone()),
+                        None => Cow::Owned(String::new()),
+                    },
+                    message: Cow::Owned(message.clone()),
+                    prompt: Cow::Owned(prompt.clone()),
+                    raw_output: Cow::Owned(raw_response.clone()),
+                },
+                ExposedError::ClientHttpError {
+                    client_name,
+                    message,
+                    status_code,
+                } => baml_types::tracing::events::BamlError::ClientHttp {
+                    message: Cow::Owned(message.clone()),
+                    status_code: status_code.to_u16() as i32,
+                },
+            };
+        }
+        if let Some(baml_error) = self.downcast_ref::<baml_types::tracing::events::BamlError<'_>>()
+        {
+            return baml_error.clone();
+        }
+        baml_types::tracing::events::BamlError::External {
+            message: Cow::Owned(format!("into_baml_error: {:?}", self)),
+        }
     }
 }

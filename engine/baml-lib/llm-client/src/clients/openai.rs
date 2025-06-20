@@ -1,24 +1,30 @@
 use std::collections::HashSet;
 
 use crate::{
-    AllowedRoleMetadata, FinishReasonFilter, ResponseType, RolesSelection, SupportedRequestModes, UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedResponseType, UnresolvedRolesSelection
+    AllowedRoleMetadata, FinishReasonFilter, ResponseType, RolesSelection, SupportedRequestModes,
+    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedResponseType,
+    UnresolvedRolesSelection,
 };
 use anyhow::Result;
 
+use baml_derive::BamlHash;
 use baml_types::{ApiKeyWithProvenance, GetEnvVar, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, BamlHash)]
 pub struct UnresolvedOpenAI<Meta> {
     base_url: Option<either::Either<UnresolvedUrl, (StringOr, StringOr)>>,
     api_key: Option<StringOr>,
     role_selection: UnresolvedRolesSelection,
     allowed_role_metadata: UnresolvedAllowedRoleMetadata,
     supported_request_modes: SupportedRequestModes,
+    #[baml_safe_hash]
     headers: IndexMap<String, StringOr>,
+    #[baml_safe_hash]
     properties: IndexMap<String, (Meta, UnresolvedValue<Meta>)>,
+    #[baml_safe_hash]
     query_params: IndexMap<String, StringOr>,
     finish_reason_filter: UnresolvedFinishReasonFilter,
     client_response_type: Option<UnresolvedResponseType>,
@@ -223,7 +229,10 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
             query_params,
             proxy_url: super::helpers::get_proxy_url(ctx),
             finish_reason_filter: self.finish_reason_filter.resolve(ctx)?,
-            client_response_type: self.client_response_type.as_ref().map_or(Ok(ResponseType::OpenAI), |v| v.resolve(ctx))?,
+            client_response_type: self
+                .client_response_type
+                .as_ref()
+                .map_or(Ok(ResponseType::OpenAI), |v| v.resolve(ctx))?,
         })
     }
 

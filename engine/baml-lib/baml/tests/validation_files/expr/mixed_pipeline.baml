@@ -3,7 +3,7 @@ function LLM(x: int) -> int {
     prompt #"Return {{ x }} {{ ctx.output_format}}"#
 }
 
-fn UseLLM(x: int) -> int {
+function UseLLM(x: int) -> int {
     LLM(x)
 }
 

@@ -3,17 +3,15 @@ macro_rules! test_failing_deserializer {
         #[test_log::test]
         fn $name() {
             let ir = crate::helpers::load_test_ir($file_content);
+            let mut target_type = $target_type;
+            ir.finalize_type(&mut target_type);
             let target =
-                crate::helpers::render_output_format(&ir, &$target_type, &Default::default())
+                crate::helpers::render_output_format(&ir, &target_type, &Default::default())
                     .unwrap();
 
-            let result = from_str(&target, &$target_type, $raw_string, false);
+            let result = from_str(&target, &target_type, $raw_string, false);
 
-            assert!(
-                result.is_err(),
-                "Failed not to parse: {:?}",
-                result.unwrap()
-            );
+            assert!(result.is_err(), "Failed not to parse");
         }
     };
 }
@@ -42,11 +40,13 @@ macro_rules! test_deserializer {
         #[test_log::test]
         fn $name() {
             let ir = crate::helpers::load_test_ir($file_content);
-            let target = crate::helpers::render_output_format(&ir, &$target_type, &Default::default()).unwrap();
+            let mut target_type = $target_type;
+            ir.finalize_type(&mut target_type);
+            let target = crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
 
             let result = from_str(
                 &target,
-                &$target_type,
+                &target_type,
                 $raw_string,
                 false,
             );
@@ -55,7 +55,7 @@ macro_rules! test_deserializer {
 
             let value = result.unwrap();
             log::trace!("Score: {}", value.score());
-            assert_eq!(value.field_type(), &$target_type);
+            assert_eq!(value.field_type(), &target_type);
             let value: BamlValue = value.into();
             log::info!("{}", value);
             let json_value = json!(value);
@@ -72,17 +72,18 @@ macro_rules! test_deserializer_with_expected_score {
         #[test_log::test]
         fn $name() {
             let ir = crate::helpers::load_test_ir($file_content);
+            let mut target_type = $target_type;
+            ir.finalize_type(&mut target_type);
             let target =
-                crate::helpers::render_output_format(&ir, &$target_type, &Default::default())
+                crate::helpers::render_output_format(&ir, &target_type, &Default::default())
                     .unwrap();
 
-            let result = from_str(&target, &$target_type, $raw_string, false);
+            let result = from_str(&target, &target_type, $raw_string, false);
 
             assert!(result.is_ok(), "Failed to parse: {:?}", result);
 
             let value = result.unwrap();
-            assert_eq!(value.field_type(), &$target_type);
-            dbg!(&value);
+            assert_eq!(value.field_type(), &target_type);
             log::trace!("Score: {}", value.score());
             assert_eq!(value.score(), $target_score);
         }
@@ -94,11 +95,13 @@ macro_rules! test_partial_deserializer {
         #[test_log::test]
         fn $name() {
             let ir = crate::helpers::load_test_ir($file_content);
-            let target = crate::helpers::render_output_format(&ir, &$target_type, &Default::default()).unwrap();
+            let mut target_type = $target_type;
+            ir.finalize_type(&mut target_type);
+            let target = crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
 
             let result = from_str(
                 &target,
-                &$target_type,
+                &target_type,
                 $raw_string,
                 true,
             );
@@ -123,24 +126,26 @@ macro_rules! test_partial_deserializer_streaming {
         #[test_log::test]
         fn $name() {
             let ir = crate::helpers::load_test_ir($file_content);
-            let target = crate::helpers::render_output_format(&ir, &$target_type, &Default::default()).unwrap();
+            let mut target_type = $target_type;
+            ir.finalize_type(&mut target_type);
+            let target = crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
 
             let parsed = from_str(
                 &target,
-                &$target_type,
+                &target_type,
                 $raw_string,
                 true,
             );
 
             // dbg!(&target);
             // dbg!(&$target_type);
-            dbg!(&parsed);
+            // dbg!(&parsed);
 
             assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed);
 
             let result = crate::helpers::parsed_value_to_response(&ir, parsed.unwrap(), true).unwrap();
 
-            dbg!(&result);
+            // dbg!(&result);
 
             let value = result;
             log::trace!("Score: {}", value.score());
@@ -158,14 +163,13 @@ macro_rules! test_partial_deserializer_streaming_failure {
         #[test_log::test]
         fn $name() {
             let ir = crate::helpers::load_test_ir($file_content);
+            let mut target_type = $target_type;
+            ir.finalize_type(&mut target_type);
             let target =
-                crate::helpers::render_output_format(&ir, &$target_type, &Default::default())
+                crate::helpers::render_output_format(&ir, &target_type, &Default::default())
                     .unwrap();
 
-            let parsed = from_str(&target, &$target_type, $raw_string, true);
-
-            dbg!(&target);
-            dbg!(&$target_type);
+            let parsed = from_str(&target, &target_type, $raw_string, true);
 
             assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed);
 
@@ -173,8 +177,8 @@ macro_rules! test_partial_deserializer_streaming_failure {
 
             assert!(
                 result.is_err(),
-                "Failed not to parse: {:?}",
-                result.unwrap()
+                "Failed not to parse: {}",
+                json!(result.unwrap().serialize_partial())
             );
         }
     };

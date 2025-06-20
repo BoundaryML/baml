@@ -1,0 +1,106 @@
+extend T::Sig
+
+
+@baml_sync_client = T.let(BamlSyncClient.new(BamlClient::Internal::DoNotUseDirectlyCallManager.new(BamlCallOptions.from_hash({}))), BamlSyncClient)
+
+sig {returns(BamlSyncClient)}
+def self.b
+   @baml_sync_client
+end
+
+class BamlSyncClient
+    extend T::Sig
+
+
+    sig {params(options: BamlClient::Internal::DoNotUseDirectlyCallManager).void}
+    def initialize(options)
+        @options = options
+    end
+
+    sig {params(collector: T.nilable(T.any(Baml::Collector, T::Array[Baml::Collector])), tb: T.nilable(Baml::TypeBuilder), client_registry: T.nilable(Baml::ClientRegistry), env_vars: T.nilable(T::Hash[Symbol, String])).returns(BamlSyncClient)}
+    def with_options(collector: nil, tb: nil, client_registry: nil, env_vars: nil)
+        BamlSyncClient.new(@options.merge_options(BamlCallOptions.from_hash({
+            collector: collector,
+            tb: tb,
+            client_registry: client_registry,
+            env_vars: env_vars,
+        })))
+    end
+
+    {% for func in functions -%}
+    sig {params(
+        varargs: T.untyped,
+        {% for arg in func.args -%}
+        {{arg.name}}: {{arg.type_.serialize_type(pkg)}},
+        {%- endfor %}
+        baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+    ).returns({{ func.return_type.serialize_type(pkg) }})}
+    def {{func.name}}(
+        *varargs,
+        {% for arg in func.args -%}
+        {{arg.name}}:,
+        {%- endfor %}
+        baml_options: {}
+    )
+        if varargs.any?
+            raise ArgumentError.new("{{func.name}} may only be called with keyword arguments")
+        end
+
+        options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+        
+        result = options.call_function_sync(function_name: "{{func.name}}", args: {
+            {% for arg in func.args -%}
+            {{arg.name}}: {{arg.name}},
+            {%- endfor %}
+        })
+
+        parsed = result.parsed_using_types(BamlClient::Types, BamlClient::PartialTypes, false)
+        # for sorbet we need to cast to the return type since parsed is now the right value
+        # We just need to tell sorbet that the return type is the right type
+        parsed.cast_to({{ func.return_type.serialize_type(pkg) }})
+    end
+    {% endfor %}
+end
+
+class BamlStreamClient
+    extend T::Sig
+
+    sig {params(options: BamlClient::Internal::DoNotUseDirectlyCallManager).void}
+    def initialize(options)
+        @options = options
+    end
+
+    {% for func in functions -%}
+    sig {params(
+        varargs: T.untyped,
+        {% for arg in func.args -%}
+        {{arg.name}}: {{arg.type_.serialize_type(pkg)}},
+        {%- endfor %}
+        baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
+    ).returns(Baml::BamlStream[{{ func.stream_return_type.serialize_type(pkg) }}, {{ func.return_type.serialize_type(pkg) }}])}
+    def {{func.name}}(
+        *varargs,
+        {% for arg in func.args -%}
+        {{arg.name}}:,
+        {%- endfor %}
+        baml_options: {}
+    )
+        if varargs.any?
+            raise ArgumentError.new("{{func.name}} may only be called with keyword arguments")
+        end
+
+        options = @options.merge_options(BamlCallOptions.from_hash(baml_options))
+        
+        ctx, result = options.create_sync_stream(function_name: "{{func.name}}", args: {
+            {% for arg in func.args -%}
+            {{arg.name}}: {{arg.name}},
+            {%- endfor %}
+        })
+
+        Baml::BamlStream[{{ func.stream_return_type.serialize_type(pkg) }}, {{ func.return_type.serialize_type(pkg) }}].new(
+            ffi_stream: result,
+            ctx_manager: ctx
+        )
+    end
+    {% endfor %}
+end

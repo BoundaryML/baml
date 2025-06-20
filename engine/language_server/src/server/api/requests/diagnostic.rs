@@ -4,7 +4,8 @@ use std::sync::{Arc, Mutex};
 use lsp_types::request::DocumentDiagnosticRequest;
 use lsp_types::{
     DocumentDiagnosticParams, DocumentDiagnosticReport, DocumentDiagnosticReportResult,
-    FullDocumentDiagnosticReport, RelatedFullDocumentDiagnosticReport, Url,
+    FullDocumentDiagnosticReport, RelatedFullDocumentDiagnosticReport,
+    RelatedUnchangedDocumentDiagnosticReport, UnchangedDocumentDiagnosticReport, Url,
 };
 
 use crate::baml_project::Project;
@@ -48,6 +49,17 @@ impl SyncRequestHandler for DocumentDiagnosticRequestHandler {
         params: DocumentDiagnosticParams,
     ) -> Result<DocumentDiagnosticReportResult> {
         let url = params.text_document.uri.clone();
+        if !url.to_string().contains("baml_src") {
+            return Ok(DocumentDiagnosticReportResult::Report(
+                DocumentDiagnosticReport::Unchanged(RelatedUnchangedDocumentDiagnosticReport {
+                    related_documents: None,
+                    unchanged_document_diagnostic_report: UnchangedDocumentDiagnosticReport {
+                        result_id: "".to_string(),
+                    },
+                }),
+            ));
+        }
+
         let path = url
             .to_file_path()
             .internal_error_msg("Could not convert URL to path")?;

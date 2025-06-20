@@ -1,7 +1,10 @@
 use super::types::validate_type;
 use crate::validate::validation_pipeline::context::Context;
+use crate::validate::validation_pipeline::validations::reserved_names::RESERVED_NAMES_PYTHON;
+use baml_types::GeneratorOutputType;
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_schema_ast::ast::{WithName, WithSpan};
+use std::collections::HashSet;
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
     let mut defined_types = internal_baml_jinja_types::PredefinedTypes::default(
@@ -34,5 +37,28 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
 
         defined_types.end_scope();
         defined_types.errors_mut().clear();
+    }
+}
+
+/// Enforce that keywords in Python do not appear as enum values when using the python/pydantic generator.
+pub(super) fn assert_no_enum_value_collisions(
+    ctx: &mut Context<'_>,
+    generator_output_types: &HashSet<GeneratorOutputType>,
+) {
+    if generator_output_types.contains(&GeneratorOutputType::PythonPydantic) {
+        for e in ctx.db.walk_enums() {
+            for value in e.values() {
+                let value_name = value.name();
+                if RESERVED_NAMES_PYTHON.contains(&value_name) {
+                    ctx.push_error(DatamodelError::new_field_validation_error(
+                        format!("Enum value '{}' is a reserved word in Python, try changing the name and using `OtherValueName @alias(\"{}\")`.", value_name, value_name),
+                        "enum",
+                        e.name(),
+                        value_name,
+                        value.span().clone(),
+                    ))
+                }
+            }
+        }
     }
 }

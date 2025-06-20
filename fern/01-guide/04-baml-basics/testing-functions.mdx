@@ -2,7 +2,6 @@
 slug: /guide/baml-basics/testing-functions
 ---
 
-
 You can test your BAML functions in the VSCode Playground by adding a `test` snippet into a BAML file:
 
 ```baml
@@ -33,33 +32,35 @@ test Test1 {
 ```
 
 ### Try it! Press 'Run Test' below!
- <div class="resizer">
-<iframe
-  class="resized"
-  src="https://promptfiddle.com/embed?id=testing_functions"
- 
-  height="640"
-  style="border: none;"
-  resize="both"
-  overflow="auto"
-  msallowfullscreen
-></iframe>
+
+{" "}
+
+<div class="resizer">
+  <iframe
+    class="resized"
+    src="https://promptfiddle.com/embed?id=testing_functions"
+    height="640"
+    style="border: none;"
+    resize="both"
+    overflow="auto"
+    msallowfullscreen
+  ></iframe>
 </div>
-
-
 
 See more [interactive examples](https://promptfiddle.com)
 
 The BAML playground will give you a starting snippet to copy that will match your function signature.
 
 <Warning>
-BAML doesn't use colons `:` between key-value pairs except in function parameters.
+  BAML doesn't use colons `:` between key-value pairs except in function
+  parameters.
 </Warning>
 
 <hr />
 ## Complex object inputs
 
 Objects are injected as dictionaries
+
 ```rust
 class Message {
   user string
@@ -87,6 +88,7 @@ test Test1 {
   }
 }
 ```
+
 <hr />
 ## Test Image Inputs in the Playground
 
@@ -131,7 +133,8 @@ test Test1 {
 <ParamField path="file" type="string" required="true">
   The path to the image file, relative to the directory containing the current BAML file.
 
-  Image files must be somewhere in `baml_src/`.
+Image files must be somewhere in `baml_src/`.
+
 </ParamField>
 
 <ParamField path="media_type" type="string">
@@ -185,7 +188,8 @@ test Test1 {
   The mime-type of the image. If not set, and the provider expects a mime-type
   to be provided, BAML will try to infer it based on the contents of the file.
 
-  If `base64` is a data URL, this field will be ignored.
+If `base64` is a data URL, this field will be ignored.
+
 </ParamField>
 
 </Tab>
@@ -212,10 +216,10 @@ You can define test cases using audio files, URLs, or base64 strings.
 <Tab title="File">
 
 <Warning>
-  Committing a lot of audio files into your repository can make it slow to clone and
-  pull your repository. If you expect to commit >500MiB of audio, please read
-  [GitHub's size limit documentation][github-large-files] and consider setting
-  up [large file storage][github-lfs].
+  Committing a lot of audio files into your repository can make it slow to clone
+  and pull your repository. If you expect to commit >500MiB of audio, please
+  read [GitHub's size limit documentation][github-large-files] and consider
+  setting up [large file storage][github-lfs].
 </Warning>
 
 ```baml
@@ -232,7 +236,8 @@ test Test1 {
 <ParamField path="file" type="string" required="true">
   The path to the audio file, relative to the directory containing the current BAML file.
 
-  audio files must be somewhere in `baml_src/`.
+audio files must be somewhere in `baml_src/`.
+
 </ParamField>
 
 <ParamField path="media_type" type="string">
@@ -286,7 +291,8 @@ test Test1 {
   The mime-type of the audio. If not set, and the provider expects a mime-type
   to be provided, BAML will try to infer it based on the contents of the file.
 
-  If `base64` is a data URL, this field will be ignored.
+If `base64` is a data URL, this field will be ignored.
+
 </ParamField>
 </Tab>
 </Tabs>
@@ -295,16 +301,16 @@ test Test1 {
 
 Test blocks in BAML code may contain checks and asserts. These attributes
 behave similarly to value-level [Checks and Asserts](/guide/baml-advanced/checks-and-asserts),
-with several additional variables available in the context of the jinja 
+with several additional variables available in the context of the jinja
 expressions you can write in a test:
 
-  - The `_` variable contains fields `result`, `checks` and `latency_ms`.
-  - The `this` variable refers to the value computed by the test, and is
-    shorthand for `_.result`.
-  - In a given check or assert, `_.checks.$NAME` can refer to the NAME of any earlier
-    check that was run in the same test block. By referring to prior checks,
-    you can build compound checks and asserts, for example asserting that all
-    checks of a certain type passed.
+- The `_` variable contains fields `result`, `checks` and `latency_ms`.
+- The `this` variable refers to the value computed by the test, and is
+  shorthand for `_.result`.
+- In a given check or assert, `_.checks.$NAME` can refer to the NAME of any earlier
+  check that was run in the same test block. By referring to prior checks,
+  you can build compound checks and asserts, for example asserting that all
+  checks of a certain type passed.
 
 The following example illustrates how each of these features can be used to
 validate a test result.
@@ -323,12 +329,13 @@ test MyTest {
 ```
 
 `@@check` and `@@assert` behave differently:
-  - A `@@check` represents a property
-    of the test result that should either be manually checked or checked by a
-    subsequent stage in the test. Multiple `@@check` predicates can fail
-    without causing a hard failure of the test.
-  - An `@@assert` represents a hard guarantee. The first failing assert will halt
-    the remainder of the checks and asserts in this particular test.
+
+- A `@@check` represents a property
+  of the test result that should either be manually checked or checked by a
+  subsequent stage in the test. Multiple `@@check` predicates can fail
+  without causing a hard failure of the test.
+- An `@@assert` represents a hard guarantee. The first failing assert will halt
+  the remainder of the checks and asserts in this particular test.
 
 For more information about the syntax used inside `@@check` and `@@assert`
 attributes, see [Checks and Asserts](/guide/baml-advanced/checks-and-asserts)
@@ -345,15 +352,37 @@ The `type_builder` block can contain new types scoped to the parent `test` block
 and also `dynamic` blocks that act as modifiers for dynamic classes or enums.
 
 ### Try it! Press 'Run Test' below!
- <div class="resizer">
-<iframe
-  class="resized"
-  src="https://promptfiddle.com/embed?id=dynamic_types"
- 
-  height="640"
-  style="border: none;"
-  resize="both"
-  overflow="auto"
-  msallowfullscreen
-></iframe>
+
+{" "}
+
+<div class="resizer">
+  <iframe
+    class="resized"
+    src="https://promptfiddle.com/embed?id=dynamic_types"
+    height="640"
+    style="border: none;"
+    resize="both"
+    overflow="auto"
+    msallowfullscreen
+  ></iframe>
 </div>
+
+## Command Line Testing
+
+While the VSCode playground is excellent for interactive development and debugging, you can also run your tests from the command line using the BAML CLI:
+
+```bash
+# Run all tests
+baml-cli test
+
+# Run tests for a specific function
+baml-cli test -i "ClassifyMessage::"
+
+# Run tests in parallel with custom concurrency
+baml-cli test --parallel 5
+
+# List available tests without running them
+baml-cli test --list
+```
+
+See the [CLI Test Reference](/ref/baml-cli/test) for complete documentation of all available options, filtering capabilities, and output formats.

@@ -1,5 +1,5 @@
-import { b, b_sync } from './test-setup'; // or wherever your b is defined
-import { Collector } from '@boundaryml/baml';
+import { b, b_sync } from "./test-setup"; // or wherever your b is defined
+import { Collector } from "@boundaryml/baml";
 
 /**
  * Helper function to force garbage collection.
@@ -24,7 +24,7 @@ describe("With Options Tests", () => {
   });
 
   it("should test with options logger async call", async () => {
-    console.log("### function_span_count", Collector.__functionSpanCount());
+    console.log("### function_call_count", Collector.__functionSpanCount());
     // Should be garbage collected
     expect(Collector.__functionSpanCount()).toBe(0);
 
@@ -71,7 +71,7 @@ describe("With Options Tests", () => {
     // Create a collector
     const collector = new Collector("my-collector");
     // Create a new instance with the collector using a sync client
-    
+
     const myB = b_sync.withOptions({ collector });
 
     // Make the sync call

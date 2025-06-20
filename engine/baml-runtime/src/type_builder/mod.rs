@@ -1,7 +1,7 @@
 use std::fmt;
 use std::sync::{Arc, Mutex};
 
-use baml_types::{BamlValue, EvaluationContext, FieldType, StreamingBehavior};
+use baml_types::{BamlValue, EvaluationContext, FieldType};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::{
     internal_baml_parser_database::ParserDatabase, ir::repr::TypeBuilderEntry,
@@ -55,7 +55,7 @@ impl<T: Meta> From<&Arc<Mutex<T>>> for PropertyAttributes {
             skip,
             meta: properties,
             constraints: Vec::new(),
-            streaming_behavior: StreamingBehavior::default(),
+            streaming_behavior: Default::default(),
         }
     }
 }
@@ -520,19 +520,17 @@ impl TypeBuilder {
                             .r#type(f.elem.r#type.elem.to_owned())
                             .with_meta(
                                 "alias",
-                                f.attributes.get("alias").map_or(BamlValue::Null, |v| {
-                                    v.resolve_string(&EvaluationContext::default())
+                                f.attributes.alias().map_or(BamlValue::Null, |v| {
+                                    v.resolve(&EvaluationContext::default())
                                         .map_or(BamlValue::Null, BamlValue::String)
                                 }),
                             )
                             .with_meta(
                                 "description",
-                                f.attributes
-                                    .get("description")
-                                    .map_or(BamlValue::Null, |v| {
-                                        v.resolve_string(&EvaluationContext::default())
-                                            .map_or(BamlValue::Null, BamlValue::String)
-                                    }),
+                                f.attributes.description().map_or(BamlValue::Null, |v| {
+                                    v.resolve(&EvaluationContext::default())
+                                        .map_or(BamlValue::Null, BamlValue::String)
+                                }),
                             );
                     }
                 }
@@ -547,30 +545,28 @@ impl TypeBuilder {
                             .unwrap()
                             .with_meta(
                                 "alias",
+                                variant.attributes.alias().map_or(BamlValue::Null, |v| {
+                                    v.resolve(&EvaluationContext::default())
+                                        .map_or(BamlValue::Null, BamlValue::String)
+                                }),
+                            )
+                            .with_meta(
+                                "description",
                                 variant
                                     .attributes
-                                    .get("alias")
+                                    .description()
                                     .map_or(BamlValue::Null, |v| {
-                                        v.resolve_string(&EvaluationContext::default())
+                                        v.resolve(&EvaluationContext::default())
                                             .map_or(BamlValue::Null, BamlValue::String)
                                     }),
                             )
                             .with_meta(
-                                "description",
-                                variant.attributes.get("description").map_or(
-                                    BamlValue::Null,
-                                    |v| {
-                                        v.resolve_string(&EvaluationContext::default())
-                                            .map_or(BamlValue::Null, BamlValue::String)
-                                    },
-                                ),
-                            )
-                            .with_meta(
                                 "skip",
-                                variant.attributes.get("skip").map_or(BamlValue::Null, |v| {
-                                    v.resolve_bool(&EvaluationContext::default())
-                                        .map_or(BamlValue::Null, BamlValue::Bool)
-                                }),
+                                if variant.attributes.skip() {
+                                    BamlValue::Bool(true)
+                                } else {
+                                    BamlValue::Bool(false)
+                                },
                             );
                     }
                 }
@@ -954,7 +950,7 @@ mod tests {
   Classes: [
     Address {
       street string (alias=String("streetAddress"), description=String("Street address including number")),
-      unit int? (description=String("Apartment/unit number if applicable")),
+      unit (int | null) (description=String("Apartment/unit number if applicable")),
       tags string[] (alias=String("labels")),
       is_primary bool,
       coordinates float (skip=Bool(true))

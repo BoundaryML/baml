@@ -6,8 +6,8 @@ enum EnumOutput {
   ONE
 
   /// The second enum.
-  TWO
-  THREE
+  TWO @alias("two") @description("two")
+  THREE @alias("hi") @description("three")
 
   @@alias("VALUE_ENUM")
 }
