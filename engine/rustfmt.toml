@@ -1,0 +1,13 @@
+# Can't use these in a stable toolchain, only through CLI:
+
+# cargo fmt -- --config imports_granularity="Crate" --config group_imports="StdExternalCrate"
+
+# unstable_features = true
+
+# group_imports = "StdExternalCrate"
+# imports_granularity = "Crate"
+
+# This one is nice because it reduces nesting, but in some cases it produces
+# very ugly looking code: https://github.com/rust-lang/rust/issues/136224
+# We'll enable it when it's stable or when the issue above is fixed.
+# overflow_delimited_expr = true

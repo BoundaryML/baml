@@ -9,6 +9,7 @@ use baml_types::{BamlMedia, BamlValue, BamlValueWithMeta, HasFieldType, ToUnionN
 mod baml_value;
 #[allow(non_snake_case)]
 #[path = "cffi/cffi_generated.rs"]
+#[rustfmt::skip]
 mod cffi_generated;
 mod function_args;
 mod traits;

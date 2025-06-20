@@ -88,54 +88,51 @@ impl OpenApiUserData {
                             .map(|(name, is_optional, ty)| (name, is_optional, ty))
                             .collect();
                         properties.sort_by_key(|(name, _, _)| name.clone());
-                        let component_request_body = ComponentRequestBody {
-                            content: vec![(
-                                "application/json".to_string(),
-                                MediaTypeSchema {
-                                    schema: TypeOpenApi::Inline {
-                                        r#type: TypePrimitive::Object {
-                                            properties: IndexMap::from_iter(
-                                                properties
-                                                    .clone()
-                                                    .into_iter()
-                                                    .map(|(n, _, ty)| (n, ty))
-                                                    .chain(std::iter::once((
-                                                        "__baml_options__".to_string(),
-                                                        TypeOpenApi::Ref {
-                                                            r#ref:
-                                                                "#/components/schemas/BamlOptions"
-                                                                    .to_string(),
-                                                            meta: OpenApiMeta {
-                                                                nullable: true,
-                                                                ..OpenApiMeta::default()
-                                                            },
+                        let component_request_body =
+                            ComponentRequestBody {
+                                content: vec![("application/json".to_string(), MediaTypeSchema {
+                                schema: TypeOpenApi::Inline {
+                                    r#type: TypePrimitive::Object {
+                                        properties: IndexMap::from_iter(
+                                            properties
+                                                .clone()
+                                                .into_iter()
+                                                .map(|(n, _, ty)| (n, ty))
+                                                .chain(std::iter::once((
+                                                    "__baml_options__".to_string(),
+                                                    TypeOpenApi::Ref {
+                                                        r#ref: "#/components/schemas/BamlOptions"
+                                                            .to_string(),
+                                                        meta: OpenApiMeta {
+                                                            nullable: true,
+                                                            ..OpenApiMeta::default()
                                                         },
-                                                    ))),
-                                            ),
-                                            required: IndexSet::from_iter(
-                                                properties.iter().filter_map(
-                                                    |(name, is_optional, _ty)| {
-                                                        if *is_optional {
-                                                            None
-                                                        } else {
-                                                            Some(name.clone())
-                                                        }
                                                     },
-                                                ),
-                                            ), // TODO: Omit optional args?
-                                            additional_properties: AdditionalProperties::Closed,
-                                        },
-                                        meta: OpenApiMeta {
-                                            title: Some(format!("{}Request", name.0)),
-                                            ..OpenApiMeta::default()
-                                        }, // TODO: Correct?
+                                                ))),
+                                        ),
+                                        required: IndexSet::from_iter(
+                                            properties.iter().filter_map(
+                                                |(name, is_optional, _ty)| {
+                                                    if *is_optional {
+                                                        None
+                                                    } else {
+                                                        Some(name.clone())
+                                                    }
+                                                },
+                                            ),
+                                        ), // TODO: Omit optional args?
+                                        additional_properties: AdditionalProperties::Closed,
                                     },
+                                    meta: OpenApiMeta {
+                                        title: Some(format!("{}Request", name.0)),
+                                        ..OpenApiMeta::default()
+                                    }, // TODO: Correct?
                                 },
-                            )]
-                            .into_iter()
-                            .collect(),
-                            required: true,
-                        };
+                            })]
+                                .into_iter()
+                                .collect(),
+                                required: true,
+                            };
                         (name.clone(), component_request_body)
                     })
                     .collect(),

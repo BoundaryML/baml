@@ -44,12 +44,20 @@ jobs:
           cache: pnpm
           cache-dependency-path: |
             typescript/**/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
       - name: Install Node
         run: pnpm install --frozen-lockfile
         working-directory: typescript
       - name: Check TS Lint
         run: pnpm biome ci . --organize-imports-enabled=false
         working-directory: typescript
+      - name: Check Rust Lint
+        # rustfmt can only run unstable features on stable toolchains if passed
+        # through CLI. We don't want to download 2 toolchains just for this.
+        run: cargo fmt --check -- --config imports_granularity="Crate" --config group_imports="StdExternalCrate"
+        working-directory: engine
   test_node_generator:
     runs-on: ubuntu-latest
     steps:
