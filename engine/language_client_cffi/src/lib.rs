@@ -5,7 +5,7 @@ mod raw_ptr_wrapper;
 use std::ops::Deref;
 use std::{collections::HashMap, ffi::CStr, ptr::null, sync::Arc};
 use anyhow::Result;
-use baml_runtime::tracingv2::storage::storage::{Collector, Usage};
+use baml_runtime::tracingv2::storage::storage::Collector;
 use baml_runtime::{BamlRuntime, FunctionResult};
 use once_cell::sync::{Lazy, OnceCell};
 

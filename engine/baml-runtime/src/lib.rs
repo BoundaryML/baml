@@ -411,14 +411,8 @@ impl BamlRuntime {
     where
         F: Fn(FunctionResult),
     {
-        log::info!("env vars1: {:#?}", env_vars.clone());
 
         baml_log::set_from_env(&env_vars).unwrap();
-        baml_log::info!("env vars: {:#?}", env_vars.clone());
-        log::info!("env vars2: {:#?}", env_vars.clone());
-        for (key, value) in env_vars.iter() {
-            log::info!("env var: {} = {}", key, value);
-        }
 
         let call = self
             .tracer_wrapper

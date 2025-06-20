@@ -45,6 +45,7 @@ pub trait TestExecutor {
         max_concurrency: usize,
         output_format: &crate::cli::testing::OutputFormat,
         junit_path: Option<&String>,
+        env_vars: &HashMap<String, String>,
     ) -> TestRunStatus;
 }
 
@@ -180,6 +181,7 @@ impl TestExecutor for BamlRuntime {
         max_concurrency: usize,
         output_format: &crate::cli::testing::OutputFormat,
         junit_path: Option<&String>,
+        env_vars: &HashMap<String, String>,
     ) -> TestRunStatus {
         let renderer = AggregateRenderer::new(output_format, junit_path);
         let selected_tests = self
@@ -219,6 +221,7 @@ impl TestExecutor for BamlRuntime {
                 let runtime = self.clone();
                 let function_name = fn_name.to_string();
                 let test_name = tt_name.to_string();
+                let env_vars = env_vars.clone();
                 let fut = tokio::spawn(async move {
                     let _permit = semaphore.acquire().await.unwrap();
                     let ctx_manager = runtime.create_ctx_manager(
@@ -233,7 +236,7 @@ impl TestExecutor for BamlRuntime {
                         TestExecutionStatus::Running,
                     ));
                     let (result, _) = runtime
-                        .run_test(&function_name, &test_name, &ctx_manager, Some(|_| {}), None, HashMap::new())
+                        .run_test(&function_name, &test_name, &ctx_manager, Some(|_| {}), None, env_vars)
                         .await;
                     let duration = start_instant.elapsed();
                     let _ = tx.send((
