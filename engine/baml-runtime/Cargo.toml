@@ -45,7 +45,9 @@ indoc.workspace = true
 # instant = "0.1"  # do not use this or wasm-timer - use web-time instead
 json_comments = "0.2.2"
 jsonish.workspace = true
+generators-lib = { path = "../generators/utils/generators_lib" }
 internal-baml-codegen.workspace = true
+generators-openapi = { path = "../generators/languages/openapi" }
 internal-llm-client.workspace = true
 internal-baml-core.workspace = true
 internal-baml-jinja.workspace = true

@@ -4,7 +4,7 @@ use crate::{
 };
 use anyhow::Result;
 use baml_types::{
-    BamlMap, BamlValue, BamlValueWithMeta, FieldType, LiteralValue, StreamingBehavior, TypeValue,
+    BamlMap, BamlValue, BamlValueWithMeta, FieldType, LiteralValue, TypeValue,
 };
 use internal_baml_core::ir::{
     ir_helpers::{infer_type, infer_type_with_meta, item_type, map_types},
@@ -172,72 +172,4 @@ impl IRHelperExtended for ScopedIr<'_> {
             None => self.ir.recursive_alias_definition(alias_name),
         }
     }
-
-    fn distribute_metadata<'a>(
-        &'a self,
-        field_type: &'a FieldType,
-    ) -> (
-        &'a FieldType,
-        (Vec<baml_types::Constraint>, baml_types::StreamingBehavior),
-    ) {
-        match field_type {
-            FieldType::Class(class_name) => match self.find_class(class_name) {
-                Err(_) => (field_type, (Vec::new(), StreamingBehavior::default())),
-                Ok(FindResult::Overriden(class_node, _) | FindResult::OnlyIr(class_node)) => (
-                    field_type,
-                    (
-                        class_node.item.attributes.constraints.clone(),
-                        class_node.item.attributes.streaming_behavior(),
-                    ),
-                ),
-                Ok(FindResult::OnlyDynamic(_)) => {
-                    (field_type, (Vec::new(), StreamingBehavior::default()))
-                }
-            },
-            FieldType::Enum(enum_name) => match self.find_enum(enum_name) {
-                Err(_) => (field_type, (Vec::new(), StreamingBehavior::default())),
-                Ok(FindResult::Overriden(enum_node, _) | FindResult::OnlyIr(enum_node)) => (
-                    field_type,
-                    (
-                        enum_node.item.attributes.constraints.clone(),
-                        StreamingBehavior::default(),
-                    ),
-                ),
-                Ok(FindResult::OnlyDynamic(_)) => {
-                    (field_type, (Vec::new(), StreamingBehavior::default()))
-                }
-            },
-            // Check the first level to see if it's constrained.
-            FieldType::WithMetadata {
-                base,
-                constraints,
-                streaming_behavior,
-            } => {
-                match base.as_ref() {
-                    // If so, we must check the second level to see if we need to combine
-                    // constraints across levels.
-                    // The recursion here means that arbitrarily nested `FieldType::WithMetadata`s
-                    // will be collapsed before the function returns.
-                    FieldType::WithMetadata { .. } => {
-                        let (sub_base, (sub_constraints, sub_streaming_behavior)) =
-                            self.distribute_metadata(base.as_ref());
-                        let combined_constraints = vec![constraints.clone(), sub_constraints]
-                            .into_iter()
-                            .flatten()
-                            .collect();
-                        let combined_streaming_behavior =
-                            streaming_behavior.combine(&sub_streaming_behavior);
-                        (
-                            sub_base,
-                            (combined_constraints, combined_streaming_behavior),
-                        )
-                    }
-                    _ => (base, (constraints.clone(), streaming_behavior.clone())),
-                }
-            }
-            _ => (field_type, (Vec::new(), StreamingBehavior::default())),
-        }
-    }
 }
-
-const UNIT_TYPE: FieldType = FieldType::Tuple(vec![]);

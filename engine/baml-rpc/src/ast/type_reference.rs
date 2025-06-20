@@ -7,12 +7,16 @@
 use std::sync::Arc;
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
 use super::type_definition::BamlTypeId;
 
+// a type that has checks and asserts (and possibly more) attached.
+// These are all user-defined types. Maybe rename to UserType
 pub type TypeReference = TypeReferenceWithMetadata<TypeMetadata>;
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Default)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Default, TS)]
+#[ts(export)]
 pub struct TypeMetadata {
     checks: Vec<CheckedType>,
     asserts: Vec<AssertedType>,
@@ -30,7 +34,7 @@ impl TypeMetadata {
 }
 
 /// FieldType represents the type of either a class field or a function arg.
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Hash)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Hash, TS)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum TypeReferenceWithMetadata<Metadata> {
     // Unknown type
@@ -64,15 +68,15 @@ pub enum TypeReferenceWithMetadata<Metadata> {
 
     // User-defined types
     Class {
-        name: Arc<BamlTypeId>,
+        type_id: Arc<BamlTypeId>,
         metadata: Metadata,
     },
     Enum {
-        name: Arc<BamlTypeId>,
+        type_id: Arc<BamlTypeId>,
         metadata: Metadata,
     },
     RecursiveTypeAlias {
-        name: Arc<BamlTypeId>,
+        type_id: Arc<BamlTypeId>,
         metadata: Metadata,
     },
 }
@@ -141,21 +145,21 @@ impl<Metadata: Default> TypeReferenceWithMetadata<Metadata> {
 
     pub fn class(name: Arc<BamlTypeId>) -> Self {
         Self::Class {
-            name,
+            type_id: name,
             metadata: Metadata::default(),
         }
     }
 
     pub fn enum_type(name: Arc<BamlTypeId>) -> Self {
         Self::Enum {
-            name,
+            type_id: name,
             metadata: Metadata::default(),
         }
     }
 
     pub fn recursive_type_alias(name: Arc<BamlTypeId>) -> Self {
         Self::RecursiveTypeAlias {
-            name,
+            type_id: name,
             metadata: Metadata::default(),
         }
     }
@@ -201,13 +205,13 @@ impl<Metadata: Default> TypeReferenceWithMetadata<Metadata> {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, TS)]
 pub struct NarrowingType<T> {
     pub name: T,
     pub expressions: Expression,
 }
 
-#[derive(Debug, PartialEq, Eq, Hash, Deserialize, Serialize)]
+#[derive(Debug, PartialEq, Eq, Hash, Deserialize, Serialize, TS)]
 #[serde(rename_all = "snake_case")]
 pub enum MediaTypeDefinition {
     Image,
@@ -215,14 +219,15 @@ pub enum MediaTypeDefinition {
 }
 
 /// Subset of [`crate::BamlValue`] allowed for literal type definitions.
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialOrd, Ord, PartialEq, Eq, Hash)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialOrd, Ord, PartialEq, Eq, Hash, TS)]
+#[ts(export)]
 pub enum LiteralTypeDefinition {
     String(String),
     Int(i64),
     Bool(bool),
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Hash)]
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Hash, TS)]
 #[serde(tag = "expression_type", content = "data", rename_all = "snake_case")]
 pub enum Expression {
     Jinja(String),

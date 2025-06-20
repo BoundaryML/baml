@@ -1,13 +1,14 @@
 use anyhow::{Context, Result};
-use baml_rpc::ast::tops::{FunctionSignature, SourceCode, AST};
-use baml_rpc::CreateBamlSrcUploadRequest;
+use baml_rpc::ast::tops::{FunctionDefinition, SourceCode, AST};
 use baml_rpc::TypeDefinition;
 use baml_rpc::TypeReference;
 use baml_rpc::{
-    ApiEndpoint, CreateBamlSrcUpload, CreateTraceEventUploadUrl, CreateTraceEventUploadUrlRequest,
-    CreateTraceEventUploadUrlResponse, S3UploadMetadata, TraceEventBatch,
+    ApiEndpoint, BamlSrcUploadS3File, CheckBamlSrcUpload, CheckBamlSrcUploadRequest,
+    CreateTraceEventUploadUrl, CreateTraceEventUploadUrlRequest, CreateTraceEventUploadUrlResponse,
+    S3UploadMetadata, TraceEventBatch,
 };
 use baml_rpc::{NamedType, TypeDefinitionSource};
+use baml_types::FieldType;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 use tracing::field;
@@ -54,9 +55,10 @@ fn get_publish_channel(
     {
         let Some(join_handle) = PUBLISHING_TASK.get() else {
             if !allow_missing {
-                baml_log::fatal_once!(
-                    "Tracing publisher not started. Report this bug to the BAML team."
-                );
+                // baml_log::fatal_once!(
+                //     "Tracing publisher not started. Report this bug to the BAML team."
+                // );
+                // TODO: redo this logic -- we dont start the publisher if there's no api key for example.
             }
             return None;
         };
@@ -81,22 +83,24 @@ struct RuntimeAST {
 }
 
 impl RuntimeAST {
-    #[allow(dead_code)]
     pub fn base_url(&self) -> String {
         // const SAM_API_URL: &str = "https://abe8c5ez29.execute-api.us-east-1.amazonaws.com";
         // const CHRIS_API_URL: &str = "https://o2em3sulde.execute-api.us-east-1.amazonaws.com";
         // return SAM_API_URL.to_string();
-        self.ast
-            .env_var("BOUNDARY_API_URL")
-            .cloned()
-            .unwrap_or_else(|| "https://api.boundaryml.com".to_string())
+        let url = match self.ast.env_var("BOUNDARY_API_URL") {
+            Some(url) if !url.is_empty() => url.clone(),
+            _ => "https://api.boundaryml.com".to_string(),
+        };
+        url
     }
 
-    #[allow(dead_code)]
     pub fn api_key(&self) -> Option<String> {
         // const CHRIS_API_KEY: &str = "7fc9adc617ed731ba6048daffe0e0de2ec168283624d07a94c2ed520183ea3f722633aa2a5eee9109098254e294f995e";
         // return CHRIS_API_KEY.to_string();
-        self.ast.env_var("BOUNDARY_API_KEY").cloned()
+        match self.ast.env_var("BOUNDARY_API_KEY") {
+            Some(key) if !key.is_empty() => Some(key.clone()),
+            _ => None,
+        }
     }
 
     async fn api_request<'req, 'resp, TEndpoint>(
@@ -117,10 +121,21 @@ impl RuntimeAST {
             .client
             .post(format!("{}{}", self.base_url(), TEndpoint::path()))
             .json(&request)
-            .bearer_auth(self.api_key().unwrap())
-            .send()
-            .await
-            .map_err(ApiError::Transport)?;
+            .bearer_auth(self.api_key().unwrap());
+        let response = response.send().await;
+
+        let response = match response {
+            Ok(response) => response,
+            Err(e) => {
+                println!(
+                    "error: {:#?}, url: {}, path: {}",
+                    e,
+                    self.base_url(),
+                    TEndpoint::path()
+                );
+                return Err(ApiError::Transport(e));
+            }
+        };
 
         // B) take the status code up‑front
         let status = response.status();
@@ -164,6 +179,10 @@ impl TypeLookup for RuntimeAST {
     fn function_lookup(&self, name: &str) -> Option<Arc<baml_rpc::ast::tops::BamlFunctionId>> {
         self.ast.function_lookup(name)
     }
+
+    fn baml_src_hash(&self) -> Option<String> {
+        self.ast.baml_src_hash()
+    }
 }
 
 pub fn start_publisher(
@@ -200,17 +219,6 @@ pub fn start_publisher(
         tx
     });
 
-    // Update runtime if channel already existed
-    #[cfg(not(target_arch = "wasm32"))]
-    let _ = rt.block_on(flush());
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = wasm_bindgen_futures::spawn_local(async move {
-            if let Err(e) = flush().await {
-                log::error!("Failed to flush: {}", e);
-            }
-        });
-    }
     let _ = channel.send(PublisherMessage::UpdateRuntime(lookup));
 }
 
@@ -265,7 +273,7 @@ impl TracePublisher {
         let mut buffer: Vec<Arc<TraceEventWithMeta>> = Vec::new();
         let mut tick_interval = interval(Duration::from_secs(2));
 
-        tracing::info!(
+        tracing::debug!(
             message = "Starting publisher loop",
             base_url = self.lookup.base_url(),
         );
@@ -281,6 +289,10 @@ impl TracePublisher {
                     }
 
                     match message {
+                        // we expect this to happen first as it sets the 'lookup' object, which is the current runtime for those incoming messages.
+                        // All the rest of the messages are guaranteed (99% certainty) to be part of that same
+                        // runtime. We can then inject metadata created by the Runtime object into all future messages,
+                        // We do this in the into_rpc_event() for example, to create the "RPC" equivalent object, but with some additional metadata.
                         PublisherMessage::UpdateRuntime(lookup) => {
                             self.process_baml_src_upload(&lookup).await;
                             self.lookup = lookup;
@@ -290,6 +302,7 @@ impl TracePublisher {
                             if buffer.len() >= self.batch_size {
                                 self.process_batch(std::mem::take(&mut buffer)).await;
                             }
+
                         },
                         PublisherMessage::Flush(flush_ack) => {
                             // Flush the current buffer if it has any pending events.
@@ -325,7 +338,7 @@ impl TracePublisher {
     async fn process_baml_src_upload(&self, lookup: &RuntimeAST) {
         let result = self.process_baml_src_upload_impl(lookup).await;
         if let Err(e) = result {
-            tracing::error!("Failed to upload baml src: {}", e);
+            tracing::debug!("Failed to upload baml src: {}", e);
         }
     }
 
@@ -334,7 +347,7 @@ impl TracePublisher {
         let ast = &lookup.ast;
 
         // Convert functions
-        let functions: Vec<FunctionSignature> = ast
+        let functions: Vec<FunctionDefinition> = ast
             .functions
             .iter()
             .map(|(name, signature)| {
@@ -343,11 +356,11 @@ impl TracePublisher {
                     .iter()
                     .map(|(name, field_type)| NamedType {
                         name: name.clone(),
-                        r#type: field_type.into_rpc_event(self.lookup.as_ref()),
+                        type_ref: field_type.into_rpc_event(self.lookup.as_ref()),
                     })
                     .collect();
 
-                FunctionSignature {
+                FunctionDefinition {
                     function_id: signature.function_id.0.clone(),
                     inputs,
                     output: signature.output.into_rpc_event(self.lookup.as_ref()),
@@ -362,43 +375,76 @@ impl TracePublisher {
             .collect();
 
         // Convert types
-        let types: Vec<TypeDefinition> = ast
-            .types
-            .iter()
-            .map(|(name, (type_id, _deps))| {
-                let node_id = &(**type_id).0;
-                let type_name = node_id.to_string();
+        let types: Vec<TypeDefinition> =
+            ast.types
+                .iter()
+                .map(|(_name, type_with_deps)| {
+                    let type_id_arc = &type_with_deps.type_id.0;
+                    let dependencies_arc = &type_with_deps.type_id.1;
 
-                if type_name.starts_with("class") {
-                    TypeDefinition::Class {
-                        name: (**type_id).clone(),
-                        fields: vec![], // Would need to extract actual fields
-                        source: TypeDefinitionSource::CompileTime,
-                        dependencies: vec![], // Would need actual dependencies
+                    let concrete_type_id = (**type_id_arc).clone();
+                    let concrete_dependencies = (**dependencies_arc).clone();
+
+                    let node_id = &concrete_type_id.0;
+                    let type_name_str = node_id.type_name();
+
+                    match type_name_str {
+                        "class" => {
+                            let fields: Vec<NamedType> = type_with_deps
+                                .class_fields
+                                .as_ref()
+                                .map_or(vec![], |arc_fields| {
+                                    (**arc_fields)
+                                        .iter()
+                                        .map(|(name, field_type_arc)| NamedType {
+                                            name: name.clone(),
+                                            type_ref: (**field_type_arc)
+                                                .into_rpc_event(self.lookup.as_ref()),
+                                        })
+                                        .collect()
+                                });
+                            TypeDefinition::Class {
+                                type_id: concrete_type_id,
+                                fields,
+                                source: TypeDefinitionSource::CompileTime,
+                                dependencies: concrete_dependencies
+                                    .iter()
+                                    .map(|d| d.0.clone())
+                                    .collect(),
+                            }
+                        }
+                        "enum" => {
+                            let values: Vec<String> = type_with_deps
+                                .enum_values
+                                .as_ref()
+                                .map_or(vec![], |arc_values| (**arc_values).clone());
+                            TypeDefinition::Enum {
+                                type_id: concrete_type_id,
+                                values,
+                                source: TypeDefinitionSource::CompileTime,
+                                dependencies: concrete_dependencies
+                                    .iter()
+                                    .map(|d| d.0.clone())
+                                    .collect(),
+                            }
+                        }
+                        "type_alias" => TypeDefinition::Alias {
+                            type_id: concrete_type_id,
+                            rhs: (*type_with_deps.field_type).into_rpc_event(self.lookup.as_ref()),
+                        },
+                        _ => TypeDefinition::Alias {
+                            type_id: concrete_type_id,
+                            rhs: TypeReference::string(),
+                        },
                     }
-                } else if type_name.starts_with("enum") {
-                    TypeDefinition::Enum {
-                        name: (**type_id).clone(),
-                        values: vec![], // Would need to extract actual values
-                        source: TypeDefinitionSource::CompileTime,
-                        dependencies: vec![], // Would need actual dependencies
-                    }
-                } else {
-                    // Default to Alias for other types
-                    TypeDefinition::Alias {
-                        name: (**type_id).clone(),
-                        rhs: TypeReference::string(), // Default type
-                    }
-                }
-            })
-            .collect();
+                })
+                .collect();
 
         // Convert source_code
         let source_code: Vec<SourceCode> = ast
             .source_code
             .iter()
             .map(|(path, content)| {
-                // TODO(seawatts): Compute a simple hash for content_hash
                 let mut hasher: DefaultHasher = DefaultHasher::new();
                 content.hash(&mut hasher);
                 let content_hash = format!("{:x}", hasher.finish());
@@ -410,33 +456,82 @@ impl TracePublisher {
             })
             .collect();
 
-        let ast = std::sync::Arc::new(AST {
+        let ast_obj = std::sync::Arc::new(AST {
             functions,
             types,
-            source_code,
+            // TODO: optimize this by not cloning the source code
+            source_code: source_code.clone(),
         });
+
+        // Calculate hash of the entire BAML source
+        let baml_src_hash = ast.baml_src_hash().unwrap_or_default();
+
+        tracing::info!(
+            "Checking if BAML source upload is needed (hash: {})",
+            baml_src_hash
+        );
+
+        // Check if we should upload
+        let check_response = match lookup
+            .api_request::<CheckBamlSrcUpload>(CheckBamlSrcUploadRequest { baml_src_hash })
+            .await
+        {
+            Ok(response) => response,
+            Err(e) => {
+                tracing::error!("Failed to check BAML source upload status: {}", e);
+                return Err(e.into());
+            }
+        };
+        tracing::info!("check_response={:?}", check_response);
+
+        if !check_response.should_upload {
+            tracing::info!("BAML source already uploaded, skipping");
+            return Ok(());
+        }
 
         tracing::info!("Uploading BAML source");
 
-        match lookup
-            .api_request::<CreateBamlSrcUpload>(CreateBamlSrcUploadRequest { ast })
+        let upload_url = check_response
+            .upload_url
+            .ok_or_else(|| anyhow::anyhow!("No upload URL provided when should_upload is true"))?;
+
+        let upload_metadata = check_response.upload_metadata.ok_or_else(|| {
+            anyhow::anyhow!("No upload metadata provided when should_upload is true")
+        })?;
+
+        // Create the upload payload
+        let payload = BamlSrcUploadS3File { ast: ast_obj };
+
+        // Upload to S3
+        lookup
+            .client
+            .put(upload_url)
+            .json(&payload)
+            .headers({
+                let mut headers = reqwest::header::HeaderMap::new();
+                for (key, value) in upload_metadata.to_map() {
+                    let header_name = format!("x-amz-meta-{}", key);
+                    if let (Ok(name), Ok(val)) = (
+                        reqwest::header::HeaderName::from_bytes(header_name.as_bytes()),
+                        reqwest::header::HeaderValue::from_str(&value),
+                    ) {
+                        headers.insert(name, val);
+                    }
+                }
+                headers
+            })
+            .send()
             .await
-        {
-            Ok(response) => {
-                log::debug!("Successfully uploaded BAML source");
-                Ok(())
-            }
-            Err(e) => {
-                log::debug!("Failed to upload baml src: {}", e);
-                return Err(e.into());
-            }
-        }
+            .context("Failed to upload BAML source to S3")?;
+
+        tracing::info!("Successfully uploaded BAML source");
+        Ok(())
     }
 
     async fn process_batch(&self, batch: Vec<Arc<TraceEventWithMeta>>) {
         let batch_result = self.process_batch_with_splitting(batch).await;
         if let Err(e) = batch_result {
-            baml_log::error!("Failed to upload trace events after retries: {:?}", e);
+            baml_log::debug!("Failed to upload trace events after retries: {:?}", e);
         }
     }
 
@@ -467,14 +562,14 @@ impl TracePublisher {
         // Try to upload the batch
         match self.process_batch_impl(batch.clone()).await {
             Ok(()) => {
-                tracing::info!("Successfully uploaded batch of {} events", batch.len());
+                tracing::debug!("Successfully uploaded batch of {} events", batch.len());
                 Ok(())
             }
             Err(e) => {
-                baml_log::error!("Failed to upload batch of {} events: {}", batch.len(), e);
+                log::info!("Failed to upload batch of {} events: {}", batch.len(), e);
                 // If batch size is at or below minimum, give up
                 if batch.len() <= min_batch_size {
-                    baml_log::error!(
+                    log::info!(
                         "Failed to upload single/minimum batch of {} events: {}",
                         batch.len(),
                         e
@@ -486,7 +581,7 @@ impl TracePublisher {
                 let mid = batch.len() / 2;
                 let (first_half, second_half) = batch.split_at(mid);
 
-                tracing::warn!(
+                tracing::debug!(
                     "Batch upload failed (size: {}), splitting into {} and {} events: {}",
                     batch.len(),
                     first_half.len(),
@@ -505,19 +600,19 @@ impl TracePublisher {
                 // If either half failed, propagate the error
                 match (first_result, second_result) {
                     (Ok(()), Ok(())) => {
-                        tracing::info!("Successfully uploaded split batches");
+                        tracing::debug!("Successfully uploaded split batches");
                         Ok(())
                     }
                     (Err(e1), Ok(())) => {
-                        baml_log::error!("First half failed: {}", e1);
+                        log::info!("First half failed: {}", e1);
                         Err(e1)
                     }
                     (Ok(()), Err(e2)) => {
-                        baml_log::error!("Second half failed: {}", e2);
+                        log::info!("Second half failed: {}", e2);
                         Err(e2)
                     }
                     (Err(e1), Err(e2)) => {
-                        baml_log::error!("Both halves failed - first: {}, second: {}", e1, e2);
+                        log::debug!("Both halves failed - first: {}, second: {}", e1, e2);
                         Err(e1) // Return the first error
                     }
                 }
@@ -532,6 +627,7 @@ impl TracePublisher {
     ///   2. Append the JSON to a file (using async file I/O on macOS).
     ///   3. Post the JSON to an HTTP API with up to 3 retries.
     async fn process_batch_impl(&self, batch: Vec<Arc<TraceEventWithMeta>>) -> Result<()> {
+        // log::info!("Processing {:#?}", batch);
         // Assemble the upload request structure.
         let trace_event_batch = TraceEventBatch {
             events: batch
@@ -540,31 +636,33 @@ impl TracePublisher {
                 .collect(),
         };
 
+        // log::info!("trace_event_batch={:#?}", trace_event_batch);
+
         // tracing::info!(
         //     message = "Trying to upload trace events",
         //     batch_size = batch.len()
         // );
 
         // Serialize to JSON.
-        #[cfg(not(target_arch = "wasm32"))]
-        {
-            use tokio::fs::OpenOptions;
-            if let Ok(mut file) = OpenOptions::new()
-                .create(true)
-                .append(true)
-                .open("/tmp/trace_events.json")
-                .await
-            {
-                for e in trace_event_batch.events.iter() {
-                    if let Ok(json) = serde_json::to_string(e) {
-                        use tokio::io::AsyncWriteExt;
-                        if let Err(e) = file.write_all(format!("{}\n", json).as_bytes()).await {
-                            log::error!("Failed to write to trace file: {}", e);
-                        }
-                    }
-                }
-            }
-        }
+        // #[cfg(not(target_arch = "wasm32"))]
+        // {
+        //     use tokio::fs::OpenOptions;
+        //     if let Ok(mut file) = OpenOptions::new()
+        //         .create(true)
+        //         .append(true)
+        //         .open("/tmp/trace_events.json")
+        //         .await
+        //     {
+        //         for e in trace_event_batch.events.iter() {
+        //             if let Ok(json) = serde_json::to_string(e) {
+        //                 use tokio::io::AsyncWriteExt;
+        //                 if let Err(e) = file.write_all(format!("{}\n", json).as_bytes()).await {
+        //                     log::error!("Failed to write to trace file: {}", e);
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
 
         // Upload via HTTP with retry logic.
         // TODO watch out with time crate
@@ -576,7 +674,7 @@ impl TracePublisher {
         {
             Ok(response) => response,
             Err(e) => {
-                baml_log::error!("Failed to upload trace events: {}", e);
+                log::debug!("Failed to upload trace events: {}", e);
                 return Err(e.into());
             }
         };
@@ -638,8 +736,6 @@ pub fn publish_trace_event(event: Arc<TraceEventWithMeta>) -> anyhow::Result<()>
 // but that's ok since noone uses our wasm build in node for logging.
 // https://github.com/whizsid/wasmtimer-rs/issues/26
 pub async fn flush() -> anyhow::Result<()> {
-    // TODO: debug
-    baml_log::debug!("Flushing trace events");
     let Some(channel) = get_publish_channel(false) else {
         return Ok(());
     };
@@ -649,7 +745,7 @@ pub async fn flush() -> anyhow::Result<()> {
     }
 
     // Set a timeout to avoid waiting indefinitely.
-    let timeout_duration = Duration::from_secs(6);
+    let timeout_duration = Duration::from_secs(8);
 
     match timeout(timeout_duration, ack_rx).await {
         Ok(Ok(())) => Ok(()),

@@ -1,12 +1,30 @@
 use itertools::Itertools;
 use std::collections::HashSet;
 
-use internal_baml_diagnostics::DatamodelError;
-// use internal_baml_schema_ast::ast::expr;
-use internal_baml_schema_ast::ast::{ClassConstructor, ClassConstructorField, Expression, Stmt};
-use internal_baml_schema_ast::ast::{WithName, WithSpan};
+use internal_baml_ast::ast::{ClassConstructor, ClassConstructorField, Expression, Stmt};
+use internal_baml_ast::ast::{WithName, WithSpan};
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
 
+use crate::ir;
+use crate::ir::builtin::is_builtin_identifier;
 use crate::validate::validation_pipeline::context::Context;
+
+/// Builtin functions.
+///
+/// TODO: Define this somewhere else like their own std.baml file or something,
+/// but we don't have modules yet.
+fn baml_prelude() -> HashSet<String> {
+    let builtin_functions = [ir::builtin::functions::FETCH_VALUE];
+
+    let builtin_classes = [ir::builtin::classes::REQUEST];
+
+    HashSet::from_iter(
+        builtin_functions
+            .iter()
+            .chain(builtin_classes.iter())
+            .map(ToString::to_string),
+    )
+}
 
 // An expr_fn is valid if:
 //   - Its arguments have valid types.
@@ -20,7 +38,8 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
         internal_baml_jinja_types::JinjaContext::Prompt,
     );
 
-    let mut taken_names = std::collections::HashSet::new();
+    let mut taken_names = baml_prelude();
+
     ctx.db.walk_classes().for_each(|class| {
         class.add_to_types(&mut defined_types);
         taken_names.insert(class.name().to_owned());
@@ -33,6 +52,10 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
     });
 
     for expr_fn in ctx.db.walk_expr_fns() {
+        ctx.push_warning(DatamodelWarning::new(
+            "Workflow functions are experimental, and will break in the future.".to_string(),
+            expr_fn.name_span().clone(),
+        ));
         if taken_names.contains(expr_fn.name()) {
             ctx.push_error(DatamodelError::new_validation_error(
                 "Expr function name must be unique",
@@ -61,6 +84,10 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
 
     for toplevel_assignment in ctx.db.walk_toplevel_assignments() {
         let scope: HashSet<String> = taken_names.clone();
+        ctx.push_warning(DatamodelWarning::new(
+            "Variable assignment is experimental, and will break in the future.".to_string(),
+            toplevel_assignment.expr().span().clone(),
+        ));
         validate_stmt(
             ctx,
             &toplevel_assignment.top_level_assignment().stmt,
@@ -84,15 +111,29 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
             }
         }
         Expression::Lambda(_args, _body, _span) => {}
-        Expression::FnApp(fn_name, args, span) => {
+        Expression::App(app) => {
             // Validate the function name.
-            if !scope.contains(&fn_name.to_string()) {
+            if !scope.contains(app.name.name()) {
                 ctx.push_error(DatamodelError::new_anyhow_error(
-                    anyhow::anyhow!("Unknown function {}", &fn_name.to_string()),
-                    span.clone(),
+                    anyhow::anyhow!("Unknown function {}", &app.name.to_string()),
+                    app.span().clone(),
                 ));
             }
-            for arg in args {
+
+            // Validate generics.
+            if is_builtin_identifier(app.name.name()) {
+                if app.type_args.len() == 0 {
+                    ctx.push_error(DatamodelError::new_anyhow_error(
+                        anyhow::anyhow!(
+                            "Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>",
+                            app.name.name(),
+                            app.name.name()
+                        ),
+                        app.span().clone(),
+                    ));
+                }
+            }
+            for arg in &app.args {
                 validate_expression(ctx, arg, scope);
             }
         }
@@ -137,7 +178,7 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
                 })
                 .collect::<Vec<_>>();
 
-            for field in cc.fields.iter() {
+            for field in &cc.fields {
                 match field {
                     ClassConstructorField::Named(field_name, value) => {}
                     ClassConstructorField::Spread(expr) => {

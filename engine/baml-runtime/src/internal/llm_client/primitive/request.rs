@@ -127,12 +127,12 @@ async fn log_http_response(
 ) {
     let event = TraceEvent::new_raw_llm_response(
         runtime_context.runtime_context().call_id_stack.clone(),
-        Arc::new(HTTPResponse {
-            request_id: runtime_context.http_request_id().clone(),
+        Arc::new(HTTPResponse::new(
+            runtime_context.http_request_id().clone(),
             status,
             headers,
             body,
-        }),
+        )),
     );
     BAML_TRACER.lock().unwrap().put(Arc::new(event));
 }
@@ -183,12 +183,12 @@ pub(crate) async fn build_and_log_outbound_request(
     {
         let event = TraceEvent::new_raw_llm_request(
             runtime_context.runtime_context().call_id_stack.clone(),
-            Arc::new(HTTPRequest {
-                id: runtime_context.http_request_id().clone(),
-                url: built_req.url().to_string(),
-                method: built_req.method().to_string(),
-                headers: json_headers(built_req.headers()),
-                body: HTTPBody::new(
+            Arc::new(HTTPRequest::new(
+                runtime_context.http_request_id().clone(),
+                built_req.url().to_string(),
+                built_req.method().to_string(),
+                json_headers(built_req.headers()),
+                HTTPBody::new(
                     built_req
                         .body()
                         .map(reqwest::Body::as_bytes)
@@ -196,7 +196,7 @@ pub(crate) async fn build_and_log_outbound_request(
                         .unwrap_or_default()
                         .into(),
                 ),
-            }),
+            )),
         );
         BAML_TRACER.lock().unwrap().put(Arc::new(event));
     }

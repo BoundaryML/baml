@@ -16,7 +16,7 @@ impl HTTPResponse {
         format!(
             "HTTPResponse(status={}, headers={}, body={})",
             self.inner.status,
-            serde_json::to_string_pretty(&self.inner.headers).unwrap(),
+            serde_json::to_string_pretty(&self.inner.headers()).unwrap(),
             serde_json::to_string_pretty(&self.inner.body.as_serde_value()).unwrap()
         )
     }
@@ -29,7 +29,7 @@ impl HTTPResponse {
     #[napi(getter)]
     pub fn headers(&self, env: Env) -> napi::Result<JsObject> {
         let mut obj = env.create_object()?;
-        if let Some(headers) = &self.inner.headers {
+        if let Some(headers) = self.inner.headers() {
             for (k, v) in headers {
                 obj.set_named_property(k, v)?;
             }

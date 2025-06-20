@@ -15,7 +15,7 @@ pub(super) fn coerce_array(
     list_target: &FieldType,
     value: Option<&crate::jsonish::Value>,
 ) -> Result<BamlValueWithFlags, ParsingError> {
-    assert!(matches!(list_target, FieldType::List(_)));
+    assert!(matches!(list_target, FieldType::List(_, _)));
 
     log::debug!(
         "scope: {scope} :: coercing to: {name} (current: {current})",
@@ -25,7 +25,7 @@ pub(super) fn coerce_array(
     );
 
     let inner = match list_target {
-        FieldType::List(inner) => inner,
+        FieldType::List(inner, _) => inner,
         _ => unreachable!("coerce_array"),
     };
 

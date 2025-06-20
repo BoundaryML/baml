@@ -46,6 +46,7 @@ uuid = { version = "1.8.0", features = ["v4", "serde"] }
 web-time.workspace = true
 static_assertions.workspace = true
 baml-ids.workspace = true
+serde_with = "3.12.0"
 
 
 [features]

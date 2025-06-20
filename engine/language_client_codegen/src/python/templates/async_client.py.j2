@@ -1,48 +1,30 @@
-from typing import Any, Dict, List, Optional, TypeVar, Union, TypedDict, Type, cast
-from typing_extensions import NotRequired, Literal
-import pprint
-import os
-import baml_py
-from pydantic import BaseModel, ValidationError, create_model
+from typing import Dict, List, Optional, TypeVar, Union, cast
+from typing_extensions import Literal
 
-from . import partial_types, types
+import baml_py
+
+from . import _baml
+from ._baml import BamlCallOptions
 from .types import Checked, Check
-from .type_builder import TypeBuilder
 from .parser import LlmResponseParser, LlmStreamParser
 from .async_request import AsyncHttpRequest, AsyncHttpStreamRequest
 from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
 
+
 OutputType = TypeVar('OutputType')
-
-
-# Define the TypedDict with optional parameters having default values
-class BamlCallOptions(TypedDict, total=False):
-    tb: NotRequired[TypeBuilder]
-    client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
-    collector: NotRequired[Union[baml_py.baml_py.Collector, List[baml_py.baml_py.Collector]]]
-    env: NotRequired[Dict[str, Optional[str]]]
-
-def env_vars_to_dict(overrides: Dict[str, Optional[str]]) -> Dict[str, str]:
-    base = os.environ.copy()
-    for k, v in overrides.items():
-        if v is not None:
-            base[k] = v
-        else:
-            base.pop(k, None)
-    return base
 
 
 class BamlAsyncClient:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
     __stream_client: "BamlStreamClient"
-    __http_request: "AsyncHttpRequest"
-    __http_stream_request: "AsyncHttpStreamRequest"
+    __http_request: AsyncHttpRequest
+    __http_stream_request: AsyncHttpStreamRequest
     __llm_response_parser: LlmResponseParser
     __llm_stream_parser: LlmStreamParser
-    __baml_options: BamlCallOptions
+    __baml_options: _baml.BamlCallOptions
 
-    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager, baml_options: Optional[BamlCallOptions] = None):
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager, baml_options: Optional[_baml.BamlCallOptions] = None):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
       self.__stream_client = BamlStreamClient(self.__runtime, self.__ctx_manager, baml_options)
@@ -54,7 +36,7 @@ class BamlAsyncClient:
 
     def with_options(
       self,
-      tb: Optional[TypeBuilder] = None,
+      tb: Optional[_baml.type_builder.TypeBuilder] = None,
       client_registry: Optional[baml_py.baml_py.ClientRegistry] = None,
       collector: Optional[Union[baml_py.baml_py.Collector, List[baml_py.baml_py.Collector]]] = None,
       env: Optional[Dict[str, Optional[str]]] = None,
@@ -103,9 +85,9 @@ class BamlAsyncClient:
         {% for (name, type, default_value) in fn.args -%}
         {{name}}: {{type}}{% if let Some(d) = default_value %} = {{d}}{% endif %},
         {%- endfor %}
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptions = {},
     ) -> {{fn.return_type}}:
-      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+      options: _baml.BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
 
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
@@ -115,7 +97,7 @@ class BamlAsyncClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = await self.__runtime.call_function(
         "{{fn.name}}",
         {
@@ -123,21 +105,21 @@ class BamlAsyncClient:
           "{{name}}": {{name}},
           {%- endfor %}
         },
-        self.__ctx_manager.get(),
+        self.__ctx_manager.clone_context(),
         tb,
         __cr__,
         collectors,
         env,
       )
-      return cast({{fn.return_type}}, raw.cast_to(types, types, partial_types, False))
+      return cast({{fn.return_type}}, raw.cast_to(_baml.types, _baml.types, _baml.partial_types, False))
     {% endfor %}
 
 
 class BamlStreamClient:
     __runtime: baml_py.BamlRuntime
     __ctx_manager: baml_py.BamlCtxManager
-    __baml_options: BamlCallOptions
-    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager, baml_options: Optional[BamlCallOptions] = None):
+    __baml_options: _baml.BamlCallOptions
+    def __init__(self, runtime: baml_py.BamlRuntime, ctx_manager: baml_py.BamlCtxManager, baml_options: Optional[_baml.BamlCallOptions] = None):
       self.__runtime = runtime
       self.__ctx_manager = ctx_manager
       self.__baml_options = baml_options or {}
@@ -148,9 +130,9 @@ class BamlStreamClient:
         {% for (name, type, default_value) in fn.args -%}
         {{name}}: {{type}}{% if let Some(d) = default_value %} = {{d}}{% endif %},
         {%- endfor %}
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptions = {},
     ) -> baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}]:
-      options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+      options: _baml.BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
       __tb__ = options.get("tb", None)
       if __tb__ is not None:
         tb = __tb__._tb # type: ignore (we know how to use this private attribute)
@@ -159,7 +141,7 @@ class BamlStreamClient:
       __cr__ = options.get("client_registry", None)
       collector = options.get("collector", None)
       collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
-      env = env_vars_to_dict(options.get("env", {}))
+      env = _baml.env_vars_to_dict(options.get("env", {}))
       raw = self.__runtime.stream_function(
         "{{fn.name}}",
         {
@@ -177,8 +159,8 @@ class BamlStreamClient:
 
       return baml_py.BamlStream[{{ fn.partial_return_type }}, {{ fn.return_type }}](
         raw,
-        lambda x: cast({{fn.partial_return_type}}, x.cast_to(types, types, partial_types, True)),
-        lambda x: cast({{fn.return_type}}, x.cast_to(types, types, partial_types, False)),
+        lambda x: cast({{fn.partial_return_type}}, x.cast_to(_baml.types, _baml.types, _baml.partial_types, True)),
+        lambda x: cast({{fn.return_type}}, x.cast_to(_baml.types, _baml.types, _baml.partial_types, False)),
         self.__ctx_manager.get(),
       )
     {% endfor %}
@@ -186,4 +168,4 @@ class BamlStreamClient:
 
 b = BamlAsyncClient(DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX)
 
-__all__ = ["b"]
+__all__ = ["b", "BamlCallOptions"]

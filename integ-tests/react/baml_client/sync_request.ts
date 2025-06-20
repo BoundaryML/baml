@@ -3552,6 +3552,50 @@ export class HttpRequest {
     }
   }
   
+  TestOpenAIGPT4oMini2(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return this.runtime.buildRequestSync(
+        "TestOpenAIGPT4oMini2",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestOpenAIGPT4oMini3(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return this.runtime.buildRequestSync(
+        "TestOpenAIGPT4oMini3",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        false,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
   TestOpenAILegacyProvider(
       input: string,
       __baml_options__?: BamlCallOptions
@@ -7570,6 +7614,50 @@ export class HttpStreamRequest {
       const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       return this.runtime.buildRequestSync(
         "TestOpenAIGPT4oMini",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestOpenAIGPT4oMini2(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return this.runtime.buildRequestSync(
+        "TestOpenAIGPT4oMini2",
+        {
+          "input": input
+        },
+        this.ctxManager.cloneContext(),
+        __baml_options__?.tb?.__tb(),
+        __baml_options__?.clientRegistry,
+        true,
+        env,
+      )
+    } catch (error) {
+      throw toBamlError(error);
+    }
+  }
+  
+  TestOpenAIGPT4oMini3(
+      input: string,
+      __baml_options__?: BamlCallOptions
+  ): HTTPRequest {
+    try {
+      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      return this.runtime.buildRequestSync(
+        "TestOpenAIGPT4oMini3",
         {
           "input": input
         },

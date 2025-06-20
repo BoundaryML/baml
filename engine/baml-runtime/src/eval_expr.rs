@@ -1,13 +1,19 @@
-use anyhow::Context;
+use anyhow::{anyhow, Context};
 use futures::channel::mpsc;
 use futures::stream::{self as stream, StreamExt};
 use internal_baml_core::internal_baml_diagnostics::SerializedSpan;
+use internal_baml_core::internal_baml_parser_database::coerce;
+use internal_baml_core::ir::builtin;
+use internal_baml_jinja::types::OutputFormatContent;
+use jsonish::deserializer::deserialize_flags::Flag;
+use jsonish::helpers::render_output_format;
 use std::collections::HashMap;
+use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use crate::{BamlRuntime, FunctionResult};
-use baml_types::expr::{Expr, ExprMetadata, Name, VarIndex};
-use baml_types::{Arrow, FieldType, TypeValue};
+use baml_types::{Arrow, FieldType,  EvaluationContext, type_meta::base::TypeMeta, TypeValue};
+use baml_types::expr::{Builtin, Expr, ExprMetadata, Name, VarIndex};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
 use internal_baml_core::ir::repr::IntermediateRepr;
 
@@ -19,6 +25,7 @@ pub struct EvalEnv<'a> {
     pub expr_tx: Option<mpsc::UnboundedSender<Vec<SerializedSpan>>>,
     /// Evaluated top-level expressions.
     pub evaluated_cache: Arc<Mutex<HashMap<Name, Expr<ExprMetadata>>>>,
+    pub env_vars: HashMap<String, String>,
 }
 
 impl<'a> EvalEnv<'a> {
@@ -46,12 +53,23 @@ fn subst<'a>(
                 Ok(expr.clone())
             }
         }
+        Expr::Builtin(builtin, meta) => Ok(expr.clone()),
         Expr::FreeVar(name, _) => Ok(expr.clone()),
         Expr::Atom(_) => Ok(expr.clone()),
-        Expr::App(f, x, meta) => {
-            let f2 = subst(f, var_name, val, env)?;
-            let x2 = subst(x, var_name, val, env)?;
-            Ok(Expr::App(Arc::new(f2), Arc::new(x2), meta.clone()))
+        Expr::App {
+            func,
+            args,
+            meta,
+            type_args,
+        } => {
+            let f2 = subst(func, var_name, val, env)?;
+            let x2 = subst(args, var_name, val, env)?;
+            Ok(Expr::App {
+                func: Arc::new(f2),
+                args: Arc::new(x2),
+                meta: meta.clone(),
+                type_args: type_args.clone(),
+            })
         }
         Expr::Lambda(params, body, meta) => Ok(Expr::Lambda(
             params.clone(),
@@ -178,7 +196,12 @@ async fn beta_reduce<'a>(
             // Finally evaluate the body with the substitution
             Box::pin(beta_reduce(env, &substituted_body, eval_final_llm_fn)).await
         }
-        Expr::App(f, x, meta) => match (f.as_ref(), x.as_ref()) {
+        Expr::App {
+            func,
+            args,
+            meta,
+            type_args,
+        } => match (func.as_ref(), args.as_ref()) {
             (Expr::Lambda(arity, body, _), Expr::ArgsTuple(args, _)) => {
                 let pairs: Vec<(VarIndex, Expr<ExprMetadata>)> = args
                     .iter()
@@ -226,11 +249,7 @@ async fn beta_reduce<'a>(
                 Box::pin(beta_reduce(env, &new_body, eval_final_llm_fn)).await
             }
             (Expr::LLMFunction(name, arg_names, _), Expr::ArgsTuple(args, _)) => {
-                let mut evaluated_args: Vec<BamlValue> = Vec::new();
-                for arg in args {
-                    let val = eval_to_value(env, arg).await;
-                    evaluated_args.push(val.unwrap().unwrap().clone().value());
-                }
+                let evaluated_args = eval_args(env, args).await?;
 
                 let params = evaluated_args
                     .into_iter()
@@ -250,7 +269,15 @@ async fn beta_reduce<'a>(
                     // TODO: env vars are not supported yet for expressions.
                     let res: anyhow::Result<FunctionResult> = env
                         .runtime
-                        .call_function(name.clone(), &args_map, &ctx, None, None, None, HashMap::new())
+                        .call_function(
+                            name.clone(),
+                            &args_map,
+                            &ctx,
+                            None,
+                            None,
+                            None,
+                            env.env_vars.clone(),
+                        )
                         .await
                         .0;
 
@@ -260,11 +287,9 @@ async fn beta_reduce<'a>(
                     let val = res?
                         .parsed()
                         .as_ref()
-                        .ok_or(anyhow::anyhow!(
-                            "Impossible case - empty value in parsed result."
-                        ))?
+                        .ok_or(anyhow!("Impossible case - empty value in parsed result."))?
                         .as_ref()
-                        .map_err(|e| anyhow::anyhow!("{e}"))?
+                        .map_err(|e| anyhow!("{e}"))?
                         .clone()
                         .0
                         .map_meta(|_| ());
@@ -278,11 +303,150 @@ async fn beta_reduce<'a>(
                     .context
                     .get(name)
                     .context(format!("Variable not found: {:?}", name))?;
-                let new_app = Expr::App(Arc::new(var_lookup.clone()), x.clone(), meta.clone());
+                let new_app = Expr::App {
+                    func: Arc::new(var_lookup.clone()),
+                    args: args.clone(),
+                    meta: meta.clone(),
+                    type_args: type_args.clone(),
+                };
                 let res = Box::pin(beta_reduce(env, &new_app, eval_final_llm_fn)).await?;
                 Ok(res)
             }
-            _ => Err(anyhow::anyhow!("Not a function: {:?}", f)),
+
+            (Expr::Builtin(builtin, builtin_meta), Expr::ArgsTuple(args, _)) => match builtin {
+                Builtin::FetchValue => {
+                    let evaluated_args = eval_args(env, args).await?;
+
+                    // TODO: Type checking / validation elsewhere.
+                    let BamlValue::Class(_, fields) = &evaluated_args[0] else {
+                        return Err(anyhow!(
+                            "{fetch_value} expects a {request_type} parameter but got: {evaluated_args:?}",
+                            fetch_value = builtin::functions::FETCH_VALUE,
+                            request_type = builtin::classes::REQUEST,
+                        ));
+                    };
+
+                    // Builtin meta should be set.
+                    let arrow = match builtin_meta.1.as_ref() {
+                        Some(FieldType::Arrow(arrow, _)) => arrow,
+
+                        other => {
+                            return Err(anyhow!(
+                                "Internal error: {fetch} meta contains no arrow type: {other:?}",
+                                fetch = builtin::functions::FETCH_VALUE,
+                            ))
+                        }
+                    };
+
+                    // TODO: Type checking / validation elsewhere.
+                    let mut base_url = fields
+                        .get("base_url")
+                        .map(BamlValue::as_str)
+                        .ok_or(anyhow!(
+                            "{fetch_value} argument has no 'base_url' field",
+                            fetch_value = builtin::functions::FETCH_VALUE
+                        ))?
+                        .ok_or(anyhow!("Can't convert 'base_url' to string"))?;
+
+                    let headers = fields
+                        .get("headers")
+                        .map(BamlValue::as_map)
+                        .ok_or(anyhow!(
+                            "{fetch_value} argument has no 'headers' field",
+                            fetch_value = builtin::functions::FETCH_VALUE
+                        ))?
+                        .ok_or(anyhow!("Can't convert 'headers' to map"))?;
+
+                    let query_params = fields
+                        .get("query_params")
+                        .map(BamlValue::as_map)
+                        .ok_or(anyhow!(
+                            "{fetch_value} argument has no 'query_params' field",
+                            fetch_value = builtin::functions::FETCH_VALUE
+                        ))?
+                        .ok_or(anyhow!("Can't convert 'query_params' to map"))?;
+
+                    let mut header_map = reqwest::header::HeaderMap::new();
+                    for (key, value) in headers {
+                        header_map.insert(
+                            reqwest::header::HeaderName::from_str(&key)?,
+                            reqwest::header::HeaderValue::from_str(value.as_str().ok_or(
+                                anyhow!("Can't convert header value to string: {:?}", value),
+                            )?)?,
+                        );
+                    }
+
+                    // TODO: There's some code that handles proxy URL extraction
+                    // better in baml-lib/llm-client/src/clients/helpers.rs
+                    // use that here.
+                    if let Some(proxy_url) = env.env_vars.get("BOUNDARY_PROXY_URL") {
+                        header_map.insert(
+                            reqwest::header::HeaderName::from_static("baml-original-url"),
+                            reqwest::header::HeaderValue::from_str(base_url)?,
+                        );
+                        base_url = &proxy_url;
+                    }
+
+                    // Highlight.
+                    let app_span = SerializedSpan::serialize(&expr.meta().0);
+                    if let Some(tx) = &env.expr_tx {
+                        tx.unbounded_send(vec![app_span]).unwrap();
+                    }
+
+                    let client = reqwest::Client::new();
+
+                    // eprintln!(
+                    //     "Sending HTTP request: {:?}",
+                    //     client
+                    //         .get(base_url)
+                    //         .query(query_params)
+                    //         .headers(header_map.clone())
+                    // );
+
+                    let response = client
+                        .get(base_url)
+                        .query(query_params)
+                        .headers(header_map)
+                        .send()
+                        .await?;
+
+                    let status = response.status();
+
+                    let body = response.text().await?;
+
+                    if status.is_client_error() || status.is_server_error() {
+                        return Err(anyhow!(
+                            "HTTP request failed: HTTP {:?}\nBody: {}",
+                            status,
+                            body
+                        ));
+                    }
+
+                    // TODO: If the lines above fail (? operator) then this
+                    // won't run. We need to wrap this function in another
+                    // function that empties the channel no matter if beta
+                    // reduction succeeds or fails.
+                    if let Some(tx) = &env.expr_tx {
+                        tx.unbounded_send(vec![]).unwrap();
+                    }
+
+                    let output_format = render_output_format(
+                        &env.runtime.inner.ir,
+                        &arrow.return_type,
+                        &EvaluationContext::default(),
+                    )?;
+
+                    let parsed =
+                        jsonish::from_str(&output_format, &arrow.return_type, &body, false)
+                            .context("(jsonish) Failed parsing response of fetch_value call")?;
+
+                    Ok(Expr::Atom(
+                        BamlValueWithMeta::<Vec<Flag>>::from(parsed).map_meta(|_| meta.clone()),
+                    ))
+                }
+            },
+
+            _ => Err(anyhow!("Not a function: {:?}", func)),
         },
         Expr::FreeVar(name, _) => {
             if let Some(cached) = env.evaluated_cache.lock().unwrap().get(name) {
@@ -361,6 +525,18 @@ async fn beta_reduce<'a>(
     }
 }
 
+async fn eval_args(
+    env: &EvalEnv<'_>,
+    args: &Vec<Expr<(internal_baml_core::ast::Span, Option<FieldType>)>>,
+) -> anyhow::Result<Vec<BamlValue>> {
+    let mut evaluated_args: Vec<BamlValue> = Vec::new();
+    for arg in args {
+        let val = eval_to_value(env, arg).await?;
+        evaluated_args.push(val.unwrap().clone().value());
+    }
+    Ok(evaluated_args)
+}
+
 pub async fn eval_to_value_or_llm_call<'a>(
     env: &EvalEnv<'a>,
     expr: &Expr<ExprMetadata>,
@@ -375,7 +551,12 @@ pub async fn eval_to_value_or_llm_call<'a>(
             current_expr.dump_str()
         );
         match current_expr {
-            Expr::App(ref f, ref args, ref meta) => match (f.as_ref(), args.as_ref()) {
+            Expr::App {
+                ref func,
+                ref args,
+                ref meta,
+                ref type_args,
+            } => match (func.as_ref(), args.as_ref()) {
                 (Expr::LLMFunction(name, arg_names, _), Expr::ArgsTuple(args, _)) => {
                     let mut evaluated_args: Vec<(String, BamlValue)> = Vec::new();
                     for (arg_name, arg) in arg_names.into_iter().zip(args) {
@@ -397,7 +578,7 @@ pub async fn eval_to_value_or_llm_call<'a>(
             Expr::Atom(value) => {
                 return Ok(ExprEvalResult::Value {
                     value: value.clone().map_meta(|_| ()),
-                    field_type: FieldType::Primitive(TypeValue::Null), // TODO: get the actual type
+                    field_type: FieldType::Primitive(TypeValue::Null, TypeMeta::default()), // TODO: get the actual type
                 });
             }
             Expr::List(items, meta) => {
@@ -414,7 +595,7 @@ pub async fn eval_to_value_or_llm_call<'a>(
                     field_type: meta
                         .1
                         .clone()
-                        .unwrap_or(FieldType::Primitive(TypeValue::Null)), // TODO: get the actual type
+                        .unwrap_or(FieldType::Primitive(TypeValue::Null, TypeMeta::default())), // TODO: get the actual type
                 });
             }
             Expr::Map(items, meta) => {
@@ -431,7 +612,7 @@ pub async fn eval_to_value_or_llm_call<'a>(
                     field_type: meta
                         .1
                         .clone()
-                        .unwrap_or(FieldType::Primitive(TypeValue::Null)), // TODO: get the actual type
+                        .unwrap_or(FieldType::Primitive(TypeValue::Null, TypeMeta::default())), // TODO: get the actual type
                 });
             }
             Expr::ClassConstructor {
@@ -453,12 +634,12 @@ pub async fn eval_to_value_or_llm_call<'a>(
                         match res {
                             Some(BamlValueWithMeta::Class(spread_class_name, spread_fields, _)) => {
                                 if name != spread_class_name {
-                                    return Err(anyhow::anyhow!("Class constructor name mismatch"));
+                                    return Err(anyhow!("Class constructor name mismatch"));
                                 }
                                 spread_fields.clone()
                             }
                             _ => {
-                                return Err(anyhow::anyhow!("Spread is not a class"));
+                                return Err(anyhow!("Spread is not a class"));
                             }
                         }
                     }
@@ -468,19 +649,27 @@ pub async fn eval_to_value_or_llm_call<'a>(
                 let val = BamlValueWithMeta::Class(name.clone(), spread_fields, ());
                 return Ok(ExprEvalResult::Value {
                     value: val,
-                    field_type: FieldType::Class(name),
+                    field_type: FieldType::class(&name.to_string()),
                 });
             }
             Expr::LLMFunction(_, _, _) => {
-                return Err(anyhow::anyhow!("Bare LLM function found"));
+                return Err(anyhow!("Bare LLM function found"));
             }
             Expr::Lambda(_, _, _) => {
-                return Err(anyhow::anyhow!("Bare lambda found: {}", expr.dump_str()));
+                return Err(anyhow!("Bare lambda found: {}", expr.dump_str()));
             }
+            Expr::Builtin(builtin, meta) => match builtin {
+                Builtin::FetchValue => {
+                    return Err(anyhow!(
+                        "Bare builtin fetch_value found: {}",
+                        expr.dump_str()
+                    ));
+                }
+            },
             Expr::Let(var_name, value, body, meta) => {
                 let res = beta_reduce(env, &expr, false).await?;
                 if res.temporary_same_state(expr) {
-                    return Err(anyhow::anyhow!("Failed to make progress"));
+                    return Err(anyhow!("Failed to make progress"));
                 }
                 current_expr = res;
             }
@@ -501,13 +690,13 @@ pub async fn eval_to_value_or_llm_call<'a>(
                 }
             }
             Expr::BoundVar(_, _) => {
-                return Err(anyhow::anyhow!("Bare bound variable found"));
+                return Err(anyhow!("Bare bound variable found"));
             }
             Expr::FreeVar(_, _) => {
-                return Err(anyhow::anyhow!("Bare free variable found"));
+                return Err(anyhow!("Bare free variable found"));
             }
             Expr::ArgsTuple(_, _) => {
-                return Err(anyhow::anyhow!("Bare args tuple found"));
+                return Err(anyhow!("Bare args tuple found"));
             }
             l @ Expr::ForLoop { .. } => {
                 let res = Box::pin(beta_reduce(env, &l, false)).await?;
@@ -515,7 +704,7 @@ pub async fn eval_to_value_or_llm_call<'a>(
             }
         }
     }
-    Err(anyhow::anyhow!("Max steps reached. {:?}", current_expr))
+    Err(anyhow!("Max steps reached. {:?}", current_expr))
 }
 
 #[derive(Clone, Debug)]
@@ -580,12 +769,12 @@ pub async fn eval_to_value<'a>(
                         match res {
                             Some(BamlValueWithMeta::Class(spread_class_name, spread_fields, _)) => {
                                 if name != spread_class_name {
-                                    return Err(anyhow::anyhow!("Class constructor name mismatch"));
+                                    return Err(anyhow!("Class constructor name mismatch"));
                                 }
                                 spread_fields.clone()
                             }
                             _ => {
-                                return Err(anyhow::anyhow!("Spread is not a class"));
+                                return Err(anyhow!("Spread is not a class"));
                             }
                         }
                     }
@@ -627,13 +816,14 @@ pub async fn eval_to_value<'a>(
                 let new_expr = Box::pin(beta_reduce(env, &other, true)).await?;
 
                 if new_expr.temporary_same_state(expr) {
-                    return Err(anyhow::anyhow!("Failed to make progress."));
+                    eprintln!("Value: {:?}", new_expr);
+                    return Err(anyhow!("Failed to make progress."));
                 }
                 current_expr = new_expr;
             }
         }
     }
-    Err(anyhow::anyhow!("Max steps reached."))
+    Err(anyhow!("Max steps reached."))
 }
 
 #[cfg(test)]
@@ -775,7 +965,7 @@ function Quiz(msg: string) -> bool {
   {{ ctx.output_format }}
   "#
 }
-  
+
 function Go() -> string {
   if Quiz("The sky is green") { Echo("Hello") } else { Echo("World") }
 }
@@ -948,10 +1138,90 @@ test TestMakePerson() {
         // dbg!(&f.item);
         let (res, _) = rt
             // .run_test("Second", "TestSecond", &ctx, Some(on_event))
-            .run_test("OuterPyramid", "OuterPyramid", &ctx, Some(on_event), None, HashMap::new())
+            .run_test(
+                "OuterPyramid",
+                "OuterPyramid",
+                &ctx,
+                Some(on_event),
+                None,
+                HashMap::new(),
+            )
             // .run_test("MakePerson", "TestMakePerson", &ctx, Some(on_event), None)
             // .run_test("CompareHaikus", "Test", &ctx, Some(on_event))
             // .run_test("LlmParseInt", "TestParse", &ctx, Some(on_event))
+            .await;
+        dbg!(res);
+        assert!(false);
+    }
+
+    // #[tokio::test]
+    async fn test_fetch_value() {
+        let rt = runtime(
+            r##"
+class Todo {
+  id int
+  todo string
+  completed bool
+  userId int
+}
+
+fn GetTodo() -> Todo {
+  std::fetch_value<Todo>(std::Request {
+    base_url: "https://dummyjson.com/todos/1",
+    headers: {},
+    query_params: {},
+  })
+}
+
+fn UseFunction() -> string {
+  let todo = GetTodo();
+  LlmDescribeTodo(todo)
+}
+
+client<llm> GPT4o {
+  provider openai
+  options {
+    model gpt-4o
+    api_key env.OPENAI_API_KEY
+  }
+}
+
+function LlmDescribeTodo(todo: Todo) -> string {
+  client GPT4o
+  prompt #"Describe the following todo in detail: {{ todo }}"#
+}
+
+test GetTodo() {
+  functions [GetTodo]
+  args { }
+}
+
+test UseFunction() {
+  functions [UseFunction]
+  args { }
+}
+        "##,
+        );
+        // dbg!(&rt.inner.ir.find_function("GetTodo").unwrap().item);
+        let ctx = rt.create_ctx_manager(BamlValue::String("test".to_string()), None);
+
+        let on_event = |res: FunctionResult| {
+            eprintln!("on_event: {:?}", res);
+        };
+        let f = rt.inner.ir.find_expr_fn("UseFunction").unwrap();
+        // dbg!(&f.item);
+        let (res, _) = rt
+            .run_test(
+                "UseFunction",
+                "UseFunction",
+                &ctx,
+                Some(on_event),
+                None,
+                HashMap::from([(
+                    "OPENAI_API_KEY".to_string(),
+                    std::env::var("OPENAI_API_KEY").expect("OPENAI_API_KEY is not set."),
+                )]),
+            )
             .await;
         dbg!(res);
         assert!(false);

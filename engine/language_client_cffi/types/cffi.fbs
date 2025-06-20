@@ -22,6 +22,14 @@ union CFFIValueUnion {
   CFFIFunctionArguments
 }
 
+// wrapper for the name of a type
+table CFFITypeName {
+  // either "types" | "streaming" (in the future can include more)
+  namespace: string;
+  // the name of the type
+  name: string;
+}
+
 // The wrapper table for CFFIValue.
 table CFFIValueHolder {
   value: CFFIValueUnion;
@@ -61,13 +69,13 @@ table CFFIValueMap {
 }
 
 table CFFIValueClass {
-  name: string;
+  name: CFFITypeName;
   fields: [CFFIMapEntry];
   dynamic_fields: [CFFIMapEntry];
 }
 
 table CFFIValueEnum {
-  name: string;
+  name: CFFITypeName;
   value: string;
   is_dynamic: bool;
 }
@@ -83,7 +91,7 @@ table CFFIValueTuple {
 
 // For the Rust variant `Union(Vec<CFFIFieldType>, Box<CFFIValue>)`
 table CFFIValueUnionVariant {
-  name: string;
+  name: CFFITypeName;
   variant_name: string;
   field_types: [CFFIFieldTypeHolder];
   value_type_index: int;
@@ -200,7 +208,7 @@ table CFFIFieldTypeEnum {
 }
 
 table CFFIFieldTypeClass {
-  name: string;
+  name: CFFITypeName;
 }
 
 table CFFIFieldTypeTypeAlias {
@@ -242,6 +250,12 @@ table CFFIFunctionArguments {
   kwargs: [CFFIMapEntry];
   client_registry: CFFIClientRegistry;
   env: [CFFIEnvVar];
+  collectors: [CFFICollector];
+}
+
+// Collectors are just pointers
+table CFFICollector {
+  pointer: long;
 }
 
 table CFFIClientRegistry {

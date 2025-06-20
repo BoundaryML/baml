@@ -1,4 +1,5 @@
 use super::*;
+use baml_types::type_meta::base::TypeMeta;
 
 //
 const FOO_FILE: &str = r#"
@@ -42,10 +43,13 @@ fn test_union_full() {
                 "hi" => {
                     assert_eq!(
                         prop_value.field_type(),
-                        &FieldType::Primitive(TypeValue::String).as_list()
+                        &FieldType::Primitive(TypeValue::String, TypeMeta::default()).as_list()
                     );
                     for item in prop_value.as_list().unwrap() {
-                        assert_eq!(item.field_type(), &FieldType::Primitive(TypeValue::String));
+                        assert_eq!(
+                            item.field_type(),
+                            &FieldType::Primitive(TypeValue::String, TypeMeta::default())
+                        );
                     }
                 }
                 _ => {
@@ -312,7 +316,7 @@ test_deserializer!(
   test_phone_number_regex,
   CONTACT_INFO,
   r#"{"primary": {"value": "908-797-8281"}}"#,
-  FieldType::Class("ContactInfo".to_string()),
+  FieldType::class("ContactInfo"),
   {"primary": {"value": "908-797-8281"}}
 );
 
@@ -320,7 +324,7 @@ test_deserializer!(
   test_email_regex,
   CONTACT_INFO,
   r#"{"primary": {"value": "help@boundaryml.com"}}"#,
-  FieldType::Class("ContactInfo".to_string()),
+  FieldType::class("ContactInfo"),
   {"primary": {"value": "help@boundaryml.com"}}
 );
 
@@ -328,9 +332,9 @@ test_deserializer!(
     test_ignore_float_in_string_if_string_in_union,
     "",
     "1 cup unsalted butter, room temperature",
-    FieldType::Union(vec![
-        FieldType::Primitive(TypeValue::Float),
-        FieldType::Primitive(TypeValue::String),
+    FieldType::union(vec![
+        FieldType::Primitive(TypeValue::Float, TypeMeta::default()),
+        FieldType::Primitive(TypeValue::String, TypeMeta::default()),
     ]),
     "1 cup unsalted butter, room temperature"
 );
@@ -339,9 +343,9 @@ test_deserializer!(
     test_ignore_int_if_string_in_union,
     "",
     "1 cup unsalted butter, room temperature",
-    FieldType::Union(vec![
-        FieldType::Primitive(TypeValue::Int),
-        FieldType::Primitive(TypeValue::String),
+    FieldType::union(vec![
+        FieldType::Primitive(TypeValue::Int, TypeMeta::default()),
+        FieldType::Primitive(TypeValue::String, TypeMeta::default()),
     ]),
     "1 cup unsalted butter, room temperature"
 );

@@ -1,4 +1,4 @@
-use internal_baml_schema_ast::ast::{self, WithIdentifier, WithSpan};
+use internal_baml_ast::ast::{self, WithIdentifier, WithSpan};
 
 use crate::types::{RetryPolicy, TestCase};
 

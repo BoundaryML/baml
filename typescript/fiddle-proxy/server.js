@@ -53,6 +53,7 @@ for (const url of Object.keys(API_KEY_INJECTION_ALLOWED)) {
 app.use(
   createProxyMiddleware({
     changeOrigin: true,
+    followRedirects: true,
     pathRewrite: (path, req) => {
       // Ensure the URL does not end with a slash
       if (path.endsWith('/')) {

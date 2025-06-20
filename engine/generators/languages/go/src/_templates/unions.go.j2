@@ -1,0 +1,96 @@
+type {{ name }} struct {
+    variant string
+    {% for v in variants %}
+    variant_{{ v.name }} *{{ v.type_.serialize_type(pkg) }}
+    {% endfor %}
+}
+
+func (u *{{ name }}) Decode(holder *cffi.CFFIValueUnionVariant) {
+    valueHolder := holder.Value(nil)
+    variantName := string(holder.VariantName())
+	switch variantName {
+    {% for v in variants -%}
+	    case "{{ v.cffi_name }}":
+            u.variant = "{{ v.name }}"
+            value := {{ v.type_.decode_from_any("valueHolder", pkg) }}
+            u.variant_{{ v.name }} = &value
+    {% endfor %}
+    default:
+        panic(fmt.Sprintf("invalid union variant: %s", variantName))
+	}
+}
+
+
+func (u {{ name }}) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
+    switch u.variant {
+    {% for v in variants %}
+    case "{{ v.name }}":
+        return baml.EncodeUnion(builder, u.BamlEncodeName, "{{ v.cffi_name }}", *u.variant_{{ v.name }})
+    {% endfor %}
+    case "":
+        return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: [unset]")
+    }
+
+    return cffi.CFFIValueUnionNONE, 0, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u {{ name }}) BamlTypeName() string {
+    return "{{ name }}"
+}
+
+func (u {{ name }}) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
+    nameOffset := builder.CreateString("{{ cffi_name }}")
+    namespaceOffset := builder.CreateString("{{ pkg.get().current() }}")
+    cffi.CFFITypeNameStart(builder)
+    cffi.CFFITypeNameAddName(builder, nameOffset)
+    cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
+    return cffi.CFFITypeNameEnd(builder)
+}
+
+func (u {{ name }}) MarshalJSON() ([]byte, error) {
+    switch u.variant {
+    {% for v in variants %}
+    case "{{ v.name }}":
+        return json.Marshal(u.variant_{{ v.name }})
+    {% endfor %}
+    }
+
+    return nil, fmt.Errorf("invalid union variant: %s", u.variant)
+}
+
+func (u *{{ name }}) UnmarshalJSON(data []byte) error {
+    var err error
+    {% for v in variants %}
+    err = json.Unmarshal(data, &u.variant_{{ v.name }})
+    if err == nil {
+        u.variant = "{{ v.name }}"
+        return nil
+    } else {
+        u.variant_{{ v.name }} = nil
+    }
+    {% endfor %}
+    return fmt.Errorf("invalid union variant: %s", string(data))
+}
+
+{% for v in variants %}
+func (u *{{ name }}) Set{{ v.name|exported_name }}(v {{ v.type_.serialize_type(pkg) }}) {
+    u.variant = "{{ v.name }}"
+    u.variant_{{ v.name }} = &v
+    {% for v2 in variants -%}
+    {%- if v2.name != v.name %}
+    u.variant_{{ v2.name }} = nil
+    {% endif -%}
+    {%- endfor %}
+}
+
+func (u *{{ name }}) Is{{ v.name|exported_name }}() bool {
+    return u.variant == "{{ v.name }}"
+}
+
+func (u *{{ name }}) {{ v.name|exported_name }}() {{ v.type_.serialize_type(pkg) }} {
+    if u.variant != "{{ v.name }}" {
+        return {{ v.type_.zero_value(pkg) }}
+    }
+    return *u.variant_{{ v.name }}
+}
+{% endfor %}

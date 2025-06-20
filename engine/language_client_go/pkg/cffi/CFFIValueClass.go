@@ -41,10 +41,15 @@ func (rcv *CFFIValueClass) Table() flatbuffers.Table {
 	return rcv._tab
 }
 
-func (rcv *CFFIValueClass) Name() []byte {
+func (rcv *CFFIValueClass) Name(obj *CFFITypeName) *CFFITypeName {
 	o := flatbuffers.UOffsetT(rcv._tab.Offset(4))
 	if o != 0 {
-		return rcv._tab.ByteVector(o + rcv._tab.Pos)
+		x := rcv._tab.Indirect(o + rcv._tab.Pos)
+		if obj == nil {
+			obj = new(CFFITypeName)
+		}
+		obj.Init(rcv._tab.Bytes, x)
+		return obj
 	}
 	return nil
 }

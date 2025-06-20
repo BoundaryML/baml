@@ -198,7 +198,7 @@ pub fn from_str(
     raw_string: &str,
     allow_partials: bool,
 ) -> Result<BamlValueWithFlags> {
-    if matches!(target, FieldType::Primitive(TypeValue::String)) {
+    if matches!(target, FieldType::Primitive(TypeValue::String, _)) {
         return Ok(BamlValueWithFlags::String(
             (raw_string.to_string(), target).into(),
         ));

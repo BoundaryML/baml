@@ -1,0 +1,4 @@
+# Ignore everything:
+*/generated_tests/*/*
+# Except for baml_client:
+!*/generated_tests/*/baml_client

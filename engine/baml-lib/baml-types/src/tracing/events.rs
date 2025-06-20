@@ -59,15 +59,17 @@ impl<'a, T: HasFieldType> TraceEvent<'a, T> {
         function_name: String,
         args: Vec<(String, BamlValueWithMeta<T>)>,
         options: EvaluationContext,
-        is_baml_function: bool,
+        function_type: FunctionType,
+        is_stream: bool,
     ) -> Self {
         Self::from_existing_call(
             call_stack,
             TraceData::FunctionStart(FunctionStart {
                 name: function_name,
+                is_stream,
                 args,
                 options,
-                is_baml_function,
+                function_type,
             }),
         )
         .expect("Failed to create function start event")
@@ -117,6 +119,7 @@ impl<'a, T: HasFieldType> TraceEvent<'a, T> {
     }
 }
 
+// DO NOT CLONE!
 #[derive(Debug)]
 pub enum TraceData<'a, T: HasFieldType> {
     // All functions, including non-LLM ones
@@ -166,10 +169,20 @@ pub struct EvaluationContext {
     // pub client_registry: Option<ClientRegistryValue>,
 }
 
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
+#[serde(rename_all = "snake_case")]
+pub enum FunctionType {
+    BamlLlm,
+    // BamlExternal, // extern function in baml
+    // Baml // a function that is defined in baml, but not a baml llm function
+    Native, // python or TS function we are @tracing.
+}
+
 #[derive(Debug)]
 pub struct FunctionStart<T: HasFieldType> {
     pub name: String,
-    pub is_baml_function: bool,
+    pub function_type: FunctionType,
+    pub is_stream: bool,
     pub args: Vec<(String, BamlValueWithMeta<T>)>,
     pub options: EvaluationContext,
 }
@@ -273,14 +286,133 @@ impl HTTPBody {
     }
 }
 
+pub fn redact_headers(headers: HashMap<String, String>) -> HashMap<String, String> {
+    headers
+        .into_iter()
+        .map(|(key, value)| {
+            let key_lower = key.to_lowercase();
+            let sensitive_keywords = [
+                "authorization",
+                "cookie",
+                "set-cookie",
+                "key",
+                "secret",
+                "token",
+                "credential",
+                "session",
+                "auth",
+            ];
+
+            // tokens is usually for input and output tokens
+            if key_lower.contains("ratelimit") || key_lower.contains("tokens") {
+                (key, value)
+            } else if sensitive_keywords
+                .iter()
+                .any(|&keyword| key_lower.contains(keyword))
+            {
+                (key, "REDACTED".to_string())
+            } else {
+                (key, value)
+            }
+        })
+        .collect()
+}
+
+fn serialize_redacted_headers<S>(
+    headers: &HashMap<String, String>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    let redacted = redact_headers(headers.clone());
+    redacted.serialize(serializer)
+}
+
+fn serialize_redacted_optional_headers<S>(
+    headers: &Option<HashMap<String, String>>,
+    serializer: S,
+) -> Result<S::Ok, S::Error>
+where
+    S: serde::Serializer,
+{
+    match headers {
+        Some(h) => {
+            let redacted = redact_headers(h.clone());
+            Some(redacted).serialize(serializer)
+        }
+        None => None::<HashMap<String, String>>.serialize(serializer),
+    }
+}
+
+fn deserialize_headers<'de, D>(deserializer: D) -> Result<HashMap<String, String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    // When deserializing, we get the redacted version, but we treat it as the "original"
+    // since we can't recover the original values from redacted data
+    HashMap::<String, String>::deserialize(deserializer)
+}
+
+fn deserialize_optional_headers<'de, D>(
+    deserializer: D,
+) -> Result<Option<HashMap<String, String>>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    // When deserializing, we get the redacted version, but we treat it as the "original"
+    // since we can't recover the original values from redacted data
+    Option::<HashMap<String, String>>::deserialize(deserializer)
+}
+
 #[derive(Debug, Serialize, Deserialize)]
 pub struct HTTPRequest {
     // since LLM requests could be made in parallel, we need to match the response to the request
     pub id: HttpRequestId,
     pub url: String,
     pub method: String,
-    pub headers: HashMap<String, String>,
+    #[serde(serialize_with = "serialize_redacted_headers")]
+    #[serde(deserialize_with = "deserialize_headers")]
+    headers: HashMap<String, String>,
     pub body: HTTPBody,
+}
+
+impl HTTPRequest {
+    pub fn new(
+        id: HttpRequestId,
+        url: String,
+        method: String,
+        headers: HashMap<String, String>,
+        body: HTTPBody,
+    ) -> Self {
+        Self {
+            id,
+            url,
+            method,
+            headers,
+            body,
+        }
+    }
+
+    pub fn id(&self) -> &HttpRequestId {
+        &self.id
+    }
+
+    pub fn url(&self) -> &str {
+        &self.url
+    }
+
+    pub fn method(&self) -> &str {
+        &self.method
+    }
+
+    pub fn headers(&self) -> &HashMap<String, String> {
+        &self.headers
+    }
+
+    pub fn body(&self) -> &HTTPBody {
+        &self.body
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -288,14 +420,41 @@ pub struct HTTPResponse {
     // since LLM requests could be made in parallel, we need to match the response to the request
     pub request_id: HttpRequestId,
     pub status: u16,
-    pub headers: Option<HashMap<String, String>>,
+    #[serde(serialize_with = "serialize_redacted_optional_headers")]
+    #[serde(deserialize_with = "deserialize_optional_headers")]
+    headers: Option<HashMap<String, String>>,
     pub body: HTTPBody,
+}
+
+impl HTTPResponse {
+    pub fn new(
+        request_id: HttpRequestId,
+        status: u16,
+        headers: Option<HashMap<String, String>>,
+        body: HTTPBody,
+    ) -> Self {
+        Self {
+            request_id,
+            status,
+            headers,
+            body,
+        }
+    }
+
+    pub fn headers(&self) -> Option<&HashMap<String, String>> {
+        self.headers.as_ref()
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct LoggedLLMResponse {
     /// Since LLM requests could be made in parallel, we need to match the response to the request.
     pub request_id: HttpRequestId,
+
+    // List of the client stack used by the LLM function to get the response, e.g. if a roundrobin
+    // client "MyRoundrobin" wraps a fallback client "MyFallback" wraps an openai client "MyOpenai"
+    // then the client stack would be ["MyRoundrobin", "MyFallback", "MyOpenai"]
+    pub client_stack: Vec<String>,
 
     /// If available, fully qualified model name. None in failure cases or unknown state.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -325,9 +484,11 @@ impl LoggedLLMResponse {
         finish_reason: Option<String>,
         usage: LLMUsage,
         raw_text_output: String,
+        client_stack: Vec<String>,
     ) -> Self {
         Self {
             request_id,
+            client_stack,
             model: Some(model),
             finish_reason,
             usage: Some(usage),
@@ -341,9 +502,11 @@ impl LoggedLLMResponse {
         error_message: String,
         model: Option<String>,
         finish_reason: Option<String>,
+        client_stack: Vec<String>,
     ) -> Self {
         Self {
             request_id,
+            client_stack,
             model,
             finish_reason,
             usage: None,
@@ -358,4 +521,99 @@ pub struct LLMUsage {
     pub input_tokens: Option<u64>,
     pub output_tokens: Option<u64>,
     pub total_tokens: Option<u64>,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use baml_ids::HttpRequestId;
+
+    #[test]
+    fn test_headers_redaction_in_serialization() {
+        let mut headers = HashMap::new();
+        headers.insert(
+            "authorization".to_string(),
+            "Bearer secret-token".to_string(),
+        );
+        headers.insert("content-type".to_string(), "application/json".to_string());
+        headers.insert("x-api-key".to_string(), "secret-key".to_string());
+
+        let request = HTTPRequest::new(
+            HttpRequestId::new(),
+            "https://api.example.com".to_string(),
+            "POST".to_string(),
+            headers.clone(),
+            HTTPBody::new(b"test body".to_vec()),
+        );
+
+        // Test that .headers() returns original headers
+        let actual_headers = request.headers();
+        assert_eq!(
+            actual_headers.get("authorization"),
+            Some(&"Bearer secret-token".to_string())
+        );
+        assert_eq!(
+            actual_headers.get("content-type"),
+            Some(&"application/json".to_string())
+        );
+        assert_eq!(
+            actual_headers.get("x-api-key"),
+            Some(&"secret-key".to_string())
+        );
+
+        // Test that serialization redacts sensitive headers
+        let serialized = serde_json::to_string(&request).unwrap();
+        assert!(serialized.contains("REDACTED"));
+        assert!(!serialized.contains("secret-token"));
+        assert!(!serialized.contains("secret-key"));
+        assert!(serialized.contains("application/json")); // non-sensitive header should remain
+
+        // Test deserialization works
+        let deserialized: HTTPRequest = serde_json::from_str(&serialized).unwrap();
+
+        // After deserialization, we can't recover original values
+        assert_eq!(
+            deserialized.headers().get("authorization"),
+            Some(&"REDACTED".to_string())
+        );
+        assert_eq!(
+            deserialized.headers().get("x-api-key"),
+            Some(&"REDACTED".to_string())
+        );
+        assert_eq!(
+            deserialized.headers().get("content-type"),
+            Some(&"application/json".to_string())
+        );
+    }
+
+    #[test]
+    fn test_response_headers_redaction_in_serialization() {
+        let mut headers = HashMap::new();
+        headers.insert("set-cookie".to_string(), "session=abc123".to_string());
+        headers.insert("content-length".to_string(), "100".to_string());
+
+        let response = HTTPResponse::new(
+            HttpRequestId::new(),
+            200,
+            Some(headers.clone()),
+            HTTPBody::new(b"response body".to_vec()),
+        );
+
+        // Test that .headers() returns original headers
+        let actual_headers = response.headers().unwrap();
+        assert_eq!(
+            actual_headers.get("set-cookie"),
+            Some(&"session=abc123".to_string())
+        );
+        assert_eq!(
+            actual_headers.get("content-length"),
+            Some(&"100".to_string())
+        );
+
+        // Test that serialization redacts sensitive headers
+        let serialized = serde_json::to_string(&response).unwrap();
+        assert!(serialized.contains("REDACTED"));
+        assert!(!serialized.contains("session=abc123"));
+        assert!(serialized.contains("100")); // non-sensitive header should remain
+    }
 }

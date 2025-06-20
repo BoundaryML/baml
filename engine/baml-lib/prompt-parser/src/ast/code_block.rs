@@ -1,6 +1,6 @@
 use std::hash::Hash;
 
-use internal_baml_schema_ast::ast::Expression;
+use internal_baml_ast::ast::Expression;
 
 use crate::ast::{Span, WithSpan};
 

@@ -17,7 +17,7 @@ use crate::{
     tracing::BamlTracer,
     tracingv2::storage::storage::{Collector, BAML_TRACER},
     type_builder::TypeBuilder,
-    FunctionResult, PreparedFunctionArgs, RuntimeContextManager,
+    FunctionResult, IntoBamlError, PreparedFunctionArgs, RuntimeContextManager,
 };
 
 /// Wrapper that holds a stream of responses from a BAML function call.
@@ -100,6 +100,7 @@ impl FunctionResultStream {
             ctx,
             &self.prepared_func.value,
             true,
+            true,
             (!self.collectors.is_empty()).then(|| self.collectors.clone()),
         );
         let rctx = ctx.create_ctx(tb, cb, env_vars, call.new_call_id_stack.clone());
@@ -144,7 +145,7 @@ impl FunctionResultStream {
                 Ok(result) => Ok(baml_types::BamlValueWithMeta::<FieldType>::Null(
                     FieldType::null(),
                 )),
-                Err(e) => Err(baml_types::tracing::errors::BamlError::from(e).to_owned()),
+                Err(e) => Err(e.into_baml_error()),
             },
         );
         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));

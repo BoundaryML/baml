@@ -2,9 +2,11 @@
 
 source "https://rubygems.org"
 
-gem "baml"
+gem 'sorbet-static-and-runtime'
+gem 'tapioca', require: false, :group => [:development, :test]
+gem 'baml', path: '../../engine/language_client_ruby'
 gem "rake", "~> 13.0"
-gem "sorbet-runtime"
+# gem "sorbet-runtime"
 
 group :test do
   gem "minitest-reporters"

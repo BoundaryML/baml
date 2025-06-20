@@ -553,28 +553,28 @@ impl ToTypeReferenceInClientDefinition for FieldType {
     /// How to serialize a type for use in a function's type signature.
     /// Also returns whether the field is optional during streaming.
     fn to_partial_type_ref(&self, ir: &IntermediateRepr, needed: bool) -> (String, bool) {
-        let (base_type, metadata) = ir.distribute_metadata(self);
-        let is_partial_type = !metadata.1.done;
+        let metadata = self.meta();
+        let is_partial_type = !metadata.streaming_behavior.done;
         let use_module_prefix = !is_partial_type;
-        let with_state = metadata.1.state;
-        let constraints = metadata.0;
+        let with_state = metadata.streaming_behavior.state;
+        let constraints = metadata.constraints.clone();
         let module_prefix = if use_module_prefix {
             "types."
         } else {
             "partial_types."
         };
-        let (base_rep, optional) = match base_type {
-            FieldType::Class(name) => {
+        let (base_rep, optional) = match self {
+            FieldType::Class { name, .. } => {
                 if needed {
                     (format!("{module_prefix}{name}"), false)
                 } else {
                     (format!("({module_prefix}{name} | null)"), true)
                 }
             }
-            FieldType::RecursiveTypeAlias(name) => (name.to_owned(), !needed),
-            FieldType::Enum(name) => {
+            FieldType::RecursiveTypeAlias(name, _) => (name.to_owned(), !needed),
+            FieldType::Enum { name, .. } => {
                 let res = if ir
-                    .find_enum(name)
+                    .find_enum(&name)
                     .map(|e| e.item.attributes.get("dynamic_type").is_some())
                     .unwrap_or(false)
                 {
@@ -592,12 +592,12 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                 };
                 res
             }
-            FieldType::Literal(value) => (value.to_string(), false),
-            FieldType::List(inner) => (
+            FieldType::Literal(value, _) => (value.to_string(), false),
+            FieldType::List(inner, _) => (
                 format!("{}[]", inner.to_partial_type_ref(ir, false).0),
                 true,
             ),
-            FieldType::Map(key, value) => {
+            FieldType::Map(key, value, _) => {
                 let or_null = if needed { "" } else { "| null" };
                 (
                     format!(
@@ -608,26 +608,28 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     !needed,
                 )
             }
-            FieldType::Primitive(r#type) => {
+            FieldType::Primitive(r#type, _) => {
                 if needed {
                     (r#type.to_typescript(), false)
                 } else {
                     (format!("({} | null)", r#type.to_typescript()), true)
                 }
             }
-            FieldType::Union(inner) => {
-                let union_contents = inner
+            FieldType::Union(inner, _) => {
+                let nonnull_types = inner.iter_skip_null();
+                let union_contents = nonnull_types
                     .iter()
                     .map(|t| t.to_partial_type_ref(ir, false).0)
                     .collect::<Vec<_>>()
                     .join(" | ");
-                if needed {
-                    (format!("({})", union_contents), false)
-                } else {
+
+                if inner.is_optional() || !needed {
                     (format!("({} | null)", union_contents), true)
+                } else {
+                    (format!("({})", union_contents), false)
                 }
             }
-            FieldType::Tuple(inner) => {
+            FieldType::Tuple(inner, _) => {
                 let tuple_contents = inner
                     .iter()
                     .map(|t| t.to_partial_type_ref(ir, false).0)
@@ -639,14 +641,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     (format!("([{tuple_contents}] | null)"), true)
                 }
             }
-            FieldType::Optional(inner) => (
-                format!("({} | null)", inner.to_partial_type_ref(ir, false).0),
-                false,
-            ),
-            FieldType::WithMetadata { .. } => {
-                unreachable!("distribute_metadata makes this field unreachable.")
-            }
-            FieldType::Arrow(_) => {
+            FieldType::Arrow(_, _) => {
                 todo!("Arrow types should not be used in generated type definitions")
             }
         };
@@ -654,7 +649,7 @@ impl ToTypeReferenceInClientDefinition for FieldType {
             base_rep
         } else {
             if needed {
-                base_type.to_type_ref(ir, use_module_prefix)
+                self.to_type_ref(ir, use_module_prefix)
             } else {
                 base_rep
             }
@@ -676,8 +671,8 @@ impl ToTypeReferenceInClientDefinition for FieldType {
 
     fn to_type_ref(&self, ir: &IntermediateRepr, use_module_prefix: bool) -> String {
         let module_prefix = if use_module_prefix { "types." } else { "" };
-        match self {
-            FieldType::Enum(name) => {
+        let base_rep = match self {
+            FieldType::Enum { name, .. } => {
                 if ir
                     .find_enum(name)
                     .map(|e| e.item.attributes.get("dynamic_type").is_some())
@@ -688,37 +683,38 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     format!("{module_prefix}{name}")
                 }
             }
-            FieldType::RecursiveTypeAlias(name) => name.to_owned(),
-            FieldType::Class(name) => format!("{module_prefix}{name}"),
-            FieldType::List(inner) => match inner.as_ref() {
-                FieldType::Union(_) | FieldType::Optional(_) => {
+            FieldType::RecursiveTypeAlias(name, _) => name.to_owned(),
+            FieldType::Class { name, .. } => format!("{module_prefix}{name}"),
+            FieldType::List(inner, _) => match inner.as_ref() {
+                FieldType::Union(_, _) => {
                     format!("({})[]", inner.to_type_ref(ir, use_module_prefix))
                 }
                 _ => format!("{}[]", inner.to_type_ref(ir, use_module_prefix)),
             },
-            FieldType::Map(key, value) => {
+            FieldType::Map(key, value, _) => {
                 let k = key.to_type_ref(ir, true);
                 let v = value.to_type_ref(ir, use_module_prefix);
 
                 match key.as_ref() {
-                    FieldType::Enum(_)
-                    | FieldType::Union(_)
-                    | FieldType::Literal(LiteralValue::String(_)) => {
+                    FieldType::Enum { .. }
+                    | FieldType::Union(_, _)
+                    | FieldType::Literal(LiteralValue::String(_), _) => {
                         format!("Partial<Record<{k}, {v}>>")
                     }
                     _ => format!("Record<{k}, {v}>"),
                 }
             }
-            FieldType::Primitive(r#type) => r#type.to_typescript(),
+            FieldType::Primitive(r#type, _) => r#type.to_typescript(),
             // In typescript we can just use literal values as type defs.
-            FieldType::Literal(value) => value.to_string(),
-            FieldType::Union(inner) => inner
+            FieldType::Literal(value, _) => value.to_string(),
+            FieldType::Union(inner, _) => inner
+                .iter_include_null()
                 .iter()
                 .map(|t| t.to_type_ref(ir, use_module_prefix))
                 .collect::<Vec<_>>()
                 .join(" | ")
                 .to_string(),
-            FieldType::Tuple(inner) => format!(
+            FieldType::Tuple(inner, _) => format!(
                 "[{}]",
                 inner
                     .iter()
@@ -726,20 +722,16 @@ impl ToTypeReferenceInClientDefinition for FieldType {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Optional(inner) => {
-                format!("{} | null", inner.to_type_ref(ir, use_module_prefix))
-            }
-            FieldType::Arrow(_) => {
+            FieldType::Arrow(_, _) => {
                 todo!("Arrow types should not be used in generated type definitions")
             }
-            FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
-                Some(checks) => {
-                    let base_type_ref = base.to_type_ref(ir, use_module_prefix);
-                    let checks_type_ref = type_name_for_checks(&checks);
-                    format!("Checked<{base_type_ref},{checks_type_ref}>")
-                }
-                None => base.to_type_ref(ir, use_module_prefix),
-            },
+        };
+        match field_type_attributes(self) {
+            Some(checks) => {
+                let checks_type_ref = type_name_for_checks(&checks);
+                format!("Checked<{base_rep}, {checks_type_ref}>")
+            }
+            None => base_rep,
         }
     }
 }
@@ -866,7 +858,7 @@ client<llm> GPT35 {
     model gpt-4
     api_key env.OPENAI_API_KEY
   }
-} 
+}
 
 // class Foo {
 //   i int @stream.not_null @stream.with_state

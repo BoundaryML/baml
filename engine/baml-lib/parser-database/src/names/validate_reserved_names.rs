@@ -1,4 +1,4 @@
-use internal_baml_schema_ast::ast::{FieldType, ValueExprBlockType};
+use internal_baml_ast::ast::{FieldType, ValueExprBlockType};
 
 use crate::{
     ast::{self, WithIdentifier, WithName},

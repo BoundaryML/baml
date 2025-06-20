@@ -1,8 +1,8 @@
-import { b } from './test-setup'
+import { b } from "./test-setup";
 
-describe('Recursive Type Tests', () => {
-  it('simple recursive type', async () => {
-    const res = await b.BuildLinkedList([1, 2, 3, 4, 5])
+describe("Recursive Type Tests", () => {
+  it("simple recursive type", async () => {
+    const res = await b.BuildLinkedList([1, 2, 3, 4, 5]);
     expect(res).toEqual({
       head: {
         data: 1,
@@ -21,10 +21,10 @@ describe('Recursive Type Tests', () => {
         },
       },
       len: 5,
-    })
-  })
+    });
+  });
 
-  it('mutually recursive type', async () => {
+  it("mutually recursive type", async () => {
     const res = await b.BuildTree({
       data: 5,
       left: {
@@ -57,7 +57,7 @@ describe('Recursive Type Tests', () => {
           right: null,
         },
       },
-    })
+    });
     expect(res).toEqual({
       data: 5,
       children: {
@@ -109,6 +109,6 @@ describe('Recursive Type Tests', () => {
           },
         ],
       },
-    })
-  })
-})
+    });
+  });
+});

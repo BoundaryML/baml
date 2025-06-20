@@ -423,8 +423,8 @@ async def test_add_baml_both_classes_and_enums():
     tb.add_baml(
         """
         class ExtraPersonInfo {
-            height int
-            weight int
+            height int @alias("height_inches")
+            weight int @alias("weight_pounds")
         }
 
         enum Job {
@@ -459,7 +459,7 @@ async def test_add_baml_both_classes_and_enums():
             name="John Doe",
             hair_color="BROWN",
             age=30,  # type: ignore (dynamic property)
-            extra={"height": 6, "weight": 180},  # type: ignore (dynamic property)
+            extra={"height": 72, "weight": 180},  # type: ignore (dynamic property)
             job="Programmer",  # type: ignore (dynamic property)
             hobbies=["BikeRiding"],  # type: ignore (dynamic property)
         )

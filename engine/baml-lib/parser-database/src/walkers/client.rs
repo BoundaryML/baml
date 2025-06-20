@@ -1,4 +1,4 @@
-use internal_baml_schema_ast::ast::{Expression, WithSpan};
+use internal_baml_ast::ast::{Expression, WithSpan};
 use internal_llm_client::ClientProvider;
 
 use crate::{

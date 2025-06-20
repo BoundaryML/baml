@@ -41,7 +41,7 @@ impl std::fmt::Display for OutputFormat {
 // TODO: do this but for a class. Use the display method to render the alias.
 impl minijinja::value::Object for OutputFormat {
     fn call(
-        &self,
+        self: &std::sync::Arc<Self>,
         _state: &minijinja::State<'_, '_>,
         args: &[minijinja::value::Value],
     ) -> Result<minijinja::value::Value, minijinja::Error> {
@@ -208,8 +208,9 @@ impl minijinja::value::Object for OutputFormat {
             None => Ok(Value::from_serialize("")),
         }
     }
+    
     fn call_method(
-        &self,
+        self: &std::sync::Arc<Self>,
         _state: &minijinja::State<'_, '_>,
         name: &str,
         _args: &[minijinja::value::Value],
@@ -218,5 +219,9 @@ impl minijinja::value::Object for OutputFormat {
             ErrorKind::UnknownMethod,
             format!("output_format has no callable attribute '{}'", name),
         ))
+    }
+
+    fn render(self: &std::sync::Arc<Self>, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        std::fmt::Display::fmt(self, f)
     }
 }

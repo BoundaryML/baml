@@ -183,9 +183,7 @@ from baml_py import Collector
 def run():
     collector = Collector(name="reusable-collector")
     res = b.ExtractResume("...", baml_options={"collector": collector})
-    # Remove all logs and free up memory
-    collector.clear()
-
+   
     # Reuse the same collector
     res = b.TestOpenAIGPT4oMini("Second call", baml_options={"collector": collector})
 ```
@@ -199,9 +197,7 @@ import {Collector} from '@boundaryml/baml'
 async function run() {
     const collector = new Collector("reusable-collector")
     const res = await b.ExtractResume("...", { collector })
-    // Remove all logs and free up memory
-    collector.clear()
-
+  
     // Reuse the same collector
     const res2 = await b.ExtractResume("...", { collector })
 }
@@ -216,9 +212,7 @@ b = Baml.Client
 def run
     collector = Baml::Collector.new(name: "reusable-collector")
     res = b.ExtractResume(input: 'First call', baml_options: { collector: collector })
-    # Remove all logs and free up memory
-    collector.clear()
-
+  
     # Reuse the same collector
     res = b.ExtractResume(input: 'Second call', baml_options: { collector: collector })
 end
@@ -493,7 +487,6 @@ The `HTTPBody` class has the following properties:
 
 ## Best Practices
 1. Use a single collector instance when tracking related function calls in a chain.
-2. Clear the collector when reusing it for unrelated operations.
 3. Consider using multiple collectors to track different parts of your application.
 4. Use function IDs when tracking specific calls in parallel operations.
 5. For streaming calls, be aware that `http_response` will be null, but you can still access usage information.

@@ -83,3 +83,15 @@ func CallFunctionStreamFromC(runtime unsafe.Pointer, functionName string, encode
 
 	return result, nil
 }
+
+func CallCollectorFunction(object unsafe.Pointer, objectType string, functionName string) (unsafe.Pointer, error) {
+	cObjectType := C.CString(objectType)
+	defer C.free(unsafe.Pointer(cObjectType))
+
+	cFunctionName := C.CString(functionName)
+	defer C.free(unsafe.Pointer(cFunctionName))
+
+	pointer := C.WrapCallCollectorFunction(object, cObjectType, cFunctionName)
+
+	return pointer, nil
+}

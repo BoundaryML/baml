@@ -1,5 +1,5 @@
 use anyhow::Result;
-use baml_types::{FieldType, LiteralValue, TypeValue};
+use baml_types::{FieldType, LiteralValue, TypeValue, ir_type::UnionTypeViewGeneric};
 use indexmap::IndexSet;
 use itertools::Itertools;
 use std::{borrow::Cow, ops::Index};
@@ -311,19 +311,30 @@ impl<'ir> TryFrom<(&'ir IntermediateRepr, &'_ crate::GeneratorArgs)> for GoUnion
             )
             .chain(ir.walk_alias_cycles().map(|c| c.item.1.find_union_types()))
             .flat_map(|set| set.into_iter())
-            .filter_map(|t| match t {
-                FieldType::Union(variants) => Some(variants),
+            .filter_map(|t| match &t {
+                FieldType::Union(variants, _) => match variants.view() {
+                    UnionTypeViewGeneric::Null => None,
+                    UnionTypeViewGeneric::Optional(_) => None,
+                    _ => Some(t),
+                },
                 _ => None,
             })
             .collect::<IndexSet<_>>()
             .into_iter()
-            .map(|variants| GoUnion {
-                name: FieldType::Union(variants.clone()).to_union_name(),
-                variants: variants
-                    .iter()
-                    .map(|v| (v.to_union_name(), v.to_type_ref_2(ir, false)))
-                    .collect(),
-                docstring: None,
+            .map(|union_type| {
+                let union_name = union_type.to_union_name();
+                let FieldType::Union(variants, _) = union_type else {
+                    unreachable!("This should have been filtered out earlier");
+                };
+                GoUnion {
+                    name: union_name,
+                    variants: variants
+                        .iter_skip_null()
+                        .iter()
+                        .map(|v| (v.to_union_name(), v.to_type_ref_2(ir, false)))
+                        .collect(),
+                    docstring: None,
+                }
             })
             .collect::<Vec<_>>();
 
@@ -443,8 +454,8 @@ impl<'ir> From<ClassWalker<'ir>> for PartialGoClass<'ir> {
                 .map(|f| {
                     // Fields with @stream.done should take their type from
                     let needed: bool = f.attributes.get("stream.not_null").is_some();
-                    let (_, metadata) = c.ir.distribute_metadata(&f.elem.r#type.elem);
-                    let done: bool = metadata.1.done;
+                    let metadata = f.elem.r#type.elem.meta().clone();
+                    let done: bool = metadata.streaming_behavior.done;
                     let field = match (done, needed) {
                         // A normal partial field.
                         (false, false) => {
@@ -475,26 +486,18 @@ impl<'ir> From<ClassWalker<'ir>> for PartialGoClass<'ir> {
 /// be given a default None value when generating a go class
 /// with that field.
 fn has_none_default(ir: &IntermediateRepr, field_type: &FieldType) -> bool {
-    let base_type = ir.distribute_metadata(field_type).0;
-    match base_type {
-        FieldType::Primitive(TypeValue::Null) => true,
-        FieldType::Primitive(_) => false,
-        FieldType::Optional(_) => true,
-        FieldType::Class(_) => false,
-        FieldType::Enum(_) => false,
-        FieldType::List(_) => false,
-        FieldType::Literal(_) => false,
-        FieldType::Map(_, _) => false,
-        FieldType::RecursiveTypeAlias(_) => false,
-        FieldType::Tuple(_) => false,
-        FieldType::Union(variants) => variants
-            .iter()
-            .map(|variant| has_none_default(ir, variant))
-            .any(|b| b),
-        FieldType::WithMetadata { .. } => {
-            unreachable!("FieldType::WithMetadata is always consumed by distribute_metadata")
-        }
-        FieldType::Arrow(_) => panic!("Generation is not supported with expr fns"),
+    match field_type {
+        FieldType::Primitive(TypeValue::Null, _) => true,
+        FieldType::Primitive(_, _) => false,
+        FieldType::Class { .. } => false,
+        FieldType::Enum { .. } => false,
+        FieldType::List(_, _) => false,
+        FieldType::Literal(_, _) => false,
+        FieldType::Map(_, _, _) => false,
+        FieldType::RecursiveTypeAlias(_, _) => false,
+        FieldType::Tuple(_, _) => false,
+        FieldType::Union(variants, _) => variants.is_optional(),
+        FieldType::Arrow(_, _) => panic!("Generation is not supported with expr fns"),
     }
 }
 
@@ -526,18 +529,25 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         GoType {
             name: simplified.to_type_ref_impl_2(ir, module_prefix),
             is_pointer: self.is_optional(),
-            is_union: matches!(simplified, FieldType::Union(_)),
-            is_slice: matches!(simplified, FieldType::List(_)),
-            is_map: matches!(simplified, FieldType::Map(_, _)),
+            is_union: matches!(simplified, FieldType::Union(_, _)),
+            is_slice: matches!(simplified, FieldType::List(_, _)),
+            is_map: matches!(simplified, FieldType::Map(_, _, _)),
             is_primitive: self.is_primitive(),
-            is_class: matches!(simplified, FieldType::Class(_)),
-            is_integer: matches!(simplified, FieldType::Primitive(TypeValue::Int)),
-            is_enum: matches!(simplified, FieldType::Enum(_)),
+            is_class: matches!(simplified, FieldType::Class { .. }),
+            is_integer: matches!(simplified, FieldType::Primitive(TypeValue::Int, _)),
+            is_enum: matches!(simplified, FieldType::Enum { .. }),
             underlying_type: match simplified {
-                FieldType::List(value) => Some(Box::new(value.to_type_ref_2(ir, module_prefix))),
-                FieldType::Optional(value) => {
-                    Some(Box::new(value.to_type_ref_2(ir, module_prefix)))
-                }
+                FieldType::List(value, _) => Some(Box::new(value.to_type_ref_2(ir, module_prefix))),
+                FieldType::Union(inner, _) => match inner.view() {
+                    UnionTypeViewGeneric::Null => None,
+                    UnionTypeViewGeneric::Optional(field_type) => {
+                        Some(Box::new(field_type.to_type_ref_2(ir, module_prefix)))
+                    }
+                    UnionTypeViewGeneric::OneOf(field_types)
+                    | UnionTypeViewGeneric::OneOfOptional(field_types) => {
+                        None
+                    }
+                },
                 _ => None,
             },
         }
@@ -551,27 +561,38 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
     // TODO: use_module_prefix boolean blindness. Replace with str?
     fn to_type_ref_impl_2(&self, ir: &IntermediateRepr, use_module_prefix: bool) -> String {
         let module_prefix = if use_module_prefix { "types." } else { "" };
-        match self {
-            FieldType::Enum(name) => {
+        let base_rep = match self {
+            FieldType::Enum { name, .. } => {
                 // The enum owns its own dynamicism.
                 format!("{module_prefix}{name}")
             }
-            FieldType::RecursiveTypeAlias(name) => format!("{module_prefix}{name}"),
-            FieldType::Literal(value) => to_go_literal(value),
-            FieldType::Class(name) => format!("{module_prefix}{name}"),
-            FieldType::List(inner) => {
+            FieldType::RecursiveTypeAlias(name, _) => format!("{module_prefix}{name}"),
+            FieldType::Literal(value, _) => to_go_literal(value),
+            FieldType::Class { name, .. } => format!("{module_prefix}{name}"),
+            FieldType::List(inner, _) => {
                 format!("[]{}", inner.to_type_ref_2(ir, use_module_prefix).name)
             }
-            FieldType::Map(key, value) => {
+            FieldType::Map(key, value, _) => {
                 format!(
                     "map[{}]{}",
                     key.to_type_ref_2(ir, use_module_prefix).name,
                     value.to_type_ref_2(ir, use_module_prefix).name
                 )
             }
-            FieldType::Primitive(r#type) => r#type.to_go(),
-            FieldType::Union(inner) => format!("{module_prefix}{}", self.to_union_name()),
-            FieldType::Tuple(inner) => format!(
+            FieldType::Primitive(r#type, _) => r#type.to_go(),
+            FieldType::Union(inner, _) => match inner.view() {
+                UnionTypeViewGeneric::Null => "any".to_string(),
+                UnionTypeViewGeneric::Optional(field_type) => {
+                    format!("*{}", field_type.to_type_ref_impl_2(ir, use_module_prefix))
+                }
+                UnionTypeViewGeneric::OneOf(field_types) => {
+                    format!("{module_prefix}{}", self.to_union_name())
+                }
+                UnionTypeViewGeneric::OneOfOptional(field_types) => {
+                    format!("*{module_prefix}{}", self.to_union_name())
+                }
+            },
+            FieldType::Tuple(inner, _) => format!(
                 "Tuple[{}]",
                 inner
                     .iter()
@@ -579,17 +600,13 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
                     .collect::<Vec<_>>()
                     .join(", ")
             ),
-            FieldType::Optional(inner) => {
-                format!("*{}", inner.to_type_ref_2(ir, use_module_prefix).name)
+            FieldType::Arrow(_, _) => panic!("Generation is not supported with expr fns"),
+        };
+        match field_type_attributes(self) {
+            Some(_) => {
+                format!("{module_prefix}Checked[{base_rep}]")
             }
-            FieldType::WithMetadata { base, .. } => match field_type_attributes(self) {
-                Some(_) => {
-                    let base_type_ref = base.to_type_ref_2(ir, use_module_prefix).name;
-                    format!("{module_prefix}Checked[{base_type_ref}]")
-                }
-                None => base.to_type_ref_2(ir, use_module_prefix).name,
-            },
-            FieldType::Arrow(_) => panic!("Generation is not supported with expr fns"),
+            None => base_rep,
         }
     }
 
@@ -599,83 +616,89 @@ impl ToTypeReferenceInTypeDefinition for FieldType {
         wrapped: bool,
         needed: bool,
     ) -> String {
-        let (base_type, metadata) = ir.distribute_metadata(self);
-        let is_partial_type = !metadata.1.done;
+        let metadata = self.meta().clone();
+        let is_partial_type = !metadata.streaming_behavior.done;
         let use_module_prefix = !is_partial_type
-            || matches!(self, FieldType::Union(_) | FieldType::RecursiveTypeAlias(_));
-        let with_state = metadata.1.state;
-        let constraints = metadata.0;
+            || matches!(
+                self,
+                FieldType::Union(_, _) | FieldType::RecursiveTypeAlias(_, _)
+            );
+        let with_state = metadata.streaming_behavior.state;
+        let constraints = metadata.constraints;
         let module_prefix = if use_module_prefix { "types." } else { "" };
-        let base_rep = match base_type {
-            FieldType::Class(name) => {
+        let base_rep = match self {
+            FieldType::Class { name, .. } => {
                 if wrapped || needed {
                     format!("{module_prefix}{name}")
                 } else {
                     format!("*{module_prefix}{name}")
                 }
             }
-            FieldType::Enum(name) => {
+            FieldType::Enum { name, .. } => {
                 if needed || wrapped {
                     format!("types.{name}")
                 } else {
                     format!("*types.{name}")
                 }
             }
-            FieldType::RecursiveTypeAlias(name) => {
+            FieldType::RecursiveTypeAlias(name, _) => {
                 if wrapped {
                     format!("{module_prefix}{name}")
                 } else {
                     format!("*{module_prefix}{name}")
                 }
             }
-            FieldType::Literal(value) => {
+            FieldType::Literal(value, _) => {
                 if needed || wrapped {
                     to_go_literal(&value)
                 } else {
                     format!("*{}", to_go_literal(&value))
                 }
-            } // TODO: Handle `needed` here.
+            }
 
-            FieldType::List(inner) => {
+            FieldType::List(inner, _) => {
                 format!("[]{}", inner.to_partial_type_ref_2(ir, true, false))
             }
-            FieldType::Map(key, value) => format!(
+            FieldType::Map(key, value, _) => format!(
                 "map[{}]{}",
                 key.to_type_ref_2(ir, use_module_prefix).name,
                 value.to_partial_type_ref_2(ir, false, false)
             ),
-            FieldType::Primitive(r#type) => {
+            FieldType::Primitive(r#type, _) => {
                 if needed || wrapped {
                     r#type.to_go()
                 } else {
                     format!("*{}", r#type.to_go())
                 }
             }
-            FieldType::Union(inner) => {
-                if needed || wrapped {
-                    format!("{module_prefix}{}", self.to_union_name())
-                } else {
+            FieldType::Union(inner, _) => match inner.view() {
+                UnionTypeViewGeneric::Null => "any".to_string(),
+                UnionTypeViewGeneric::Optional(field_type) => {
+                    format!("*{}", field_type.to_type_ref_impl_2(ir, use_module_prefix))
+                }
+                UnionTypeViewGeneric::OneOf(field_types) => {
+                    if needed {
+                        format!("{module_prefix}{}", self.to_union_name())
+                    } else {
+                        format!("*{module_prefix}{}", self.to_union_name())
+                    }
+                }
+                UnionTypeViewGeneric::OneOfOptional(field_types) => {
                     format!("*{module_prefix}{}", self.to_union_name())
                 }
-            }
-            FieldType::Tuple(inner) => {
+            },
+            FieldType::Tuple(inner, _) => {
                 todo!("Tuples are not supported in partial types.")
             }
-            FieldType::Optional(inner) => {
-                format!("*{}", inner.to_partial_type_ref_2(ir, true, false))
-            }
-            FieldType::WithMetadata { .. } => {
-                unreachable!("distribute_metadata makes this branch unreachable.")
-            }
-            FieldType::Arrow(_) => panic!("Generation is not supported with expr fns"),
+            FieldType::Arrow(_, _) => panic!("Generation is not supported with expr fns"),
         };
         let base_type_ref = if is_partial_type {
             base_rep
         } else {
             if needed {
-                base_type.to_type_ref_2(ir, use_module_prefix).name
-            } else {
                 base_rep
+            } else {
+                format!("*{}", base_rep)
             }
         };
         let rep_with_checks = match field_type_attributes(self) {
@@ -719,9 +742,7 @@ mod tests {
     #[test]
     fn test_optional_list() {
         let ir = make_test_ir("").unwrap();
-        let optional_list = FieldType::Optional(Box::new(FieldType::List(Box::new(
-            FieldType::Primitive(TypeValue::String),
-        ))));
+        let optional_list = FieldType::string().as_list().as_optional();
         let full = optional_list.to_type_ref_2(&ir, false);
         let partial = optional_list.to_partial_type_ref_2(&ir, false, false);
         assert_eq!(full.name, "*[]string");
@@ -730,10 +751,7 @@ mod tests {
     #[test]
     fn test_union() {
         let ir = make_test_ir("").unwrap();
-        let union = FieldType::Union(vec![
-            FieldType::Primitive(TypeValue::String),
-            FieldType::Primitive(TypeValue::Int),
-        ]);
+        let union = FieldType::union(vec![FieldType::string(), FieldType::int()]);
         let full = union.to_type_ref_2(&ir, false);
         let partial = union.to_partial_type_ref_2(&ir, false, false);
         assert_eq!(full.name, "Union__string__int");
@@ -742,9 +760,9 @@ mod tests {
     #[test]
     fn test_union_with_optional() {
         let ir = make_test_ir("").unwrap();
-        let union = FieldType::Union(vec![
-            FieldType::Optional(Box::new(FieldType::Primitive(TypeValue::String))),
-            FieldType::Primitive(TypeValue::Int),
+        let union = FieldType::union(vec![
+            FieldType::optional(FieldType::string()),
+            FieldType::int(),
         ]);
         let full = union.to_type_ref_2(&ir, false);
         let partial = union.to_partial_type_ref_2(&ir, false, false);

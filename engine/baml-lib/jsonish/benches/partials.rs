@@ -42,7 +42,7 @@ pub fn bench_partials(c: &mut Criterion) {
     let mut group = c.benchmark_group("partials");
     
     // Test partial parsing of a deeply nested object
-    let target = FieldType::Class("NestedObject".to_string());
+    let target = FieldType::class("NestedObject");
     let of = Builder::new(target.clone()).build();
     
     group.bench_function("partial_nested_shallow", |b| b.iter(|| from_str(
@@ -70,7 +70,7 @@ pub fn bench_partials(c: &mut Criterion) {
     )));
 
     // Test partial with optional fields
-    let target = FieldType::Class("ComplexPartial".to_string());
+    let target = FieldType::class("ComplexPartial");
     let of = Builder::new(target.clone()).build();
     
     group.bench_function("partial_with_optional", |b| b.iter(|| from_str(

@@ -1,27 +1,11 @@
-from typing import Any, Dict, List, Optional, Union, TypedDict, Type, cast
-from typing_extensions import NotRequired, Literal
-import os
+from typing import Dict, List, Optional, Union, cast
+from typing_extensions import Literal
 
 import baml_py
 
-from . import types, partial_types
+from . import _baml
 from .types import Checked, Check
-from .type_builder import TypeBuilder
 
-
-class BamlCallOptions(TypedDict, total=False):
-    tb: NotRequired[TypeBuilder]
-    client_registry: NotRequired[baml_py.baml_py.ClientRegistry]
-    env: NotRequired[Dict[str, Optional[str]]]
-
-def env_vars_to_dict(overrides: Dict[str, Optional[str]]) -> Dict[str, str]:
-    base = os.environ.copy()
-    for k, v in overrides.items():
-        if v is not None:
-            base[k] = v
-        else:
-            base.pop(k, None)
-    return base
 
 class LlmResponseParser:
     __runtime: baml_py.BamlRuntime
@@ -35,7 +19,7 @@ class LlmResponseParser:
     def {{ fn.name }}(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> {{fn.return_type}}:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -44,14 +28,14 @@ class LlmResponseParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "{{fn.name}}",
         llm_response,
-        types,
-        types,
-        partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         False,
         self.__ctx_manager.get(),
         tb,
@@ -75,7 +59,7 @@ class LlmStreamParser:
     def {{ fn.name }}(
         self,
         llm_response: str,
-        baml_options: BamlCallOptions = {},
+        baml_options: _baml.BamlCallOptionsModApi = {},
     ) -> {{fn.partial_return_type}}:
       __tb__ = baml_options.get("tb", None)
       if __tb__ is not None:
@@ -84,14 +68,14 @@ class LlmStreamParser:
         tb = None
       __cr__ = baml_options.get("client_registry", None)
 
-      env = env_vars_to_dict(baml_options.get("env", {}))
+      env = _baml.env_vars_to_dict(baml_options.get("env", {}))
 
       parsed = self.__runtime.parse_llm_response(
         "{{fn.name}}",
         llm_response,
-        types,
-        types,
-        partial_types,
+        _baml.types,
+        _baml.types,
+        _baml.partial_types,
         True,
         self.__ctx_manager.get(),
         tb,

@@ -35,9 +35,10 @@ impl<'de> Deserialize<'de> for BamlFunctionId {
     }
 }
 
+// Only includes baml llm functions, not user-defined functions
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
-pub struct FunctionSignature {
+pub struct FunctionDefinition {
     pub function_id: Arc<BamlFunctionId>,
     pub inputs: Vec<NamedType>,
     pub output: TypeReference,
@@ -47,7 +48,7 @@ pub struct FunctionSignature {
 #[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub struct AST {
-    pub functions: Vec<FunctionSignature>,
+    pub functions: Vec<FunctionDefinition>,
     pub types: Vec<TypeDefinition>,
     pub source_code: Vec<SourceCode>,
 }
@@ -113,7 +114,7 @@ pub struct ASTId<'a> {
     pub raw_src_ids: Vec<(Cow<'a, str>, Cow<'a, str>)>,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct SourceCode {
     pub file_name: String,

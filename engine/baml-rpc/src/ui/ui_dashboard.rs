@@ -1,5 +1,6 @@
 use crate::base::EpochMsTimestamp;
 use crate::rpc::ApiEndpoint;
+use baml_ids::ProjectId;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -93,58 +94,49 @@ pub struct UnaryBooleanOperator<T> {
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub enum ChartMetric {
-    TotalTokenCount,
-    LatencyMs,
-}
-
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct ChartParameters {
-    pub chart_name: String,
-    pub chart_metric: ChartMetric,
-    pub group_by: Vec<String>,
-    pub filters: Vec<FilterOperation>,
-}
-
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export)]
-pub struct ChartDefinition {
-    pub chart_name: String,
-    pub chart_params: ChartParameters,
-}
-
-#[derive(Debug, Serialize, Deserialize, TS)]
-#[ts(export)]
 pub struct GetDashboardDataRequest {
-    pub charts: Vec<ChartDefinition>,
+    #[ts(type = "string")]
+    pub project_id: ProjectId,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct ChartDataSeries {
-    pub series_name: String,
-    /// If there are no data points for a given time window, the value will be None.
-    /// The frontend can decide whether to show a gap or a zero.
-    #[ts(type = "[number, number | null][]")]
-    pub data: Vec<(EpochMsTimestamp, Option<f64>)>,
+pub struct StatusCountByFunction {
+    pub function_id: String,
+    pub success_count: u64,
+    pub error_count: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct ChartData {
-    pub chart_name: String,
-    pub chart_params: ChartParameters,
-    /// There is one data series per member of the group_by set,
-    /// e.g. if group_by = ["personId", "functionId"], there will be one
-    /// data series per (personId, functionId) pair.
-    pub chart_data: Vec<ChartDataSeries>,
+pub struct ParsingErrorCountByClient {
+    pub client_name: String,
+    pub error_count: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ParsingErrorCountByFunction {
+    pub function_id: String,
+    pub status_count: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct StatusCountOverTime {
+    #[ts(type = "number")]
+    pub interval_start: EpochMsTimestamp,
+    pub success_count: u64,
+    pub error_count: u64,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct GetDashboardDataResponse {
-    pub charts: Vec<ChartData>,
+    pub status_counts_by_function: Vec<StatusCountByFunction>,
+    pub parsing_errors_by_client: Vec<ParsingErrorCountByClient>,
+    pub parsing_errors_by_function: Vec<ParsingErrorCountByFunction>,
+    pub status_counts: Vec<StatusCountOverTime>,
 }
 
 struct GetDashboardData;

@@ -22,7 +22,7 @@ mise exec -- bundle install
 
 Generate the BAML client code:
 ```bash
-mise exec -- baml-cli generate --from ../baml_src
+mise exec -- rake generate
 ```
 
 

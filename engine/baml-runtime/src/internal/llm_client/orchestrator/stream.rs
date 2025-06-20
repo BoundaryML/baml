@@ -156,6 +156,7 @@ where
                 &final_response,
                 ctx.runtime_context().call_id_stack.clone(),
                 ctx.http_request_id(),
+                node.scope.scope.iter().map(|s| s.to_string()).collect(),
             );
             BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
         }

@@ -2,7 +2,7 @@ pub mod common;
 use std::{collections::HashSet, path::PathBuf};
 
 use anyhow::Result;
-use baml_types::{BamlValueWithMeta, ResponseCheck, StreamingBehavior};
+use baml_types::{type_meta::base::StreamingBehavior, BamlValueWithMeta, ResponseCheck};
 use baml_types::{EvaluationContext, JinjaExpression};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::IRHelperExtended;
@@ -129,10 +129,14 @@ fn relevant_data_models<'a>(
     let mut start: Vec<baml_types::FieldType> = vec![output.clone()];
 
     while let Some(output) = start.pop() {
-        match ir.distribute_constraints(&output) {
-            (FieldType::Enum(enm), constraints) => {
+        match &output {
+            FieldType::Enum {
+                name,
+                dynamic,
+                meta,
+            } => {
                 if checked_types.insert(output.to_string()) {
-                    let walker = ir.find_enum(enm);
+                    let walker = ir.find_enum(&name);
 
                     let real_values = walker
                         .as_ref()
@@ -142,25 +146,25 @@ fn relevant_data_models<'a>(
                         .into_iter()
                         .flatten()
                         .map(|value| {
-                            let meta = find_enum_value(enm.as_str(), &value, &walker, env_values)?;
+                            let meta = find_enum_value(&name, &value, &walker, env_values)?;
                             Ok(meta)
                         })
                         .filter_map(|v| v.transpose())
                         .collect::<Result<Vec<_>>>()?;
 
                     enums.push(Enum {
-                        name: Name::new_with_alias(enm.to_string(), walker?.alias(env_values)?),
+                        name: Name::new_with_alias(name.to_string(), walker?.alias(env_values)?),
                         values,
-                        constraints,
+                        constraints: meta.constraints.clone(),
                     });
                 }
             }
-            (FieldType::List(inner), _constraints) | (FieldType::Optional(inner), _constraints) => {
+            FieldType::List(inner, _) => {
                 if !checked_types.contains(&inner.to_string()) {
                     start.push(inner.as_ref().clone());
                 }
             }
-            (FieldType::Map(k, v), _constraints) => {
+            FieldType::Map(k, v, _) => {
                 if checked_types.insert(output.to_string()) {
                     if !checked_types.contains(&k.to_string()) {
                         start.push(k.as_ref().clone());
@@ -170,8 +174,7 @@ fn relevant_data_models<'a>(
                     }
                 }
             }
-            (FieldType::Tuple(options), _constraints)
-            | (FieldType::Union(options), _constraints) => {
+            FieldType::Tuple(options, _) => {
                 if checked_types.insert(output.to_string()) {
                     for inner in options {
                         if !checked_types.contains(&inner.to_string()) {
@@ -180,9 +183,23 @@ fn relevant_data_models<'a>(
                     }
                 }
             }
-            (FieldType::Class(cls), constraints) => {
+            FieldType::Union(options, _) => {
                 if checked_types.insert(output.to_string()) {
-                    let walker = ir.find_class(cls);
+                    for inner in options.iter_include_null() {
+                        if !checked_types.contains(&inner.to_string()) {
+                            start.push(inner.clone());
+                        }
+                    }
+                }
+            }
+            FieldType::Class {
+                name,
+                mode,
+                dynamic,
+                meta: metadata,
+            } => {
+                if checked_types.insert(output.to_string()) {
+                    let walker = ir.find_class(&name);
 
                     let real_fields = walker
                         .as_ref()
@@ -190,7 +207,7 @@ fn relevant_data_models<'a>(
                         .ok();
 
                     let fields = real_fields.into_iter().flatten().map(|field| {
-                        let meta = find_existing_class_field(cls, &field, &walker, env_values)?;
+                        let meta = find_existing_class_field(&name, &field, &walker, env_values)?;
                         Ok(meta)
                     });
 
@@ -213,20 +230,20 @@ fn relevant_data_models<'a>(
                     //
                     // Also take a look at the TODO on top of this function.
                     for cycle in ir.finite_recursive_cycles() {
-                        if cycle.contains(cls) {
+                        if cycle.contains(name) {
                             recursive_classes.extend(cycle.iter().map(ToOwned::to_owned));
                         }
                     }
 
                     classes.push(Class {
-                        name: Name::new_with_alias(cls.to_string(), walker?.alias(env_values)?),
+                        name: Name::new_with_alias(name.to_string(), walker?.alias(env_values)?),
                         fields,
-                        constraints,
-                        streaming_behavior: StreamingBehavior::default(),
+                        constraints: metadata.constraints.clone(),
+                        streaming_behavior: metadata.streaming_behavior.clone(),
                     });
                 }
             }
-            (FieldType::RecursiveTypeAlias(name), _) => {
+            FieldType::RecursiveTypeAlias { name, .. } => {
                 // TODO: Same O(n) problem as above.
                 for cycle in ir.structural_recursive_alias_cycles() {
                     if cycle.contains_key(name) {
@@ -236,12 +253,9 @@ fn relevant_data_models<'a>(
                     }
                 }
             }
-            (FieldType::Literal(_), _) => {}
-            (FieldType::Primitive(_), _constraints) => {}
-            (_, _) => {
-                // TODO: Don't use this wildcard.
-                unreachable!("It is guaranteed that a call to distribute_constraints will not return FieldType::Constrained")
-            }
+            FieldType::Literal(_, _) => {}
+            FieldType::Primitive(_, _) => {}
+            FieldType::Arrow(_, _) => {}
         }
     }
 
@@ -254,6 +268,8 @@ fn relevant_data_models<'a>(
 }
 
 /// Validate a parsed value, checking asserts and checks.
+/// This is largely a duplicate of baml-runtime::internal::llm_client::parsed_value_to_response.
+/// It's used in jsonish tests.
 pub fn parsed_value_to_response(
     ir: &IntermediateRepr,
     baml_value: BamlValueWithFlags,
@@ -292,4 +308,30 @@ pub fn parsed_value_to_response(
             crate::ResponseValueMeta(z.clone(), y.clone(), x.clone(), ft.clone())
         });
     Ok(ResponseBamlValue(response_value))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_output_format_description_and_alias() {
+        let ir = load_test_ir(
+            r#"
+          class Foo {
+            bar string @description("d") @alias("a")
+          }
+        "#,
+        );
+        let output =
+            render_output_format(&ir, &FieldType::class("Foo"), &EvaluationContext::default())
+                .expect("Rendering should work");
+        let foo = output.classes.get("Foo").expect("Exists");
+        assert_eq!(foo.fields.len(), 1);
+        assert_eq!(foo.fields[0].2, Some("d".to_string()));
+        assert_eq!(
+            foo.fields[0].0,
+            Name::new_with_alias("bar".to_string(), Some("a".to_string()))
+        );
+    }
 }

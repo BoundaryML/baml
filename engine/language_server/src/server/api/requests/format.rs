@@ -4,7 +4,7 @@ use crate::server::api::ResultExt;
 use crate::server::client::Requester;
 use crate::server::{client::Notifier, Result};
 use crate::{DocumentKey, Session};
-use internal_baml_core::internal_baml_schema_ast::{format_schema, FormatOptions};
+use internal_baml_core::internal_baml_ast::{format_schema, FormatOptions};
 use lsp_types::{request, DocumentFormattingParams, TextEdit};
 use std::path::PathBuf;
 pub(crate) struct DocumentFormatting;
@@ -20,6 +20,11 @@ impl SyncRequestHandler for DocumentFormatting {
         _requester: &mut Requester,
         params: DocumentFormattingParams,
     ) -> Result<Option<Vec<lsp_types::TextEdit>>> {
+        let url = params.text_document.uri;
+        if !url.to_string().contains("baml_src") {
+            return Ok(None);
+        }
+
         // let url = &params.text_document.uri;
         // let path = url
         //     .to_file_path()

@@ -4,7 +4,9 @@ use crate::on_log_event::LogEventCallbackSync;
 use crate::tracingv2::storage::storage::{Collector, BAML_TRACER};
 use crate::InnerTraceStats;
 use anyhow::{Context, Result};
-use baml_types::tracing::events::{EvaluationContext, FunctionStart, TraceData, TraceEvent};
+use baml_types::tracing::events::{
+    EvaluationContext, FunctionStart, FunctionType, TraceData, TraceEvent,
+};
 use baml_types::{BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta};
 use cfg_if::cfg_if;
 use colored::{ColoredString, Colorize};
@@ -49,6 +51,7 @@ cfg_if! {
 #[derive(Debug, Clone)]
 pub struct TracingCall {
     pub call_id: Uuid,
+    pub function_name: String,
     pub new_call_id_stack: Vec<baml_ids::FunctionCallId>,
     params: BamlMap<String, BamlValue>,
     start_time: web_time::SystemTime,
@@ -156,7 +159,7 @@ impl Visualize for FunctionResult {
                     if let Some(max_size) = max_chunk_size.maybe_truncate_to(json_str.len()) {
                         s.push(truncate_string(&json_str, max_size).to_string());
                     } else {
-                        s.push(json_str);
+                        s.push(json_str.to_string());
                     }
                 }
             }
@@ -401,14 +404,23 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         params: &BamlMap<String, BamlValue>,
         is_baml_function: bool,
+        is_stream: bool,
+        // baml_src_hash: Option<String>,
         collectors: Option<Vec<Arc<Collector>>>,
     ) -> TracingCall {
         self.trace_stats.guard().start();
         let (call_id, call_stack, last_tags, global_tags) = ctx.enter(function_name);
 
-        log::trace!(" Entering call {:#?} in {:?}", call_id, function_name);
+        log::trace!(
+            "\n{}------------------- Entering {:?}, ctx chain {:#?}",
+            "        ".repeat(ctx.context_depth()),
+            function_name,
+            ctx
+        );
+
         let call = TracingCall {
             call_id,
+            function_name: function_name.to_string(),
             new_call_id_stack: call_stack.clone(),
             params: params.clone(),
             start_time: web_time::SystemTime::now(),
@@ -416,6 +428,8 @@ impl BamlTracer {
             // more tags with set_tags(). Those are picked up via a diff event (SetTags)
             tags: last_tags.clone(),
         };
+        // println!("---- {} ctx {:#?}", function_name, ctx);
+        // baml_log::info!("---- {} ctx {:#?}", function_name, ctx);
 
         // This must happen before the first event is sent.
         if let Some(collectors) = collectors {
@@ -434,7 +448,7 @@ impl BamlTracer {
                 .map(|(k, v)| {
                     let field_type = infer_type(v).unwrap_or_else(|| {
                         log::warn!("Failed to infer FieldType for BamlValue in tracing. Defaulting to Null.");
-                        baml_types::FieldType::Primitive(baml_types::TypeValue::Null)
+                        baml_types::FieldType::Primitive(baml_types::TypeValue::Null, Default::default())
                     });
                     (
                         k.clone(),
@@ -449,7 +463,12 @@ impl BamlTracer {
                     .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
                     .collect(),
             },
-            is_baml_function,
+            if is_baml_function {
+                FunctionType::BamlLlm
+            } else {
+                FunctionType::Native
+            },
+            is_stream,
         );
         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
@@ -497,6 +516,8 @@ impl BamlTracer {
         ctx: &RuntimeContextManager,
         response: Option<BamlValue>,
     ) -> Result<uuid::Uuid> {
+        use baml_types::type_meta::base::TypeMeta;
+
         let guard = self.trace_stats.guard();
         let Some((call_id, event_chain, global_and_user_tags)) = ctx.exit() else {
             anyhow::bail!(
@@ -506,8 +527,9 @@ impl BamlTracer {
             );
         };
         log::trace!(
-            "Finishing call: {:#?} {}\nevent chain {:?}",
-            call,
+            "\n{}------------------- Finishing call: {:#?} {}\nevent chain {:#?}",
+            "        ".repeat(ctx.context_depth()),
+            call.function_name,
             call_id,
             event_chain
         );
@@ -534,9 +556,11 @@ impl BamlTracer {
                 log::warn!(
                     "Failed to infer FieldType for BamlValue in tracing. Defaulting to Null."
                 );
-                baml_types::FieldType::Primitive(baml_types::TypeValue::Null)
+                baml_types::FieldType::Primitive(baml_types::TypeValue::Null, TypeMeta::default())
             }),
-            None => baml_types::FieldType::Primitive(baml_types::TypeValue::Null),
+            None => {
+                baml_types::FieldType::Primitive(baml_types::TypeValue::Null, TypeMeta::default())
+            }
         };
         let baml_value_with_meta: BamlValueWithMeta<baml_types::FieldType> =
             BamlValueWithMeta::with_const_meta(
@@ -626,8 +650,8 @@ impl BamlTracer {
         };
 
         log::trace!(
-            "Finishing baml call: {:#?} {}\nevent chain {:?}",
-            call,
+            "Finishing baml call: {:#?} {}\nevent chain {:#?}",
+            call.function_name,
             call_id,
             event_chain
         );

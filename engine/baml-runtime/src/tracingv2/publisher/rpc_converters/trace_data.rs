@@ -2,7 +2,7 @@ use anyhow::Result;
 use std::borrow::Cow;
 
 use super::{IntoRpcEvent, TypeLookup};
-use baml_types::HasFieldType;
+use baml_types::{tracing::events::FunctionType, HasFieldType};
 
 impl<'a, T: HasFieldType> IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
     for baml_types::tracing::events::FunctionStart<T>
@@ -13,11 +13,13 @@ impl<'a, T: HasFieldType> IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
     ) -> baml_rpc::runtime_api::TraceData<'a> {
         baml_rpc::runtime_api::TraceData::FunctionStart {
             function_display_name: self.name.clone(),
+            function_type: function_type_to_rpc(&self.function_type),
             args: self
                 .args
                 .iter()
                 .map(|(k, v)| (k.clone(), v.into_rpc_event(lookup)))
                 .collect(),
+            is_stream: self.is_stream,
             tags: self
                 .options
                 .tags
@@ -29,6 +31,19 @@ impl<'a, T: HasFieldType> IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
     }
 }
 
+fn function_type_to_rpc(
+    value: &baml_types::tracing::events::FunctionType,
+) -> baml_rpc::runtime_api::FunctionType {
+    match value {
+        baml_types::tracing::events::FunctionType::BamlLlm => {
+            baml_rpc::runtime_api::FunctionType::BamlLlm
+        }
+        baml_types::tracing::events::FunctionType::Native => {
+            baml_rpc::runtime_api::FunctionType::Native
+        }
+    }
+}
+
 impl<'a, T: HasFieldType> IntoRpcEvent<'a, Option<baml_rpc::runtime_api::BamlFunctionStart>>
     for baml_types::tracing::events::FunctionStart<T>
 {
@@ -36,10 +51,13 @@ impl<'a, T: HasFieldType> IntoRpcEvent<'a, Option<baml_rpc::runtime_api::BamlFun
         &'a self,
         lookup: &(impl TypeLookup + ?Sized),
     ) -> Option<baml_rpc::runtime_api::BamlFunctionStart> {
-        if self.is_baml_function {
+        if self.function_type == FunctionType::BamlLlm {
             match lookup.function_lookup(&self.name).map(|id| {
                 baml_rpc::runtime_api::BamlFunctionStart {
                     function_id: id,
+                    baml_src_hash: lookup
+                        .baml_src_hash()
+                        .unwrap_or_else(|| "unknown_hash".to_string()),
                     eval_context: self.options.into_rpc_event(lookup),
                 }
             }) {
@@ -200,10 +218,10 @@ impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
         lookup: &(impl TypeLookup + ?Sized),
     ) -> baml_rpc::runtime_api::IntermediateData<'a> {
         baml_rpc::runtime_api::IntermediateData::RawLLMRequest {
-            url: self.url.clone(),
-            method: self.method.clone(),
-            headers: self.headers.clone(),
-            body: self.body.into_rpc_event(lookup),
+            url: self.url().to_string(),
+            method: self.method().to_string(),
+            headers: self.headers().clone(),
+            body: self.body().into_rpc_event(lookup),
         }
     }
 }
@@ -217,7 +235,7 @@ impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
     ) -> baml_rpc::runtime_api::IntermediateData<'a> {
         baml_rpc::runtime_api::IntermediateData::RawLLMResponse {
             status: self.status,
-            headers: self.headers.clone(),
+            headers: self.headers().map(|h| h.clone()),
             body: self.body.into_rpc_event(lookup),
         }
     }
@@ -231,6 +249,7 @@ impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
         lookup: &(impl TypeLookup + ?Sized),
     ) -> baml_rpc::runtime_api::IntermediateData<'a> {
         baml_rpc::runtime_api::IntermediateData::LLMResponse {
+            client_stack: self.client_stack.clone(),
             model: self.model.clone(),
             finish_reason: self.finish_reason.clone(),
             usage: self.usage.as_ref().map(|u| u.into_rpc_event(lookup)),

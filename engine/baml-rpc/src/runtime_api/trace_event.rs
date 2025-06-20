@@ -7,13 +7,14 @@ use crate::{
 use serde::{Deserialize, Serialize};
 
 use baml_ids::{FunctionCallId, FunctionEventId};
+use ts_rs::TS;
 
 use super::baml_function_call_error::BamlFunctionCallError;
 use super::baml_value::{BamlValue, Media};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TraceEventBatch<'a> {
-    pub events: Vec<TraceEvent<'a>>,
+    pub events: Vec<BackendTraceEvent<'a>>,
 }
 
 /// This is intentionally VERY similar to TraceEvent in
@@ -21,7 +22,7 @@ pub struct TraceEventBatch<'a> {
 /// If the convertion from baml-types to baml-rpc is not possible,
 /// WE HAVE A BREAKING CHANGE.
 #[derive(Debug, Serialize, Deserialize)]
-pub struct TraceEvent<'a> {
+pub struct BackendTraceEvent<'a> {
     /*
      * (call_id, content_event_id) is a unique identifier for a log event
      * The query (call_id, *) gets all logs for a function call
@@ -43,6 +44,16 @@ pub struct TraceEvent<'a> {
     pub content: TraceData<'a>,
 }
 
+// Same as tracing/events.rs FunctionType
+#[derive(Debug, Serialize, Deserialize, PartialEq, Eq, Hash, Clone, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum FunctionType {
+    BamlLlm,
+    // BamlExternal, // extern function in baml
+    // Baml // a function that is defined in baml, but not a baml llm function
+    Native, // python or TS function we are @tracing.
+}
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum TraceData<'a> {
@@ -50,6 +61,8 @@ pub enum TraceData<'a> {
         function_display_name: String,
         args: Vec<(String, BamlValue<'a>)>,
         tags: TraceTags,
+        function_type: FunctionType,
+        is_stream: bool,
         /// Only sent for BAML defined functions
         baml_function_content: Option<BamlFunctionStart>,
     },
@@ -63,6 +76,7 @@ pub enum TraceData<'a> {
 #[derive(Debug, Serialize, Deserialize)]
 pub struct BamlFunctionStart {
     pub function_id: std::sync::Arc<BamlFunctionId>,
+    pub baml_src_hash: String,
     pub eval_context: EvaluationContext,
 }
 
@@ -104,6 +118,7 @@ pub enum IntermediateData<'a> {
         body: HTTPBody<'a>,
     },
     LLMResponse {
+        client_stack: Vec<String>,
         #[serde(skip_serializing_if = "Option::is_none")]
         model: Option<String>,
         #[serde(skip_serializing_if = "Option::is_none")]

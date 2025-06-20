@@ -47,3 +47,7 @@ const void *call_function_stream_from_c(const void *runtime,
                                         const char *encoded_args,
                                         uintptr_t length,
                                         uint32_t id);
+
+const void *call_collector_function(const void *object,
+                                    const char *object_type,
+                                    const char *function_name);

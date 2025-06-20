@@ -123,6 +123,18 @@ case "$_path" in
       date
     fi
     ;;
+  
+  /engine/generators/go | /engine/generators/go/* )
+    command="cargo test --package generators-go --lib -- tests --show-output"
+    if [ "$_watch_mode" -eq 1 ]; then
+      npx nodemon \
+        --ext rs,toml,j2 \
+        --watch "${_repo_root}/engine" \
+        --exec "${command}"
+    else
+      eval "${command}"
+    fi
+    ;;
 
   # Subdirectories of engine must be matched before this line
   /engine/baml-runtime | /engine/baml-runtime/* )

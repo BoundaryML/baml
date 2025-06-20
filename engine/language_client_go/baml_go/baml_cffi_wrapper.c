@@ -22,3 +22,4 @@ DEFINE_WRAPPER_FUNCTIONS(int, InvokeRuntimeCli, (const char *const *args), (args
 DEFINE_WRAPPER_FUNCTIONS(void, RegisterCallbacks, (CallbackFn callback_fn, CallbackFn error_callback_fn), (callback_fn, error_callback_fn), )
 DEFINE_WRAPPER_FUNCTIONS(const void *, CallFunctionFromC, (const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id), (runtime, function_name, encoded_args, length, id), NULL)
 DEFINE_WRAPPER_FUNCTIONS(const void *, CallFunctionStreamFromC, (const void *runtime, const char *function_name, const char *encoded_args, uintptr_t length, uint32_t id), (runtime, function_name, encoded_args, length, id), NULL)
+DEFINE_WRAPPER_FUNCTIONS(const void *, CallCollectorFunction, (const void *object, const char *object_type, const char *function_name), (object, object_type, function_name), NULL)

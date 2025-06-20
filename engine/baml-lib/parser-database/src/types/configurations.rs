@@ -1,7 +1,7 @@
 use baml_types::Constraint;
 use baml_types::UnresolvedValue;
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
-use internal_baml_schema_ast::ast::{
+use internal_baml_ast::ast::{
     Attribute, ValExpId, ValueExprBlock, WithIdentifier, WithName, WithSpan,
 };
 use regex::Regex;
@@ -114,7 +114,7 @@ pub(crate) fn visit_retry_policy<'db>(
 
 fn visit_strategy(
     field_span: &Span,
-    val: Vec<((&str, &Span), &internal_baml_schema_ast::ast::Expression)>,
+    val: Vec<((&str, &Span), &internal_baml_ast::ast::Expression)>,
     diagnostics: &mut internal_baml_diagnostics::Diagnostics,
 ) -> Option<RetryPolicyStrategy> {
     let mut r#type = None;

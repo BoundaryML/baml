@@ -223,8 +223,8 @@ impl<'ir> From<ClassWalker<'ir>> for PartialTypescriptClass<'ir> {
                 .map(|f| {
                     let ir = c.ir;
                     let needed: bool = f.attributes.get("stream.not_null").is_some();
-                    let (_, metadata) = ir.distribute_metadata(&f.elem.r#type.elem);
-                    let done: bool = metadata.1.done;
+                    let metadata = f.elem.r#type.elem.meta();
+                    let done: bool = metadata.streaming_behavior.done;
                     let (field, optional) = match (done, needed) {
                         (false, false) => f.elem.r#type.elem.to_partial_type_ref(c.ir, false),
                         (true, false) => (f.elem.r#type.elem.to_type_ref(c.ir, true), false),

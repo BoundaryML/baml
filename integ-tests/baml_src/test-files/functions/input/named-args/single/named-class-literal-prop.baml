@@ -9,3 +9,12 @@ function FnLiteralClassInputOutput(input: LiteralClassHello) -> LiteralClassHell
     {{ ctx.output_format }}
   "#
 }
+
+test TestFnLiteralClassInputOutput{
+  functions [FnLiteralClassInputOutput]
+  args {
+    input {
+      prop "hello"
+    }
+  }
+}

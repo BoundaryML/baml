@@ -12,6 +12,7 @@ import "C"
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"unsafe"
@@ -27,11 +28,12 @@ type BamlFunctionArguments struct {
 	Kwargs         map[string]any
 	ClientRegistry *ClientRegistry
 	Env            map[string]string
+	Collectors     []Collector
 }
 
 type ClientRegistry struct {
 	primary *string
-	clients ClientRegistryMap
+	clients clientRegistryMap
 }
 
 type clientProperty struct {
@@ -40,12 +42,12 @@ type clientProperty struct {
 	options     map[string]any
 }
 
-type ClientRegistryMap map[string]clientProperty
+type clientRegistryMap map[string]clientProperty
 
 func NewClientRegistry() *ClientRegistry {
 	return &ClientRegistry{
 		primary: nil,
-		clients: ClientRegistryMap{},
+		clients: clientRegistryMap{},
 	}
 }
 
@@ -124,10 +126,16 @@ func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, enc
 		}
 	}()
 
-	_, err := baml_go.CallFunctionFromC(r.runtime, functionName, encoded_args, callback_id)
+	result, err := baml_go.CallFunctionFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
 		close(return_channel)
 		return nil, err
+	}
+
+	if result != nil {
+		result_str := (*string)(result)
+		close(return_channel)
+		return nil, errors.New(*result_str)
 	}
 
 	select {
@@ -141,30 +149,15 @@ func (r *BamlRuntime) CallFunction(ctx context.Context, functionName string, enc
 func (r *BamlRuntime) CallFunctionStream(ctx context.Context, functionName string, encoded_args []byte) (<-chan ResultCallback, error) {
 	callback_id, callback := create_unique_id(ctx)
 
-	return_channel := make(chan ResultCallback)
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				close(return_channel)
-				return
-			case result, ok := <-callback:
-				if !ok {
-					close(return_channel)
-					return
-				}
-				// TODO: Handle the result
-				// error handling, type checking, etc.
-				return_channel <- result
-			}
-		}
-	}()
-
-	_, err := baml_go.CallFunctionStreamFromC(r.runtime, functionName, encoded_args, callback_id)
+	result, err := baml_go.CallFunctionStreamFromC(r.runtime, functionName, encoded_args, callback_id)
 	if err != nil {
-		close(return_channel)
 		return nil, err
 	}
 
-	return return_channel, nil
+	if result != nil {
+		result_str := (*string)(result)
+		return nil, errors.New(*result_str)
+	}
+
+	return callback, nil
 }

@@ -3,11 +3,13 @@ import pytest
 from openai.types.chat import ChatCompletion
 
 from ..baml_client import b
+from ..baml_client.async_client import BamlCallOptions
 from ..baml_client.sync_client import b as b_sync
 from baml_py import ClientRegistry, Collector
 import gc
 import sys
 import asyncio
+from contextlib import asynccontextmanager
 
 
 def function_call_count():
@@ -580,3 +582,259 @@ async def test_collector_groq():
     assert collector.usage.output_tokens is not None
     assert collector.usage.input_tokens > 0
     assert collector.usage.output_tokens > 0
+
+
+@pytest.mark.asyncio
+async def test_collector_multiple_async_nested():
+    from baml_client.tracing import trace
+
+    collector = Collector(name="my-collector")
+
+    @trace
+    async def more_nested():
+        return "hi"
+
+    @trace
+    async def gather_batch_2():
+        # await more_nested()
+        return await asyncio.gather(
+            b.TestOpenAIGPT4oMini2("hi there", baml_options={"collector": collector}),
+            # context depth 2 after enter()
+            b.TestOpenAIGPT4oMini3("hi there", baml_options={"collector": collector}),
+            # more_nested()
+        )
+
+    async def gather_batch_1():
+        # all these have context depth 1 initially
+        return await asyncio.gather(
+            b.TestOpenAIGPT4oMini("hi there", baml_options={"collector": collector}),
+            gather_batch_2(),
+        )
+
+    # batch_1_results = await asyncio.gather(gather_batch_1())
+    await gather_batch_1()
+
+    # assert collector.usage.input_tokens is not None
+    # assert collector.usage.output_tokens is not None
+    # assert collector.usage.input_tokens > 0
+    # assert collector.usage.output_tokens > 0
+
+
+@pytest.mark.asyncio
+async def test_collector_multiple_async_nested_stream():
+    from baml_client.tracing import trace
+
+    collector = Collector(name="my-collector")
+
+    @trace
+    async def more_nested():
+        return "hi"
+
+    async def stream1():
+        stream = b.stream.TestOpenAIGPT4oMini2(
+            "hi there", baml_options={"collector": collector}
+        )
+        async for chunk in stream:
+            print(f"stream1: {chunk}")
+        return "done"
+
+    @trace
+    async def gather_batch_2():
+        # await more_nested()
+        return await asyncio.gather(
+            stream1(),
+            # context depth 2 after enter()
+            # b.stream.TestOpenAIGPT4oMini3("hi there", baml_options={"collector": collector}),
+            # more_nested()
+        )
+
+    async def gather_batch_1():
+        # all these have context depth 1 initially
+        return await asyncio.gather(
+            b.TestOpenAIGPT4oMini("hi there", baml_options={"collector": collector}),
+            gather_batch_2(),
+        )
+
+    # batch_1_results = await asyncio.gather(gather_batch_1())
+    await gather_batch_1()
+
+    # assert collector.usage.input_tokens is not None
+    # assert collector.usage.output_tokens is not None
+    # assert collector.usage.input_tokens > 0
+    # assert collector.usage.output_tokens > 0
+
+
+@pytest.mark.asyncio
+async def test_collector_multiple_sync_nested():
+    from baml_client.tracing import trace
+
+    collector = Collector(name="my-collector")
+
+    @trace
+    def more_nested():
+        return "hi"
+
+    @trace
+    def gather_batch_2():
+        # more_nested()
+        # return await asyncio.gather(
+        b_sync.TestOpenAIGPT4oMini("hi there", baml_options={"collector": collector})
+        # )
+
+    # batch_1_results = await asyncio.gather(gather_batch_1())
+    gather_batch_2()
+
+    assert collector.usage.input_tokens is not None
+    assert collector.usage.output_tokens is not None
+    assert collector.usage.input_tokens > 0
+    assert collector.usage.output_tokens > 0
+
+
+@pytest.mark.asyncio
+async def test_collector_context_manager_pattern():
+    """Test using collector with context manager pattern similar to production usage"""
+
+    # Mock usage tracking (similar to your _ModelUsage class)
+    class MockUsageTracker:
+        def __init__(self):
+            self.usage_by_provider: dict[str, dict[str, int]] = {}
+
+        def record_usage(self, provider: str, input_tokens: int, output_tokens: int):
+            if provider not in self.usage_by_provider:
+                self.usage_by_provider[provider] = {"input": 0, "output": 0}
+            self.usage_by_provider[provider]["input"] += input_tokens
+            self.usage_by_provider[provider]["output"] += output_tokens
+
+    def record_baml_usage(usage_tracker: MockUsageTracker, baml_collector: Collector):
+        """Record usage from collector logs (similar to your _record_baml_usage)"""
+        for log in baml_collector.logs:
+            for call in log.calls:
+                usage_tracker.record_usage(
+                    provider=call.provider,
+                    input_tokens=call.usage.input_tokens or 0,
+                    output_tokens=call.usage.output_tokens or 0,
+                )
+
+    @asynccontextmanager
+    async def baml_instrumentation(name: str):
+        """Context manager for BAML instrumentation (similar to your pattern)"""
+        baml_collector = Collector(name=name)
+        usage_tracker = MockUsageTracker()
+        try:
+            yield baml_collector, usage_tracker
+        finally:
+            record_baml_usage(usage_tracker, baml_collector)
+
+    async def process_text(
+        text: str,
+        baml_options: BamlCallOptions,
+    ) -> str:
+        """Wrapper function that calls BAML function (similar to your sanitize_text)"""
+        return await b.TestOpenAIGPT4oMini(text, baml_options=baml_options)
+
+    async def process_text_batch_item(
+        text: str,
+        baml_options: BamlCallOptions,
+    ) -> str:
+        """Another wrapper (similar to your _sanitize_literal_text_row)"""
+        return await process_text(text=text, baml_options=baml_options)
+
+    async def process_text_batch(
+        texts: list[str],
+        baml_options: BamlCallOptions,
+    ) -> list[str]:
+        """Batch processing with parallel execution (similar to your _sanitize_literal_text)"""
+        process_tasks = [process_text_batch_item(text, baml_options) for text in texts]
+        return await asyncio.gather(*process_tasks)
+
+    # Test the pattern
+    test_texts = ["Hello world", "How are you?", "Test message"]
+
+    async with baml_instrumentation("test-context-manager") as (
+        collector,
+        usage_tracker,
+    ):
+        results = await process_text_batch(
+            texts=test_texts, baml_options={"collector": collector}
+        )
+
+    # Verify results
+    assert len(results) == 3
+    assert all(isinstance(result, str) and len(result) > 0 for result in results)
+
+    # Verify collector captured all calls
+    logs = collector.logs
+    assert len(logs) == 3
+
+    # Verify all logs have the expected function name
+    for log in logs:
+        assert log.function_name == "TestOpenAIGPT4oMini"
+        assert log.log_type == "call"
+
+    # Verify usage was recorded correctly
+    assert "openai" in usage_tracker.usage_by_provider
+    openai_usage = usage_tracker.usage_by_provider["openai"]
+    assert openai_usage["input"] > 0
+    assert openai_usage["output"] > 0
+
+    # Verify collector totals match usage tracker totals
+    assert collector.usage.input_tokens == openai_usage["input"]
+    assert collector.usage.output_tokens == openai_usage["output"]
+
+    # Verify timing - all calls should have completed
+    for log in logs:
+        assert log.timing.duration_ms is not None and log.timing.duration_ms > 0
+
+
+@pytest.mark.asyncio
+async def test_collector_mixed_providers_context_manager():
+    """Test context manager pattern with multiple providers"""
+
+    class UsageTracker:
+        def __init__(self):
+            self.total_input = 0
+            self.total_output = 0
+            self.providers = set()
+
+        def add_from_collector(self, collector: Collector):
+            for log in collector.logs:
+                for call in log.calls:
+                    self.providers.add(call.provider)
+                    self.total_input += call.usage.input_tokens or 0
+                    self.total_output += call.usage.output_tokens or 0
+
+    @asynccontextmanager
+    async def multi_provider_context():
+        collector = Collector(name="multi-provider-test")
+        tracker = UsageTracker()
+        try:
+            yield collector, tracker
+        finally:
+            tracker.add_from_collector(collector)
+
+    async def call_different_providers(collector: Collector) -> list[str]:
+        """Call different BAML functions with different providers"""
+        tasks = [
+            b.TestOpenAIGPT4oMini("test openai", baml_options={"collector": collector}),
+            b.TestGroq("test groq", baml_options={"collector": collector}),
+        ]
+        return await asyncio.gather(*tasks)
+
+    async with multi_provider_context() as (collector, tracker):
+        results = await call_different_providers(collector)
+
+    # Verify results
+    assert len(results) == 2
+    assert all(isinstance(result, str) and len(result) > 0 for result in results)
+
+    # Verify multiple providers were used
+    assert len(tracker.providers) >= 2
+    assert "openai" in tracker.providers
+    assert "openai-generic" in tracker.providers
+
+    # Verify usage was tracked
+    assert tracker.total_input > 0
+    assert tracker.total_output > 0
+
+    # Verify collector logs
+    assert len(collector.logs) == 2

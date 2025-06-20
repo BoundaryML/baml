@@ -151,10 +151,14 @@ impl RuntimeContextManager {
         let call = uuid::Uuid::new_v4();
         let call_id = FunctionCallId::new();
         let mut ctx = self.context.lock().unwrap();
-        ctx.push((call, name.to_string(), last_tags.clone(), call_id));
+        ctx.push((call, name.to_string(), last_tags.clone(), call_id.clone()));
 
-        let call_stack = ctx.iter().map(|(.., call_id)| call_id.clone()).collect();
-        log::trace!("Entering with: {:#?}", ctx);
+        let call_stack = ctx
+            .iter()
+            .map(|(.., call_id)| call_id.clone())
+            .collect::<Vec<_>>();
+
+        // log::info!("Entering with: {:#?}", ctx);
         let mut last_tags = last_tags;
         for (k, v) in self.global_tags.lock().unwrap().iter() {
             last_tags.entry(k.clone()).or_insert_with(|| v.clone());
@@ -168,7 +172,7 @@ impl RuntimeContextManager {
         let mut ctx = self.context.lock().unwrap();
         log::trace!("Exiting: {:#?}", ctx);
 
-        let prev = ctx
+        let tracing_v1_call_stack = ctx
             .iter()
             .map(|(call, name, _, call_id)| CallCtx {
                 call_id: *call,
@@ -183,7 +187,7 @@ impl RuntimeContextManager {
             tags.entry(k.clone()).or_insert_with(|| v.clone());
         }
 
-        Some((id, prev, tags))
+        Some((id, tracing_v1_call_stack, tags))
     }
 
     pub fn create_ctx(

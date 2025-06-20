@@ -59,7 +59,7 @@ impl<'a> InterfaceFieldType<'a> {
 impl<'a> InterfaceFieldType<'a> {
     fn from(field_type: &'a FieldType) -> Self {
         match field_type {
-            FieldType::Primitive(type_value) => match type_value {
+            FieldType::Primitive(type_value, _) => match type_value {
                 baml_types::TypeValue::String => InterfaceFieldType::String,
                 baml_types::TypeValue::Int => InterfaceFieldType::Int,
                 baml_types::TypeValue::Float => InterfaceFieldType::Float,
@@ -69,34 +69,30 @@ impl<'a> InterfaceFieldType<'a> {
                     InterfaceFieldType::Media(baml_media_type)
                 }
             },
-            FieldType::Enum(name) => InterfaceFieldType::Enum(name.as_str()),
-            FieldType::Literal(literal_value) => InterfaceFieldType::Literal(literal_value),
-            FieldType::Class(name) => InterfaceFieldType::Class(name.as_str()),
-            FieldType::List(field_type) => {
+            FieldType::Enum { name, .. } => InterfaceFieldType::Enum(name.as_str()),
+            FieldType::Literal(literal_value, _) => InterfaceFieldType::Literal(literal_value),
+            FieldType::Class { name, .. } => InterfaceFieldType::Class(name.as_str()),
+            FieldType::List(field_type, _) => {
                 InterfaceFieldType::List(Box::new(Self::from(field_type)))
             }
-            FieldType::Map(field_type, field_type1) => InterfaceFieldType::Map(
+            FieldType::Map(field_type, field_type1, _) => InterfaceFieldType::Map(
                 Box::new(Self::from(field_type)),
                 Box::new(Self::from(field_type1)),
             ),
-            FieldType::Union(field_types) => {
-                InterfaceFieldType::Union(field_types.iter().map(|ft| Self::from(ft)).collect())
-            }
-            FieldType::Tuple(field_types) => {
+            FieldType::Union(field_types, _) => InterfaceFieldType::Union(
+                field_types
+                    .iter_include_null()
+                    .iter()
+                    .map(|ft| Self::from(ft))
+                    .collect(),
+            ),
+            FieldType::Tuple(field_types, _) => {
                 InterfaceFieldType::Tuple(field_types.iter().map(|ft| Self::from(ft)).collect())
             }
-            FieldType::Optional(field_type) => {
-                InterfaceFieldType::Union(vec![Self::from(field_type), InterfaceFieldType::Null])
-            }
-            FieldType::RecursiveTypeAlias(name) => {
+            FieldType::RecursiveTypeAlias { name, .. } => {
                 InterfaceFieldType::RecursiveTypeAlias(name.as_str())
             }
-            FieldType::Arrow(arrow) => InterfaceFieldType::Unknown,
-            FieldType::WithMetadata {
-                base,
-                constraints,
-                streaming_behavior,
-            } => Self::from(base),
+            FieldType::Arrow(_, _) => InterfaceFieldType::Unknown,
         }
     }
 }

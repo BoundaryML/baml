@@ -170,13 +170,13 @@ impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterc
         } else {
             serde_json::Value::Null
         };
-        let request = HTTPRequest {
-            id: self.http_request_id.clone(),
-            url: request.uri().to_string(),
-            method: request.method().to_string(),
+        let request = HTTPRequest::new(
+            self.http_request_id.clone(),
+            request.uri().to_string(),
+            request.method().to_string(),
             headers,
-            body: HTTPBody::new(request.body().bytes().unwrap_or_default().to_vec().into()),
-        };
+            HTTPBody::new(request.body().bytes().unwrap_or_default().to_vec().into()),
+        );
         let event = TraceEvent::new_raw_llm_request(self.call_stack.clone(), Arc::new(request));
         BAML_TRACER.lock().unwrap().put(Arc::new(event));
 
@@ -190,12 +190,12 @@ impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterc
         _cfg: &mut aws_smithy_types::config_bag::ConfigBag,
     ) -> std::result::Result<(), aws_sdk_bedrockruntime::error::BoxError> {
         if let Some(response) = context.response() {
-            let response = HTTPResponse {
-                request_id: self.http_request_id.clone(),
-                status: response.status().as_u16(),
-                headers: Some(smithy_json_headers(response.headers())),
-                body: HTTPBody::new(response.body().bytes().unwrap_or_default().to_vec().into()),
-            };
+            let response = HTTPResponse::new(
+                self.http_request_id.clone(),
+                response.status().as_u16(),
+                Some(smithy_json_headers(response.headers())),
+                HTTPBody::new(response.body().bytes().unwrap_or_default().to_vec().into()),
+            );
 
             let event =
                 TraceEvent::new_raw_llm_response(self.call_stack.clone(), Arc::new(response));

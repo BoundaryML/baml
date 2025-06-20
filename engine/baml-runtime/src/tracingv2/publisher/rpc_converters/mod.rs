@@ -15,6 +15,7 @@ pub mod types;
 pub trait TypeLookup {
     fn type_lookup(&self, name: &str) -> Option<Arc<BamlTypeId>>;
     fn function_lookup(&self, name: &str) -> Option<Arc<BamlFunctionId>>;
+    fn baml_src_hash(&self) -> Option<String>;
 }
 
 pub(crate) trait IntoRpcEvent<'a, RpcOutputType> {
@@ -24,10 +25,10 @@ pub(crate) trait IntoRpcEvent<'a, RpcOutputType> {
 pub(super) fn to_rpc_event<'a>(
     event: &'a TraceEventWithMeta,
     lookup: &(impl TypeLookup + ?Sized),
-) -> baml_rpc::runtime_api::TraceEvent<'a> {
+) -> baml_rpc::runtime_api::BackendTraceEvent<'a> {
     let timestamp = baml_rpc::EpochMsTimestamp::try_from(event.timestamp)
         .expect("Failed to convert timestamp to EpochMsTimestamp");
-    baml_rpc::runtime_api::TraceEvent {
+    baml_rpc::runtime_api::BackendTraceEvent {
         call_id: event.call_id.clone(),
         function_event_id: event.function_event_id.clone(),
         call_stack: event.call_stack.clone(),

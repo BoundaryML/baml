@@ -1,0 +1,39 @@
+def {{ fn.name }}(
+        self,
+        {% for arg in fn.args -%}
+        {{arg.name}}: {{arg.type_.serialize_type(pkg)}}
+        {%- if let Some(default_value) = arg.default_value %} = {{default_value}}{% endif %},
+        {%- endfor %}
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlSyncStream[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}]:
+        options: BamlCallOptions = {**self.__baml_options, **(baml_options or {})}
+        __tb__ = options.get("tb", None)
+        if __tb__ is not None:
+        tb = __tb__._tb # type: ignore (we know how to use this private attribute)
+        else:
+        tb = None
+        __cr__ = options.get("client_registry", None)
+        collector = options.get("collector", None)
+        collectors = collector if isinstance(collector, list) else [collector] if collector is not None else []
+        env = env_vars_to_dict(options.get("env", {}))
+        raw = self.__runtime.stream_function_sync(
+        "{{fn.name}}",
+        {
+            {%- for arg in fn.args %}
+            "{{arg.name}}": {{arg.name}},
+            {%- endfor %}
+        },
+        None,
+        self.__ctx_manager.get(),
+        tb,
+        __cr__,
+        collectors,
+        env,
+        )
+
+        return baml_py.BamlSyncStream[{{ fn.stream_return_type.serialize_type(pkg) }}, {{ fn.return_type.serialize_type(pkg) }}](
+        raw,
+        lambda x: cast({{fn.stream_return_type.serialize_type(pkg)}}, x.cast_to(types, types, partial_types, True)),
+        lambda x: cast({{fn.return_type.serialize_type(pkg)}}, x.cast_to(types, types, partial_types, False)),
+        self.__ctx_manager.get(),
+        )

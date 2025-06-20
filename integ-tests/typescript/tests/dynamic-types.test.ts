@@ -1,97 +1,154 @@
-import TypeBuilder from '../baml_client/type_builder'
-import { b } from './test-setup'
+import TypeBuilder from "../baml_client/type_builder";
+import { b } from "./test-setup";
 
-describe('Dynamic Type Tests', () => {
-  describe('Basic Dynamic Types', () => {
-    it('should work with dynamic types single', async () => {
-      let tb = new TypeBuilder()
-      tb.Person.addProperty('last_name', tb.string().optional())
-      tb.Person.addProperty('height', tb.float().optional()).description('Height in meters')
-      tb.Hobby.addValue('CHESS')
-      tb.Hobby.listValues().map(([name, v]) => v.alias(name.toLowerCase()))
-      tb.Person.addProperty('hobbies', tb.Hobby.type().list().optional()).description(
-        'Some suggested hobbies they might be good at',
-      )
+describe("Dynamic Type Tests", () => {
+  describe("Basic Dynamic Types", () => {
+    it("should work with dynamic types single", async () => {
+      let tb = new TypeBuilder();
+      tb.Person.addProperty("last_name", tb.string().optional());
+      tb.Person.addProperty("height", tb.float().optional()).description(
+        "Height in meters",
+      );
+      tb.Hobby.addValue("CHESS");
+      tb.Hobby.listValues().map(([name, v]) => v.alias(name.toLowerCase()));
+      tb.Person.addProperty(
+        "hobbies",
+        tb.Hobby.type().list().optional(),
+      ).description("Some suggested hobbies they might be good at");
 
       const res = await b.ExtractPeople(
         "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop.",
         { tb },
-      )
-      expect(res.length).toBeGreaterThan(0)
-    })
+      );
+      expect(res.length).toBeGreaterThan(0);
+    });
 
-    it('should work with dynamic types enum', async () => {
-      let tb = new TypeBuilder()
-      const fieldEnum = tb.addEnum('Animal')
-      const animals = ['giraffe', 'elephant', 'lion']
+    it("should work with dynamic types enum", async () => {
+      let tb = new TypeBuilder();
+      const fieldEnum = tb.addEnum("Animal");
+      const animals = ["giraffe", "elephant", "lion"];
       for (const animal of animals) {
-        fieldEnum.addValue(animal.toUpperCase())
+        fieldEnum.addValue(animal.toUpperCase());
       }
-      tb.Person.addProperty('animalLiked', fieldEnum.type())
+      tb.Person.addProperty("animalLiked", fieldEnum.type());
       const res = await b.ExtractPeople(
         "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
         { tb },
-      )
-      expect(res.length).toBeGreaterThan(0)
-      expect(res[0]['animalLiked']).toEqual('GIRAFFE')
-    })
+      );
+      expect(res.length).toBeGreaterThan(0);
+      expect(res[0]["animalLiked"]).toEqual("GIRAFFE");
+    });
 
-    it('should work with dynamic literals', async () => {
-      let tb = new TypeBuilder()
-      const animals = tb.union(['giraffe', 'elephant', 'lion'].map((animal) => tb.literalString(animal.toUpperCase())))
-      tb.Person.addProperty('animalLiked', animals)
+    it("should work with dynamic types class", async () => {
+      let tb = new TypeBuilder();
+      const animalClass = tb.addClass("Animal");
+      animalClass
+        .addProperty("animal", tb.string())
+        .description("The animal mentioned, in singular form.");
+      tb.Person.addProperty("animalLiked", animalClass.type());
       const res = await b.ExtractPeople(
         "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
         { tb },
-      )
-      expect(res.length).toBeGreaterThan(0)
-      expect(res[0]['animalLiked']).toEqual('GIRAFFE')
-    })
-  })
+      );
+      expect(res.length).toBeGreaterThan(0);
+      const animalLiked = res[0]["animalLiked"];
+      expect(animalLiked["animal"]).toContain("giraffe");
+    });
 
-  describe('Complex Dynamic Types', () => {
-    it('should work with dynamic output map', async () => {
-      let tb = new TypeBuilder()
-      tb.DynamicOutput.addProperty('hair_color', tb.string())
-      tb.DynamicOutput.addProperty('attributes', tb.map(tb.string(), tb.string())).description(
-        "Things like 'eye_color' or 'facial_hair'",
-      )
+    it("should work with dynamic literals", async () => {
+      let tb = new TypeBuilder();
+      const animals = tb.union(
+        ["giraffe", "elephant", "lion"].map((animal) =>
+          tb.literalString(animal.toUpperCase()),
+        ),
+      );
+      tb.Person.addProperty("animalLiked", animals);
+      const res = await b.ExtractPeople(
+        "My name is Harrison. My hair is black and I'm 6 feet tall. I'm pretty good around the hoop. I like giraffes.",
+        { tb },
+      );
+      expect(res.length).toBeGreaterThan(0);
+      expect(res[0]["animalLiked"]).toEqual("GIRAFFE");
+    });
+
+    it("should work with dynamic inputs class", async () => {
+      let tb = new TypeBuilder();
+      tb.DynInputOutput.addProperty("new-key", tb.string().optional());
+
+      const res = await b.DynamicInputOutput(
+        { "new-key": "hi", testKey: "myTest" },
+        { tb },
+      );
+      expect(res["new-key"]).toEqual("hi");
+      expect(res["testKey"]).toEqual("myTest");
+    });
+  });
+
+  describe("Complex Dynamic Types", () => {
+    it("should work with dynamic inputs list", async () => {
+      let tb = new TypeBuilder();
+      tb.DynInputOutput.addProperty("new-key", tb.string().optional());
+
+      const res = await b.DynamicListInputOutput(
+        [{ "new-key": "hi", testKey: "myTest" }],
+        { tb },
+      );
+      expect(res[0]["new-key"]).toEqual("hi");
+      expect(res[0]["testKey"]).toEqual("myTest");
+    });
+
+    it("should work with dynamic output map", async () => {
+      let tb = new TypeBuilder();
+      tb.DynamicOutput.addProperty("hair_color", tb.string());
+      tb.DynamicOutput.addProperty(
+        "attributes",
+        tb.map(tb.string(), tb.string()),
+      ).description("Things like 'eye_color' or 'facial_hair'");
 
       const res = await b.MyFunc(
         "My name is Harrison. My hair is black and I'm 6 feet tall. I have blue eyes and a beard.",
         { tb },
-      )
+      );
 
-      expect(res.hair_color).toEqual('black')
-      expect(res.attributes['eye_color']).toEqual('blue')
-      expect(res.attributes['facial_hair']).toEqual('beard')
-    })
+      expect(res.hair_color).toEqual("black");
+      expect(res.attributes["eye_color"]).toEqual("blue");
+      expect(res.attributes["facial_hair"]).toEqual("beard");
+    });
 
-    it('should work with dynamic output union', async () => {
-      let tb = new TypeBuilder()
+    it("should work with dynamic output union", async () => {
+      let tb = new TypeBuilder();
 
-      const class1 = tb.addClass('Class1')
-      class1.addProperty('meters', tb.float())
+      const class1 = tb.addClass("Class1");
+      class1.addProperty("meters", tb.float());
 
-      const class2 = tb.addClass('Class2')
-      class2.addProperty('feet', tb.float())
-      class2.addProperty('inches', tb.float().optional())
+      const class2 = tb.addClass("Class2");
+      class2.addProperty("feet", tb.float());
+      class2.addProperty("inches", tb.float().optional());
 
-      tb.DynamicOutput.addProperty('height', tb.union([class1.type(), class2.type()]))
+      tb.DynamicOutput.addProperty(
+        "height",
+        tb.union([class1.type(), class2.type()]),
+      );
 
-      let res = await b.MyFunc("My name is Harrison. My hair is black and I'm 6 feet tall.", { tb })
+      let res = await b.MyFunc(
+        "My name is Harrison. My hair is black and I'm 6 feet tall.",
+        { tb },
+      );
 
-      expect(res.height['feet']).toEqual(6)
+      expect(res.height["feet"]).toEqual(6);
 
-      res = await b.MyFunc("My name is Harrison. My hair is black and I'm 1.8 meters tall.", { tb })
+      res = await b.MyFunc(
+        "My name is Harrison. My hair is black and I'm 1.8 meters tall.",
+        { tb },
+      );
 
-      expect(res.height['meters']).toEqual(1.8)
-    })
-  })
+      expect(res.height["meters"]).toEqual(1.8);
+    });
+  });
 
-  describe('Add Baml', () => {
-    it('should add to existing class', async () => {
-      let tb = new TypeBuilder()
+  describe("Add Baml", () => {
+    it("should add to existing class", async () => {
+      let tb = new TypeBuilder();
       tb.addBaml(`
         class ExtraPersonInfo {
             height int
@@ -102,28 +159,35 @@ describe('Dynamic Type Tests', () => {
             age int?
             extra ExtraPersonInfo?
         }
-      `)
+      `);
       let res = await b.ExtractPeople(
         "My name is John Doe. I'm 30 years old. I'm 6 feet tall and weigh 180 pounds. My hair is yellow.",
         { tb },
-      )
-      expect(res).toEqual([{name: "John Doe", age: 30, extra: {height: 6, weight: 180}, hair_color: "YELLOW"}])
-    })
+      );
+      expect(res).toEqual([
+        {
+          name: "John Doe",
+          age: 30,
+          extra: { height: 6, weight: 180 },
+          hair_color: "YELLOW",
+        },
+      ]);
+    });
 
-    it('should add to existing enum', async () => {
-      let tb = new TypeBuilder()
+    it("should add to existing enum", async () => {
+      let tb = new TypeBuilder();
       tb.addBaml(`
         dynamic enum Hobby {
           VideoGames
           BikeRiding
         }
-      `)
-      let res = await b.ExtractHobby("I play video games", { tb })
-      expect(res).toEqual(["VideoGames"])
-    })
+      `);
+      let res = await b.ExtractHobby("I play video games", { tb });
+      expect(res).toEqual(["VideoGames"]);
+    });
 
-    it('should add both class and enum', async () => {
-      let tb = new TypeBuilder()
+    it("should add both class and enum", async () => {
+      let tb = new TypeBuilder();
       tb.addBaml(`
         class ExtraPersonInfo {
             height int @description("in feet")
@@ -151,11 +215,11 @@ describe('Dynamic Type Tests', () => {
             job Job?
             hobbies Hobby[]
         }
-      `)
+      `);
       let res = await b.ExtractPeople(
         "My name is John Doe. I'm 30 years old. My height is 6 feet and I weigh 180 pounds. My hair is brown. I work as a programmer and enjoy bike riding.",
         { tb },
-      )
+      );
       expect(res).toEqual([
         {
           name: "John Doe",
@@ -163,13 +227,13 @@ describe('Dynamic Type Tests', () => {
           hair_color: "BROWN",
           job: "Programmer",
           hobbies: ["BikeRiding"],
-          extra: {height: 6, weight: 180},
-        }
-      ])
-    })
+          extra: { height: 6, weight: 180 },
+        },
+      ]);
+    });
 
-    it('should add baml with attrs', async () => {
-      let tb = new TypeBuilder()
+    it("should add baml with attrs", async () => {
+      let tb = new TypeBuilder();
       tb.addBaml(`
         class ExtraPersonInfo {
             height int @description("In centimeters and rounded to the nearest whole number")
@@ -179,12 +243,18 @@ describe('Dynamic Type Tests', () => {
         dynamic class Person {
             extra ExtraPersonInfo?
         }
-      `)
+      `);
       let res = await b.ExtractPeople(
         "My name is John Doe. I'm 30 years old. I'm 6 feet tall and weigh 180 pounds. My hair is yellow.",
         { tb },
-      )
-      expect(res).toEqual([{name: "John Doe", extra: {height: 183, weight: 82}, hair_color: "YELLOW"}])
-    })
-  })
-})
+      );
+      expect(res).toEqual([
+        {
+          name: "John Doe",
+          extra: { height: 183, weight: 82 },
+          hair_color: "YELLOW",
+        },
+      ]);
+    });
+  });
+});

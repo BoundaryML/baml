@@ -6,6 +6,26 @@ use regex::Regex;
 
 pub fn get_env<'a>() -> minijinja::Environment<'a> {
     let mut env = minijinja::Environment::new();
+
+    env.set_formatter(|output, state, value| {
+        // Top level (non-nested) none value is handled here.
+        // Nested none values are handled in std::fmt::Display impl for
+        // MinijinjaBamlClass and MinijinjaBamlList.
+        // File is jinja-runtime/src/baml_value_to_jinja_value.rs.
+        //
+        // This is a little confusing and would be nice to replace all nones
+        // with nulls in a single place but had no luck getting it to work,
+        // this commit has commented code that attempts to do so:
+        // https://github.com/BoundaryML/baml/pull/2037/commits/6facd2805f79be3e2000dc61058e772d9c5943be
+        let value = if value.is_none() {
+            &Value::from("null")
+        } else {
+            value
+        };
+
+        minijinja::escape_formatter(output, state, value)
+    });
+
     env.set_debug(true);
     env.set_trim_blocks(true);
     env.set_lstrip_blocks(true);

@@ -10,7 +10,7 @@ pub(super) fn coerce_union(
     union_target: &FieldType,
     value: Option<&crate::jsonish::Value>,
 ) -> Result<BamlValueWithFlags, ParsingError> {
-    assert!(matches!(union_target, FieldType::Union(_)));
+    assert!(matches!(union_target, FieldType::Union(_, _)));
     log::debug!(
         "scope: {scope} :: coercing to: {name} (current: {current})",
         name = union_target.to_string(),
@@ -19,11 +19,12 @@ pub(super) fn coerce_union(
     );
 
     let options = match union_target {
-        FieldType::Union(options) => options,
+        FieldType::Union(options, _) => options,
         _ => unreachable!("coerce_union"),
     };
 
     let parsed = options
+        .iter_include_null()
         .iter()
         .map(|option| option.coerce(ctx, union_target, value))
         .collect::<Vec<_>>();

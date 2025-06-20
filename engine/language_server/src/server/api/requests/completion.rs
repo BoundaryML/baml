@@ -20,6 +20,11 @@ impl SyncRequestHandler for Completion {
         _requester: &mut Requester,
         params: CompletionParams,
     ) -> Result<Option<lsp_types::CompletionResponse>> {
+        let url = params.text_document_position.text_document.uri;
+        if !url.to_string().contains("baml_src") {
+            return Ok(None);
+        }
+
         // TODO: Enable this only if you
         // 1. test on windows, with chinese characters
         // 2. Modify position_utils.rs to use byte offsets to account for chinese/multibyte characters

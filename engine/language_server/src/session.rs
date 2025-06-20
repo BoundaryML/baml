@@ -436,7 +436,7 @@ mod tests {
     fn test_get_or_create_project() {
         init_logging(LogLevel::Info, None);
 
-        let mut session = create_test_session();
+        let session = create_test_session();
 
         // Using paths similar to the logs
         let path_str1 = "/Users/aaronvillalpando/Projects/baml-examples/ruby-starter/baml_src";
