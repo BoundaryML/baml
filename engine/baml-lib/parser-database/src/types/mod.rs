@@ -345,9 +345,9 @@ fn visit_template_string<'db>(
     template_string: &'db ast::TemplateString,
     ctx: &mut Context<'db>,
 ) {
-    ctx.types.template_strings.insert(
-        either::Left(idx),
-        TemplateStringProperties {
+    ctx.types
+        .template_strings
+        .insert(either::Left(idx), TemplateStringProperties {
             name: Some(template_string.name().to_string()),
             type_dependencies: template_string
                 .input()
@@ -361,8 +361,7 @@ fn visit_template_string<'db>(
                 .as_raw_string_value()
                 .map(|v| v.value().to_string())
                 .unwrap(),
-        },
-    );
+        });
 }
 
 fn visit_enum<'db>(
@@ -652,23 +651,19 @@ fn visit_function<'db>(idx: ValExpId, function: &'db ast::ValueExprBlock, ctx: &
 
     match (prompt, client) {
         (Some(prompt), Some(client)) => {
-            ctx.types.function.insert(
-                idx,
-                FunctionType {
-                    dependencies: (input_deps.clone(), output_deps),
-                    prompt: Some(prompt.clone()),
-                    client: Some(client),
-                },
-            );
+            ctx.types.function.insert(idx, FunctionType {
+                dependencies: (input_deps.clone(), output_deps),
+                prompt: Some(prompt.clone()),
+                client: Some(client),
+            });
 
-            ctx.types.template_strings.insert(
-                either::Right(idx),
-                TemplateStringProperties {
+            ctx.types
+                .template_strings
+                .insert(either::Right(idx), TemplateStringProperties {
                     name: None,
                     type_dependencies: input_deps,
                     template: prompt.value().to_string(),
-                },
-            );
+                });
         }
         (Some(_), None) => {
             ctx.push_error(DatamodelError::new_validation_error(
@@ -778,14 +773,11 @@ fn visit_client<'db>(idx: ValExpId, client: &'db ast::ValueExprBlock, ctx: &mut 
             // Parse and cache the result
             match provider.0.parse_client_property(properties) {
                 Ok(options) => {
-                    ctx.types.client_properties.insert(
-                        idx,
-                        ClientProperties {
-                            provider,
-                            retry_policy,
-                            options,
-                        },
-                    );
+                    ctx.types.client_properties.insert(idx, ClientProperties {
+                        provider,
+                        retry_policy,
+                        options,
+                    });
                 }
                 Err(errors) => {
                     for error in errors {

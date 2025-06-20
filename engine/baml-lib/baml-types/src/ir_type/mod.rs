@@ -1156,10 +1156,10 @@ mod tests {
     #[test]
     fn flatten_optional_int() {
         let optional_int = FieldType::optional(FieldType::int());
-        assert_eq!(
-            optional_int.flatten(),
-            vec![FieldType::int(), FieldType::null()]
-        )
+        assert_eq!(optional_int.flatten(), vec![
+            FieldType::int(),
+            FieldType::null()
+        ])
     }
 
     #[test]
@@ -1214,16 +1214,14 @@ mod tests {
             },
             ..Default::default()
         });
-        let expected = TypeStreaming::Primitive(
-            TypeValue::Int,
-            type_meta::stream::TypeMetaStreaming {
+        let expected =
+            TypeStreaming::Primitive(TypeValue::Int, type_meta::stream::TypeMetaStreaming {
                 constraints: vec![],
                 streaming_behavior: type_meta::stream::StreamingBehavior {
                     state: true,
                     done: true,
                 },
-            },
-        );
+            });
         assert_eq!(int.partialize(&TestLookup), expected);
     }
 

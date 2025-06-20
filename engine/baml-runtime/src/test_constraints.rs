@@ -112,13 +112,10 @@ fn step_constraints(
     // Short-circuit if we have already had a hard failure. We can skip
     // the work in the rest of this function if we have already encountered
     // a hard failure.
-    let already_failed = matches!(
-        acc.result,
-        TestConstraintsResult::Completed {
-            failed_assert: Some(_),
-            ..
-        }
-    ) || matches!(acc.result, TestConstraintsResult::InternalError { .. });
+    let already_failed = matches!(acc.result, TestConstraintsResult::Completed {
+        failed_assert: Some(_),
+        ..
+    }) || matches!(acc.result, TestConstraintsResult::InternalError { .. });
     if already_failed {
         return acc;
     }
@@ -367,13 +364,10 @@ mod tests {
     #[test]
     fn basic_test_constraints() {
         let res = run_pipeline(&[mk_assert("has_kids", "_.result.kids|length > 0")]);
-        assert_eq!(
-            res,
-            TestConstraintsResult::Completed {
-                checks: vec![],
-                failed_assert: None,
-            }
-        );
+        assert_eq!(res, TestConstraintsResult::Completed {
+            checks: vec![],
+            failed_assert: None,
+        });
     }
 
     #[test]
@@ -383,16 +377,13 @@ mod tests {
             mk_check("not_too_many", "this.kids.length < 100"),
             mk_assert("both_pass", "_.checks.has_kids and _.checks.not_too_many"),
         ]);
-        assert_eq!(
-            res,
-            TestConstraintsResult::Completed {
-                checks: vec![
-                    ("has_kids".to_string(), true),
-                    ("not_too_many".to_string(), true),
-                ],
-                failed_assert: None
-            }
-        );
+        assert_eq!(res, TestConstraintsResult::Completed {
+            checks: vec![
+                ("has_kids".to_string(), true),
+                ("not_too_many".to_string(), true),
+            ],
+            failed_assert: None
+        });
     }
 
     #[test]
@@ -404,13 +395,10 @@ mod tests {
         ]);
         // This constraint set should fail because `has_kids` is an assert, not
         // a check, therefore it doesn't get a field in `checks`.
-        assert_eq!(
-            res,
-            TestConstraintsResult::Completed {
-                checks: vec![("not_too_many".to_string(), true),],
-                failed_assert: Some("both_pass".to_string())
-            }
-        );
+        assert_eq!(res, TestConstraintsResult::Completed {
+            checks: vec![("not_too_many".to_string(), true),],
+            failed_assert: Some("both_pass".to_string())
+        });
     }
 
     #[test]
@@ -421,17 +409,14 @@ mod tests {
             mk_check("both_pass", "_.checks.has_kids and _.checks.not_too_many"),
             mk_assert("either_or", "_.checks.both_pass or _.latency_ms < 1000"),
         ]);
-        assert_eq!(
-            res,
-            TestConstraintsResult::Completed {
-                checks: vec![
-                    ("has_kids".to_string(), true),
-                    ("not_too_many".to_string(), true),
-                    ("both_pass".to_string(), true),
-                ],
-                failed_assert: None
-            }
-        );
+        assert_eq!(res, TestConstraintsResult::Completed {
+            checks: vec![
+                ("has_kids".to_string(), true),
+                ("not_too_many".to_string(), true),
+                ("both_pass".to_string(), true),
+            ],
+            failed_assert: None
+        });
     }
 
     #[test]
@@ -443,18 +428,15 @@ mod tests {
             mk_check("no_kids", "this.kids|length == 0"),
             mk_check("way_too_many", "this.kids|length > 1000"),
         ]);
-        assert_eq!(
-            res,
-            TestConstraintsResult::Completed {
-                checks: vec![
-                    ("has_kids".to_string(), true),
-                    ("not_too_many".to_string(), true),
-                    ("no_kids".to_string(), false),
-                    ("way_too_many".to_string(), false)
-                ],
-                failed_assert: None
-            }
-        );
+        assert_eq!(res, TestConstraintsResult::Completed {
+            checks: vec![
+                ("has_kids".to_string(), true),
+                ("not_too_many".to_string(), true),
+                ("no_kids".to_string(), false),
+                ("way_too_many".to_string(), false)
+            ],
+            failed_assert: None
+        });
     }
 
     #[test]

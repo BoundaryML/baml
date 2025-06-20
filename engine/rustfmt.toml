@@ -1,7 +1,9 @@
-# Just for import grouping. There are some bugs related to comments above
-# or next to import statements, but we don't have many of those.
-unstable_features = true
+# Can't use these in a stable toolchain, only through CLI:
 
-group_imports = "StdExternalCrate"
-imports_granularity = "Crate"
-overflow_delimited_expr = true
+# cargo fmt -- --config imports_granularity="Crate" --config group_imports="StdExternalCrate" --config overflow_delimited_expr=true
+
+# unstable_features = true
+
+# group_imports = "StdExternalCrate"
+# imports_granularity = "Crate"
+# overflow_delimited_expr = true

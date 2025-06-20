@@ -90,14 +90,11 @@ pub(crate) fn visit_retry_policy<'db>(
         });
     match (max_reties, strategy) {
         (Some(max_retries), Some(strategy)) => {
-            ctx.types.retry_policies.insert(
-                idx,
-                RetryPolicy {
-                    max_retries,
-                    strategy,
-                    options,
-                },
-            );
+            ctx.types.retry_policies.insert(idx, RetryPolicy {
+                max_retries,
+                strategy,
+                options,
+            });
         }
         (Some(_), None) => {
             unreachable!("max_retries is set but strategy is not");
@@ -284,17 +281,14 @@ pub(crate) fn visit_test_case<'db>(
             config.identifier().span().clone(),
         )),
         (Some(functions), Some((args_field_span, args))) => {
-            ctx.types.test_cases.insert(
-                idx,
-                super::TestCase {
-                    functions,
-                    args,
-                    args_field_span: args_field_span.clone(),
-                    constraints,
-                    type_builder: config.type_builder.clone(),
-                    type_builder_scoped_db: Default::default(),
-                },
-            );
+            ctx.types.test_cases.insert(idx, super::TestCase {
+                functions,
+                args,
+                args_field_span: args_field_span.clone(),
+                constraints,
+                type_builder: config.type_builder.clone(),
+                type_builder_scoped_db: Default::default(),
+            });
         }
     }
 }

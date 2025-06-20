@@ -8,8 +8,11 @@ use super::{
     parse_named_args_list::parse_named_argument_list,
     Rule,
 };
-use crate::{assert_correct_parser, ast::*};
-use crate::{ast::TypeExpressionBlock, parser::parse_field::parse_type_expr}; // Add this line to import DatamodelParser
+use crate::{
+    assert_correct_parser,
+    ast::{TypeExpressionBlock, *},
+    parser::parse_field::parse_type_expr,
+}; // Add this line to import DatamodelParser
 
 pub(crate) fn parse_type_expression_block(
     pair: Pair<'_>,

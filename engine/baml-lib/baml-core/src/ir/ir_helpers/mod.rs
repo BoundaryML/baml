@@ -1243,16 +1243,12 @@ mod tests {
     fn distribute_list_of_maps() {
         let ir = mk_ir();
 
-        let elem_type = FieldType::union(vec![
-            string_type(),
-            int_type(),
-            FieldType::Class {
-                name: "Foo".to_string(),
-                mode: baml_types::ir_type::StreamingMode::NonStreaming,
-                dynamic: false,
-                meta: Default::default(),
-            },
-        ]);
+        let elem_type = FieldType::union(vec![string_type(), int_type(), FieldType::Class {
+            name: "Foo".to_string(),
+            mode: baml_types::ir_type::StreamingMode::NonStreaming,
+            dynamic: false,
+            meta: Default::default(),
+        }]);
         let map_type = FieldType::Map(
             Box::new(string_type()),
             Box::new(elem_type.clone()),
@@ -1580,17 +1576,14 @@ mod subtype_tests {
     }
 
     fn subtype_list_with_metadata() {
-        let l_i = FieldType::List(
-            Box::new(mk_list(mk_int())),
-            TypeMeta {
-                constraints: vec![],
-                streaming_behavior: StreamingBehavior {
-                    done: true,
-                    state: false,
-                    needed: false,
-                },
+        let l_i = FieldType::List(Box::new(mk_list(mk_int())), TypeMeta {
+            constraints: vec![],
+            streaming_behavior: StreamingBehavior {
+                done: true,
+                state: false,
+                needed: false,
             },
-        );
+        });
         let l_o = mk_list(mk_int());
         assert!(ir().is_subtype(&l_i, &l_o));
         assert!(ir().is_subtype(&l_o, &l_i));

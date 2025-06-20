@@ -260,18 +260,14 @@ pub(super) fn coerce_bool(
                 (false, target, Flag::StringToBool(s.clone())).into(),
             )),
             _ => {
-                match super::match_string::match_string(
-                    ctx,
-                    target,
-                    Some(value),
-                    &[
-                        ("true", vec!["true".into(), "True".into(), "TRUE".into()]),
-                        (
-                            "false",
-                            vec!["false".into(), "False".into(), "FALSE".into()],
-                        ),
-                    ],
-                ) {
+                match super::match_string::match_string(ctx, target, Some(value), &[
+                    ("true", vec!["true".into(), "True".into(), "TRUE".into()]),
+                    ("false", vec![
+                        "false".into(),
+                        "False".into(),
+                        "FALSE".into(),
+                    ]),
+                ]) {
                     Ok(val) => match val.value().as_str() {
                         "true" => Ok(BamlValueWithFlags::Bool(
                             (true, target, Flag::StringToBool(val.value().clone())).into(),

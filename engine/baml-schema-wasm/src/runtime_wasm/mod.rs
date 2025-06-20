@@ -1063,14 +1063,11 @@ impl WasmRuntime {
                             f.inputs().iter().for_each(|(param_name, t)| {
                                 if !params.iter().any(|p| p.name == *param_name) && !t.is_optional()
                                 {
-                                    params.insert(
-                                        0,
-                                        WasmParam {
-                                            name: param_name.to_string(),
-                                            value: None,
-                                            error: Some("Missing parameter".to_string()),
-                                        },
-                                    );
+                                    params.insert(0, WasmParam {
+                                        name: param_name.to_string(),
+                                        value: None,
+                                        error: Some("Missing parameter".to_string()),
+                                    });
                                 }
                             });
 
@@ -1759,12 +1756,9 @@ impl WasmFunction {
         }
 
         let ctx = context_manager
-            .create_ctx(
-                test_type_builder.as_ref(),
-                None,
-                env_vars,
-                vec![baml_ids::FunctionCallId::new()],
-            )
+            .create_ctx(test_type_builder.as_ref(), None, env_vars, vec![
+                baml_ids::FunctionCallId::new(),
+            ])
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let params = rt
@@ -1827,12 +1821,9 @@ impl WasmFunction {
         }
 
         let ctx = context_manager
-            .create_ctx(
-                test_type_builder.as_ref(),
-                None,
-                env_vars,
-                vec![baml_ids::FunctionCallId::new()],
-            )
+            .create_ctx(test_type_builder.as_ref(), None, env_vars, vec![
+                baml_ids::FunctionCallId::new(),
+            ])
             .map_err(|e| JsError::new(format!("{e:?}").as_str()))?;
 
         let params = rt

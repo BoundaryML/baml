@@ -1,12 +1,12 @@
 // use rustc_hash::FxHashSet;
-use std::collections::{hash_map::DefaultHasher, HashMap};
 // use std::sync::Arc;
-use std::time::Instant;
 use std::{
+    collections::{hash_map::DefaultHasher, HashMap},
     hash::{Hash, Hasher},
     io,
     path::{Path, PathBuf},
     str::FromStr,
+    time::Instant,
 };
 
 use anyhow::Context;
@@ -627,14 +627,11 @@ impl BamlRuntimeExt for BamlRuntime {
                             f.inputs().iter().for_each(|(param_name, t)| {
                                 if !params.iter().any(|p| p.name == *param_name) && !t.is_optional()
                                 {
-                                    params.insert(
-                                        0,
-                                        BamlParam {
-                                            name: param_name.to_string(),
-                                            value: None,
-                                            error: Some("Missing parameter".to_string()),
-                                        },
-                                    );
+                                    params.insert(0, BamlParam {
+                                        name: param_name.to_string(),
+                                        value: None,
+                                        error: Some("Missing parameter".to_string()),
+                                    });
                                 }
                             });
 

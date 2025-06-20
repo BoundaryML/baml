@@ -43,13 +43,10 @@ fn create_cffi_type_name<'a, 'b>(
     } else {
         "types"
     });
-    CFFITypeName::create(
-        &mut builder,
-        &CFFITypeNameArgs {
-            namespace: Some(namespace_offset),
-            name: Some(name_offset),
-        },
-    )
+    CFFITypeName::create(&mut builder, &CFFITypeNameArgs {
+        namespace: Some(namespace_offset),
+        name: Some(name_offset),
+    })
 }
 
 impl From<CFFIMapEntry<'_>> for (String, BamlValue) {
@@ -278,12 +275,9 @@ where
             let str_offset = builder.create_string(val);
 
             // Build the CFFIValueString table.
-            let value_string = CFFIValueString::create(
-                &mut builder,
-                &CFFIValueStringArgs {
-                    value: Some(str_offset),
-                },
-            );
+            let value_string = CFFIValueString::create(&mut builder, &CFFIValueStringArgs {
+                value: Some(str_offset),
+            });
             (
                 CFFIValueUnion::CFFIValueString,
                 value_string.as_union_value(),
@@ -321,13 +315,10 @@ where
 
             let field_type = field_type_to_cffi_value_holder(value.field_type(), &mut builder);
 
-            let value_list = CFFIValueList::create(
-                &mut builder,
-                &CFFIValueListArgs {
-                    field_type: Some(field_type),
-                    values: Some(values),
-                },
-            );
+            let value_list = CFFIValueList::create(&mut builder, &CFFIValueListArgs {
+                field_type: Some(field_type),
+                values: Some(values),
+            });
 
             (CFFIValueUnion::CFFIValueList, value_list.as_union_value())
         }
@@ -337,26 +328,20 @@ where
                 let key = builder.create_string(k);
                 let value = from_baml_value_with_meta(v, &mut builder, allow_partials, ir);
 
-                items.push(CFFIMapEntry::create(
-                    &mut builder,
-                    &CFFIMapEntryArgs {
-                        key: Some(key),
-                        value: Some(value),
-                    },
-                ));
+                items.push(CFFIMapEntry::create(&mut builder, &CFFIMapEntryArgs {
+                    key: Some(key),
+                    value: Some(value),
+                }));
             }
 
             let entries = builder.create_vector_from_iter(items.into_iter());
 
             let field_types = field_type_to_cffi_value_holder(value.field_type(), &mut builder);
 
-            let value_map = CFFIValueMap::create(
-                &mut builder,
-                &CFFIValueMapArgs {
-                    field_types: Some(field_types),
-                    entries: Some(entries),
-                },
-            );
+            let value_map = CFFIValueMap::create(&mut builder, &CFFIValueMapArgs {
+                field_types: Some(field_types),
+                entries: Some(entries),
+            });
 
             (CFFIValueUnion::CFFIValueMap, value_map.as_union_value())
         }
@@ -365,13 +350,10 @@ where
             for (k, v) in fields.iter() {
                 let key = builder.create_string(k);
                 let value = from_baml_value_with_meta(v, &mut builder, allow_partials, ir);
-                items.push(CFFIMapEntry::create(
-                    &mut builder,
-                    &CFFIMapEntryArgs {
-                        key: Some(key),
-                        value: Some(value),
-                    },
-                ));
+                items.push(CFFIMapEntry::create(&mut builder, &CFFIMapEntryArgs {
+                    key: Some(key),
+                    value: Some(value),
+                }));
             }
 
             let entries = builder.create_vector_from_iter(items.into_iter());
@@ -379,28 +361,22 @@ where
             let ft = meta.field_type();
 
             let class_name = create_cffi_type_name(class_name, &mut builder, allow_partials);
-            let value_class = CFFIValueClass::create(
-                &mut builder,
-                &CFFIValueClassArgs {
-                    name: Some(class_name),
-                    fields: Some(entries),
-                    dynamic_fields: None,
-                },
-            );
+            let value_class = CFFIValueClass::create(&mut builder, &CFFIValueClassArgs {
+                name: Some(class_name),
+                fields: Some(entries),
+                dynamic_fields: None,
+            });
 
             (CFFIValueUnion::CFFIValueClass, value_class.as_union_value())
         }
         BamlValueWithMeta::Enum(enum_name, enum_value, _) => {
             let enum_name = create_cffi_type_name(enum_name, &mut builder, allow_partials);
             let enum_value = builder.create_string(enum_value);
-            let value_enum = CFFIValueEnum::create(
-                &mut builder,
-                &CFFIValueEnumArgs {
-                    name: Some(enum_name),
-                    value: Some(enum_value),
-                    is_dynamic: false,
-                },
-            );
+            let value_enum = CFFIValueEnum::create(&mut builder, &CFFIValueEnumArgs {
+                name: Some(enum_name),
+                value: Some(enum_value),
+                is_dynamic: false,
+            });
 
             (CFFIValueUnion::CFFIValueEnum, value_enum.as_union_value())
         }
@@ -413,10 +389,10 @@ where
             let (media_content_type, media_content_value) = match &val.content {
                 baml_types::BamlMediaContent::Base64(data) => {
                     let data = builder.create_string(&data.base64);
-                    let content_base64 = CFFIMediaContentBase64::create(
-                        &mut builder,
-                        &CFFIMediaContentBase64Args { data: Some(data) },
-                    );
+                    let content_base64 =
+                        CFFIMediaContentBase64::create(&mut builder, &CFFIMediaContentBase64Args {
+                            data: Some(data),
+                        });
                     (
                         CFFIMediaContentUnion::CFFIMediaContentBase64,
                         content_base64.as_union_value(),
@@ -428,10 +404,10 @@ where
                             .to_str()
                             .expect("Failed to convert BamlMediaContentFile path to string"),
                     );
-                    let content_file = CFFIMediaContentFile::create(
-                        &mut builder,
-                        &CFFIMediaContentFileArgs { path: Some(path) },
-                    );
+                    let content_file =
+                        CFFIMediaContentFile::create(&mut builder, &CFFIMediaContentFileArgs {
+                            path: Some(path),
+                        });
                     (
                         CFFIMediaContentUnion::CFFIMediaContentFile,
                         content_file.as_union_value(),
@@ -439,10 +415,10 @@ where
                 }
                 baml_types::BamlMediaContent::Url(url) => {
                     let url = builder.create_string(&url.url);
-                    let content_url = CFFIMediaContentUrl::create(
-                        &mut builder,
-                        &CFFIMediaContentUrlArgs { url: Some(url) },
-                    );
+                    let content_url =
+                        CFFIMediaContentUrl::create(&mut builder, &CFFIMediaContentUrlArgs {
+                            url: Some(url),
+                        });
                     (
                         CFFIMediaContentUnion::CFFIMediaContentUrl,
                         content_url.as_union_value(),
@@ -450,50 +426,35 @@ where
                 }
             };
 
-            let media_value = CFFIMediaValue::create(
-                &mut builder,
-                &CFFIMediaValueArgs {
-                    content_type: media_content_type,
-                    content: Some(media_content_value),
-                    mime_type,
-                },
-            );
+            let media_value = CFFIMediaValue::create(&mut builder, &CFFIMediaValueArgs {
+                content_type: media_content_type,
+                content: Some(media_content_value),
+                mime_type,
+            });
 
-            let media_type = CFFIMediaType::create(
-                &mut builder,
-                &CFFIMediaTypeArgs {
-                    type_: media_type,
-                    other: None,
-                },
-            );
-            let value_media = CFFIValueMedia::create(
-                &mut builder,
-                &CFFIValueMediaArgs {
-                    media_type: Some(media_type),
-                    media_value: Some(media_value),
-                },
-            );
+            let media_type = CFFIMediaType::create(&mut builder, &CFFIMediaTypeArgs {
+                type_: media_type,
+                other: None,
+            });
+            let value_media = CFFIValueMedia::create(&mut builder, &CFFIValueMediaArgs {
+                media_type: Some(media_type),
+                media_value: Some(media_value),
+            });
 
             (CFFIValueUnion::CFFIValueMedia, value_media.as_union_value())
         }
         BamlValueWithMeta::Null(_) => {
-            return CFFIValueHolder::create(
-                &mut builder,
-                &CFFIValueHolderArgs {
-                    value_type: CFFIValueUnion::NONE,
-                    value: None,
-                },
-            )
+            return CFFIValueHolder::create(&mut builder, &CFFIValueHolderArgs {
+                value_type: CFFIValueUnion::NONE,
+                value: None,
+            })
         }
     };
 
-    let value_holder = CFFIValueHolder::create(
-        &mut builder,
-        &CFFIValueHolderArgs {
-            value_type,
-            value: Some(value_holder),
-        },
-    );
+    let value_holder = CFFIValueHolder::create(&mut builder, &CFFIValueHolderArgs {
+        value_type,
+        value: Some(value_holder),
+    });
 
     let target_type = value.field_type().simplify();
 
@@ -528,24 +489,19 @@ where
             create_cffi_type_name(&target_type.to_union_name(), &mut builder, allow_partials);
         let variant_name_offset = builder.create_string(&variant_name);
 
-        let value_union_variant = CFFIValueUnionVariant::create(
-            &mut builder,
-            &CFFIValueUnionVariantArgs {
+        let value_union_variant =
+            CFFIValueUnionVariant::create(&mut builder, &CFFIValueUnionVariantArgs {
                 name: Some(name_offset),
                 variant_name: Some(variant_name_offset),
                 field_types: Some(options),
                 value_type_index: value_type_index as i32,
                 value: Some(value_holder),
-            },
-        );
+            });
 
-        let value_holder = CFFIValueHolder::create(
-            &mut builder,
-            &CFFIValueHolderArgs {
-                value_type: CFFIValueUnion::CFFIValueUnionVariant,
-                value: Some(value_union_variant.as_union_value()),
-            },
-        );
+        let value_holder = CFFIValueHolder::create(&mut builder, &CFFIValueHolderArgs {
+            value_type: CFFIValueUnion::CFFIValueUnionVariant,
+            value: Some(value_union_variant.as_union_value()),
+        });
 
         value_holder
     } else {
@@ -565,12 +521,9 @@ where
         }
         baml_types::FieldType::Enum { name: e, .. } => {
             let enum_name = builder.create_string(e);
-            let enum_type = CFFIFieldTypeEnum::create(
-                &mut builder,
-                &CFFIFieldTypeEnumArgs {
-                    name: Some(enum_name),
-                },
-            );
+            let enum_type = CFFIFieldTypeEnum::create(&mut builder, &CFFIFieldTypeEnumArgs {
+                name: Some(enum_name),
+            });
             (
                 CFFIFieldTypeUnion::CFFIFieldTypeEnum,
                 enum_type.as_union_value(),
@@ -587,10 +540,9 @@ where
         baml_types::FieldType::Class { name: cls, .. } => {
             // TODO: figure out if we need to allow partials here
             let name = create_cffi_type_name(cls, &mut builder, false);
-            let class_type = CFFIFieldTypeClass::create(
-                &mut builder,
-                &CFFIFieldTypeClassArgs { name: Some(name) },
-            );
+            let class_type = CFFIFieldTypeClass::create(&mut builder, &CFFIFieldTypeClassArgs {
+                name: Some(name),
+            });
             (
                 CFFIFieldTypeUnion::CFFIFieldTypeClass,
                 class_type.as_union_value(),
@@ -598,12 +550,9 @@ where
         }
         baml_types::FieldType::List(field_type, _) => {
             let list_type = field_type_to_cffi_value_holder(field_type, &mut builder);
-            let element_type = CFFIFieldTypeList::create(
-                &mut builder,
-                &CFFIFieldTypeListArgs {
-                    element: Some(list_type),
-                },
-            );
+            let element_type = CFFIFieldTypeList::create(&mut builder, &CFFIFieldTypeListArgs {
+                element: Some(list_type),
+            });
             (
                 CFFIFieldTypeUnion::CFFIFieldTypeList,
                 element_type.as_union_value(),
@@ -612,13 +561,10 @@ where
         baml_types::FieldType::Map(key_type, value_type, _) => {
             let key_type = field_type_to_cffi_value_holder(key_type, &mut builder);
             let value_type = field_type_to_cffi_value_holder(value_type, &mut builder);
-            let map_type = CFFIFieldTypeMap::create(
-                &mut builder,
-                &CFFIFieldTypeMapArgs {
-                    key: Some(key_type),
-                    value: Some(value_type),
-                },
-            );
+            let map_type = CFFIFieldTypeMap::create(&mut builder, &CFFIFieldTypeMapArgs {
+                key: Some(key_type),
+                value: Some(value_type),
+            });
             (
                 CFFIFieldTypeUnion::CFFIFieldTypeMap,
                 map_type.as_union_value(),
@@ -630,12 +576,10 @@ where
                 options_vec.push(field_type_to_cffi_value_holder(t, &mut builder));
             }
             let options = builder.create_vector_from_iter(options_vec.into_iter());
-            let value_union_variant = CFFIFieldTypeUnionVariant::create(
-                &mut builder,
-                &CFFIFieldTypeUnionVariantArgs {
+            let value_union_variant =
+                CFFIFieldTypeUnionVariant::create(&mut builder, &CFFIFieldTypeUnionVariantArgs {
                     options: Some(options),
-                },
-            );
+                });
             (
                 CFFIFieldTypeUnion::CFFIFieldTypeUnionVariant,
                 value_union_variant.as_union_value(),
@@ -643,10 +587,10 @@ where
         }
         baml_types::FieldType::RecursiveTypeAlias { name, .. } => {
             let name = builder.create_string(name);
-            let type_alias = CFFIFieldTypeTypeAlias::create(
-                &mut builder,
-                &CFFIFieldTypeTypeAliasArgs { name: Some(name) },
-            );
+            let type_alias =
+                CFFIFieldTypeTypeAlias::create(&mut builder, &CFFIFieldTypeTypeAliasArgs {
+                    name: Some(name),
+                });
             (
                 CFFIFieldTypeUnion::CFFIFieldTypeTypeAlias,
                 type_alias.as_union_value(),
@@ -656,13 +600,10 @@ where
         baml_types::FieldType::Arrow(_, _) => unimplemented!("Functions are not supported."),
     };
 
-    CFFIFieldTypeHolder::create(
-        &mut builder,
-        &CFFIFieldTypeHolderArgs {
-            type_type: field_type_union,
-            type_: Some(field_type_union_value),
-        },
-    )
+    CFFIFieldTypeHolder::create(&mut builder, &CFFIFieldTypeHolderArgs {
+        type_type: field_type_union,
+        type_: Some(field_type_union_value),
+    })
 }
 
 fn type_value_to_cffi<'a, 'b>(
@@ -699,13 +640,10 @@ fn type_value_to_cffi<'a, 'b>(
         }
     };
 
-    CFFIFieldTypeHolder::create(
-        &mut builder,
-        &CFFIFieldTypeHolderArgs {
-            type_type: field_type_union,
-            type_: Some(field_type_union_value),
-        },
-    )
+    CFFIFieldTypeHolder::create(&mut builder, &CFFIFieldTypeHolderArgs {
+        type_type: field_type_union,
+        type_: Some(field_type_union_value),
+    })
 }
 
 fn media_type_to_cffi<'a, 'b>(
@@ -714,22 +652,16 @@ fn media_type_to_cffi<'a, 'b>(
 ) -> CFFIFieldTypeMediaArgs<'b> {
     match media_type {
         baml_types::BamlMediaType::Image => CFFIFieldTypeMediaArgs {
-            media: Some(CFFIMediaType::create(
-                &mut builder,
-                &CFFIMediaTypeArgs {
-                    type_: MediaTypeEnum::Image,
-                    other: None,
-                },
-            )),
+            media: Some(CFFIMediaType::create(&mut builder, &CFFIMediaTypeArgs {
+                type_: MediaTypeEnum::Image,
+                other: None,
+            })),
         },
         baml_types::BamlMediaType::Audio => CFFIFieldTypeMediaArgs {
-            media: Some(CFFIMediaType::create(
-                &mut builder,
-                &CFFIMediaTypeArgs {
-                    type_: MediaTypeEnum::Audio,
-                    other: None,
-                },
-            )),
+            media: Some(CFFIMediaType::create(&mut builder, &CFFIMediaTypeArgs {
+                type_: MediaTypeEnum::Audio,
+                other: None,
+            })),
         },
     }
 }

@@ -284,37 +284,34 @@ impl PredefinedTypes {
                 ),
                 (
                     "baml::OutputFormat".into(),
-                    (
-                        Type::String,
-                        vec![
-                            ("prefix".into(), Type::merge(vec![Type::String, Type::None])),
-                            (
-                                "or_splitter".into(),
-                                Type::merge(vec![Type::String, Type::None]),
-                            ),
-                            (
-                                "enum_value_prefix".into(),
-                                Type::merge(vec![Type::String, Type::None]),
-                            ),
-                            (
-                                "always_hoist_enums".into(),
-                                Type::merge(vec![Type::Bool, Type::None]),
-                            ),
-                            (
-                                "hoisted_class_prefix".into(),
-                                Type::merge(vec![Type::String, Type::None]),
-                            ),
-                            (
-                                "hoist_classes".into(),
-                                Type::merge(vec![
-                                    Type::None,
-                                    Type::Bool,
-                                    Type::Literal(LiteralValue::String(String::from("auto"))),
-                                    Type::List(Box::new(Type::String)),
-                                ]),
-                            ),
-                        ],
-                    ),
+                    (Type::String, vec![
+                        ("prefix".into(), Type::merge(vec![Type::String, Type::None])),
+                        (
+                            "or_splitter".into(),
+                            Type::merge(vec![Type::String, Type::None]),
+                        ),
+                        (
+                            "enum_value_prefix".into(),
+                            Type::merge(vec![Type::String, Type::None]),
+                        ),
+                        (
+                            "always_hoist_enums".into(),
+                            Type::merge(vec![Type::Bool, Type::None]),
+                        ),
+                        (
+                            "hoisted_class_prefix".into(),
+                            Type::merge(vec![Type::String, Type::None]),
+                        ),
+                        (
+                            "hoist_classes".into(),
+                            Type::merge(vec![
+                                Type::None,
+                                Type::Bool,
+                                Type::Literal(LiteralValue::String(String::from("auto"))),
+                                Type::List(Box::new(Type::String)),
+                            ]),
+                        ),
+                    ]),
                 ),
             ]),
             classes: HashMap::from([
@@ -541,15 +538,12 @@ impl PredefinedTypes {
         let span = expr.span();
         let val = self.as_function(func);
         if val.is_none() {
-            return (
-                Type::Unknown,
-                vec![TypeError::new_invalid_type(
-                    &expr.expr,
-                    &Type::Unknown,
-                    func,
-                    span,
-                )],
-            );
+            return (Type::Unknown, vec![TypeError::new_invalid_type(
+                &expr.expr,
+                &Type::Unknown,
+                func,
+                span,
+            )]);
         }
         let (ret, args) = val.unwrap();
         let mut errors = Vec::new();

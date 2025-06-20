@@ -5,13 +5,10 @@ use super::*;
 
 #[track_caller]
 fn assert_format_eq(schema: &str, expected: &str) -> Result<()> {
-    let formatted = format_schema(
-        &schema,
-        FormatOptions {
-            indent_width: 2,
-            fail_on_unhandled_rule: true,
-        },
-    )?;
+    let formatted = format_schema(&schema, FormatOptions {
+        indent_width: 2,
+        fail_on_unhandled_rule: true,
+    })?;
     assert_eq!(formatted, expected);
 
     Ok(())

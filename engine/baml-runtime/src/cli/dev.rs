@@ -49,13 +49,10 @@ impl DevArgs {
             for result in rx {
                 match result {
                     Ok(events) => {
-                        log::debug!(
-                            "Reloading - {}",
-                            match events.len() {
-                                1 => "1 file changed".to_string(),
-                                n => format!("{} files changed", n),
-                            }
-                        );
+                        log::debug!("Reloading - {}", match events.len() {
+                            1 => "1 file changed".to_string(),
+                            n => format!("{} files changed", n),
+                        });
                         let start = Instant::now();
                         match BamlRuntime::from_directory(&self.from, std::env::vars().collect()) {
                             Ok(mut new_runtime) => {

@@ -314,19 +314,16 @@ impl IRSignature {
         let functions_map: HashMap<String, FunctionSignature> = ir
             .walk_functions()
             .map(|func| {
-                Ok((
-                    func.name().to_string(),
-                    FunctionSignature {
-                        signature: Signature::new_function(func.name(), &shallow_hash)?,
-                        inputs: Arc::new(
-                            func.inputs()
-                                .iter()
-                                .map(|(name, r#type)| (name.clone(), r#type.clone()))
-                                .collect(),
-                        ),
-                        output: Arc::new(func.output().clone()),
-                    },
-                ))
+                Ok((func.name().to_string(), FunctionSignature {
+                    signature: Signature::new_function(func.name(), &shallow_hash)?,
+                    inputs: Arc::new(
+                        func.inputs()
+                            .iter()
+                            .map(|(name, r#type)| (name.clone(), r#type.clone()))
+                            .collect(),
+                    ),
+                    output: Arc::new(func.output().clone()),
+                }))
             })
             .collect::<Result<_>>()?;
 
@@ -391,16 +388,10 @@ impl IRSignature {
             .walk_type_aliases()
             .map(|type_alias_walker| {
                 let resolved_field_type = type_alias_walker.elem().r#type.elem.clone();
-                Ok((
-                    type_alias_walker.name().to_string(),
-                    TypeNodeSignature {
-                        signature: Signature::new_type_alias(
-                            type_alias_walker.name(),
-                            &shallow_hash,
-                        )?,
-                        field_type: Arc::new(resolved_field_type),
-                    },
-                ))
+                Ok((type_alias_walker.name().to_string(), TypeNodeSignature {
+                    signature: Signature::new_type_alias(type_alias_walker.name(), &shallow_hash)?,
+                    field_type: Arc::new(resolved_field_type),
+                }))
             })
             .collect::<Result<_>>()?;
 

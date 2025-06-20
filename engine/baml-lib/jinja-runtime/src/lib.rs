@@ -96,14 +96,11 @@ fn render_minijinja(
     let client = ctx.client.clone();
     let tags = std::mem::take(&mut ctx.tags);
     let formatter = OutputFormat::new(ctx);
-    env.add_global(
-        "ctx",
-        context! {
-            client => client,
-            tags => tags,
-            output_format => minijinja::value::Value::from_object(formatter),
-        },
-    );
+    env.add_global("ctx", context! {
+        client => client,
+        tags => tags,
+        output_format => minijinja::value::Value::from_object(formatter),
+    });
 
     let role_fn = minijinja::Value::from_function(
         |role: Option<String>, kwargs: Kwargs| -> Result<String, minijinja::Error> {
@@ -158,13 +155,10 @@ fn render_minijinja(
         },
     );
 
-    env.add_global(
-        "_",
-        context! {
-            chat => role_fn,
-            role => role_fn
-        },
-    );
+    env.add_global("_", context! {
+        chat => role_fn,
+        role => role_fn
+    });
 
     let tmpl = env.get_template("prompt")?;
 

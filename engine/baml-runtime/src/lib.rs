@@ -702,9 +702,8 @@ impl BamlRuntime {
                         let result = self.inner.call_function_impl(prepared_func, rctx).await;
                         // eprintln!("result: {:?}", result);
                         // Trace event
-                        let trace_event = TraceEvent::new_function_end(
-                            call_id_stack.clone(),
-                            match &result {
+                        let trace_event =
+                            TraceEvent::new_function_end(call_id_stack.clone(), match &result {
                                 Ok(result) => match result.result_with_constraints_content() {
                                     Ok(value) => Ok(value.0.map_meta(|f| f.3.clone())),
                                     Err(e) => Err((&e).into_baml_error()), // None => Err(baml_types::tracing::errors::BamlError::Base {
@@ -716,8 +715,7 @@ impl BamlRuntime {
                                                                            // }),
                                 },
                                 Err(e) => Err(e.into_baml_error()),
-                            },
-                        );
+                            });
                         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
 
                         result

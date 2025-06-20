@@ -302,13 +302,10 @@ fn type_def_for_checks(checks: Vec<String>) -> TypeOpenApi {
     let mut properties: IndexMap<String, TypeOpenApi> = checks
         .iter()
         .map(|check_name| {
-            (
-                check_name.clone(),
-                TypeOpenApi::Ref {
-                    r#ref: format!("#/components/schemas/Check"),
-                    meta: OpenApiMeta::default(),
-                },
-            )
+            (check_name.clone(), TypeOpenApi::Ref {
+                r#ref: format!("#/components/schemas/Check"),
+                meta: OpenApiMeta::default(),
+            })
         })
         .collect();
     properties.sort_keys();

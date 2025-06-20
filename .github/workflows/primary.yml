@@ -54,7 +54,11 @@ jobs:
         run: pnpm biome ci . --organize-imports-enabled=false
         working-directory: typescript
       - name: Check Rust Lint
-        run: cargo fmt --check
+        run: >
+          cargo fmt --check --
+            --config imports_granularity="Crate"
+            --config group_imports="StdExternalCrate"
+            --config overflow_delimited_expr=true
         working-directory: engine
   test_node_generator:
     runs-on: ubuntu-latest

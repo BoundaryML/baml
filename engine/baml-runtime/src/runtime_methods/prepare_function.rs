@@ -118,14 +118,12 @@ impl InternalBamlRuntime {
             }
         };
 
-        let baml_args = match self.ir().check_function_params(
-            &func.inputs(),
-            params,
-            ArgCoercer {
+        let baml_args = match self
+            .ir()
+            .check_function_params(&func.inputs(), params, ArgCoercer {
                 span_path: None,
                 allow_implicit_cast_to_string: false,
-            },
-        ) {
+            }) {
             Ok(baml_args) => baml_args,
             Err(error) => {
                 return Err(PrepareFunctionError::InvalidParams {

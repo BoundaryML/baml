@@ -243,10 +243,11 @@ mod tests {
     fn find_cycles_names() {
         // Define the graph using a key-value type with string literals
         let graph_data = [
-            (
-                "ProcessNextStepArgs",
-                vec!["JSONSchemaValue", "Tool", "Message"],
-            ),
+            ("ProcessNextStepArgs", vec![
+                "JSONSchemaValue",
+                "Tool",
+                "Message",
+            ]),
             ("JSONSchemaProperty", vec!["JSONSchemaValue"]),
             ("Message", vec![]),
             ("ParameterValue", vec![]),
@@ -257,10 +258,11 @@ mod tests {
             ("ScriptStep", vec!["JSONSchemaValue"]),
             ("JSONSchemaValue", vec!["JSONSchemaValue"]),
             ("UserCommandParameter", vec![]),
-            (
-                "StepDescriptionRequest",
-                vec!["JSONSchemaValue", "UserTool", "ScriptStep"],
-            ),
+            ("StepDescriptionRequest", vec![
+                "JSONSchemaValue",
+                "UserTool",
+                "ScriptStep",
+            ]),
             ("GetUnstructuredContentArgs", vec![]),
             ("SummarizedToolExecutionResults", vec!["StructuredResponse"]),
             ("StructuredResponse", vec![]),
@@ -268,10 +270,10 @@ mod tests {
             ("GetUnstructuredContentResponse", vec![]),
             ("ToolCall", vec!["ParameterValue"]),
             ("SummarizeToolExecutionResultsArgs", vec!["Message"]),
-            (
-                "UserCommand",
-                vec!["UserCommandQuestion", "UserCommandParameter"],
-            ),
+            ("UserCommand", vec![
+                "UserCommandQuestion",
+                "UserCommandParameter",
+            ]),
             ("ProcessNextStepResponse", vec!["ToolCall"]),
         ];
 

@@ -722,13 +722,10 @@ impl TypeBuilder {
                         (value_name.clone(), PropertyAttributes::from(value))
                     })
                     .collect();
-                (
-                    name.clone(),
-                    RuntimeEnumOverride {
-                        values,
-                        alias: attributes.alias,
-                    },
-                )
+                (name.clone(), RuntimeEnumOverride {
+                    values,
+                    alias: attributes.alias,
+                })
             })
             .collect();
 

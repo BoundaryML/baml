@@ -15,17 +15,14 @@ fn enum_match_candidates(enm: &Enum) -> Vec<(&str, Vec<String>)> {
     enm.values
         .iter()
         .map(|(name, desc)| {
-            (
-                name.real_name(),
-                match desc.as_ref().map(|d| d.trim()) {
-                    Some(d) if !d.is_empty() => vec![
-                        name.rendered_name().into(),
-                        d.into(),
-                        format!("{}: {}", name.rendered_name(), d),
-                    ],
-                    _ => vec![name.rendered_name().into()],
-                },
-            )
+            (name.real_name(), match desc.as_ref().map(|d| d.trim()) {
+                Some(d) if !d.is_empty() => vec![
+                    name.rendered_name().into(),
+                    d.into(),
+                    format!("{}: {}", name.rendered_name(), d),
+                ],
+                _ => vec![name.rendered_name().into()],
+            })
         })
         .collect()
 }
