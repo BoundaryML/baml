@@ -2,7 +2,7 @@ use crate::types::Attributes;
 
 use super::{ClassWalker, Walker};
 
-use internal_baml_schema_ast::ast::{self, FieldType, WithName, WithSpan};
+use internal_baml_ast::ast::{self, FieldType, WithName, WithSpan};
 
 /// A model field, scalar or relation.
 pub type FieldWalker<'db> = Walker<'db, (ast::TypeExpId, ast::FieldId, bool)>;

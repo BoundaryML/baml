@@ -8,7 +8,7 @@ use crate::{
 use baml_types::{BamlMap, FieldType};
 use indexmap::map::IndexedEntry;
 use internal_baml_diagnostics::Span;
-use internal_baml_schema_ast::ast::{ConfigBlockProperty, Expression, Field, WithIdentifier};
+use internal_baml_ast::ast::{ConfigBlockProperty, Expression, Field, WithIdentifier};
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use validate_reserved_names::*;

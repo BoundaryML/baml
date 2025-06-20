@@ -1,5 +1,5 @@
 use internal_baml_diagnostics::{DatamodelError, Span};
-use internal_baml_schema_ast::ast::{
+use internal_baml_ast::ast::{
     Assignment, Top, TopId, TypeAliasId, TypeExpId, TypeExpressionBlock,
 };
 
@@ -10,7 +10,7 @@ mod to_string_attribute;
 use crate::interner::StringId;
 use crate::{context::Context, types::ClassAttributes, types::EnumAttributes};
 use baml_types::{Constraint, UnresolvedValue};
-use internal_baml_schema_ast::ast::{Expression, SubType};
+use internal_baml_ast::ast::{Expression, SubType};
 
 /// Node attributes.
 #[derive(Debug, Default, Clone)]

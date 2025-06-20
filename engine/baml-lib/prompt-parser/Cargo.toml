@@ -13,8 +13,8 @@ unused_imports = "deny"
 unused_variables = "deny"
 
 [dependencies]
+internal-baml-ast = { path = "../ast" }
 internal-baml-diagnostics = { path = "../diagnostics" }
-internal-baml-schema-ast = { path = "../schema-ast" }
 log = "0.4.20"
 
 pest = "2.1.3"

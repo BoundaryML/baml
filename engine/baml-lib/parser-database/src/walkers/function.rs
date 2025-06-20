@@ -1,6 +1,6 @@
 use either::Either;
 use internal_baml_diagnostics::DatamodelError;
-use internal_baml_schema_ast::ast::{ArgumentId, Identifier, WithIdentifier, WithSpan};
+use internal_baml_ast::ast::{ArgumentId, Identifier, WithIdentifier, WithSpan};
 use internal_llm_client::ClientSpec;
 
 use crate::{

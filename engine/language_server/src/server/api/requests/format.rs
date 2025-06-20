@@ -4,7 +4,7 @@ use crate::server::api::ResultExt;
 use crate::server::client::Requester;
 use crate::server::{client::Notifier, Result};
 use crate::{DocumentKey, Session};
-use internal_baml_core::internal_baml_schema_ast::{format_schema, FormatOptions};
+use internal_baml_core::internal_baml_ast::{format_schema, FormatOptions};
 use lsp_types::{request, DocumentFormattingParams, TextEdit};
 use std::path::PathBuf;
 pub(crate) struct DocumentFormatting;

@@ -4,7 +4,7 @@ use indexmap::{IndexMap, IndexSet};
 
 use internal_baml_diagnostics::Span;
 use internal_baml_parser_database::RetryPolicyStrategy;
-use internal_baml_schema_ast::ast::WithIdentifier;
+use internal_baml_ast::ast::WithIdentifier;
 use internal_llm_client::ClientSpec;
 
 use std::collections::HashSet;

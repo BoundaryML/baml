@@ -1,3 +1,5 @@
+//! Parser entry point.
+
 use std::path::{Path, PathBuf};
 
 use super::{
@@ -26,12 +28,10 @@ fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) 
     }
 }
 
-/// Parse a PSL string and return its AST.
-/// It validates some basic things on the AST like name conflicts. Further validation is in baml-core
-pub fn parse_schema(
-    root_path: &Path,
-    source: &SourceFile,
-) -> Result<(SchemaAst, Diagnostics), Diagnostics> {
+/// Parse Baml source code and return its AST.
+/// It validates some basic things on the AST like name conflicts. Further
+/// validation is in baml-core.
+pub fn parse(root_path: &Path, source: &SourceFile) -> Result<(Ast, Diagnostics), Diagnostics> {
     let mut diagnostics = Diagnostics::new(root_path.to_path_buf());
     diagnostics.set_source(source);
 
@@ -153,7 +153,7 @@ pub fn parse_schema(
             }
 
             Ok((
-                SchemaAst {
+                Ast {
                     tops: top_level_definitions,
                 },
                 diagnostics,
@@ -202,7 +202,7 @@ mod tests {
 
     use std::path::Path;
 
-    use super::parse_schema;
+    use super::parse;
     use crate::ast::*;
     use baml_types::{expr::Expr, TypeValue};
     // Add this line to import the ast module
@@ -221,14 +221,14 @@ mod tests {
         let root_path = "test_file.baml";
         let source = SourceFile::new_static(root_path.into(), input);
 
-        let result = parse_schema(Path::new(root_path), &source);
+        let result = parse(Path::new(root_path), &source);
 
         assert!(result.is_ok());
-        let (schema_ast, _) = result.unwrap();
+        let (ast, _) = result.unwrap();
 
-        assert_eq!(schema_ast.tops.len(), 1);
+        assert_eq!(ast.tops.len(), 1);
 
-        match &schema_ast.tops[0] {
+        match &ast.tops[0] {
             Top::Class(TypeExpressionBlock { name, fields, .. }) => {
                 assert_eq!(name.name(), "MyClass");
                 assert_eq!(fields.len(), 2);
@@ -277,7 +277,7 @@ mod tests {
         let root_path = "example_file.baml";
         let source = SourceFile::new_static(root_path.into(), input);
 
-        let result = parse_schema(Path::new(root_path), &source).unwrap();
+        let result = parse(Path::new(root_path), &source).unwrap();
         assert_eq!(result.1.errors().len(), 0);
     }
 
@@ -307,7 +307,7 @@ mod tests {
         "##;
         let root_path = "a.baml";
         let source = SourceFile::new_static(root_path.into(), input);
-        let schema = parse_schema(Path::new(root_path), &source).unwrap().0;
+        let schema = parse(Path::new(root_path), &source).unwrap().0;
         let mut tops = schema.iter_tops();
         let foo_top = tops.next().unwrap().1;
         match foo_top {
@@ -385,7 +385,7 @@ mod tests {
         let path = "example_file.baml";
         let source = SourceFile::new_static(path.into(), input);
 
-        let (ast, _) = parse_schema(&Path::new(path), &source).unwrap();
+        let (ast, _) = parse(&Path::new(path), &source).unwrap();
 
         let [Top::TypeAlias(one), Top::TypeAlias(two)] = ast.tops.as_slice() else {
             panic!(
@@ -419,7 +419,7 @@ mod tests {
         let input = "let x = 1;";
         let path = "example_file.baml";
         let source = SourceFile::new_static(path.into(), input);
-        let (ast, _) = parse_schema(&Path::new(path), &source).unwrap();
+        let (ast, _) = parse(&Path::new(path), &source).unwrap();
         match ast.tops.as_slice() {
             [Top::TopLevelAssignment(x)] => {
                 assert_eq!(x.stmt.identifier.name(), "x");
@@ -438,7 +438,7 @@ mod tests {
         "#;
         let path = "example_file.baml";
         let source = SourceFile::new_static(path.into(), input);
-        let (ast, _) = parse_schema(&Path::new(path), &source).unwrap();
+        let (ast, _) = parse(&Path::new(path), &source).unwrap();
         match ast.tops.as_slice() {
             [Top::TopLevelAssignment(x)] => {
                 dbg!(&x);

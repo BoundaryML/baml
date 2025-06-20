@@ -11,12 +11,12 @@ use crate::{context::Context, DatamodelError};
 use baml_types::Constraint;
 use baml_types::{StringOr, UnresolvedValue};
 use indexmap::IndexMap;
-use internal_baml_diagnostics::{Diagnostics, Span};
-use internal_baml_prompt_parser::ast::{ChatBlock, PrinterBlock, Variable};
-use internal_baml_schema_ast::ast::{
+use internal_baml_ast::ast::{
     self, BlockArgs, Expression, FieldId, FieldType, RawString, TypeAliasId, TypeBuilderBlock,
     ValExpId, WithIdentifier, WithName, WithSpan,
 };
+use internal_baml_diagnostics::{Diagnostics, Span};
+use internal_baml_prompt_parser::ast::{ChatBlock, PrinterBlock, Variable};
 use internal_llm_client::{ClientProvider, PropertyHandler, UnresolvedClientProperty};
 
 mod configurations;
@@ -86,7 +86,7 @@ pub(super) fn resolve_type_aliases(ctx: &mut Context<'_>) {
     // Cycles are already computed so this should not stack overflow.
     let mut aliases = ctx.types.type_alias_dependencies.keys().collect::<Vec<_>>();
     aliases.sort_by_cached_key(|id| ctx.ast[**id].name().to_string());
-    
+
     for alias_id in aliases {
         // We can ignore the error here because it's already reported in the
         // diagnostics at [`visit_type_alias`].

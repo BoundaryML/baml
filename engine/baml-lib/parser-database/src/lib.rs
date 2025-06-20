@@ -39,8 +39,8 @@ mod types;
 use std::collections::{HashMap, HashSet, VecDeque};
 
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
-pub use internal_baml_schema_ast::ast;
-use internal_baml_schema_ast::ast::{FieldType, SchemaAst, ValExpId, WithName};
+pub use internal_baml_ast::ast;
+use internal_baml_ast::ast::{Ast, FieldType, ValExpId, WithName};
 pub use tarjan::Tarjan;
 pub use types::{
     Attributes, ClientProperties, ContantDelayStrategy, ExponentialBackoffStrategy, PrinterType,
@@ -74,7 +74,7 @@ use names::Names;
 #[derive(Clone)]
 pub struct ParserDatabase {
     /// The AST.
-    pub ast: ast::SchemaAst,
+    pub ast: ast::Ast,
     interner: interner::StringInterner,
     names: Names,
     types: Types,
@@ -90,7 +90,7 @@ impl ParserDatabase {
     /// Create a new, empty ParserDatabase.
     pub fn new() -> Self {
         ParserDatabase {
-            ast: ast::SchemaAst { tops: vec![] },
+            ast: ast::Ast { tops: vec![] },
             interner: Default::default(),
             names: Default::default(),
             types: Default::default(),
@@ -107,7 +107,7 @@ impl ParserDatabase {
     }
 
     /// See the docs on [ParserDatabase](/struct.ParserDatabase.html).
-    pub fn add_ast(&mut self, ast: SchemaAst) {
+    pub fn add_ast(&mut self, ast: Ast) {
         self.ast.tops.extend(ast.tops);
     }
 
@@ -314,7 +314,7 @@ impl ParserDatabase {
     }
 
     /// The parsed AST.
-    pub fn ast(&self) -> &ast::SchemaAst {
+    pub fn ast(&self) -> &ast::Ast {
         &self.ast
     }
 
@@ -354,12 +354,11 @@ mod test {
     use ast::FieldArity;
     use baml_types::TypeValue;
     use internal_baml_diagnostics::{Diagnostics, SourceFile};
-    use internal_baml_schema_ast::parse_schema;
 
     fn parse(baml: &'static str) -> Result<ParserDatabase, Diagnostics> {
         let mut db = ParserDatabase::new();
         let source = SourceFile::new_static(PathBuf::from("test.baml"), baml);
-        let (ast, mut diag) = parse_schema(source.path_buf(), &source)?;
+        let (ast, mut diag) = internal_baml_ast::parse(source.path_buf(), &source)?;
 
         db.add_ast(ast);
         db.validate(&mut diag)?;

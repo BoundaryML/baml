@@ -4,7 +4,7 @@ pub(crate) mod js_callback_bridge;
 #[cfg(target_arch = "wasm32")]
 pub mod runtime_wasm;
 
-use internal_baml_core::internal_baml_schema_ast::{format_schema, FormatOptions};
+use internal_baml_core::internal_baml_ast::{format_schema, FormatOptions};
 use wasm_bindgen::prelude::*;
 
 #[wasm_bindgen]

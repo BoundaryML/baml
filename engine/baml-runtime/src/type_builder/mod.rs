@@ -587,7 +587,7 @@ impl TypeBuilder {
     pub fn add_baml(&self, baml: &str, rt: &crate::BamlRuntime) -> anyhow::Result<()> {
         use internal_baml_core::{
             internal_baml_diagnostics::{Diagnostics, SourceFile},
-            internal_baml_schema_ast::parse_type_builder_contents_from_str,
+            internal_baml_ast::parse_type_builder_contents_from_str,
             ir::repr::IntermediateRepr,
             run_validation_pipeline_on_db, validate_type_builder_entries,
         };

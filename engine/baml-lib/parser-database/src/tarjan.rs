@@ -10,7 +10,7 @@ use std::{
     hash::Hash,
 };
 
-use internal_baml_schema_ast::ast::TypeExpId;
+use internal_baml_ast::ast::TypeExpId;
 
 /// Dependency graph represented as an adjacency list.
 type Graph<V> = HashMap<V, HashSet<V>>;
@@ -216,7 +216,7 @@ impl<'g, V: Eq + Ord + Hash + Copy> Tarjan<'g, V> {
 mod tests {
     use std::collections::{HashMap, HashSet};
 
-    use internal_baml_schema_ast::ast::TypeExpId;
+    use internal_baml_ast::ast::TypeExpId;
 
     use super::Tarjan;
 

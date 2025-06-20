@@ -5,7 +5,7 @@ use internal_llm_client::{ClientProvider, ClientSpec, PropertyHandler, StrategyC
 
 use crate::validate::validation_pipeline::context::Context;
 
-use internal_baml_schema_ast::ast::Expression;
+use internal_baml_ast::ast::Expression;
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
     let valid_clients = ctx.db.valid_client_names();

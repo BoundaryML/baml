@@ -1,10 +1,9 @@
 use itertools::Itertools;
 use std::collections::HashSet;
 
+use internal_baml_ast::ast::{ClassConstructor, ClassConstructorField, Expression, Stmt};
+use internal_baml_ast::ast::{WithName, WithSpan};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
-// use internal_baml_schema_ast::ast::expr;
-use internal_baml_schema_ast::ast::{ClassConstructor, ClassConstructorField, Expression, Stmt};
-use internal_baml_schema_ast::ast::{WithName, WithSpan};
 
 use crate::ir;
 use crate::ir::builtin::is_builtin_identifier;

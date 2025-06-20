@@ -1,6 +1,6 @@
+use internal_baml_ast::ast::RawString;
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::{CodeBlock, PromptAst, Top, Variable};
-use internal_baml_schema_ast::ast::RawString;
 
 use crate::context::Context;
 
