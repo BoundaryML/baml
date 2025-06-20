@@ -54,7 +54,7 @@ pub fn validate(root_path: &Path, files: Vec<SourceFile>) -> ValidatedSchema {
         let diagnostics = Mutex::new(&mut diagnostics);
         let db = Mutex::new(&mut db);
         files.par_iter().for_each(
-            |file| match internal_baml_ast::parse_schema(root_path, file) {
+            |file| match internal_baml_ast::parse(root_path, file) {
                 Ok((ast, err)) => {
                     let mut diagnostics = diagnostics.lock().unwrap();
                     let mut db = db.lock().unwrap();
@@ -323,7 +323,7 @@ pub fn validate_single_file(
     root_path: &Path,
     main_schema: &SourceFile,
 ) -> Result<(Configuration, Diagnostics), Diagnostics> {
-    let (ast, mut diagnostics) = internal_baml_ast::parse_schema(root_path, main_schema)?;
+    let (ast, mut diagnostics) = internal_baml_ast::parse(root_path, main_schema)?;
 
     let (out, diag) = validate_config_impl(root_path, &ast);
     diagnostics.push(diag);

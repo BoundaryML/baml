@@ -354,12 +354,11 @@ mod test {
     use ast::FieldArity;
     use baml_types::TypeValue;
     use internal_baml_diagnostics::{Diagnostics, SourceFile};
-    use internal_baml_ast::parse_schema;
 
     fn parse(baml: &'static str) -> Result<ParserDatabase, Diagnostics> {
         let mut db = ParserDatabase::new();
         let source = SourceFile::new_static(PathBuf::from("test.baml"), baml);
-        let (ast, mut diag) = parse_schema(source.path_buf(), &source)?;
+        let (ast, mut diag) = internal_baml_ast::parse(source.path_buf(), &source)?;
 
         db.add_ast(ast);
         db.validate(&mut diag)?;
