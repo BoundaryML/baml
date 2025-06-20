@@ -36,7 +36,7 @@ impl_coercions! {
 pub mod coerce_opt {
     #![allow(missing_docs, clippy::needless_lifetimes)] // lifetimes are used by the macro
 
-    use internal_baml_schema_ast::ast::RawString;
+    use internal_baml_ast::ast::RawString;
 
     use super::*;
 

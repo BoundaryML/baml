@@ -43,31 +43,28 @@ pub use type_builder_block::{TypeBuilderBlock, TypeBuilderEntry, DYNAMIC_TYPE_NA
 pub use type_expression_block::{FieldId, SubType, TypeExpressionBlock};
 pub use value_expression_block::{BlockArg, BlockArgs, ValueExprBlock, ValueExprBlockType};
 
-/// AST representation of a prisma schema.
+/// AST representation of the Baml source code.
 ///
-/// This module is used internally to represent an AST. The AST's nodes can be
-/// used during validation of a schema, especially when implementing custom
-/// attributes.
+/// This module is used internally to represent an AST (Abstract Syntax Tree).
+/// The AST's nodes can be used during validation.
 ///
 /// The AST is not validated, also fields and attributes are not resolved. Every
 /// node is annotated with its location in the text representation.
-/// Basically, the AST is an object oriented representation of the datamodel's
-/// text. Schema = Datamodel + Generators + Datasources
 #[derive(Debug, Clone)]
-pub struct SchemaAst {
-    /// All models, enums, composite types, datasources, generators and type aliases.
+pub struct Ast {
+    /// All function defs, class defs, enum defs, etc.
     pub tops: Vec<Top>,
 }
 
-impl Default for SchemaAst {
+impl Default for Ast {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl SchemaAst {
+impl Ast {
     pub fn new() -> Self {
-        SchemaAst { tops: Vec::new() }
+        Ast { tops: Vec::new() }
     }
 
     /// Iterate over all the top-level items in the schema.
@@ -100,7 +97,7 @@ impl From<u32> for TypeExpId {
     }
 }
 
-impl std::ops::Index<TypeExpId> for SchemaAst {
+impl std::ops::Index<TypeExpId> for Ast {
     type Output = TypeExpressionBlock;
 
     fn index(&self, index: TypeExpId) -> &Self::Output {
@@ -114,7 +111,7 @@ impl std::ops::Index<TypeExpId> for SchemaAst {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TypeAliasId(u32);
 
-impl std::ops::Index<TypeAliasId> for SchemaAst {
+impl std::ops::Index<TypeAliasId> for Ast {
     type Output = Assignment;
 
     fn index(&self, index: TypeAliasId) -> &Self::Output {
@@ -128,7 +125,7 @@ impl std::ops::Index<TypeAliasId> for SchemaAst {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TopLevelAssignmentId(u32);
 
-impl std::ops::Index<TopLevelAssignmentId> for SchemaAst {
+impl std::ops::Index<TopLevelAssignmentId> for Ast {
     type Output = TopLevelAssignment;
 
     fn index(&self, index: TopLevelAssignmentId) -> &Self::Output {
@@ -142,7 +139,7 @@ impl std::ops::Index<TopLevelAssignmentId> for SchemaAst {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ExprFnId(u32);
 
-impl std::ops::Index<ExprFnId> for SchemaAst {
+impl std::ops::Index<ExprFnId> for Ast {
     type Output = ExprFn;
 
     fn index(&self, index: ExprFnId) -> &Self::Output {
@@ -156,7 +153,7 @@ impl std::ops::Index<ExprFnId> for SchemaAst {
 /// `schema[model_id]` syntax to resolve the id to an `ast::Model`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ValExpId(u32);
-impl std::ops::Index<ValExpId> for SchemaAst {
+impl std::ops::Index<ValExpId> for Ast {
     type Output = ValueExprBlock;
 
     fn index(&self, index: ValExpId) -> &Self::Output {
@@ -171,7 +168,7 @@ impl std::ops::Index<ValExpId> for SchemaAst {
 /// `schema[model_id]` syntax to resolve the id to an `ast::Model`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct TemplateStringId(u32);
-impl std::ops::Index<TemplateStringId> for SchemaAst {
+impl std::ops::Index<TemplateStringId> for Ast {
     type Output = TemplateString;
 
     fn index(&self, index: TemplateStringId) -> &Self::Output {
@@ -291,7 +288,7 @@ impl TopId {
         }
     }
 }
-impl std::ops::Index<TopId> for SchemaAst {
+impl std::ops::Index<TopId> for Ast {
     type Output = Top;
 
     fn index(&self, index: TopId) -> &Self::Output {

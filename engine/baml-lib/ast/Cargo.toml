@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name = "internal-baml-schema-ast"
+name = "internal-baml-ast"
 version.workspace = true
 authors.workspace = true
 description.workspace = true

@@ -6,9 +6,9 @@ use crate::types::Attributes;
 use baml_types::Constraint;
 use either::Either;
 use indexmap::IndexMap;
-use internal_baml_schema_ast::ast::Identifier;
-use internal_baml_schema_ast::ast::SubType;
-use internal_baml_schema_ast::ast::{self, ArgumentId, WithIdentifier, WithName, WithSpan};
+use internal_baml_ast::ast::Identifier;
+use internal_baml_ast::ast::SubType;
+use internal_baml_ast::ast::{self, ArgumentId, WithIdentifier, WithName, WithSpan};
 use std::collections::HashMap;
 
 /// Class walker with some helper methods to extract info from the parser DB.

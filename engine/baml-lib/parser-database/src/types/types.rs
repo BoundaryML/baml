@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 
-use internal_baml_schema_ast::ast::FieldId;
+use internal_baml_ast::ast::FieldId;
 
 use super::Attributes;
 

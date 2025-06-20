@@ -1,5 +1,5 @@
 use baml_types::GeneratorOutputType;
-use internal_baml_schema_ast::ast::{Field, FieldType, WithIdentifier, WithName, WithSpan};
+use internal_baml_ast::ast::{Field, FieldType, WithIdentifier, WithName, WithSpan};
 
 use super::{
     reserved_names::{reserved_names, ReservedNamesMode},

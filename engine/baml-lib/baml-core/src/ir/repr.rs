@@ -23,7 +23,7 @@ use internal_baml_parser_database::{
     Attributes, ParserDatabase, PromptAst, RetryPolicyStrategy, TypeWalker,
 };
 
-use internal_baml_schema_ast::ast::{
+use internal_baml_ast::ast::{
     self, Attribute, FieldArity, SubType, ValExpId, WithAttributes, WithIdentifier, WithName,
     WithSpan,
 };

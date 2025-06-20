@@ -3,7 +3,7 @@ use crate::validate::validation_pipeline::context::Context;
 use crate::validate::validation_pipeline::validations::reserved_names::RESERVED_NAMES_PYTHON;
 use baml_types::GeneratorOutputType;
 use internal_baml_diagnostics::DatamodelError;
-use internal_baml_schema_ast::ast::{WithName, WithSpan};
+use internal_baml_ast::ast::{WithName, WithSpan};
 use std::collections::HashSet;
 
 pub(super) fn validate(ctx: &mut Context<'_>) {

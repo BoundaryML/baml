@@ -31,7 +31,7 @@ fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) 
 pub fn parse_schema(
     root_path: &Path,
     source: &SourceFile,
-) -> Result<(SchemaAst, Diagnostics), Diagnostics> {
+) -> Result<(Ast, Diagnostics), Diagnostics> {
     let mut diagnostics = Diagnostics::new(root_path.to_path_buf());
     diagnostics.set_source(source);
 
@@ -153,7 +153,7 @@ pub fn parse_schema(
             }
 
             Ok((
-                SchemaAst {
+                Ast {
                     tops: top_level_definitions,
                 },
                 diagnostics,
@@ -224,11 +224,11 @@ mod tests {
         let result = parse_schema(Path::new(root_path), &source);
 
         assert!(result.is_ok());
-        let (schema_ast, _) = result.unwrap();
+        let (ast, _) = result.unwrap();
 
-        assert_eq!(schema_ast.tops.len(), 1);
+        assert_eq!(ast.tops.len(), 1);
 
-        match &schema_ast.tops[0] {
+        match &ast.tops[0] {
             Top::Class(TypeExpressionBlock { name, fields, .. }) => {
                 assert_eq!(name.name(), "MyClass");
                 assert_eq!(fields.len(), 2);

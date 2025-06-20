@@ -7,7 +7,7 @@ use std::collections::HashSet;
 use indexmap::IndexMap;
 use internal_baml_diagnostics::Span;
 use internal_baml_parser_database::walkers::ExprFnWalker;
-use internal_baml_schema_ast::ast::{WithIdentifier, WithSpan};
+use internal_baml_ast::ast::{WithIdentifier, WithSpan};
 use itertools::Itertools;
 
 use self::scope_diagnostics::ScopeStack;

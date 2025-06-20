@@ -96,7 +96,7 @@ impl AttributeId {
     }
 }
 
-impl Index<AttributeContainer> for super::SchemaAst {
+impl Index<AttributeContainer> for super::Ast {
     type Output = [Attribute];
 
     fn index(&self, index: AttributeContainer) -> &Self::Output {
@@ -114,7 +114,7 @@ impl Index<AttributeContainer> for super::SchemaAst {
     }
 }
 
-impl Index<AttributeId> for super::SchemaAst {
+impl Index<AttributeId> for super::Ast {
     type Output = Attribute;
 
     fn index(&self, index: AttributeId) -> &Self::Output {
