@@ -1,7 +1,6 @@
-use crate::{package::{CurrentRenderPackage, Package}};
+use crate::package::{CurrentRenderPackage, Package};
 
-#[derive(Clone, PartialEq, Debug)]
-#[derive(Default)]
+#[derive(Clone, PartialEq, Debug, Default)]
 pub enum TypeWrapper {
     #[default]
     None,
@@ -11,17 +10,21 @@ pub enum TypeWrapper {
 
 impl TypeWrapper {
     pub fn wrap_with_checked<T: AsRef<str>>(self, names: Vec<T>) -> TypeWrapper {
-        TypeWrapper::Checked(Box::new(self), names.into_iter().map(|i| EscapedPythonString::new(i.as_ref())).collect())
+        TypeWrapper::Checked(
+            Box::new(self),
+            names
+                .into_iter()
+                .map(|i| EscapedPythonString::new(i.as_ref()))
+                .collect(),
+        )
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
-#[derive(Default)]
+#[derive(Clone, PartialEq, Debug, Default)]
 pub struct TypeMetaPy {
     pub type_wrapper: TypeWrapper,
     pub wrap_stream_state: bool,
 }
-
 
 impl TypeMetaPy {
     pub fn is_optional(&self) -> bool {
@@ -48,7 +51,6 @@ impl TypeMetaPy {
     }
 }
 
-
 trait WrapType {
     fn wrap_type(&self, params: (&CurrentRenderPackage, String)) -> String;
 }
@@ -62,12 +64,13 @@ impl WrapType for TypeWrapper {
                 "{}Checked[{}, typing_extensions.Literal[{}]]",
                 Package::checked().relative_from(pkg),
                 inner.wrap_type(params),
-                names.iter().map(|n| n.0.clone()).collect::<Vec<_>>().join(", ")
+                names
+                    .iter()
+                    .map(|n| n.0.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ")
             ),
-            TypeWrapper::Optional(inner) => format!(
-                "typing.Optional[{}]",
-                inner.wrap_type(params)
-            ),
+            TypeWrapper::Optional(inner) => format!("typing.Optional[{}]", inner.wrap_type(params)),
         }
     }
 }
@@ -240,21 +243,33 @@ pub trait SerializeType {
 impl SerializeType for TypePy {
     fn serialize_type(&self, pkg: &CurrentRenderPackage) -> String {
         let meta = self.meta();
-        let pkg = if meta.map(|m| m.is_optional() || m.wrap_stream_state || m.is_checked()).unwrap_or(false) {
+        let pkg = if meta
+            .map(|m| m.is_optional() || m.wrap_stream_state || m.is_checked())
+            .unwrap_or(false)
+        {
             &pkg.in_type_definition()
         } else {
             pkg
         };
-        
+
         let type_str = match self {
-            TypePy::Literal(items, meta) => meta.wrap_type((pkg, format!("typing_extensions.Literal[{}]", items.iter().map(|s| s.serialize_type(pkg)).collect::<Vec<_>>().join(", ")))),
+            TypePy::Literal(items, meta) => meta.wrap_type((
+                pkg,
+                format!(
+                    "typing_extensions.Literal[{}]",
+                    items
+                        .iter()
+                        .map(|s| s.serialize_type(pkg))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                ),
+            )),
             TypePy::String(_) => "str".to_string(),
             TypePy::Int(_) => "int".to_string(),
             TypePy::Float(_) => "float".to_string(),
             TypePy::Bool(_) => "bool".to_string(),
             TypePy::Media(media, _) => media.serialize_type(pkg),
-            TypePy::Class { package, name, .. } |
-            TypePy::TypeAlias { package, name, .. } => {
+            TypePy::Class { package, name, .. } | TypePy::TypeAlias { package, name, .. } => {
                 if pkg.get().in_type_definition() {
                     format!("\"{}{}\"", package.relative_from(pkg), name)
                 } else {
@@ -263,17 +278,32 @@ impl SerializeType for TypePy {
             }
             TypePy::Union { variants, .. } => {
                 let pkg = pkg.in_type_definition();
-                format!("typing.Union[{}]", variants.iter().map(|v| v.serialize_type(&pkg)).collect::<Vec<_>>().join(", "))
+                format!(
+                    "typing.Union[{}]",
+                    variants
+                        .iter()
+                        .map(|v| v.serialize_type(&pkg))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
-            TypePy::Enum { package, name, dynamic, .. } => {
+            TypePy::Enum {
+                package,
+                name,
+                dynamic,
+                ..
+            } => {
                 let enm = format!("{}{}", package.relative_from(pkg), name);
                 if *dynamic {
                     format!("typing.Union[{}, str]", enm)
                 } else {
                     enm
                 }
-            },
-            TypePy::List(inner, _) => format!("typing.List[{}]", inner.serialize_type(&pkg.in_type_definition())),
+            }
+            TypePy::List(inner, _) => format!(
+                "typing.List[{}]",
+                inner.serialize_type(&pkg.in_type_definition())
+            ),
             TypePy::Map(key, value, _) => {
                 let pkg = pkg.in_type_definition();
                 format!(

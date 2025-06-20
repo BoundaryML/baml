@@ -32,7 +32,7 @@ impl FunctionResultStream {
         event: Option<PyObject>,
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
-        env_vars: HashMap<String, String>
+        env_vars: HashMap<String, String>,
     ) -> Self {
         Self {
             inner: std::sync::Arc::new(tokio::sync::Mutex::new(inner)),
@@ -50,7 +50,7 @@ impl SyncFunctionResultStream {
         event: Option<PyObject>,
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
-        env_vars: HashMap<String, String>
+        env_vars: HashMap<String, String>,
     ) -> Self {
         Self {
             inner: std::sync::Arc::new(std::sync::Mutex::new(inner)),

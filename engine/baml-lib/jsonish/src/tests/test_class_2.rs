@@ -1,4 +1,4 @@
-use baml_types::{FieldType};
+use baml_types::FieldType;
 
 use super::*;
 

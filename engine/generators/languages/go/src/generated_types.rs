@@ -126,7 +126,7 @@ struct GoTypesUtils {}
 pub(crate) fn render_go_types_utils(_pkg: &CurrentRenderPackage) -> Result<String, askama::Error> {
     use askama::Template;
 
-    GoTypesUtils{}.render()
+    GoTypesUtils {}.render()
 }
 
 /// A list of types in Go.
@@ -242,15 +242,14 @@ type StreamState[T any] struct {
 ///
 #[derive(askama::Template)]
 #[template(in_doc = true, escape = "none", ext = "txt")]
-pub struct GoStreamTypesUtils {
-}
+pub struct GoStreamTypesUtils {}
 
 pub(crate) fn render_go_stream_types_utils(
     _pkg: &CurrentRenderPackage,
 ) -> Result<String, askama::Error> {
     use askama::Template;
 
-    GoStreamTypesUtils {  }.render()
+    GoStreamTypesUtils {}.render()
 }
 /// A list of types in Go.
 ///
@@ -292,5 +291,5 @@ pub(crate) fn render_go_stream_types<T: askama::Template>(
 
 pub use class::{ClassGo, FieldGo};
 pub use enums::EnumGo;
-pub use union::{UnionGo, VariantGo};
 pub use type_aliases::TypeAliasGo;
+pub use union::{UnionGo, VariantGo};

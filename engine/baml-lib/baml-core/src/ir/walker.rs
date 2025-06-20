@@ -1,10 +1,12 @@
 use anyhow::Result;
-use baml_types::{BamlValue, EvaluationContext, type_meta::base::StreamingBehavior, UnresolvedValue};
+use baml_types::{
+    type_meta::base::StreamingBehavior, BamlValue, EvaluationContext, UnresolvedValue,
+};
 use indexmap::{IndexMap, IndexSet};
 
+use internal_baml_ast::ast::WithIdentifier;
 use internal_baml_diagnostics::Span;
 use internal_baml_parser_database::RetryPolicyStrategy;
-use internal_baml_ast::ast::WithIdentifier;
 use internal_llm_client::ClientSpec;
 
 use std::collections::HashSet;

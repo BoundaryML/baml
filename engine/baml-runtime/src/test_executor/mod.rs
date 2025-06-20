@@ -236,7 +236,14 @@ impl TestExecutor for BamlRuntime {
                         TestExecutionStatus::Running,
                     ));
                     let (result, _) = runtime
-                        .run_test(&function_name, &test_name, &ctx_manager, Some(|_| {}), None, env_vars)
+                        .run_test(
+                            &function_name,
+                            &test_name,
+                            &ctx_manager,
+                            Some(|_| {}),
+                            None,
+                            env_vars,
+                        )
                         .await;
                     let duration = start_instant.elapsed();
                     let _ = tx.send((

@@ -208,7 +208,7 @@ impl minijinja::value::Object for OutputFormat {
             None => Ok(Value::from_serialize("")),
         }
     }
-    
+
     fn call_method(
         self: &std::sync::Arc<Self>,
         _state: &minijinja::State<'_, '_>,

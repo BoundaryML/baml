@@ -1,5 +1,5 @@
 use anyhow::Result;
-use baml_types::{FieldType};
+use baml_types::FieldType;
 use internal_baml_jinja::types::Enum;
 
 use crate::deserializer::{

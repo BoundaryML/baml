@@ -1,6 +1,6 @@
 use baml_types::{Constraint, ConstraintLevel};
-use internal_baml_diagnostics::{DatamodelError, Span};
 use internal_baml_ast::ast::{Argument, Attribute, Expression};
+use internal_baml_diagnostics::{DatamodelError, Span};
 
 use crate::{context::Context, types::Attributes};
 

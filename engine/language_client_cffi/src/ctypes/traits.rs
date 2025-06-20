@@ -1,4 +1,3 @@
-
 pub trait Encode {
     type To;
 

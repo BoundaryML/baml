@@ -1,7 +1,7 @@
 use crate::ctypes::cffi_generated::cffi::{CFFICollector, CFFIFunctionArguments};
-use std::collections::HashMap;
 use baml_runtime::client_registry::ClientRegistry;
 use baml_types::BamlValue;
+use std::collections::HashMap;
 
 use crate::raw_ptr_wrapper::CollectorWrapper;
 
@@ -29,7 +29,11 @@ impl Decode for BamlFunctionArguments {
             .unwrap_or_default();
         let collectors = from
             .collectors()
-            .map(|c| c.iter().map(|c| CollectorWrapper::decode(c)).collect::<Result<_, _>>())
+            .map(|c| {
+                c.iter()
+                    .map(|c| CollectorWrapper::decode(c))
+                    .collect::<Result<_, _>>()
+            })
             .transpose()?;
 
         println!("collectors: {:?}", collectors);

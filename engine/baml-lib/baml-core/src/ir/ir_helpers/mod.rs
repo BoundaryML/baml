@@ -5,9 +5,9 @@ mod to_baml_arg;
 use std::collections::HashSet;
 
 use indexmap::IndexMap;
+use internal_baml_ast::ast::{WithIdentifier, WithSpan};
 use internal_baml_diagnostics::Span;
 use internal_baml_parser_database::walkers::ExprFnWalker;
-use internal_baml_ast::ast::{WithIdentifier, WithSpan};
 use itertools::Itertools;
 
 use self::scope_diagnostics::ScopeStack;
@@ -343,10 +343,7 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
             }
 
             BamlValueWithMeta::Class(name, fields, meta) => {
-                if !self.is_subtype(
-                    &FieldType::class(name.as_str()),
-                    &field_type,
-                ) {
+                if !self.is_subtype(&FieldType::class(name.as_str()), &field_type) {
                     anyhow::bail!("Could not unify Class {} with {:?}", name, field_type);
                 } else {
                     let class_fields = self.class_fields(&name)?;
@@ -1029,21 +1026,17 @@ pub fn infer_type(value: &BamlValue) -> Option<FieldType> {
             TypeValue::Media(m.media_type),
             Default::default(),
         )),
-        BamlValue::Enum(enum_name, _) => {
-            Some(FieldType::Enum {
-                name: enum_name.clone(),
-                dynamic: false,
-                meta: Default::default(),
-            })
-        }
-        BamlValue::Class(class_name, _) => {
-            Some(FieldType::Class {
-                name: class_name.clone(),
-                mode: baml_types::ir_type::StreamingMode::NonStreaming,
-                dynamic: false,
-                meta: Default::default(),
-            })
-        }
+        BamlValue::Enum(enum_name, _) => Some(FieldType::Enum {
+            name: enum_name.clone(),
+            dynamic: false,
+            meta: Default::default(),
+        }),
+        BamlValue::Class(class_name, _) => Some(FieldType::Class {
+            name: class_name.clone(),
+            mode: baml_types::ir_type::StreamingMode::NonStreaming,
+            dynamic: false,
+            meta: Default::default(),
+        }),
     };
     ret
 }
@@ -1103,21 +1096,17 @@ pub fn infer_type_with_meta<T>(value: &BamlValueWithMeta<T>) -> Option<FieldType
             TypeValue::Media(m.media_type),
             Default::default(),
         )),
-        BamlValueWithMeta::Enum(enum_name, _, _) => {
-            Some(FieldType::Enum {
-                name: enum_name.clone(),
-                dynamic: false,
-                meta: Default::default(),
-            })
-        }
-        BamlValueWithMeta::Class(class_name, _, _) => {
-            Some(FieldType::Class {
-                name: class_name.clone(),
-                mode: baml_types::ir_type::StreamingMode::NonStreaming,
-                dynamic: false,
-                meta: Default::default(),
-            })
-        }
+        BamlValueWithMeta::Enum(enum_name, _, _) => Some(FieldType::Enum {
+            name: enum_name.clone(),
+            dynamic: false,
+            meta: Default::default(),
+        }),
+        BamlValueWithMeta::Class(class_name, _, _) => Some(FieldType::Class {
+            name: class_name.clone(),
+            mode: baml_types::ir_type::StreamingMode::NonStreaming,
+            dynamic: false,
+            meta: Default::default(),
+        }),
     };
     ret
 }

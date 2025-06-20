@@ -6,10 +6,10 @@ mod enums;
 mod expr_fns;
 pub mod expr_typecheck;
 mod functions;
+mod reserved_names;
 mod template_strings;
 mod tests;
 mod types;
-mod reserved_names;
 
 use baml_types::GeneratorOutputType;
 

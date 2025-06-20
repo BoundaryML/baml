@@ -129,7 +129,9 @@ impl IntoResponse for BamlError {
                 BamlError::FinishReasonError { .. } => StatusCode::INTERNAL_SERVER_ERROR, // ??? - FIXME
                 BamlError::ValidationFailure { .. } => StatusCode::INTERNAL_SERVER_ERROR, // ??? - FIXME
                 BamlError::InternalError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-                BamlError::ClientHttpError { status_code, .. } => StatusCode::from_u16(*status_code).unwrap_or(StatusCode::BAD_GATEWAY),
+                BamlError::ClientHttpError { status_code, .. } => {
+                    StatusCode::from_u16(*status_code).unwrap_or(StatusCode::BAD_GATEWAY)
+                }
             },
             Json(match serde_json::to_value(&self) {
                 Ok(serde_json::Value::Object(mut v)) => {

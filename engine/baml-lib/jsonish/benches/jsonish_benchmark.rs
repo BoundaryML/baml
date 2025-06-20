@@ -1,16 +1,16 @@
 use criterion::{criterion_group, criterion_main};
 
-mod literals;
-mod lists;
 mod classes;
-mod unions;
+mod lists;
+mod literals;
 mod partials;
+mod unions;
 
-use literals::bench_literals;
-use lists::bench_lists;
 use classes::bench_complex_classes;
-use unions::bench_unions;
+use lists::bench_lists;
+use literals::bench_literals;
 use partials::bench_partials;
+use unions::bench_unions;
 
 criterion_group!(
     benches,

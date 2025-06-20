@@ -12,8 +12,8 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex};
 
 use crate::{BamlRuntime, FunctionResult};
-use baml_types::{Arrow, FieldType,  EvaluationContext, type_meta::base::TypeMeta, TypeValue};
 use baml_types::expr::{Builtin, Expr, ExprMetadata, Name, VarIndex};
+use baml_types::{type_meta::base::TypeMeta, Arrow, EvaluationContext, FieldType, TypeValue};
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
 use internal_baml_core::ir::repr::IntermediateRepr;
 

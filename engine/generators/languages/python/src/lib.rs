@@ -115,7 +115,10 @@ impl LanguageFeatures for PyLanguageFeatures {
         pkg.set("baml_client.stream_types");
         collector.add_file("stream_types.py", render_py_stream_types_utils(&pkg)?)?;
         collector.append_to_file("stream_types.py", &render_py_types(&py_classes, &pkg)?)?;
-        collector.append_to_file("stream_types.py", &render_py_types(&py_stream_type_aliases, &pkg)?)?;
+        collector.append_to_file(
+            "stream_types.py",
+            &render_py_types(&py_stream_type_aliases, &pkg)?,
+        )?;
 
         Ok(())
     }

@@ -44,12 +44,18 @@ jobs:
           cache: pnpm
           cache-dependency-path: |
             typescript/**/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
       - name: Install Node
         run: pnpm install --frozen-lockfile
         working-directory: typescript
       - name: Check TS Lint
         run: pnpm biome ci . --organize-imports-enabled=false
         working-directory: typescript
+      - name: Check Rust Lint
+        run: cargo fmt --check
+        working-directory: engine
   test_node_generator:
     runs-on: ubuntu-latest
     steps:

@@ -68,7 +68,6 @@ impl Hash for Value {
     }
 }
 
-
 impl Value {
     pub fn r#type(&self) -> String {
         match self {
@@ -155,11 +154,10 @@ impl Value {
             Value::Markdown(_, _, s) => *s = CompletionState::Complete,
             Value::FixedJson(val, fixes) => {
                 val.complete_deeply();
-            },
+            }
             Value::AnyOf(choices, _) => choices.iter_mut().for_each(|v| v.complete_deeply()),
         }
     }
-
 }
 
 impl std::fmt::Display for Value {

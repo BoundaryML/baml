@@ -35,7 +35,7 @@ use crate::internal::llm_client::{llm_provider::LLMProvider, retry_policy::Calla
 pub struct CachedClient {
     pub provider: Arc<LLMProvider>,
     pub env_vars: HashMap<String, String>,
-} 
+}
 
 impl CachedClient {
     pub fn new(provider: Arc<LLMProvider>, env_vars: HashMap<String, String>) -> Self {
@@ -43,7 +43,9 @@ impl CachedClient {
     }
 
     pub fn has_env_vars_changed(&self, new_env_vars: &HashMap<String, String>) -> bool {
-        self.env_vars.iter().any(|(k, v)| new_env_vars.get(k).map_or(false, |v2| v2 != v))
+        self.env_vars
+            .iter()
+            .any(|(k, v)| new_env_vars.get(k).map_or(false, |v2| v2 != v))
     }
 }
 

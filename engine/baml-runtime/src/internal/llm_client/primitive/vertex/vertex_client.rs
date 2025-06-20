@@ -233,7 +233,7 @@ impl RequestBuilder for VertexClient {
                         None => vertex_auth.project_id().await?.to_string(),
                     }
                 )
-            },
+            }
         };
 
         let baml_original_url = format!(

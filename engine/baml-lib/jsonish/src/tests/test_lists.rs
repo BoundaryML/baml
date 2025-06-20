@@ -5,7 +5,10 @@ test_deserializer!(
     test_list,
     "",
     r#"["a", "b"]"#,
-    FieldType::List(FieldType::Primitive(TypeValue::String, TypeMeta::default()).into(), TypeMeta::default()),
+    FieldType::List(
+        FieldType::Primitive(TypeValue::String, TypeMeta::default()).into(),
+        TypeMeta::default()
+    ),
     ["a", "b"]
 );
 
@@ -13,7 +16,10 @@ test_deserializer!(
     test_list_with_quotes,
     "",
     r#"["\"a\"", "\"b\""]"#,
-    FieldType::List(FieldType::Primitive(TypeValue::String, TypeMeta::default()).into(), TypeMeta::default()),
+    FieldType::List(
+        FieldType::Primitive(TypeValue::String, TypeMeta::default()).into(),
+        TypeMeta::default()
+    ),
     ["\"a\"", "\"b\""]
 );
 
@@ -21,7 +27,10 @@ test_deserializer!(
     test_list_with_extra_text,
     "",
     r#"["a", "b"] is the output."#,
-    FieldType::List(FieldType::Primitive(TypeValue::String, TypeMeta::default()).into(), TypeMeta::default()),
+    FieldType::List(
+        FieldType::Primitive(TypeValue::String, TypeMeta::default()).into(),
+        TypeMeta::default()
+    ),
     ["a", "b"]
 );
 
@@ -29,7 +38,10 @@ test_deserializer!(
     test_list_with_invalid_extra_text,
     "",
     r#"[a, b] is the output."#,
-    FieldType::List(FieldType::Primitive(TypeValue::String, TypeMeta::default()).into(), TypeMeta::default()),
+    FieldType::List(
+        FieldType::Primitive(TypeValue::String, TypeMeta::default()).into(),
+        TypeMeta::default()
+    ),
     ["a", "b"]
 );
 
@@ -128,7 +140,10 @@ test_deserializer!(
     test_list_streaming,
     "",
     r#"[1234, 5678"#,
-    FieldType::List(FieldType::Primitive(TypeValue::Int, TypeMeta::default()).into(), TypeMeta::default()),
+    FieldType::List(
+        FieldType::Primitive(TypeValue::Int, TypeMeta::default()).into(),
+        TypeMeta::default()
+    ),
     [1234, 5678]
 );
 
@@ -136,6 +151,9 @@ test_deserializer!(
     test_list_streaming_2,
     "",
     r#"[1234"#,
-    FieldType::List(FieldType::Primitive(TypeValue::Int, TypeMeta::default()).into(), TypeMeta::default()),
+    FieldType::List(
+        FieldType::Primitive(TypeValue::Int, TypeMeta::default()).into(),
+        TypeMeta::default()
+    ),
     [1234]
 );

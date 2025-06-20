@@ -1,9 +1,9 @@
 use baml_types::Constraint;
 use baml_types::UnresolvedValue;
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 use internal_baml_ast::ast::{
     Attribute, ValExpId, ValueExprBlock, WithIdentifier, WithName, WithSpan,
 };
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 use regex::Regex;
 use std::{collections::HashSet, ops::Deref};
 

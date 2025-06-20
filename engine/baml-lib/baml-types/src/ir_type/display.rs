@@ -1,6 +1,6 @@
 use crate::ir_type::UnionTypeViewGeneric;
 
-use super::{ConstraintLevel, TypeGeneric, TypeStreaming, type_meta};
+use super::{type_meta, ConstraintLevel, TypeGeneric, TypeStreaming};
 
 impl std::fmt::Display for TypeStreaming {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -20,10 +20,7 @@ impl std::fmt::Display for TypeStreaming {
                 " @{constraint_level}({constraint_name}, {{{{..}}}} )"
             ));
         }
-        let type_meta::stream::StreamingBehavior {
-            done,
-            state
-        } = self.meta().streaming_behavior;
+        let type_meta::stream::StreamingBehavior { done, state } = self.meta().streaming_behavior;
         if done {
             metadata_display_fmt.push_str(" @stream.done")
         }
@@ -90,7 +87,6 @@ impl std::fmt::Display for TypeStreaming {
         write!(f, "{}", metadata_display_fmt)
     }
 }
-
 
 impl std::fmt::Display for TypeGeneric<type_meta::Base> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

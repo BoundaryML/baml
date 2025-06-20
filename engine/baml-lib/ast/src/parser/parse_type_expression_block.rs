@@ -75,7 +75,9 @@ pub(crate) fn parse_type_expression_block(
             }
 
             Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE => {}
-            Rule::named_argument_list => { input = Some(parse_named_argument_list(current, diagnostics))},
+            Rule::named_argument_list => {
+                input = Some(parse_named_argument_list(current, diagnostics))
+            }
             Rule::type_expression_contents => {
                 let mut pending_field_comment: Option<Pair<'_>> = None;
 

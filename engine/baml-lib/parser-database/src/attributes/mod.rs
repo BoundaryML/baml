@@ -1,7 +1,5 @@
+use internal_baml_ast::ast::{Assignment, Top, TopId, TypeAliasId, TypeExpId, TypeExpressionBlock};
 use internal_baml_diagnostics::{DatamodelError, Span};
-use internal_baml_ast::ast::{
-    Assignment, Top, TopId, TypeAliasId, TypeExpId, TypeExpressionBlock,
-};
 
 mod alias;
 pub mod constraint;

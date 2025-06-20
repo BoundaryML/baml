@@ -50,7 +50,8 @@ impl GenerateArgs {
                     // this has no meaning
                     GeneratorDefaultClientMode::Sync
                 }
-                internal_baml_core::configuration::GeneratorOutputType::PythonPydantic | internal_baml_core::configuration::GeneratorOutputType::PythonPydanticV1 => {
+                internal_baml_core::configuration::GeneratorOutputType::PythonPydantic
+                | internal_baml_core::configuration::GeneratorOutputType::PythonPydanticV1 => {
                     // TODO: Consider changing this default to sync
                     GeneratorDefaultClientMode::Async
                 }

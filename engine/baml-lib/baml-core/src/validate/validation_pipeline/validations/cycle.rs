@@ -4,11 +4,9 @@ use std::{
     ops::Index,
 };
 
+use internal_baml_ast::ast::{self, Ast, FieldType, TypeAliasId, TypeExpId, WithName, WithSpan};
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_parser_database::{Tarjan, TypeWalker};
-use internal_baml_ast::ast::{
-    self, FieldType, Ast, TypeAliasId, TypeExpId, WithName, WithSpan,
-};
 
 use crate::validate::validation_pipeline::context::Context;
 

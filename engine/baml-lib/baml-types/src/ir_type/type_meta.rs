@@ -62,7 +62,6 @@ pub mod stream {
         pub state: bool,
     }
 
-
     impl TypeMetaStreaming {
         pub fn done(mut self) -> Self {
             self.streaming_behavior.done = true;

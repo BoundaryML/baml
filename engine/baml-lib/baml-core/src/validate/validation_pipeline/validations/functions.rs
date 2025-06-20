@@ -4,10 +4,10 @@ use crate::validate::validation_pipeline::context::Context;
 
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 
-use internal_baml_parser_database::TypeWalker;
 use internal_baml_ast::ast::{
     FieldType, TypeAliasId, TypeExpId, WithIdentifier, WithName, WithSpan,
 };
+use internal_baml_parser_database::TypeWalker;
 
 use super::types::validate_type;
 

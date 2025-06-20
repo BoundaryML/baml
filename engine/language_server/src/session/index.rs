@@ -82,7 +82,10 @@ impl Index {
         // };
 
         let Some(_) = self.documents.remove(&document_key) else {
-            anyhow::bail!("tried to close document that didn't exist at {}", document_key)
+            anyhow::bail!(
+                "tried to close document that didn't exist at {}",
+                document_key
+            )
         };
         Ok(())
     }
@@ -176,7 +179,7 @@ impl DocumentQuery {
         }
     }
 
-    pub (crate) fn file_document_key(&self) -> &DocumentKey {
+    pub(crate) fn file_document_key(&self) -> &DocumentKey {
         match self {
             Self::Text { document_key, .. } => document_key,
         }

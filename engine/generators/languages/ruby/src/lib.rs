@@ -29,7 +29,9 @@ impl RbLanguageFeatures {
         } else {
             self.requires.lock().unwrap()
         };
-        map.entry(std::path::Path::new(path).to_path_buf()).or_insert_with(Vec::new).push(import.to_string());
+        map.entry(std::path::Path::new(path).to_path_buf())
+            .or_insert_with(Vec::new)
+            .push(import.to_string());
     }
 }
 
@@ -127,9 +129,7 @@ impl LanguageFeatures for RbLanguageFeatures {
             .walk_enums()
             .map(|e| ir_to_rb::enums::ir_enum_to_rb(e.item, &pkg))
             .collect::<Vec<_>>();
-        let type_aliases = ir
-            .walk_type_aliases()
-            .collect::<Vec<_>>();
+        let type_aliases = ir.walk_type_aliases().collect::<Vec<_>>();
         let mut rb_type_aliases = type_aliases
             .iter()
             .map(|c| ir_to_rb::type_aliases::ir_type_alias_to_rb(c.item, &pkg))
@@ -168,7 +168,10 @@ impl LanguageFeatures for RbLanguageFeatures {
         collector.add_file("stream_types.rb", "module StreamTypes\n")?;
         collector.append_to_file("stream_types.rb", &render_rb_stream_types_utils(&pkg)?)?;
         collector.append_to_file("stream_types.rb", &render_rb_types(&rb_classes, &pkg)?)?;
-        collector.append_to_file("stream_types.rb", &render_rb_types(&rb_stream_type_aliases, &pkg)?)?;
+        collector.append_to_file(
+            "stream_types.rb",
+            &render_rb_types(&rb_stream_type_aliases, &pkg)?,
+        )?;
         collector.append_to_file("stream_types.rb", "\nend\n")?;
 
         Ok(())

@@ -72,9 +72,10 @@ impl DocumentKey {
     pub fn from_url(root_path: &Path, url: &Url) -> anyhow::Result<Self> {
         Self::from_path(
             root_path,
-            &PathBuf::from(&url.to_file_path().map_err(|e| {
-                anyhow::anyhow!("Could not convert url to path {}: {e:?}", url)
-            })?),
+            &PathBuf::from(
+                &url.to_file_path()
+                    .map_err(|e| anyhow::anyhow!("Could not convert url to path {}: {e:?}", url))?,
+            ),
         )
     }
 

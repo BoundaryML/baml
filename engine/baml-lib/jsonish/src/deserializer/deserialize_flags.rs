@@ -51,7 +51,7 @@ pub enum Flag {
 
     /// Completion state for the top-level node of the value is Incomplete.
     Incomplete,
-    Pending
+    Pending,
 }
 
 #[derive(Clone)]
@@ -121,12 +121,14 @@ impl DeserializerConditions {
 }
 
 pub fn constraint_results(flags: &Vec<Flag>) -> Vec<(String, JinjaExpression, bool)> {
-    flags.iter().filter_map(|flag| match flag {
-        Flag::ConstraintResults(cs) => Some(cs.clone()),
-        _ => None,
-    })
-    .flatten()
-    .collect()
+    flags
+        .iter()
+        .filter_map(|flag| match flag {
+            Flag::ConstraintResults(cs) => Some(cs.clone()),
+            _ => None,
+        })
+        .flatten()
+        .collect()
 }
 
 impl std::fmt::Debug for DeserializerConditions {

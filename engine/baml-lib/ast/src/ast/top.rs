@@ -1,7 +1,8 @@
 use super::{
-    assignment::Assignment, traits::WithSpan, Identifier, Span, TemplateString,
-    TypeExpressionBlock, ValueExprBlock, WithIdentifier,
-    expr::{TopLevelAssignment, ExprFn}
+    assignment::Assignment,
+    expr::{ExprFn, TopLevelAssignment},
+    traits::WithSpan,
+    Identifier, Span, TemplateString, TypeExpressionBlock, ValueExprBlock, WithIdentifier,
 };
 
 /// Enum for distinguishing between top-level entries

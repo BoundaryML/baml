@@ -132,6 +132,4 @@ pub struct PathRequestBody {
 }
 
 #[cfg(test)]
-mod tests {
-    
-}
+mod tests {}

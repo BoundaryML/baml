@@ -64,7 +64,7 @@ impl Default for Ast {
 
 impl Ast {
     pub fn new() -> Self {
-        Ast { tops: Vec::new() }
+         Ast { tops: Vec::new() }
     }
 
     /// Iterate over all the top-level items in the schema.

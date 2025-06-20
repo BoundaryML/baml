@@ -1,5 +1,5 @@
-use baml_types::LiteralValue;
 use baml_types::type_meta::base::TypeMeta;
+use baml_types::LiteralValue;
 
 use super::*;
 

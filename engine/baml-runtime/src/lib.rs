@@ -411,7 +411,6 @@ impl BamlRuntime {
     where
         F: Fn(FunctionResult),
     {
-
         baml_log::set_from_env(&env_vars).unwrap();
 
         let call = self

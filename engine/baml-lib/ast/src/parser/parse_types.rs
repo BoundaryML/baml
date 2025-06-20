@@ -4,7 +4,10 @@ use super::{helpers::Pair, parse_attribute::parse_attribute, Rule};
 use crate::{
     assert_correct_parser,
     ast::*,
-    parser::{helpers::parsing_catch_all, parse_field::parse_field_type_with_attr, parse_identifier::parse_identifier},
+    parser::{
+        helpers::parsing_catch_all, parse_field::parse_field_type_with_attr,
+        parse_identifier::parse_identifier,
+    },
     unreachable_rule,
 };
 use baml_types::{LiteralValue, TypeValue};

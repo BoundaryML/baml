@@ -1,8 +1,8 @@
 use baml_types::BamlMap;
 use bstd::dedent;
 
-use baml_types::CompletionState;
 use crate::jsonish::Value;
+use baml_types::CompletionState;
 
 #[derive(Debug)]
 pub enum JsonCollection {
@@ -69,7 +69,9 @@ impl JsonCollection {
 impl From<JsonCollection> for Option<Value> {
     fn from(collection: JsonCollection) -> Option<Value> {
         Some(match collection {
-            JsonCollection::TrailingComment(_, _) | JsonCollection::BlockComment(_, _) => return None,
+            JsonCollection::TrailingComment(_, _) | JsonCollection::BlockComment(_, _) => {
+                return None
+            }
             JsonCollection::Object(keys, values, object_completion) => {
                 // log::debug!("keys: {:?}", keys);
                 let mut object: Vec<_> = Vec::new();
@@ -78,10 +80,16 @@ impl From<JsonCollection> for Option<Value> {
                 }
                 Value::Object(object, object_completion)
             }
-            JsonCollection::Array(values, completion_state) => Value::Array(values, completion_state),
+            JsonCollection::Array(values, completion_state) => {
+                Value::Array(values, completion_state)
+            }
             JsonCollection::QuotedString(s, completion_state) => Value::String(s, completion_state),
-            JsonCollection::TripleQuotedString(s, completion_state) => Value::String(dedent(s.as_str()).content, completion_state),
-            JsonCollection::SingleQuotedString(s, completion_state) => Value::String(s, completion_state),
+            JsonCollection::TripleQuotedString(s, completion_state) => {
+                Value::String(dedent(s.as_str()).content, completion_state)
+            }
+            JsonCollection::SingleQuotedString(s, completion_state) => {
+                Value::String(s, completion_state)
+            }
             JsonCollection::TripleBacktickString { content, .. } => {
                 let Some((fenced_codeblock_info, codeblock_contents)) = content.0.split_once("\n")
                 else {
@@ -90,7 +98,9 @@ impl From<JsonCollection> for Option<Value> {
 
                 Value::String(dedent(codeblock_contents).content, content.1)
             }
-            JsonCollection::BacktickString(s, completion_state) => Value::String(s, completion_state),
+            JsonCollection::BacktickString(s, completion_state) => {
+                Value::String(s, completion_state)
+            }
             JsonCollection::UnquotedString(s, completion_state) => {
                 let s = s.trim();
                 if s == "true" {

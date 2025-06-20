@@ -396,7 +396,7 @@ pub fn apply_constraints(
     scope: Vec<String>,
     mut value: BamlValueWithFlags,
     constraints: Vec<Constraint>,
-    streaming_behavior: baml_types::type_meta::base::StreamingBehavior
+    streaming_behavior: baml_types::type_meta::base::StreamingBehavior,
 ) -> Result<BamlValueWithFlags, ParsingError> {
     if constraints.is_empty() {
         Ok(value)

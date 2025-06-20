@@ -53,8 +53,9 @@ pub fn validate(root_path: &Path, files: Vec<SourceFile>) -> ValidatedSchema {
     {
         let diagnostics = Mutex::new(&mut diagnostics);
         let db = Mutex::new(&mut db);
-        files.par_iter().for_each(
-            |file| match internal_baml_ast::parse(root_path, file) {
+        files
+            .par_iter()
+            .for_each(|file| match internal_baml_ast::parse(root_path, file) {
                 Ok((ast, err)) => {
                     let mut diagnostics = diagnostics.lock().unwrap();
                     let mut db = db.lock().unwrap();
@@ -65,8 +66,7 @@ pub fn validate(root_path: &Path, files: Vec<SourceFile>) -> ValidatedSchema {
                     let mut diagnostics = diagnostics.lock().unwrap();
                     diagnostics.push(err);
                 }
-            },
-        );
+            });
     }
 
     if let Err(d) = db.validate(&mut diagnostics) {

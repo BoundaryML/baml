@@ -1,4 +1,4 @@
-use baml_types::{LiteralValue, type_meta::base::TypeMeta};
+use baml_types::{type_meta::base::TypeMeta, LiteralValue};
 
 use super::*;
 
@@ -277,7 +277,10 @@ test_deserializer!(
     "#,
     FieldType::union(vec![
         FieldType::Literal(LiteralValue::String("pay".into()), TypeMeta::default()),
-        FieldType::Literal(LiteralValue::String("pay_without_credit_card".into()), TypeMeta::default()),
+        FieldType::Literal(
+            LiteralValue::String("pay_without_credit_card".into()),
+            TypeMeta::default()
+        ),
     ]),
     "pay"
 );
@@ -290,7 +293,10 @@ test_partial_deserializer_streaming_failure!(
     "#,
     FieldType::union(vec![
         FieldType::Literal(LiteralValue::String("pay".into()), TypeMeta::default()),
-        FieldType::Literal(LiteralValue::String("pay_without_credit_card".into()), TypeMeta::default()),
+        FieldType::Literal(
+            LiteralValue::String("pay_without_credit_card".into()),
+            TypeMeta::default()
+        ),
     ])
 );
 

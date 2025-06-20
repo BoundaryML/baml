@@ -1,7 +1,7 @@
 use crate::helpers::render_output_format;
 #[cfg(test)]
 use crate::{from_str, helpers::parsed_value_to_response};
-use baml_types::{FieldType, type_meta::base::StreamingBehavior, type_meta::base::TypeMeta};
+use baml_types::{type_meta::base::StreamingBehavior, type_meta::base::TypeMeta, FieldType};
 use internal_baml_core::ir::repr::make_test_ir;
 
 #[test]

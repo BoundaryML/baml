@@ -1,6 +1,6 @@
+pub(crate) mod response_handler;
 #[cfg(target_arch = "wasm32")]
 pub(super) mod wasm_auth;
-pub(crate) mod response_handler;
 #[cfg(target_arch = "wasm32")]
 pub(super) use wasm_auth as auth;
 

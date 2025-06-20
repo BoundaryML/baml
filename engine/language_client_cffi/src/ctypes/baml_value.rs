@@ -1,6 +1,9 @@
 use baml_types::BamlValue;
 
-use crate::ctypes::{cffi_generated::cffi::{CFFIValueHolder, CFFIValueUnion}, traits::Decode};
+use crate::ctypes::{
+    cffi_generated::cffi::{CFFIValueHolder, CFFIValueUnion},
+    traits::Decode,
+};
 
 impl Decode for BamlValue {
     type From<'a> = CFFIValueHolder<'a>;

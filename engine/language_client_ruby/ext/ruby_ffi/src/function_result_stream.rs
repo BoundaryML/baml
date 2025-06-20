@@ -41,12 +41,13 @@ impl FunctionResultStream {
             None
         };
 
-        match rb_self.t.block_on(
-            rb_self
-                .inner
-                .borrow_mut()
-                .run(on_event, &ctx.inner, None, None, HashMap::new()),
-        ) {
+        match rb_self.t.block_on(rb_self.inner.borrow_mut().run(
+            on_event,
+            &ctx.inner,
+            None,
+            None,
+            HashMap::new(),
+        )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
             (Err(e), _) => Err(Error::new(
                 ruby.exception_runtime_error(),

@@ -127,11 +127,9 @@ impl RuntimeCli {
                     }
                 }
             }
-            Commands::LanguageServer(args) => {
-                match args.run() {
-                    Ok(()) => Ok(crate::ExitCode::Success),
-                    Err(_) => Ok(crate::ExitCode::Other),
-                }
+            Commands::LanguageServer(args) => match args.run() {
+                Ok(()) => Ok(crate::ExitCode::Success),
+                Err(_) => Ok(crate::ExitCode::Other),
             },
         }
     }

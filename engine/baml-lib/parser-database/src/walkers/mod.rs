@@ -24,9 +24,7 @@ use either::Either;
 pub use expr_fn::{ExprFnWalker, TopLevelAssignmentWalker};
 pub use field::*;
 pub use function::FunctionWalker;
-use internal_baml_ast::ast::{
-    Ast, FieldType, Identifier, TopId, TypeAliasId, TypeExpId, WithName,
-};
+use internal_baml_ast::ast::{Ast, FieldType, Identifier, TopId, TypeAliasId, TypeExpId, WithName};
 pub use r#class::*;
 pub use r#enum::*;
 pub use template_string::TemplateStringWalker;

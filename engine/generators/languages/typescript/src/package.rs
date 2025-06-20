@@ -67,11 +67,12 @@ pub(crate) struct CurrentRenderPackage {
 impl CurrentRenderPackage {
     pub fn new(package: &str, lookup: std::sync::Arc<IntermediateRepr>) -> Self {
         Self {
-            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(Package::new(package)))),
+            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(Package::new(
+                package,
+            )))),
             lookup,
         }
     }
-
 
     pub fn lookup(&self) -> &impl TypeLookups {
         self.lookup.as_ref()
