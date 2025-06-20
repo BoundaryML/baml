@@ -219,17 +219,6 @@ pub fn start_publisher(
         tx
     });
 
-    // Update runtime if channel already existed
-    #[cfg(not(target_arch = "wasm32"))]
-    let _ = rt.block_on(flush());
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = wasm_bindgen_futures::spawn_local(async move {
-            if let Err(e) = flush().await {
-                log::error!("Failed to flush: {}", e);
-            }
-        });
-    }
     let _ = channel.send(PublisherMessage::UpdateRuntime(lookup));
 }
 
