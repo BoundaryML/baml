@@ -10,10 +10,10 @@ class TestEnvVarsWithoutSetup < Minitest::Test
   def test_env_vars_remain_unchanged_without_options
     # Store initial state
     initial_vars = ENV.to_h.dup
-    
+
     # Call ExtractPeople without any baml_options
     result = @b.ExtractPeople(text: "John and Jane went to the store")
-    
+
     # Verify environment variables are exactly the same as before
     assert_equal initial_vars, ENV.to_h
   end
@@ -23,7 +23,7 @@ class TestEnvVarsWithSetup < Minitest::Test
   def setup
     # Save original environment variables
     @original_env = ENV.to_h.dup
-    
+
     # Set up test environment variables
     ENV['OPENAI_API_KEY'] = 'sk-system-key'
     ENV['ANTHROPIC_API_KEY'] = 'sk-ant-system-key'
@@ -53,7 +53,7 @@ class TestEnvVarsWithSetup < Minitest::Test
       'OPENAI_API_KEY' => 'sk-user-key',
       'AZURE_OPENAI_API_KEY' => 'azure-user-key'
     }
-    
+
     error = assert_raises(RuntimeError) do
       @b.ExtractPeople(
         text: "John and Jane went to the store",
@@ -69,7 +69,7 @@ class TestEnvVarsWithSetup < Minitest::Test
       'OPENAI_API_KEY' => 'sk-user-key',
       'AZURE_OPENAI_API_KEY' => 'azure-user-key'
     }
-    
+
     # Test OpenAI request
     error = assert_raises(RuntimeError) do
       @b.ExtractPeople(
