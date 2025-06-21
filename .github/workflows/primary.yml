@@ -59,10 +59,10 @@ jobs:
         run: cargo fmt --check -- --config imports_granularity="Crate" --config group_imports="StdExternalCrate"
         working-directory: engine
       - name: Check Rust Lint (Clippy)
-        run: RUSTFLAGS="-A unused" cargo clippy
+        run: RUSTFLAGS="-A unused -D warnings" cargo clippy
         working-directory: engine
       - name: Check Rust Lint WASM (Clippy)
-        run: RUSTFLAGS="-A unused" cargo clippy --target wasm32-unknown-unknown
+        run: RUSTFLAGS="-A unused -D warnings" cargo clippy --target wasm32-unknown-unknown
         working-directory: engine/baml-schema-wasm
   test_node_generator:
     runs-on: ubuntu-latest
