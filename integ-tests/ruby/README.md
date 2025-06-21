@@ -1,16 +1,28 @@
 # BAML Ruby Integration Tests
 
-Install `mise` to manage ruby installations
+Install [`mise`](https://mise.jdx.dev/getting-started.html) to manage ruby
+installations.
 
-1. Build the ruby FFI client
-`cd ../engine/language_client_ruby`
-`cargo build`
-`mise exec -- bundle install`
-`mise exec -- rake compile`
+Build the ruby FFI client:
+```bash
+cd ../engine/language_client_ruby
+cargo build
+mise exec -- bundle install
+mise exec -- rake compile
+```
 
-to speed it up, you can try building the dev mode before doing rake compile:
-`export RB_SYS_CARGO_PROFILE="dev"` 
-   
+To speed it up, you can try building the dev mode before doing `rake compile`:
+```bash
+export RB_SYS_CARGO_PROFILE="dev"
+```
+
+Or you can add it in-place so you don't have to export again after closing
+the terminal:
+
+```bash
+RB_SYS_CARGO_PROFILE="dev" mise exec -- rake compile
+```
+
 ## Running Tests
 
 In this directory (integ-tests/ruby)
@@ -37,7 +49,6 @@ infisical run --env=test -- mise exec -- rake test
 infisical run --env=test -- mise exec -- ruby test_functions.rb
 
 # Run a specific test
-```bash
 infisical run --env=test -- mise exec -- rake test test_collector.rb TEST_OPTS="--name=/test_collector_no_stream_success/ -v"
 ```
 
