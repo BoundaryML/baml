@@ -83,7 +83,7 @@ pub fn typecheck_exprs(ctx: &mut Context<'_>) -> Result<()> {
     for toplevel_assignment in ir.toplevel_assignments.iter() {
         typecheck_in_context(
             &ir,
-            &mut ctx.diagnostics,
+            ctx.diagnostics,
             &typing_context,
             &toplevel_assignment.elem.expr.elem,
         )?;

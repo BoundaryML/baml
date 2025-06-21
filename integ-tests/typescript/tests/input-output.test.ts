@@ -108,7 +108,7 @@ describe("Basic Input/Output Tests", () => {
 
     it("single optional string", async () => {
       const res = await b.FnNamedArgsSingleStringOptional();
-      expect(res).toContain("none");
+      expect(res).toContain("null");
     });
 
     it("single map string to string", async () => {
