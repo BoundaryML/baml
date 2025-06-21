@@ -320,11 +320,7 @@ fn insert_name(
                 .entry(name)
                 .or_default()
                 .insert(existing);
-            duplicate_names
-                .tops
-                .entry(name)
-                .or_default()
-                .insert(top_id);
+            duplicate_names.tops.entry(name).or_default().insert(top_id);
         }
     }
 }

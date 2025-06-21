@@ -69,9 +69,7 @@ impl super::SyncNotificationHandler for DidSaveTextDocument {
         project.lock().unwrap().run_generators_without_debounce(
             |message| {
                 tracing::info!("About to notify client that generator has run.");
-                notifier
-                    .notify_baml_info(&message)
-                    .unwrap_or(())
+                notifier.notify_baml_info(&message).unwrap_or(())
             },
             |e| {
                 tracing::error!("Error generating: {e}");
@@ -110,9 +108,7 @@ impl super::BackgroundDocumentNotificationHandler for DidSaveTextDocument {
             project.lock().unwrap().run_generators_without_debounce(
                 |message| {
                     tracing::info!("About to notify client that generator has run.");
-                    notifier
-                        .notify_baml_info(&message)
-                        .unwrap_or(())
+                    notifier.notify_baml_info(&message).unwrap_or(())
                 },
                 |e| {
                     tracing::error!("Error generating: {e}");

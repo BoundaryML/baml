@@ -56,12 +56,12 @@ impl LanguageFeatures for GoLanguageFeatures {
             .iter()
             .map(|f| ir_to_go::functions::ir_function_to_go(f, &pkg))
             .collect::<Vec<_>>();
-        let _ =collector.add_file(
+        let _ = collector.add_file(
             "functions.go",
             render_functions(&functions, &pkg, go_mod_name)?,
         );
 
-        let _ =collector.add_file(
+        let _ = collector.add_file(
             "functions_stream.go",
             render_functions_stream(&functions, &pkg, go_mod_name)?,
         );

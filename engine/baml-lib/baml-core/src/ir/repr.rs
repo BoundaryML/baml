@@ -1939,11 +1939,13 @@ pub fn annotate_variable(
                     )
                 })
                 .collect();
-            let new_spread = spread.as_ref().map(|expr| Box::new(annotate_variable(
-                target,
-                r#type.clone(),
-                expr.as_ref().clone(),
-            )));
+            let new_spread = spread.as_ref().map(|expr| {
+                Box::new(annotate_variable(
+                    target,
+                    r#type.clone(),
+                    expr.as_ref().clone(),
+                ))
+            });
             Expr::ClassConstructor {
                 name: name.clone(),
                 fields: new_fields,

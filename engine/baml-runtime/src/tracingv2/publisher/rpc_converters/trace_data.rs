@@ -53,15 +53,15 @@ impl<'a, T: HasFieldType> IntoRpcEvent<'a, Option<baml_rpc::runtime_api::BamlFun
         lookup: &(impl TypeLookup + ?Sized),
     ) -> Option<baml_rpc::runtime_api::BamlFunctionStart> {
         if self.function_type == FunctionType::BamlLlm {
-            lookup.function_lookup(&self.name).map(|id| {
-                baml_rpc::runtime_api::BamlFunctionStart {
+            lookup
+                .function_lookup(&self.name)
+                .map(|id| baml_rpc::runtime_api::BamlFunctionStart {
                     function_id: id,
                     baml_src_hash: lookup
                         .baml_src_hash()
                         .unwrap_or_else(|| "unknown_hash".to_string()),
                     eval_context: self.options.to_rpc_event(lookup),
-                }
-            })
+                })
         } else {
             None
         }
@@ -124,11 +124,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::IntermediateData<'a>>
                 .iter()
                 .map(|(k, v)| (k.clone(), Cow::Borrowed(v)))
                 .collect(),
-            prompt: self
-                .prompt
-                .iter()
-                .map(|p| p.to_rpc_event(lookup))
-                .collect(),
+            prompt: self.prompt.iter().map(|p| p.to_rpc_event(lookup)).collect(),
         }
     }
 }

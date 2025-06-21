@@ -277,7 +277,7 @@ impl ArgCoercer {
                     }
                     Err(_) => {
                         scope.push_error(format!("Class {} not found", name));
-                            Err(ArgCoerceError)
+                        Err(ArgCoerceError)
                     }
                 },
                 _ => {
@@ -364,9 +364,9 @@ impl ArgCoercer {
                 }
             }
             FieldType::Arrow(_, _) => {
-                scope.push_error(
-                    String::from("A json value may not be coerced into a function type")
-                );
+                scope.push_error(String::from(
+                    "A json value may not be coerced into a function type",
+                ));
                 Err(ArgCoerceError)
             }
         }?;

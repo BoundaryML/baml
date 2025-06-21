@@ -170,8 +170,7 @@ pub struct WasmError {
 impl WasmProject {
     #[wasm_bindgen]
     pub fn new(root_dir_name: &str, files: JsValue) -> Result<WasmProject, JsError> {
-        let files: HashMap<String, String> =
-            serde_wasm_bindgen::from_value(files)?;
+        let files: HashMap<String, String> = serde_wasm_bindgen::from_value(files)?;
 
         Ok(WasmProject {
             root_dir_name: root_dir_name.to_string(),

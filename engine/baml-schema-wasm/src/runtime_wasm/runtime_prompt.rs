@@ -97,9 +97,8 @@ impl WasmChatMessagePart {
     pub fn json_meta(&self, prompt: &WasmPrompt) -> Option<String> {
         match self.part.meta() {
             Some(meta) => {
-                let (allowed, skipped): (Vec<_>, Vec<_>) = meta
-                    .iter()
-                    .partition(|(k, _)| prompt.allowed.is_allowed(k));
+                let (allowed, skipped): (Vec<_>, Vec<_>) =
+                    meta.iter().partition(|(k, _)| prompt.allowed.is_allowed(k));
 
                 let allowed: HashMap<_, _> = allowed.into_iter().collect();
                 let skipped: HashMap<_, _> = skipped.into_iter().collect();

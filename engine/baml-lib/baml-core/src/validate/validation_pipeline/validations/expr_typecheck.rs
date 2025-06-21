@@ -76,12 +76,7 @@ pub fn typecheck_exprs(ctx: &mut Context<'_>) -> Result<()> {
                     .clone(),
             ),
         );
-        typecheck_in_context(
-            &ir,
-            ctx.diagnostics,
-            &typing_context,
-            &expr_fn_with_types,
-        )?;
+        typecheck_in_context(&ir, ctx.diagnostics, &typing_context, &expr_fn_with_types)?;
         // deeply_check_inference(&expr_fn_with_types)?;
     }
 

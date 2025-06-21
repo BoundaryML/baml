@@ -379,9 +379,7 @@ impl AwsClient {
         // Set region if specified
         if let Some(aws_region) = self.properties.region.as_ref() {
             if let Some(v) = aws_region.strip_prefix("$") {
-                return Err(anyhow::anyhow!(
-                    "AWS region expected, please set: env.{v}",
-                ));
+                return Err(anyhow::anyhow!("AWS region expected, please set: env.{v}",));
             }
 
             loader = loader.region(Region::new(aws_region.clone()));

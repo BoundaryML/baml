@@ -285,9 +285,7 @@ impl BamlEventLoggable<'_> {
                             .result_with_constraints()
                             .as_ref()
                             .and_then(|r| r.as_ref().ok())
-                            .map(|v| {
-                                serde_json::to_value(v.serialize_final()).unwrap_or_default()
-                            }),
+                            .map(|v| serde_json::to_value(v.serialize_final()).unwrap_or_default()),
                         error: None,
                     },
                     LLMResponse::LLMFailure(err) => BamlEventJson {
@@ -705,9 +703,9 @@ impl BamlTracer {
         env_vars: &std::collections::HashMap<String, String>,
     ) -> bool {
         // Try to create a new APIWrapper from the env vars
-        if let Ok(new_api_wrapper) = crate::tracing::api_wrapper::APIWrapper::from_env_vars(
-            env_vars.iter(),
-        ) {
+        if let Ok(new_api_wrapper) =
+            crate::tracing::api_wrapper::APIWrapper::from_env_vars(env_vars.iter())
+        {
             // Compare the config in the current APIWrapper to the new one
             self.options.config == new_api_wrapper.config
         } else {

@@ -189,7 +189,7 @@ fn generate_main_baml_content(
     // 'baml-cli generate' will run this after generating go code
     // This command will be run from within $output_dir/baml_client
     on_generate "gofmt -w . && goimports -w ."
-    "#
+    "#,
         )
     } else {
         "".to_string()

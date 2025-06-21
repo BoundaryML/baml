@@ -69,9 +69,7 @@ impl TraceStorage {
         *count += 1;
 
         // Ensure call_map has an entry for the ID; create if not present.
-        self.call_map
-            .entry(function_id.clone())
-            .or_default();
+        self.call_map.entry(function_id.clone()).or_default();
     }
 
     /// Decrease the reference count for the given FunctionCallId,

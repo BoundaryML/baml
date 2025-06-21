@@ -707,12 +707,12 @@ impl BamlRuntime {
                                 Ok(result) => match result.result_with_constraints_content() {
                                     Ok(value) => Ok(value.0.map_meta(|f| f.3.clone())),
                                     Err(e) => Err((&e).to_baml_error()), // None => Err(baml_types::tracing::errors::BamlError::Base {
-                                                                           //     message: format!(
-                                                                           //         "No parsed result found for function: {}",
-                                                                           //         function_name
-                                                                           //     )
-                                                                           //     .into(),
-                                                                           // }),
+                                                                         //     message: format!(
+                                                                         //         "No parsed result found for function: {}",
+                                                                         //         function_name
+                                                                         //     )
+                                                                         //     .into(),
+                                                                         // }),
                                 },
                                 Err(e) => Err(e.to_baml_error()),
                             },

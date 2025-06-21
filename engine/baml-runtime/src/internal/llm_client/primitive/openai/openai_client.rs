@@ -475,9 +475,7 @@ impl CompletionToProviderBody for OpenAIClient {
 }
 
 // converts completion prompt into JSON body for request
-fn convert_completion_prompt_to_body(
-    prompt: &str,
-) -> serde_json::Map<String, serde_json::Value> {
+fn convert_completion_prompt_to_body(prompt: &str) -> serde_json::Map<String, serde_json::Value> {
     let mut map = serde_json::Map::new();
     map.insert("prompt".into(), json!(prompt));
     map

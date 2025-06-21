@@ -560,10 +560,7 @@ impl<T> BamlValueWithMeta<T> {
                     .iter()
                     .map(|(k, v)| (k.clone(), Self::with_default_meta(v)))
                     .collect();
-                let value_types = entries
-                    .values()
-                    .map(|v| v.field_type())
-                    .collect::<Vec<_>>();
+                let value_types = entries.values().map(|v| v.field_type()).collect::<Vec<_>>();
                 let field_type =
                     FieldType::union(value_types.into_iter().map(|v| v.to_owned()).collect());
 
@@ -572,10 +569,7 @@ impl<T> BamlValueWithMeta<T> {
             BamlValue::List(items) => {
                 let items: Vec<BamlValueWithMeta<T>> =
                     items.iter().map(|i| Self::with_default_meta(i)).collect();
-                let items_types = items
-                    .iter()
-                    .map(|i| i.field_type())
-                    .collect::<Vec<_>>();
+                let items_types = items.iter().map(|i| i.field_type()).collect::<Vec<_>>();
                 let field_type =
                     FieldType::union(items_types.into_iter().map(|v| v.to_owned()).collect());
                 List(items, T::from(field_type.simplify()))

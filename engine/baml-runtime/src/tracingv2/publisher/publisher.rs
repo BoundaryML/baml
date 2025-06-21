@@ -154,8 +154,7 @@ impl RuntimeAST {
         }
 
         // D) happy path: 2xx → attempt to parse into T
-        serde_json::from_slice::<TEndpoint::Response<'resp>>(&bytes)
-            .map_err(ApiError::Deserialize)
+        serde_json::from_slice::<TEndpoint::Response<'resp>>(&bytes).map_err(ApiError::Deserialize)
     }
 }
 

@@ -23,7 +23,10 @@ pub struct WasmGeneratedFile {
 impl From<GenerateOutput> for WasmGeneratorOutput {
     fn from(generate_output: GenerateOutput) -> WasmGeneratorOutput {
         WasmGeneratorOutput {
-            output_dir: generate_output.output_dir_full.to_string_lossy().to_string(),
+            output_dir: generate_output
+                .output_dir_full
+                .to_string_lossy()
+                .to_string(),
             output_dir_relative_to_baml_src: generate_output
                 .output_dir_shorthand
                 .to_string_lossy()

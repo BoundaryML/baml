@@ -138,9 +138,11 @@ pub fn scan_anthropic_response_stream(
             inner.output_tokens = Some(body.usage.output_tokens);
             inner.total_tokens = Some(body.usage.input_tokens + body.usage.output_tokens);
         }
-        MessageChunk::ContentBlockDelta(event) => if let super::types::ContentBlockDelta::TextDelta { text } =  event.delta {
-            inner.content += &text;
-        },
+        MessageChunk::ContentBlockDelta(event) => {
+            if let super::types::ContentBlockDelta::TextDelta { text } = event.delta {
+                inner.content += &text;
+            }
+        }
         MessageChunk::ContentBlockStart(_) => (),
         MessageChunk::ContentBlockStop(_) => (),
         MessageChunk::Ping => (),

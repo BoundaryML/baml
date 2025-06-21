@@ -97,12 +97,9 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::FieldType {
                     .map(|t| t.to_rpc_event(lookup))
                     .collect(),
             ),
-            baml_types::FieldType::Tuple(field_types, _) => TypeReference::tuple(
-                field_types
-                    .iter()
-                    .map(|t| t.to_rpc_event(lookup))
-                    .collect(),
-            ),
+            baml_types::FieldType::Tuple(field_types, _) => {
+                TypeReference::tuple(field_types.iter().map(|t| t.to_rpc_event(lookup)).collect())
+            }
             baml_types::FieldType::RecursiveTypeAlias { name: alias, .. } => lookup
                 .type_lookup(alias.as_str())
                 .map(TypeReference::recursive_type_alias)
@@ -160,9 +157,7 @@ impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::Media<'a>> for baml_types::Baml
     }
 }
 
-impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::MediaValue<'a>>
-    for baml_types::BamlMediaContent
-{
+impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::MediaValue<'a>> for baml_types::BamlMediaContent {
     fn to_rpc_event(
         &'a self,
         lookup: &(impl TypeLookup + ?Sized),

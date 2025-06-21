@@ -377,7 +377,6 @@ impl<T> TypeGeneric<T> {
                 returned
             }
         }
-
     }
 
     pub fn set_meta(&mut self, meta: T) {

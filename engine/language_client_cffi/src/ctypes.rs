@@ -294,14 +294,12 @@ where
             (CFFIValueUnion::CFFIValueInt, value_int.as_union_value())
         }
         BamlValueWithMeta::Float(val, _) => {
-            let value_float =
-                CFFIValueFloat::create(builder, &CFFIValueFloatArgs { value: *val });
+            let value_float = CFFIValueFloat::create(builder, &CFFIValueFloatArgs { value: *val });
 
             (CFFIValueUnion::CFFIValueFloat, value_float.as_union_value())
         }
         BamlValueWithMeta::Bool(val, _) => {
-            let value_bool =
-                CFFIValueBool::create(builder, &CFFIValueBoolArgs { value: *val });
+            let value_bool = CFFIValueBool::create(builder, &CFFIValueBoolArgs { value: *val });
 
             (CFFIValueUnion::CFFIValueBool, value_bool.as_union_value())
         }
@@ -579,10 +577,8 @@ where
         baml_types::FieldType::Class { name: cls, .. } => {
             // TODO: figure out if we need to allow partials here
             let name = create_cffi_type_name(cls, builder, false);
-            let class_type = CFFIFieldTypeClass::create(
-                builder,
-                &CFFIFieldTypeClassArgs { name: Some(name) },
-            );
+            let class_type =
+                CFFIFieldTypeClass::create(builder, &CFFIFieldTypeClassArgs { name: Some(name) });
             (
                 CFFIFieldTypeUnion::CFFIFieldTypeClass,
                 class_type.as_union_value(),

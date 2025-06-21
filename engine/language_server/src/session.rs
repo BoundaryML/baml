@@ -251,11 +251,9 @@ impl Session {
         let file_path = url.to_file_path().ok()?;
         let project = self.get_or_create_project(&file_path)?;
 
-        let document_key = DocumentKey::from_url(
-            &project.lock().unwrap().baml_project.root_dir_name,
-            &url,
-        )
-        .ok()?;
+        let document_key =
+            DocumentKey::from_url(&project.lock().unwrap().baml_project.root_dir_name, &url)
+                .ok()?;
 
         Some(DocumentSnapshot {
             resolved_client_capabilities: self.resolved_client_capabilities.clone(),

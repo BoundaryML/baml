@@ -81,11 +81,8 @@ impl OpenApiUserData {
                     .map(|(name, func)| {
                         let mut schema = func.return_type.clone();
                         schema.meta_mut().title = Some(format!("{}Request", name.0));
-                        let mut properties: Vec<(String, bool, TypeOpenApi)> = func
-                            .args
-                            .clone()
-                            .into_iter()
-                            .collect();
+                        let mut properties: Vec<(String, bool, TypeOpenApi)> =
+                            func.args.clone().into_iter().collect();
                         properties.sort_by_key(|(name, _, _)| name.clone());
                         let component_request_body =
                             ComponentRequestBody {

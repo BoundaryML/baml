@@ -439,8 +439,7 @@ pub async fn make_parsed_request(
             latency: instant_now.elapsed(),
             message: format!(
                 "Request failed with status code: {}. {}",
-                response.status,
-                response_body
+                response.status, response_body
             ),
             code: ErrorCode::from_status(response.status),
         });

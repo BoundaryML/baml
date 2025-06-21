@@ -110,8 +110,7 @@ impl<'rb> RubyToJson<'rb> {
                 BamlValueWithMeta::Class(class_name, class_fields, _) => {
                     let hash = ruby.hash_new();
                     for (k, v) in class_fields.into_iter() {
-                        let subvalue_allow_partials =
-                            allow_partials && !v.meta().2.required_done;
+                        let subvalue_allow_partials = allow_partials && !v.meta().2.required_done;
                         let k = ruby.sym_new(k.as_str());
                         let v = RubyToJson::serialize_baml(
                             ruby,
@@ -149,9 +148,7 @@ impl<'rb> RubyToJson<'rb> {
                 BamlValueWithMeta::Enum(enum_name, enum_value, _) => {
                     if let Ok(enum_type) = types.const_get::<_, RClass>(enum_name.as_str()) {
                         let enum_value = ruby.str_new(&enum_value);
-                        if let Ok(enum_instance) =
-                            enum_type.funcall("deserialize", (enum_value,))
-                        {
+                        if let Ok(enum_instance) = enum_type.funcall("deserialize", (enum_value,)) {
                             return Ok(enum_instance);
                         }
                     }
@@ -191,7 +188,6 @@ impl<'rb> RubyToJson<'rb> {
             };
             res
         }
-
     }
 
     pub fn serialize(

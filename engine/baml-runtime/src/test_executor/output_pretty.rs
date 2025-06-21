@@ -295,10 +295,7 @@ impl PrettyTestExecutionStatusRenderer {
 
         let mut grouped: BTreeMap<&str, Vec<(&str, &TestExecutionStatus)>> = BTreeMap::new();
         for ((func, test), status) in test_status_map {
-            grouped
-                .entry(func)
-                .or_default()
-                .push((test, status));
+            grouped.entry(func).or_default().push((test, status));
         }
         let mut total_counts = TestCounts::default();
 

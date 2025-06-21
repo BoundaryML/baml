@@ -220,14 +220,8 @@ pub enum FinishReasonFilter {
 impl UnresolvedFinishReasonFilter {
     pub fn required_env_vars(&self) -> HashSet<String> {
         match self {
-            Self::AllowList(allow) => allow
-                .iter()
-                .flat_map(StringOr::required_env_vars)
-                .collect(),
-            Self::DenyList(deny) => deny
-                .iter()
-                .flat_map(StringOr::required_env_vars)
-                .collect(),
+            Self::AllowList(allow) => allow.iter().flat_map(StringOr::required_env_vars).collect(),
+            Self::DenyList(deny) => deny.iter().flat_map(StringOr::required_env_vars).collect(),
             _ => HashSet::new(),
         }
     }

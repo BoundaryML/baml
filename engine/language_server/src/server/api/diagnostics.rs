@@ -208,10 +208,7 @@ pub fn project_diagnostics(
                     &guard,
                     &root_path,
                     &Span {
-                        file: SourceFile::new_static(
-                            PathBuf::from(gen.span.file_path.clone()),
-                            "",
-                        ),
+                        file: SourceFile::new_static(PathBuf::from(gen.span.file_path.clone()), ""),
                         start: gen.span.start,
                         end: gen.span.end,
                     },
@@ -228,10 +225,7 @@ pub fn project_diagnostics(
                         ensure_absolute(&root_path, &PathBuf::from(gen.span.file_path.clone()));
                     match Url::from_file_path(span_path) {
                         Ok(uri) => {
-                            diagnostics_map
-                                .entry(uri)
-                                .or_default()
-                                .push(diagnostic);
+                            diagnostics_map.entry(uri).or_default().push(diagnostic);
                         }
                         Err(_) => {
                             tracing::error!(
@@ -278,10 +272,7 @@ pub fn project_diagnostics(
 
                     match Url::from_file_path(span_path) {
                         Ok(uri) => {
-                            diagnostics_map
-                                .entry(uri)
-                                .or_default()
-                                .push(diagnostic);
+                            diagnostics_map.entry(uri).or_default().push(diagnostic);
                         }
                         Err(_) => {
                             tracing::error!(
