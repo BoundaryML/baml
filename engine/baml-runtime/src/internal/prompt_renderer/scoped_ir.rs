@@ -126,8 +126,8 @@ impl IRSemanticStreamingHelper for ScopedIr<'_> {
         Ok(result)
     }
 
-    fn find_class_fields_needing_null_filler<'a>(
-        &'a self,
+    fn find_class_fields_needing_null_filler(
+        &self,
         class_name: &str,
         value_names: &std::collections::HashSet<String>,
     ) -> Result<std::collections::HashSet<String>> {

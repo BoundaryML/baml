@@ -85,8 +85,7 @@ pub fn parse_statement(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Option
         }
         Rule::expression => {
             // eprintln!("parsing expr");
-            let maybe_expr = parse_expression(rhs, diagnostics);
-            maybe_expr
+            parse_expression(rhs, diagnostics)
         }
         _ => {
             diagnostics.push_error(DatamodelError::new_static(

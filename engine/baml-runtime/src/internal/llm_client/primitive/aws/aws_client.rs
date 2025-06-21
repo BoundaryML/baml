@@ -176,7 +176,7 @@ impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterc
             request.uri().to_string(),
             request.method().to_string(),
             headers,
-            HTTPBody::new(request.body().bytes().unwrap_or_default().to_vec().into()),
+            HTTPBody::new(request.body().bytes().unwrap_or_default().to_vec()),
         );
         let event = TraceEvent::new_raw_llm_request(self.call_stack.clone(), Arc::new(request));
         BAML_TRACER.lock().unwrap().put(Arc::new(event));
@@ -195,7 +195,7 @@ impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterc
                 self.http_request_id.clone(),
                 response.status().as_u16(),
                 Some(smithy_json_headers(response.headers())),
-                HTTPBody::new(response.body().bytes().unwrap_or_default().to_vec().into()),
+                HTTPBody::new(response.body().bytes().unwrap_or_default().to_vec()),
             );
 
             let event =
@@ -266,7 +266,7 @@ impl AwsClient {
     }
 
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<AwsClient> {
-        let properties = resolve_properties(&client.elem().provider, &client.options(), ctx)?;
+        let properties = resolve_properties(&client.elem().provider, client.options(), ctx)?;
 
         Ok(Self {
             name: client.name().into(),
@@ -378,10 +378,9 @@ impl AwsClient {
 
         // Set region if specified
         if let Some(aws_region) = self.properties.region.as_ref() {
-            if aws_region.starts_with("$") {
+            if let Some(v) = aws_region.strip_prefix("$") {
                 return Err(anyhow::anyhow!(
-                    "AWS region expected, please set: env.{}",
-                    &aws_region[1..]
+                    "AWS region expected, please set: env.{v}",
                 ));
             }
 
@@ -404,7 +403,7 @@ impl AwsClient {
         Ok(BedrockRuntimeClient::from_conf(bedrock_config))
     }
 
-    async fn chat_anyhow<'r>(&self, response: &'r ConverseOutput) -> Result<String> {
+    async fn chat_anyhow(&self, response: &ConverseOutput) -> Result<String> {
         let Some(bedrock::types::ConverseOutput::Message(ref message)) = response.output else {
             anyhow::bail!(
                 "Expected message output in response, but is type {}",
@@ -464,7 +463,7 @@ impl AwsClient {
                     first
                         .parts
                         .iter()
-                        .map(|part| self.part_to_system_message(part))
+                        .map(Self::part_to_system_message)
                         .collect::<Result<_>>()?,
                 );
                 chat_slice = remainder_slice;
@@ -850,7 +849,6 @@ impl AwsClient {
     }
 
     fn part_to_system_message(
-        &self,
         part: &ChatMessagePart,
     ) -> Result<bedrock::types::SystemContentBlock> {
         match part {
@@ -859,7 +857,7 @@ impl AwsClient {
                 "AWS Bedrock only supports text blocks for system messages, but got {:#?}",
                 part
             ),
-            ChatMessagePart::WithMeta(p, _) => self.part_to_system_message(p),
+            ChatMessagePart::WithMeta(p, _) => Self::part_to_system_message(p),
         }
     }
 

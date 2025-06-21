@@ -3,8 +3,6 @@ use std::hash::Hash;
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
 use indexmap::IndexMap;
 use serde::Serialize;
-use serde_json;
-use serde_yaml;
 
 use crate::{generate_types::OpenApiUserData, r#type::TypeOpenApi};
 
@@ -101,8 +99,10 @@ pub struct FunctionName(String);
 pub struct TypeName(String);
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct Components {
-    pub requestBodies: IndexMap<FunctionName, ComponentRequestBody>,
+    #[allow(non_snake_case)]
+    pub request_bodies: IndexMap<FunctionName, ComponentRequestBody>,
     pub schemas: IndexMap<TypeName, TypeOpenApi>,
 }
 

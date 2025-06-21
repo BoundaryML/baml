@@ -408,6 +408,12 @@ impl TypeAliasBuilder {
     }
 }
 
+impl Default for TypeAliasBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl std::fmt::Debug for TypeBuilder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Start the debug printout with the struct name
@@ -595,7 +601,7 @@ impl TypeBuilder {
         };
 
         let path = std::path::PathBuf::from("TypeBuilder::add_baml");
-        let source = SourceFile::from((path.clone().into(), baml));
+        let source = SourceFile::from((path.clone(), baml));
 
         let mut diagnostics = Diagnostics::new(path);
         diagnostics.set_source(&source);

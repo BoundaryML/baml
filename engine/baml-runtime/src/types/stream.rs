@@ -145,7 +145,7 @@ impl FunctionResultStream {
                 Ok(result) => Ok(baml_types::BamlValueWithMeta::<FieldType>::Null(
                     FieldType::null(),
                 )),
-                Err(e) => Err(e.into_baml_error()),
+                Err(e) => Err(e.to_baml_error()),
             },
         );
         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));

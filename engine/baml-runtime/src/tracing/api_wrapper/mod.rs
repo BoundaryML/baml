@@ -130,7 +130,7 @@ pub(super) struct PartialAPIConfig {
 }
 
 impl CompleteAPIConfig {
-    pub(self) async fn post<'a, T: DeserializeOwned>(&self, path: &str, body: &Value) -> Result<T> {
+    pub(self) async fn post<T: DeserializeOwned>(&self, path: &str, body: &Value) -> Result<T> {
         let url = format!("{}/{}", self.base_url, path);
 
         let req = self

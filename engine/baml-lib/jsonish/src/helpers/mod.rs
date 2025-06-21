@@ -143,7 +143,7 @@ fn relevant_data_models<'a>(
                 meta,
             } => {
                 if checked_types.insert(output.to_string()) {
-                    let walker = ir.find_enum(&name);
+                    let walker = ir.find_enum(name);
 
                     let real_values = walker
                         .as_ref()
@@ -153,7 +153,7 @@ fn relevant_data_models<'a>(
                         .into_iter()
                         .flatten()
                         .map(|value| {
-                            let meta = find_enum_value(&name, &value, &walker, env_values)?;
+                            let meta = find_enum_value(name, &value, &walker, env_values)?;
                             Ok(meta)
                         })
                         .filter_map(|v| v.transpose())
@@ -206,7 +206,7 @@ fn relevant_data_models<'a>(
                 meta: metadata,
             } => {
                 if checked_types.insert(output.to_string()) {
-                    let walker = ir.find_class(&name);
+                    let walker = ir.find_class(name);
 
                     let real_fields = walker
                         .as_ref()
@@ -214,7 +214,7 @@ fn relevant_data_models<'a>(
                         .ok();
 
                     let fields = real_fields.into_iter().flatten().map(|field| {
-                        let meta = find_existing_class_field(&name, &field, &walker, env_values)?;
+                        let meta = find_existing_class_field(name, &field, &walker, env_values)?;
                         Ok(meta)
                     });
 

@@ -156,7 +156,7 @@ impl AnthropicClient {
     }
 
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<AnthropicClient> {
-        let properties = resolve_properties(&client.elem().provider, &client.options(), ctx)?;
+        let properties = resolve_properties(&client.elem().provider, client.options(), ctx)?;
         Ok(Self {
             name: client.name().into(),
             context: RenderContext_Client {
@@ -393,7 +393,7 @@ impl ToProviderMessageExt for AnthropicClient {
 
 // converts completion prompt into JSON body for request
 pub fn convert_completion_prompt_to_body(
-    prompt: &String,
+    prompt: &str,
 ) -> serde_json::Map<String, serde_json::Value> {
     let mut map = serde_json::Map::new();
     map.insert("prompt".into(), json!(prompt));
@@ -403,7 +403,7 @@ pub fn convert_completion_prompt_to_body(
 impl CompletionToProviderBody for AnthropicClient {
     fn completion_to_provider_body(
         &self,
-        prompt: &String,
+        prompt: &str,
     ) -> serde_json::Map<String, serde_json::Value> {
         convert_completion_prompt_to_body(prompt)
     }

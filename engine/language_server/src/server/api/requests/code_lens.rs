@@ -84,7 +84,7 @@ impl SyncRequestHandler for CodeLens {
 
         let mut function_lenses: Vec<lsp_types::CodeLens> = project_lock
             .list_functions()
-            .unwrap_or(vec![])
+            .unwrap_or_default()
             .iter()
             .filter(|func| doc_matches(&func.span, &project_lock))
             .map(|func| {
@@ -110,7 +110,7 @@ impl SyncRequestHandler for CodeLens {
 
         let test_case_lenses: Vec<lsp_types::CodeLens> = project_lock
             .list_testcases()
-            .unwrap_or(vec![])
+            .unwrap_or_default()
             .iter()
             .filter(|testcase| doc_matches(&testcase.span, &project_lock))
             .map(|testcase| {

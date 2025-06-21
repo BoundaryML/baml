@@ -46,9 +46,7 @@ pub(crate) fn parse_type_expression_block(
                         // codebase.
                         "dynamic" => {
                             diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!(
-                                    "Incomplete 'dynamic' type definition. Use 'dynamic class' or 'dynamic enum' to add properties to types that contain the `@@dynamic` attribute.",
-                                ),
+                                "Incomplete 'dynamic' type definition. Use 'dynamic class' or 'dynamic enum' to add properties to types that contain the `@@dynamic` attribute.",
                                 diagnostics.span(current.as_span()),
                             ));
 

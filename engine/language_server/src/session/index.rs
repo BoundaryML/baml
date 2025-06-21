@@ -79,7 +79,7 @@ impl Index {
         //     anyhow::bail!("Tried to close unavailable document `{key}`");
         // };
 
-        let Some(_) = self.documents.remove(&document_key) else {
+        let Some(_) = self.documents.remove(document_key) else {
             anyhow::bail!(
                 "tried to close document that didn't exist at {}",
                 document_key
@@ -92,7 +92,7 @@ impl Index {
         &mut self,
         document_key: &DocumentKey,
     ) -> anyhow::Result<&mut DocumentController> {
-        let Some(controller) = self.documents.get_mut(&document_key) else {
+        let Some(controller) = self.documents.get_mut(document_key) else {
             anyhow::bail!("Document controller not available at `{}`", document_key);
         };
         Ok(controller)
@@ -154,7 +154,7 @@ pub enum DocumentQuery {
 }
 
 impl DocumentQuery {
-    /// Retrieve the original key that describes this document query.
+    // /// Retrieve the original key that describes this document query.
     // pub(crate) fn make_key(&self) -> DocumentKey {
     //     match self {
     //         Self::Text { file_url, .. } => DocumentKey::Text(file_url.clone()),

@@ -259,7 +259,7 @@ impl<'a> Walker<'a, (&'a FunctionNode, &'a TestCase)> {
     }
 
     pub fn name(&self) -> (&'a str, &'a str) {
-        (&self.item.0.elem.name(), &self.item.1.elem.name)
+        (self.item.0.elem.name(), &self.item.1.elem.name)
     }
 
     pub fn args(&self) -> &IndexMap<String, UnresolvedValue<()>> {

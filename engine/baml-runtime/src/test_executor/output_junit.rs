@@ -89,7 +89,7 @@ impl RenderTestExecutionStatus for JUnitXMLRenderer {
                         suite.add_testcase(TestCase::skipped(test_name));
                     }
                     TestExecutionStatus::Pending | TestExecutionStatus::Running => {
-                        suite.add_testcase(TestCase::skipped(&test_name));
+                        suite.add_testcase(TestCase::skipped(test_name));
                     }
                 }
             }

@@ -46,7 +46,7 @@ impl TypeCoercer for LiteralValue {
                     jsonish::Value::Number(_, _)
                     | jsonish::Value::Boolean(_)
                     | jsonish::Value::String(_, _) => {
-                        let mut result = self.coerce(ctx, target, Some(&inner_value))?;
+                        let mut result = self.coerce(ctx, target, Some(inner_value))?;
                         result.add_flag(Flag::ObjectToPrimitive(jsonish::Value::Object(
                             obj.clone(),
                             completion_state.clone(),

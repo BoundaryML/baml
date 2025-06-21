@@ -261,7 +261,7 @@ impl<'c> NestedChecks<'c> {
                             .ast_field()
                             .expr
                             .as_ref()
-                            .map_or(false, |ft| self.has_checks_nested(ft))
+                            .is_some_and(|ft| self.has_checks_nested(ft))
                     })
                 }
                 Some(TypeWalker::TypeAlias(type_alias_walker)) => {

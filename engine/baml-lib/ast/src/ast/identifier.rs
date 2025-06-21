@@ -109,7 +109,7 @@ impl From<(&str, Span)> for Identifier {
                     path: s.split('.').map(|s| s.to_string()).collect::<Vec<_>>()
                         [..s.split('.').count() - 1]
                         .to_vec(),
-                    name: s.split('.').last().unwrap().to_string(),
+                    name: s.split('.').next_back().unwrap().to_string(),
                     full_name: s.to_string(),
                 },
                 span,

@@ -16,6 +16,11 @@ elided_named_lifetimes = "deny"
 unused_imports = "deny"
 unused_variables = "deny"
 
+[lints.clippy]
+too_many_arguments = "allow"
+new_without_default = "allow"
+arc_with_non_send_sync = "allow"
+
 [dependencies]
 reqwest.workspace = true
 anyhow.workspace = true

@@ -10,7 +10,7 @@ use crate::{
 
 impl fmt::Display for TypeTS {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self)
+        write!(f, "TypeTS") // TODO
     }
 }
 
@@ -171,9 +171,9 @@ pub fn render_inlinedbaml(
 /// package baml_client
 ///
 /// var file_map = map[string]string{
-/// {% for (path, contents) in file_map %}  
+/// {% for (path, contents) in file_map %}
 ///   {{ path }}: {{ contents }},
-/// {%- endfor %}  
+/// {%- endfor %}
 /// }
 ///
 /// func getBamlFiles() map[string]string {

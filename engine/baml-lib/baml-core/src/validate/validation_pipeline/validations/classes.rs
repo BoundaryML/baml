@@ -115,9 +115,9 @@ pub(super) fn assert_no_field_name_collisions(
     );
     for func in ctx.db.walk_functions() {
         for param in func.walk_input_args() {
-            match param.ast_arg().0 {
-                Some(id) => match reserved.get(id.name()) {
-                    Some(langs) => match langs.as_slice() {
+            if let Some(id) = param.ast_arg().0 {
+                if let Some(langs) = reserved.get(id.name()) {
+                    match langs.as_slice() {
                         [lang] => {
                             ctx.push_error(DatamodelError::new_validation_error(
                                 &format!("{} is a reserved word in {}", id.name(), lang),
@@ -134,10 +134,8 @@ pub(super) fn assert_no_field_name_collisions(
                                 id.span().clone(),
                             ));
                         }
-                    },
-                    None => {}
-                },
-                None => {}
+                    }
+                }
             }
         }
     }

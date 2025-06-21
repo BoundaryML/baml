@@ -12,7 +12,7 @@ pub(super) fn coerce_union(
     assert!(matches!(union_target, FieldType::Union(_, _)));
     log::debug!(
         "scope: {scope} :: coercing to: {name} (current: {current})",
-        name = union_target.to_string(),
+        name = union_target,
         scope = ctx.display_scope(),
         current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
     );

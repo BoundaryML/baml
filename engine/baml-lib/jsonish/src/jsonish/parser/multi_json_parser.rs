@@ -81,12 +81,9 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
     }
 }
 
-fn complete_stack_head(stack: &mut Vec<Value>) {
-    match stack.last_mut() {
-        Some(v) => {
-            v.complete_deeply();
-        }
-        None => {}
+fn complete_stack_head(stack: &mut [Value]) {
+    if let Some(v) = stack.last_mut() {
+        v.complete_deeply();
     }
 }
 

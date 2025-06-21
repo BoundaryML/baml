@@ -92,17 +92,17 @@ impl Attributes {
                 .or(other.description.as_ref())
                 .cloned(),
             alias: self.alias.as_ref().or(other.alias.as_ref()).cloned(),
-            dynamic_type: self.dynamic_type.or(other.dynamic_type).clone(),
-            skip: self.skip.or(other.skip).clone(),
+            dynamic_type: self.dynamic_type.or(other.dynamic_type),
+            skip: self.skip.or(other.skip),
             constraints: self
                 .constraints
                 .iter()
                 .chain(other.constraints.iter())
                 .cloned()
                 .collect(),
-            streaming_done: self.streaming_done.or(other.streaming_done).clone(),
-            streaming_needed: self.streaming_needed.or(other.streaming_needed).clone(),
-            streaming_state: self.streaming_state.or(other.streaming_state).clone(),
+            streaming_done: self.streaming_done.or(other.streaming_done),
+            streaming_needed: self.streaming_needed.or(other.streaming_needed),
+            streaming_state: self.streaming_state.or(other.streaming_state),
         }
     }
 }

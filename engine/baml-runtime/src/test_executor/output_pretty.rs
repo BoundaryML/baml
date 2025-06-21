@@ -133,7 +133,7 @@ impl TestCounts {
             }
             summary.pop();
             summary.pop();
-            summary.push_str(")");
+            summary.push(')');
             summary
         } else {
             "".to_string()
@@ -297,7 +297,7 @@ impl PrettyTestExecutionStatusRenderer {
         for ((func, test), status) in test_status_map {
             grouped
                 .entry(func)
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push((test, status));
         }
         let mut total_counts = TestCounts::default();

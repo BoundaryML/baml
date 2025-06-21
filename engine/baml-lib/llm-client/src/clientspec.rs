@@ -222,13 +222,11 @@ impl UnresolvedFinishReasonFilter {
         match self {
             Self::AllowList(allow) => allow
                 .iter()
-                .map(|s| s.required_env_vars())
-                .flatten()
+                .flat_map(StringOr::required_env_vars)
                 .collect(),
             Self::DenyList(deny) => deny
                 .iter()
-                .map(|s| s.required_env_vars())
-                .flatten()
+                .flat_map(StringOr::required_env_vars)
                 .collect(),
             _ => HashSet::new(),
         }
@@ -289,7 +287,7 @@ impl UnresolvedRolesSelection {
     pub fn required_env_vars(&self) -> HashSet<String> {
         let mut env_vars = HashSet::new();
         if let Some(allowed) = &self.allowed {
-            env_vars.extend(allowed.iter().map(|s| s.required_env_vars()).flatten());
+            env_vars.extend(allowed.iter().flat_map(StringOr::required_env_vars));
         }
         if let Some(default) = &self.default {
             env_vars.extend(default.required_env_vars());
@@ -317,7 +315,7 @@ impl UnresolvedRolesSelection {
 
         match (&allowed, &default) {
             (Some(allowed), Some(default)) => {
-                if !allowed.contains(&default) {
+                if !allowed.contains(default) {
                     return Err(anyhow::anyhow!("default_role must be in allowed_roles: {}. Not found in {:?}", default, allowed));
                 }
             }

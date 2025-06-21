@@ -157,6 +157,7 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
 }
 
 impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
+    #[allow(clippy::single_match)]
     pub fn required_env_vars(&self) -> HashSet<String> {
         let mut env_vars = HashSet::new();
         if let Some(m) = self.model.as_ref() {

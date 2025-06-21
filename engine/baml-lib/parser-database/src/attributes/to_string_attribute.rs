@@ -54,12 +54,10 @@ pub(super) fn visit(ctx: &mut Context<'_>, span: &Span, as_block: bool) -> Optio
         ctx.validate_visited_arguments();
     }
 
-    if as_block {
-        if ctx.visit_optional_single_attr("dynamic") {
-            attributes.set_dynamic_type();
-            modified = true;
-            ctx.validate_visited_arguments();
-        }
+    if as_block && ctx.visit_optional_single_attr("dynamic") {
+        attributes.set_dynamic_type();
+        modified = true;
+        ctx.validate_visited_arguments();
     }
 
     if modified {

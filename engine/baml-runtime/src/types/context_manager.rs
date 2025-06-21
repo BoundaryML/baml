@@ -108,7 +108,7 @@ impl RuntimeContextManager {
                 let mut all_tags = self.global_tags.lock().unwrap().clone();
                 let ctx = self.context.lock().unwrap();
                 if let Some((.., ctx_tags, _)) = ctx.last() {
-                    all_tags.extend(ctx_tags.into_iter().map(|(k, v)| (k.clone(), v.clone())));
+                    all_tags.extend(ctx_tags.iter().map(|(k, v)| (k.clone(), v.clone())));
                 }
                 all_tags
             };
@@ -219,7 +219,7 @@ impl RuntimeContextManager {
             let ctx = self.context.lock().unwrap();
             let ctx = ctx.last();
             if let Some((.., ctx_tags, _)) = ctx {
-                tags.extend(ctx_tags.into_iter().map(|(k, v)| (k.clone(), v.clone())));
+                tags.extend(ctx_tags.iter().map(|(k, v)| (k.clone(), v.clone())));
             }
             tags
         };

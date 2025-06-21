@@ -50,7 +50,7 @@ fn subst<'a>(
     expr: &Expr<ExprMetadata>,
     var_name: &VarIndex,
     val: &Expr<ExprMetadata>,
-    env: &EvalEnv<'a>,
+    _env: &EvalEnv<'a>,
 ) -> anyhow::Result<Expr<ExprMetadata>> {
     let res: anyhow::Result<Expr<ExprMetadata>> = match expr {
         Expr::BoundVar(expr_var_name, _) => {
@@ -69,8 +69,8 @@ fn subst<'a>(
             meta,
             type_args,
         } => {
-            let f2 = subst(func, var_name, val, env)?;
-            let x2 = subst(args, var_name, val, env)?;
+            let f2 = subst(func, var_name, val, _env)?;
+            let x2 = subst(args, var_name, val, _env)?;
             Ok(Expr::App {
                 func: Arc::new(f2),
                 args: Arc::new(x2),
@@ -79,21 +79,21 @@ fn subst<'a>(
             })
         }
         Expr::Lambda(params, body, meta) => Ok(Expr::Lambda(
-            params.clone(),
-            Arc::new(subst(body, var_name, val, env)?),
+            *params,
+            Arc::new(subst(body, var_name, val, _env)?),
             meta.clone(),
         )),
         Expr::ArgsTuple(args, meta) => {
             let mut new_args = Vec::new();
             for arg in args {
-                new_args.push(subst(arg, var_name, val, env)?);
+                new_args.push(subst(arg, var_name, val, _env)?);
             }
             Ok(Expr::ArgsTuple(new_args, meta.clone()))
         }
         Expr::LLMFunction(_, _, _) => Ok(expr.clone()),
         Expr::Let(name, value, body, meta) => {
-            let new_value = subst(value, var_name, val, env)?;
-            let new_body = subst(body, var_name, val, env)?;
+            let new_value = subst(value, var_name, val, _env)?;
+            let new_body = subst(body, var_name, val, _env)?;
             Ok(Expr::Let(
                 name.clone(),
                 Arc::new(new_value),
@@ -104,7 +104,7 @@ fn subst<'a>(
         Expr::List(items, meta) => {
             let new_items = items
                 .iter()
-                .map(|item| subst(item, var_name, val, env))
+                .map(|item| subst(item, var_name, val, _env))
                 .collect::<anyhow::Result<Vec<_>>>()?;
             Ok(Expr::List(new_items, meta.clone()))
         }
@@ -112,7 +112,7 @@ fn subst<'a>(
             let new_items = items
                 .iter()
                 .map(|(key, value)| {
-                    let new_value = subst(value, var_name, val, env)?;
+                    let new_value = subst(value, var_name, val, _env)?;
                     Ok((key.clone(), new_value))
                 })
                 .collect::<anyhow::Result<BamlMap<_, _>>>()?;
@@ -127,14 +127,14 @@ fn subst<'a>(
             let new_fields = fields
                 .iter()
                 .map(|(key, value)| {
-                    let new_value = subst(value, var_name, val, env)?;
+                    let new_value = subst(value, var_name, val, _env)?;
                     Ok((key.clone(), new_value))
                 })
                 .collect::<anyhow::Result<BamlMap<_, _>>>()?;
             let new_spread = spread
                 .as_ref()
                 .map(|spread| {
-                    subst(spread, var_name, val, env).map(|spread| Box::new(spread.clone()))
+                    subst(spread, var_name, val, _env).map(|spread| Box::new(spread.clone()))
                 })
                 .transpose()?;
             Ok(Expr::ClassConstructor {
@@ -145,16 +145,16 @@ fn subst<'a>(
             })
         }
         Expr::If(cond, then, else_, meta) => {
-            let new_cond = subst(cond, var_name, val, env)?;
-            let new_then = subst(then, var_name, val, env)?;
+            let new_cond = subst(cond, var_name, val, _env)?;
+            let new_then = subst(then, var_name, val, _env)?;
             let new_else = else_
                 .as_ref()
-                .map(|e| subst(e, var_name, val, env))
+                .map(|e| subst(e, var_name, val, _env))
                 .transpose()?;
             Ok(Expr::If(
                 Arc::new(new_cond),
                 Arc::new(new_then),
-                new_else.map(|e| Arc::new(e)),
+                new_else.map(Arc::new),
                 meta.clone(),
             ))
         }
@@ -164,8 +164,8 @@ fn subst<'a>(
             body,
             meta,
         } => {
-            let new_iterable = subst(iterable, var_name, val, env)?;
-            let new_body = subst(body, var_name, val, env)?;
+            let new_iterable = subst(iterable, var_name, val, _env)?;
+            let new_body = subst(body, var_name, val, _env)?;
             Ok(Expr::ForLoop {
                 item: item.clone(),
                 iterable: Arc::new(new_iterable),
@@ -226,7 +226,7 @@ async fn beta_reduce<'a>(
                 let new_body = pairs
                     .iter()
                     .fold(body.as_ref().clone(), |acc, (param, arg)| {
-                        subst(&acc, &param, &arg, env).as_ref().unwrap().clone()
+                        subst(&acc, param, arg, env).as_ref().unwrap().clone()
                     });
                 Box::pin(beta_reduce(env, &new_body, eval_final_llm_fn)).await
             }
@@ -251,7 +251,7 @@ async fn beta_reduce<'a>(
                 let new_body = substitutions
                     .iter()
                     .fold(body.as_ref().clone(), |acc, (param, arg)| {
-                        subst(&acc, &param, &arg, env).as_ref().unwrap().clone()
+                        subst(&acc, param, arg, env).as_ref().unwrap().clone()
                     });
                 Box::pin(beta_reduce(env, &new_body, eval_final_llm_fn)).await
             }
@@ -376,7 +376,7 @@ async fn beta_reduce<'a>(
                     let mut header_map = reqwest::header::HeaderMap::new();
                     for (key, value) in headers {
                         header_map.insert(
-                            reqwest::header::HeaderName::from_str(&key)?,
+                            reqwest::header::HeaderName::from_str(key)?,
                             reqwest::header::HeaderValue::from_str(value.as_str().ok_or(
                                 anyhow!("Can't convert header value to string: {:?}", value),
                             )?)?,
@@ -391,7 +391,7 @@ async fn beta_reduce<'a>(
                             reqwest::header::HeaderName::from_static("baml-original-url"),
                             reqwest::header::HeaderValue::from_str(base_url)?,
                         );
-                        base_url = &proxy_url;
+                        base_url = proxy_url;
                     }
 
                     // Highlight.
@@ -566,7 +566,7 @@ pub async fn eval_to_value_or_llm_call<'a>(
             } => match (func.as_ref(), args.as_ref()) {
                 (Expr::LLMFunction(name, arg_names, _), Expr::ArgsTuple(args, _)) => {
                     let mut evaluated_args: Vec<(String, BamlValue)> = Vec::new();
-                    for (arg_name, arg) in arg_names.into_iter().zip(args) {
+                    for (arg_name, arg) in arg_names.iter().zip(args) {
                         let val = eval_to_value(env, arg).await;
                         evaluated_args
                             .push((arg_name.clone(), val.unwrap().unwrap().clone().value()));
@@ -656,7 +656,7 @@ pub async fn eval_to_value_or_llm_call<'a>(
                 let val = BamlValueWithMeta::Class(name.clone(), spread_fields, ());
                 return Ok(ExprEvalResult::Value {
                     value: val,
-                    field_type: FieldType::class(&name.to_string()),
+                    field_type: FieldType::class(name),
                 });
             }
             Expr::LLMFunction(_, _, _) => {
@@ -674,7 +674,7 @@ pub async fn eval_to_value_or_llm_call<'a>(
                 }
             },
             Expr::Let(var_name, value, body, meta) => {
-                let res = beta_reduce(env, &expr, false).await?;
+                let res = beta_reduce(env, expr, false).await?;
                 if res.temporary_same_state(expr) {
                     return Err(anyhow!("Failed to make progress"));
                 }

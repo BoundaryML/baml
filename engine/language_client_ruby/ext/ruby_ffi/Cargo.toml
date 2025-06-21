@@ -8,6 +8,9 @@ publish = false
 # This controls the name of the generated .so file
 crate-type = ["cdylib"]
 
+[lints.clippy]
+too_many_arguments = "allow"
+
 [dependencies]
 anyhow.workspace = true
 baml-cli.workspace = true

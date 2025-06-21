@@ -17,6 +17,9 @@ unused_imports = "deny"
 unused_must_use = "deny"
 unused_variables = "deny"
 
+[lints.clippy]
+too_many_arguments = "allow"
+
 [dependencies]
 anyhow.workspace = true
 baml-cli.workspace = true

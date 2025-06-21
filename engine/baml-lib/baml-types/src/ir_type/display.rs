@@ -28,7 +28,7 @@ impl std::fmt::Display for TypeStreaming {
             metadata_display_fmt.push_str(" @stream.with_state")
         }
 
-        let _res = match self {
+        match self {
             TypeStreaming::Enum { name, .. }
             | TypeStreaming::Class { name, .. }
             | TypeStreaming::RecursiveTypeAlias { name, .. } => write!(f, "{name}"),
@@ -39,7 +39,7 @@ impl std::fmt::Display for TypeStreaming {
                 let res = match view {
                     UnionTypeViewGeneric::Null => "null".to_string(),
                     UnionTypeViewGeneric::Optional(field_type) => {
-                        format!("{} | null", field_type.to_string())
+                        format!("{} | null", field_type)
                     }
                     UnionTypeViewGeneric::OneOf(field_types) => field_types
                         .iter()
@@ -79,7 +79,7 @@ impl std::fmt::Display for TypeStreaming {
                     .map(|t| t.to_string())
                     .collect::<Vec<_>>()
                     .join(", "),
-                arrow.return_type.to_string()
+                arrow.return_type
             ),
         }?;
 
@@ -120,7 +120,7 @@ impl std::fmt::Display for TypeGeneric<type_meta::Base> {
             metadata_display_fmt.push_str(" @stream.with_state")
         }
 
-        let _res = match self {
+        match self {
             TypeGeneric::Enum { name, .. }
             | TypeGeneric::Class { name, .. }
             | TypeGeneric::RecursiveTypeAlias { name, .. } => write!(f, "{name}"),
@@ -131,7 +131,7 @@ impl std::fmt::Display for TypeGeneric<type_meta::Base> {
                 let res = match view {
                     UnionTypeViewGeneric::Null => "null".to_string(),
                     UnionTypeViewGeneric::Optional(field_type) => {
-                        format!("{} | null", field_type.to_string())
+                        format!("{} | null", field_type)
                     }
                     UnionTypeViewGeneric::OneOf(field_types) => field_types
                         .iter()
@@ -171,7 +171,7 @@ impl std::fmt::Display for TypeGeneric<type_meta::Base> {
                     .map(|t| t.to_string())
                     .collect::<Vec<_>>()
                     .join(", "),
-                arrow.return_type.to_string()
+                arrow.return_type
             ),
         }?;
 

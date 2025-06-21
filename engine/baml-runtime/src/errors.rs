@@ -76,11 +76,11 @@ impl std::fmt::Debug for ExposedError {
 }
 
 pub(crate) trait IntoBamlError {
-    fn into_baml_error<'a, 'b>(&'a self) -> baml_types::tracing::events::BamlError<'b>;
+    fn to_baml_error<'b>(&self) -> baml_types::tracing::events::BamlError<'b>;
 }
 
-impl<'a> IntoBamlError for &'a anyhow::Error {
-    fn into_baml_error<'b>(&self) -> baml_types::tracing::events::BamlError<'b> {
+impl IntoBamlError for &anyhow::Error {
+    fn to_baml_error<'b>(&self) -> baml_types::tracing::events::BamlError<'b> {
         // print as the downcast_ref of whatever error actually is
         if let Some(er) = self.downcast_ref::<ExposedError>() {
             return match er {

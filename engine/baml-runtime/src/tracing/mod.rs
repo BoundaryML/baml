@@ -229,7 +229,7 @@ impl baml_log::Loggable for BamlEventLoggable<'_> {
         let function_name = format!("Function {}", self.function_name).purple();
         match self.data.as_ref() {
             Ok(response) => {
-                let response = response.visualize(max_message_length.clone());
+                let response = response.visualize(*max_message_length);
                 format!("{}:\n{}", function_name, response)
             }
             Err(error) => {
@@ -286,7 +286,7 @@ impl BamlEventLoggable<'_> {
                             .as_ref()
                             .and_then(|r| r.as_ref().ok())
                             .map(|v| {
-                                serde_json::to_value(&v.serialize_final()).unwrap_or_default()
+                                serde_json::to_value(v.serialize_final()).unwrap_or_default()
                             }),
                         error: None,
                     },
@@ -462,7 +462,7 @@ impl BamlTracer {
             EvaluationContext {
                 tags: global_tags
                     .into_iter()
-                    .chain(last_tags.into_iter())
+                    .chain(last_tags)
                     .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
                     .collect(),
             },
@@ -706,7 +706,7 @@ impl BamlTracer {
     ) -> bool {
         // Try to create a new APIWrapper from the env vars
         if let Ok(new_api_wrapper) = crate::tracing::api_wrapper::APIWrapper::from_env_vars(
-            env_vars.iter().map(|(k, v)| (k, v)),
+            env_vars.iter(),
         ) {
             // Compare the config in the current APIWrapper to the new one
             self.options.config == new_api_wrapper.config

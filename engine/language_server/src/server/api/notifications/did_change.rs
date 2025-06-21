@@ -52,7 +52,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
 
         let project = project.unwrap();
         let document_key =
-            DocumentKey::from_url(&project.lock().unwrap().root_path(), &url).internal_error()?;
+            DocumentKey::from_url(project.lock().unwrap().root_path(), &url).internal_error()?;
 
         session
             .update_text_document(

@@ -44,7 +44,7 @@ pub fn format_schema(source: &str, format_options: FormatOptions) -> Result<Stri
     let mut w = Vec::new();
     doc.render(10, &mut w)
         .map_err(|_| anyhow!("Failed to render doc"))?;
-    Ok(String::from_utf8(w).map_err(|_| anyhow!("Failed to convert to string"))?)
+    String::from_utf8(w).map_err(|_| anyhow!("Failed to convert to string"))
 }
 
 macro_rules! next_pair {
@@ -115,7 +115,7 @@ impl<'a> ToDoc for Pair<'a, Rule> {
         if self.as_rule() == Rule::empty_lines {
             // If we're formatting empty lines, superfluous whitespace should get stripped.
             let newline_count = self.as_str().matches('\n').count();
-            return RcDoc::concat(std::iter::repeat(RcDoc::hardline()).take(newline_count));
+            return RcDoc::concat(std::iter::repeat_n(RcDoc::hardline(), newline_count));
         }
         RcDoc::text(self.as_str())
     }
@@ -130,7 +130,7 @@ impl Formatter {
     /// The number of spaces to add before an inline trailing comment.
     /// Here, "trailing comment" does not refer to the trailing_comment Pest rule, but rather just
     /// a comment in this style:
-    ///    
+    ///
     ///   class Foo {
     ///       field string   // comment
     ///                   ^^^------------ This is what will get replaced with SPACES_BEFORE_TRAILING_COMMENT
@@ -222,7 +222,7 @@ impl Formatter {
             }
         }
 
-        let doc = if content_docs.len() > 0 {
+        let doc = if !content_docs.is_empty() {
             content_docs
                 .into_iter()
                 .fold(RcDoc::hardline(), |acc, doc| {

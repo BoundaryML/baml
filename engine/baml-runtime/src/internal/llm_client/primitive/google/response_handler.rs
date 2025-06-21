@@ -101,10 +101,10 @@ pub fn parse_google_response<C: WithClient + RequestBuilder>(
     })
 }
 
-fn text_content_part(parts: &Vec<Part>) -> Option<String> {
+fn text_content_part(parts: &[Part]) -> Option<String> {
     parts
         .iter()
-        .position(|part| !part.text.is_empty() && part.thought.unwrap_or(false) == false)
+        .position(|part| !part.text.is_empty() && !part.thought.unwrap_or(false))
         .map(|index| parts[index].text.clone())
 }
 
@@ -124,7 +124,7 @@ pub fn scan_google_response_stream(
         Err(e) => return Ok(()),
     };
 
-    let event = match GoogleResponse::deserialize(&event_body)
+    let event = GoogleResponse::deserialize(&event_body)
         .context(format!(
             "Failed to parse into a response accepted by {}: {}",
             std::any::type_name::<GoogleResponse>(),
@@ -134,23 +134,21 @@ pub fn scan_google_response_stream(
             client: client_name.to_string(),
             model: model_name.clone(),
             prompt: prompt.clone(),
-            start_time: system_now.clone(),
+            start_time: *system_now,
             request_options: request_options.clone(),
             latency: instant_now.elapsed(),
             message: format!("{:?}", e),
             code: ErrorCode::Other(2),
-        }) {
-        Ok(response) => response,
-        Err(e) => return Err(e),
-    };
-    if let Some(choice) = event.candidates.get(0) {
+        })?;
+
+    if let Some(choice) = event.candidates.first() {
         let text_content = &choice
             .content
             .as_ref()
             .and_then(|c| text_content_part(&c.parts));
 
         if let Some(text_content) = text_content {
-            inner.content += &text_content;
+            inner.content += text_content;
         }
         inner.metadata.finish_reason = choice.finish_reason.as_ref().map(|r| r.to_string());
         if choice

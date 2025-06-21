@@ -17,7 +17,7 @@ impl VertexAuth {
             ResolvedGcpAuthStrategy::MaybeFilePath(path) => {
                 log::debug!("Attempting to auth using JsonFile strategy");
                 let authz_user =
-                    gcp_auth::CustomServiceAccount::from_file(&path).context(format!(
+                    gcp_auth::CustomServiceAccount::from_file(path).context(format!(
                         "Failed to parse credentials as JSON file: {}",
                         serde_json::to_string(&path)
                             .expect("Serialization of string should always succeed")
@@ -26,7 +26,7 @@ impl VertexAuth {
             }
             ResolvedGcpAuthStrategy::StringContainingJson(s) => {
                 log::debug!("Attempting to auth using JsonString strategy");
-                let authz_user = gcp_auth::CustomServiceAccount::from_json(&s).context(format!(
+                let authz_user = gcp_auth::CustomServiceAccount::from_json(s).context(format!(
                     "Failed to parse credentials as JSON string: {}",
                     {
                         let s = serde_json::to_string(&s)

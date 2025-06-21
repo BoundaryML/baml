@@ -55,14 +55,14 @@ fn parse_path_identifier(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Ident
         return Identifier::ENV(env_name, span);
     }
 
-    return Identifier::Ref(
+    Identifier::Ref(
         RefIdentifier {
             path: vec[..vec.len() - 1].iter().map(|s| s.to_string()).collect(),
             name: vec[vec.len() - 1].to_string(),
             full_name: vec.join("."),
         },
         span,
-    );
+    )
 }
 
 /// Parse an identifier of the form `word::word::word` directly into a that string.

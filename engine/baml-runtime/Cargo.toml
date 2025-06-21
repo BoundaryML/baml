@@ -18,6 +18,14 @@ elided_named_lifetimes = "deny"
 unused_imports = "allow"
 unused_variables = "allow"
 
+[lints.clippy]
+module_inception = "allow"
+result_large_err = "allow"
+large_enum_variant = "allow"
+type_complexity = "allow"
+too_many_arguments = "allow"
+arc_with_non_send_sync = "allow"
+
 [dependencies]
 anyhow.workspace = true
 baml-ids.workspace = true
@@ -118,7 +126,7 @@ aws-config = { version = "=1.5.3", default-features = false, features = [] }
 # You will run into some crypto/install issues with vertex tests if you move further than this due to https://github.com/awslabs/aws-sdk-rust/releases/tag/release-2025-03-11 . The new version uses aws_lc_rs instead of ring.
 # but depending on ring and aws_lc_rs leads to issues.
 # https://github.com/rustls/rustls/issues/1877
-# https://github.com/awslabs/aws-sdk-rust/issues/1263 
+# https://github.com/awslabs/aws-sdk-rust/issues/1263
 # same goes for aws-config.
 # Potential migration https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#tlsProviders
 aws-sdk-bedrockruntime = { version = "=1.76.0", default-features = false, features = [
@@ -135,7 +143,7 @@ reqwest = { version = "0.12.12", features = [
   "native-tls-vendored",
   "native-tls-alpn",
 ] }
-# 
+#
 send_wrapper = { version = "0.6.0", features = ["futures"] }
 serde-wasm-bindgen = "0.6.5"
 uuid = { version = "1.8.0", features = ["v4", "serde", "js"] }
@@ -161,7 +169,7 @@ aws-config = "=1.5.3"
 # You will run into some crypto/install issues with vertex tests if you move further than this due to https://github.com/awslabs/aws-sdk-rust/releases/tag/release-2025-03-11 . The new version uses aws_lc_rs instead of ring.
 # but depending on ring and aws_lc_rs leads to issues.
 # https://github.com/rustls/rustls/issues/1877
-# https://github.com/awslabs/aws-sdk-rust/issues/1263 
+# https://github.com/awslabs/aws-sdk-rust/issues/1263
 # same goes for aws-config.
 # Potential migration https://docs.aws.amazon.com/sdk-for-rust/latest/dg/http.html#tlsProviders
 aws-sdk-bedrockruntime = { version = "=1.76.0", default-features = false, features = [

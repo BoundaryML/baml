@@ -84,8 +84,8 @@ impl<'db> Context<'db> {
     /// process, emitting unknown attribute errors when it is not the case.
     ///
     /// - When you are done validating an attribute, you must call
-    /// [`Self::discard_arguments()`] or [`Self::validate_visited_arguments()`].
-    /// Otherwise, [`Context`] will helpfully panic.
+    ///   [`Self::discard_arguments()`] or [`Self::validate_visited_arguments()`].
+    ///   Otherwise, [`Context`] will helpfully panic.
     pub(super) fn assert_all_attributes_processed(
         &mut self,
         ast_attributes: ast::AttributeContainer,

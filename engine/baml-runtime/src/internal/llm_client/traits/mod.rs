@@ -81,7 +81,7 @@ pub trait ToProviderMessage: WithClient {
 pub trait CompletionToProviderBody {
     fn completion_to_provider_body(
         &self,
-        prompt: &String,
+        prompt: &str,
     ) -> serde_json::Map<String, serde_json::Value>;
 }
 

@@ -166,7 +166,7 @@ fn expand_value(value: &str, env_vars: &HashMap<String, String>) -> Result<Strin
                 let mut var_name = String::new();
 
                 // Read until closing '}'
-                while let Some(c) = chars.next() {
+                for c in chars.by_ref() {
                     if c == '}' {
                         break;
                     }

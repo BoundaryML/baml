@@ -193,16 +193,18 @@ impl Signature {
             all_dependencies.extend(dependencies.iter().cloned());
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
             let mut has_implementation_hash = item.implementation_hash.is_some();
-            item.implementation_hash.map(|h| h.hash(&mut hasher));
+            if let Some(h) = item.implementation_hash {
+                h.hash(&mut hasher);
+            }
             for dep in dependencies {
                 let dep_hash = shallow_hash
                     .get(dep.as_str())
                     .ok_or(anyhow::anyhow!("Dependency: {} not found", dep))?;
-                dep_hash.implementation_hash.map(|h| {
+                if let Some(h) = dep_hash.implementation_hash {
                     has_implementation_hash = true;
                     dep.as_str().hash(&mut hasher);
                     h.hash(&mut hasher);
-                });
+                };
             }
             has_implementation_hash.then_some(hasher.finish())
         };

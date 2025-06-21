@@ -151,10 +151,7 @@ impl From<BamlValueWithFlags> for BamlValueWithMeta<FieldType> {
             BamlValueWithFlags::Float(v) => BamlValueWithMeta::Float(v.value, field_type),
             BamlValueWithFlags::Bool(v) => BamlValueWithMeta::Bool(v.value, field_type),
             BamlValueWithFlags::List(conditions, target, items) => BamlValueWithMeta::List(
-                items
-                    .into_iter()
-                    .map(|v| BamlValueWithMeta::from(v))
-                    .collect(),
+                items.into_iter().map(BamlValueWithMeta::from).collect(),
                 field_type,
             ),
             BamlValueWithFlags::Map(conditions, target, fields) => BamlValueWithMeta::Map(
@@ -191,10 +188,7 @@ impl From<BamlValueWithFlags> for BamlValueWithMeta<Vec<Flag>> {
             BamlValueWithFlags::Float(v) => BamlValueWithMeta::Float(v.value, v.flags.flags),
             BamlValueWithFlags::Bool(v) => BamlValueWithMeta::Bool(v.value, v.flags.flags),
             BamlValueWithFlags::List(conditions, target, items) => BamlValueWithMeta::List(
-                items
-                    .into_iter()
-                    .map(|v| BamlValueWithMeta::from(v))
-                    .collect(),
+                items.into_iter().map(BamlValueWithMeta::from).collect(),
                 conditions.flags,
             ),
             BamlValueWithFlags::Map(conditions, target, fields) => BamlValueWithMeta::Map(

@@ -78,7 +78,7 @@ pub fn typecheck_exprs(ctx: &mut Context<'_>) -> Result<()> {
         );
         typecheck_in_context(
             &ir,
-            &mut ctx.diagnostics,
+            ctx.diagnostics,
             &typing_context,
             &expr_fn_with_types,
         )?;
@@ -88,7 +88,7 @@ pub fn typecheck_exprs(ctx: &mut Context<'_>) -> Result<()> {
     for toplevel_assignment in ir.toplevel_assignments.iter() {
         typecheck_in_context(
             &ir,
-            &mut ctx.diagnostics,
+            ctx.diagnostics,
             &typing_context,
             &toplevel_assignment.elem.expr.elem,
         )?;
@@ -119,7 +119,7 @@ pub fn typecheck_in_context(
         Expr::FreeVar(var, (var_span, maybe_type)) => {
             if let Some(var_type) = maybe_type {
                 if let Some(ctx_type) = typing_context.get(var) {
-                    if !ir.is_subtype(&ctx_type, var_type) {
+                    if !ir.is_subtype(ctx_type, var_type) {
                         diagnostics.push_error(DatamodelError::new_validation_error(
                             "Type mismatch",
                             var_span.clone(),
@@ -157,7 +157,7 @@ pub fn typecheck_in_context(
                                 .1
                                 .as_ref()
                                 .map_or("?".to_string(), FieldType::to_string),
-                            arrow.return_type.to_string()
+                            arrow.return_type
                         ),
                         body.meta().0.clone(),
                     ));

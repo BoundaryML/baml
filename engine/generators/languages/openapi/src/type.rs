@@ -84,7 +84,7 @@ impl Serialize for AdditionalProperties {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
 pub struct OpenApiMeta {
     /// Pydantic includes this by default.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -103,17 +103,6 @@ pub struct OpenApiMeta {
     /// Nulls in OpenAPI are weird: https://swagger.io/docs/specification/data-models/data-types/
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub nullable: bool,
-}
-
-impl Default for OpenApiMeta {
-    fn default() -> Self {
-        Self {
-            nullable: false,
-            title: None,
-            r#enum: None,
-            r#const: None,
-        }
-    }
 }
 
 impl Hash for TypeOpenApi {
@@ -161,10 +150,10 @@ pub fn convert_ir_type(ir: &IntermediateRepr, ty: &Type) -> TypeOpenApi {
         _ => None,
     };
     let meta_enum = None;
-    let meta_const = match ty {
-        Type::Literal(literal, _) => Some(literal.to_string()),
-        _ => None,
-    };
+    // let meta_const = match ty {
+    //     Type::Literal(literal, _) => Some(literal.to_string()),
+    //     _ => None,
+    // };
     let meta_const = None;
     let meta = OpenApiMeta {
         nullable: ty.is_optional(),
@@ -305,7 +294,7 @@ fn type_def_for_checks(checks: Vec<String>) -> TypeOpenApi {
             (
                 check_name.clone(),
                 TypeOpenApi::Ref {
-                    r#ref: format!("#/components/schemas/Check"),
+                    r#ref: "#/components/schemas/Check".to_string(),
                     meta: OpenApiMeta::default(),
                 },
             )

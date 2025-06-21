@@ -20,7 +20,7 @@ impl TypeCoercer for TypeValue {
     ) -> Result<BamlValueWithFlags, ParsingError> {
         log::debug!(
             "scope: {scope} :: coercing to: {name} (current: {current})",
-            name = target.to_string(),
+            name = target,
             scope = ctx.display_scope(),
             current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
         );
