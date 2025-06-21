@@ -164,11 +164,7 @@ fn validate_type_constraints(ctx: &mut Context<'_>, field_type: &FieldType) {
                             let start_offset = span.start + range.start;
                             let end_offset = span.start + range.end;
 
-                            let span = Span::new(
-                                span.file.clone(),
-                                start_offset as usize,
-                                end_offset as usize,
-                            );
+                            let span = Span::new(span.file.clone(), start_offset, end_offset);
 
                             ctx.push_error(DatamodelError::new_validation_error(
                                 &format!("Error parsing jinja template: {}", e),
@@ -214,11 +210,7 @@ fn validate_type_constraints(ctx: &mut Context<'_>, field_type: &FieldType) {
                             let start_offset = span.start + range.start;
                             let end_offset = span.start + range.end;
 
-                            let span = Span::new(
-                                span.file.clone(),
-                                start_offset as usize,
-                                end_offset as usize,
-                            );
+                            let span = Span::new(span.file.clone(), start_offset, end_offset);
 
                             ctx.push_error(DatamodelError::new_validation_error(
                                 &format!("Error parsing jinja template: {}", e),

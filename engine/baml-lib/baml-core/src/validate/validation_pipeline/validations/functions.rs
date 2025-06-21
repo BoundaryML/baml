@@ -68,11 +68,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                     let start_offset = pspan.start + range.start;
                     let end_offset = pspan.start + range.end;
 
-                    let span = Span::new(
-                        pspan.file.clone(),
-                        start_offset as usize,
-                        end_offset as usize,
-                    );
+                    let span = Span::new(pspan.file.clone(), start_offset, end_offset);
 
                     ctx.push_error(DatamodelError::new_validation_error(
                         &format!("Error parsing jinja template: {}", e),
@@ -190,11 +186,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                     let start_offset = pspan.start + range.start;
                     let end_offset = pspan.start + range.end;
 
-                    let span = Span::new(
-                        pspan.file.clone(),
-                        start_offset as usize,
-                        end_offset as usize,
-                    );
+                    let span = Span::new(pspan.file.clone(), start_offset, end_offset);
 
                     ctx.push_error(DatamodelError::new_validation_error(
                         &format!("Error parsing jinja template: {}", e),
