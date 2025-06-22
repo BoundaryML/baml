@@ -461,9 +461,9 @@ impl Expression {
                     ..
                 },
             ) => {
-                id1.assert_eq_up_to_span(&id2);
-                it1.assert_eq_up_to_span(&it2);
-                d1.assert_eq_up_to_span(&d2);
+                id1.assert_eq_up_to_span(id2);
+                it1.assert_eq_up_to_span(it2);
+                d1.assert_eq_up_to_span(d2);
             }
             (ForLoop { .. }, _) => panic!("Types do not match: {self:?} and {other:?}"),
         }

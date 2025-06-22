@@ -3,7 +3,7 @@ use std::cmp;
 use lsp_types::{Position, Range, TextDocumentItem};
 use regex::Regex;
 
-const MAX_SAFE_CHAR: u32 = std::u32::MAX; // You can adjust this to mimic your TS MAX_SAFE_VALUE_i32
+const MAX_SAFE_CHAR: u32 = u32::MAX; // You can adjust this to mimic your TS MAX_SAFE_VALUE_i32
 
 /// Returns the full range of the document, from the beginning (line 0, character 0)
 /// to the "end" (last line with a very large character position).
@@ -35,7 +35,7 @@ pub fn full_document_range(contents: &str) -> Range {
 
 /// Returns the text of the current line (by number) from the document.
 /// If the line does not exist, an empty string is returned.
-pub fn get_current_line<'a>(contents: &'a str, line: u32) -> &'a str {
+pub fn get_current_line(contents: &str, line: u32) -> &str {
     contents.lines().nth(line as usize).unwrap_or("")
 }
 
@@ -174,9 +174,8 @@ pub fn get_symbol_before_position(contents: &str, position: &Position) -> String
 pub fn get_position_from_index(document: &TextDocumentItem, index: usize) -> Position {
     let mut line: u32 = 0;
     let mut character: u32 = 0;
-    let mut count = 0;
 
-    for c in document.text.chars() {
+    for (count, c) in document.text.chars().enumerate() {
         if count >= index {
             break;
         }
@@ -186,7 +185,6 @@ pub fn get_position_from_index(document: &TextDocumentItem, index: usize) -> Pos
         } else {
             character += 1;
         }
-        count += 1;
     }
 
     Position { line, character }

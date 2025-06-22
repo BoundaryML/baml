@@ -126,7 +126,7 @@ pub enum LiteralValue {
 }
 
 impl LiteralValue {
-    pub fn serialize_type(&self, pkg: &CurrentRenderPackage) -> String {
+    pub fn serialize_type(&self, _pkg: &CurrentRenderPackage) -> String {
         match self {
             LiteralValue::String(s) => s.0.clone(),
             LiteralValue::Int(i) => i.to_string(),
@@ -177,7 +177,9 @@ pub enum TypePy {
 
 impl TypePy {
     pub fn with_meta(mut self, meta: TypeMetaPy) -> Self {
-        self.meta_mut().map(|m| *m = meta);
+        if let Some(m) = self.meta_mut() {
+            *m = meta;
+        }
         self
     }
 

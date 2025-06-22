@@ -81,8 +81,8 @@ impl PromptRenderer {
             allow_partials,
         )?;
         let scoped_ir = ScopedIr::new(ir, ctx);
-        let res = parsed_value_to_response(&scoped_ir, parsed, allow_partials);
-        res
+
+        parsed_value_to_response(&scoped_ir, parsed, allow_partials)
     }
 
     pub fn render_prompt(

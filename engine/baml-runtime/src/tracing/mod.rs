@@ -229,7 +229,7 @@ impl baml_log::Loggable for BamlEventLoggable<'_> {
         let function_name = format!("Function {}", self.function_name).purple();
         match self.data.as_ref() {
             Ok(response) => {
-                let response = response.visualize(max_message_length.clone());
+                let response = response.visualize(*max_message_length);
                 format!("{}:\n{}", function_name, response)
             }
             Err(error) => {
@@ -285,9 +285,7 @@ impl BamlEventLoggable<'_> {
                             .result_with_constraints()
                             .as_ref()
                             .and_then(|r| r.as_ref().ok())
-                            .map(|v| {
-                                serde_json::to_value(&v.serialize_final()).unwrap_or_default()
-                            }),
+                            .map(|v| serde_json::to_value(v.serialize_final()).unwrap_or_default()),
                         error: None,
                     },
                     LLMResponse::LLMFailure(err) => BamlEventJson {
@@ -462,7 +460,7 @@ impl BamlTracer {
             EvaluationContext {
                 tags: global_tags
                     .into_iter()
-                    .chain(last_tags.into_iter())
+                    .chain(last_tags)
                     .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
                     .collect(),
             },
@@ -705,9 +703,9 @@ impl BamlTracer {
         env_vars: &std::collections::HashMap<String, String>,
     ) -> bool {
         // Try to create a new APIWrapper from the env vars
-        if let Ok(new_api_wrapper) = crate::tracing::api_wrapper::APIWrapper::from_env_vars(
-            env_vars.iter().map(|(k, v)| (k, v)),
-        ) {
+        if let Ok(new_api_wrapper) =
+            crate::tracing::api_wrapper::APIWrapper::from_env_vars(env_vars.iter())
+        {
             // Compare the config in the current APIWrapper to the new one
             self.options.config == new_api_wrapper.config
         } else {
@@ -716,7 +714,7 @@ impl BamlTracer {
     }
 
     pub fn tracing_project_id(&self) -> Option<String> {
-        self.options.project_id().map(|s| s.to_string())
+        self.options.project_id().map(str::to_string)
     }
 }
 
@@ -909,7 +907,7 @@ impl<T: ToLogSchema> ToLogSchema for Result<T> {
         match self {
             Ok(r) => r.to_log_schema(api, event_chain, tags, call),
             Err(e) => LogSchema {
-                project_id: api.project_id().map(|s| s.to_string()),
+                project_id: api.project_id().map(str::to_string),
                 event_type: api_wrapper::core_types::EventType::FuncCode,
                 root_event_id: event_chain.first().map(|s| s.call_id).unwrap().to_string(),
                 event_id: event_chain.last().map(|s| s.call_id).unwrap().to_string(),
@@ -941,7 +939,7 @@ impl ToLogSchema for Option<BamlValue> {
         call: TracingCall,
     ) -> LogSchema {
         LogSchema {
-            project_id: api.project_id().map(|s| s.to_string()),
+            project_id: api.project_id().map(str::to_string),
             event_type: api_wrapper::core_types::EventType::FuncCode,
             root_event_id: event_chain.first().map(|s| s.call_id).unwrap().to_string(),
             event_id: event_chain.last().map(|s| s.call_id).unwrap().to_string(),
@@ -985,7 +983,7 @@ impl ToLogSchema for FunctionResult {
         call: TracingCall,
     ) -> LogSchema {
         LogSchema {
-            project_id: api.project_id().map(|s| s.to_string()),
+            project_id: api.project_id().map(str::to_string),
             event_type: api_wrapper::core_types::EventType::FuncLlm,
             root_event_id: event_chain.first().map(|s| s.call_id).unwrap().to_string(),
             event_id: event_chain.last().map(|s| s.call_id).unwrap().to_string(),

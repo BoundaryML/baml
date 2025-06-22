@@ -138,6 +138,7 @@ enum GetOrCreateProjectResult {
     ToBeCreated(String),
 }
 
+#[allow(clippy::await_holding_refcell_ref)] // TODO: Figure out how to fix this.
 impl Deployer {
     async fn get_or_create_project(&self) -> Result<GetOrCreateProjectResult> {
         let propel_auth_client = super::propelauth::PropelAuthClient::new()?;
@@ -285,6 +286,7 @@ generator cloud {{
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(false) // This is the default. Linter complains if not added.
             .open(&generator_abspath)
             .context(format!("Failed to open {}", generator_abspath.display()))?;
         writeln!(file, "{}", new_generators).context(format!(

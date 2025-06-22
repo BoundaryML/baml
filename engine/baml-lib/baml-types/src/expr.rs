@@ -684,63 +684,62 @@ impl<'a, T: 'a> Iterator for ExprIterator<'a, T> {
     type Item = &'a Expr<T>;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if let Some(expr) = self.stack.pop_back() {
-            // For exprs with sub-exprs, push the sub-exprs onto the stack.
-            match expr {
-                Expr::Atom(_) => {}
-                Expr::List(items, _) => {
-                    for item in items.iter() {
-                        self.stack.push_back(item);
-                    }
+        let expr = self.stack.pop_back()?;
+
+        // For exprs with sub-exprs, push the sub-exprs onto the stack.
+        match expr {
+            Expr::Atom(_) => {}
+            Expr::List(items, _) => {
+                for item in items.iter() {
+                    self.stack.push_back(item);
                 }
-                Expr::Map(entries, _) => {
-                    for (_, value) in entries.iter() {
-                        self.stack.push_back(value);
-                    }
-                }
-                Expr::ClassConstructor { fields, spread, .. } => {
-                    for (_, value) in fields.iter() {
-                        self.stack.push_back(value);
-                    }
-                    if let Some(spread) = spread {
-                        self.stack.push_back(spread);
-                    }
-                }
-                Expr::LLMFunction(_, _, _) => {}
-                Expr::FreeVar(_, _) => {}
-                Expr::BoundVar(_, _) => {}
-                Expr::Lambda(_, body, _) => {
-                    self.stack.push_back(body);
-                }
-                Expr::App { func, args, .. } => {
-                    self.stack.push_back(func);
-                    self.stack.push_back(args);
-                }
-                Expr::If(cond, then, else_, _) => {
-                    self.stack.push_back(cond);
-                    self.stack.push_back(then);
-                    if let Some(else_) = else_ {
-                        self.stack.push_back(else_);
-                    }
-                }
-                Expr::Let(_, expr, body, _) => {
-                    self.stack.push_back(expr);
-                    self.stack.push_back(body);
-                }
-                Expr::ArgsTuple(args, _) => {
-                    for arg in args.iter() {
-                        self.stack.push_back(arg);
-                    }
-                }
-                Expr::ForLoop { iterable, body, .. } => {
-                    self.stack.push_back(iterable);
-                    self.stack.push_back(body);
-                }
-                Expr::Builtin(_, _) => {}
             }
-            Some(&expr)
-        } else {
-            None
+            Expr::Map(entries, _) => {
+                for (_, value) in entries.iter() {
+                    self.stack.push_back(value);
+                }
+            }
+            Expr::ClassConstructor { fields, spread, .. } => {
+                for (_, value) in fields.iter() {
+                    self.stack.push_back(value);
+                }
+                if let Some(spread) = spread {
+                    self.stack.push_back(spread);
+                }
+            }
+            Expr::LLMFunction(_, _, _) => {}
+            Expr::FreeVar(_, _) => {}
+            Expr::BoundVar(_, _) => {}
+            Expr::Lambda(_, body, _) => {
+                self.stack.push_back(body);
+            }
+            Expr::App { func, args, .. } => {
+                self.stack.push_back(func);
+                self.stack.push_back(args);
+            }
+            Expr::If(cond, then, else_, _) => {
+                self.stack.push_back(cond);
+                self.stack.push_back(then);
+                if let Some(else_) = else_ {
+                    self.stack.push_back(else_);
+                }
+            }
+            Expr::Let(_, expr, body, _) => {
+                self.stack.push_back(expr);
+                self.stack.push_back(body);
+            }
+            Expr::ArgsTuple(args, _) => {
+                for arg in args.iter() {
+                    self.stack.push_back(arg);
+                }
+            }
+            Expr::ForLoop { iterable, body, .. } => {
+                self.stack.push_back(iterable);
+                self.stack.push_back(body);
+            }
+            Expr::Builtin(_, _) => {}
         }
+
+        Some(expr)
     }
 }

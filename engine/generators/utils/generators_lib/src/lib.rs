@@ -11,22 +11,22 @@ pub fn generate_sdk(
     let res = match gen.client_type {
         GeneratorOutputType::Go => {
             use generators_go::GoLanguageFeatures;
-            let features = GoLanguageFeatures::default();
+            let features = GoLanguageFeatures;
             features.generate_sdk(ir, gen)?
         }
         GeneratorOutputType::PythonPydantic | GeneratorOutputType::PythonPydanticV1 => {
             use generators_python::PyLanguageFeatures;
-            let features = PyLanguageFeatures::default();
+            let features = PyLanguageFeatures;
             features.generate_sdk(ir, gen)?
         }
         GeneratorOutputType::OpenApi => {
             use generators_openapi::OpenApiLanguageFeatures;
-            let features = OpenApiLanguageFeatures::default();
+            let features = OpenApiLanguageFeatures;
             features.generate_sdk(ir, gen)?
         }
         GeneratorOutputType::Typescript => {
             use generators_typescript::TsLanguageFeatures;
-            let features = TsLanguageFeatures::default();
+            let features = TsLanguageFeatures;
             features.generate_sdk(ir, gen)?
         }
         GeneratorOutputType::RubySorbet => {

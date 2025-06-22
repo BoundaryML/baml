@@ -12,6 +12,10 @@ elided_named_lifetimes = "deny"
 unused_imports = "allow"
 unused_variables = "allow"
 
+[lints.clippy]
+large_enum_variant = "allow"
+type_complexity = "allow"
+
 [dependencies]
 anyhow.workspace = true
 baml-derive.workspace = true

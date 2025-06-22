@@ -8,7 +8,7 @@ pub struct Package {
 
 impl Package {
     fn new(package: &str) -> Self {
-        let parts: Vec<_> = package.split('.').map(|s| s.to_string()).collect();
+        let parts: Vec<_> = package.split('.').map(str::to_string).collect();
         if parts.is_empty() {
             panic!("Package cannot be empty");
         }

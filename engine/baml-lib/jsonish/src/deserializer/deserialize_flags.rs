@@ -121,7 +121,7 @@ impl DeserializerConditions {
     }
 }
 
-pub fn constraint_results(flags: &Vec<Flag>) -> Vec<(String, JinjaExpression, bool)> {
+pub fn constraint_results(flags: &[Flag]) -> Vec<(String, JinjaExpression, bool)> {
     flags
         .iter()
         .filter_map(|flag| match flag {

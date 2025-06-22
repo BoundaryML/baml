@@ -34,7 +34,7 @@ impl Decode for BamlFunctionArguments {
             .collectors()
             .map(|c| {
                 c.iter()
-                    .map(|c| CollectorWrapper::decode(c))
+                    .map(CollectorWrapper::decode)
                     .collect::<Result<_, _>>()
             })
             .transpose()?;

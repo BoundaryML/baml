@@ -22,7 +22,7 @@ impl OpenApiUserData {
             .map(|function| {
                 (
                     FunctionName(function.name().to_string()),
-                    convert_ir_function(&ir, &function.elem()),
+                    convert_ir_function(ir, function.elem()),
                 )
             })
             .collect();
@@ -38,7 +38,7 @@ impl OpenApiUserData {
             .chain(ir.walk_classes().map(|class| {
                 (
                     TypeName(class.name().to_string()),
-                    convert_ir_class(&ir, &class.item.elem),
+                    convert_ir_class(ir, &class.item.elem),
                 )
             }))
             .collect();
@@ -75,18 +75,14 @@ impl OpenApiUserData {
                 })
                 .collect(),
             components: Components {
-                requestBodies: self
+                request_bodies: self
                     .functions
                     .iter()
                     .map(|(name, func)| {
                         let mut schema = func.return_type.clone();
                         schema.meta_mut().title = Some(format!("{}Request", name.0));
-                        let mut properties: Vec<(String, bool, TypeOpenApi)> = func
-                            .args
-                            .clone()
-                            .into_iter()
-                            .map(|(name, is_optional, ty)| (name, is_optional, ty))
-                            .collect();
+                        let mut properties: Vec<(String, bool, TypeOpenApi)> =
+                            func.args.clone().into_iter().collect();
                         properties.sort_by_key(|(name, _, _)| name.clone());
                         let component_request_body =
                             ComponentRequestBody {
@@ -158,13 +154,13 @@ mod class {
                 if field.elem.r#type.elem.is_optional() {
                     (
                         field.elem.name.clone(),
-                        convert_ir_type(&ir, &field.elem.r#type.elem),
+                        convert_ir_type(ir, &field.elem.r#type.elem),
                     )
                 } else {
                     required.insert(field.elem.name.clone());
                     (
                         field.elem.name.clone(),
-                        convert_ir_type(&ir, &field.elem.r#type.elem),
+                        convert_ir_type(ir, &field.elem.r#type.elem),
                     )
                 }
             })
@@ -218,7 +214,7 @@ mod function {
                 (
                     arg_name.clone(),
                     arg_type.is_optional(),
-                    convert_ir_type(&ir, &arg_type),
+                    convert_ir_type(ir, arg_type),
                 )
             })
             .collect();
@@ -226,7 +222,7 @@ mod function {
             name: function.name.clone(),
             documentation: None,
             args,
-            return_type: convert_ir_type(&ir, &function.output),
+            return_type: convert_ir_type(ir, &function.output),
         }
     }
 
@@ -281,7 +277,7 @@ mod tests {
               model gpt-4
               api_key env.OPENAI_API_KEY
             }
-          } 
+          }
 
         "##,
         )

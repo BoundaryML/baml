@@ -27,7 +27,7 @@ impl TypeCoercer for FieldType {
             Some(crate::jsonish::Value::AnyOf(candidates, primitive)) => {
                 log::debug!(
                     "scope: {scope} :: coercing to: {name} (current: {current})",
-                    name = target.to_string(),
+                    name = target,
                     scope = ctx.display_scope(),
                     current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
                 );
@@ -57,7 +57,7 @@ impl TypeCoercer for FieldType {
             Some(crate::jsonish::Value::Markdown(_t, v, _completion)) => {
                 log::debug!(
                     "scope: {scope} :: coercing to: {name} (current: {current})",
-                    name = target.to_string(),
+                    name = target,
                     scope = ctx.display_scope(),
                     current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
                 );
@@ -76,7 +76,7 @@ impl TypeCoercer for FieldType {
             Some(crate::jsonish::Value::FixedJson(v, fixes)) => {
                 log::debug!(
                     "scope: {scope} :: coercing to: {name} (current: {current})",
-                    name = target.to_string(),
+                    name = target,
                     scope = ctx.display_scope(),
                     current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
                 );
@@ -103,7 +103,7 @@ impl TypeCoercer for FieldType {
                 FieldType::Arrow(_, _) => Err(ctx.error_internal("Arrow type not supported")),
             },
         };
-        if target.meta().constraints.len() > 0 {
+        if !target.meta().constraints.is_empty() {
             if let Ok(coerced_value) = result.as_mut() {
                 let constrainted_results = run_user_checks(&coerced_value.clone().into(), self)
                     .map_err(|e| ParsingError {
@@ -222,7 +222,7 @@ impl DefaultValue for FieldType {
         // TODO (Greg): Get rid of string-matching for this.
         fn has_assert_failure(error: &ParsingError) -> bool {
             error.reason.contains("Assertions failed.")
-                || error.causes.iter().any(|c| has_assert_failure(c))
+                || error.causes.iter().any(has_assert_failure)
         }
 
         // If there are no constraints, we can just return the unasserted value.

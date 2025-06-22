@@ -53,7 +53,7 @@ impl super::ShallowSignature for Client {
         Some(ClientImplementationHash {
             name: self.elem.name.as_str(),
             provider: &self.elem.provider,
-            retry_policy: self.elem.retry_policy_id.as_ref().map(|id| id.as_str()),
+            retry_policy: self.elem.retry_policy_id.as_deref(),
             options: &self.elem.options,
         })
     }

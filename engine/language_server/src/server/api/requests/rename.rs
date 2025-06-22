@@ -67,7 +67,6 @@ impl SyncRequestHandler for Rename {
             let runtime = guard.baml_project.runtime(HashMap::new());
             let rt = runtime
                 .as_ref()
-                .clone()
                 .map_err(|_| anyhow::anyhow!("Failed to get runtime"))
                 .internal_error()?;
             log::info!("------------ RUNTIME 2----------");
@@ -101,7 +100,7 @@ impl SyncRequestHandler for Rename {
 
             let mut changes: HashMap<Url, Vec<TextEdit>> = HashMap::new();
 
-            symbol_locations.iter().try_for_each(|ref loc| {
+            symbol_locations.iter().try_for_each(|loc| {
                 let loc_url = PathBuf::from(&loc.uri);
                 let range = lsp_types::Range::new(
                     lsp_types::Position::new(loc.start_line as u32, loc.start_character as u32),
@@ -115,7 +114,7 @@ impl SyncRequestHandler for Rename {
                     new_text: new_symbol.clone(),
                 };
 
-                let entry = changes.entry(symbol_doc_key.url()).or_insert_with(Vec::new);
+                let entry = changes.entry(symbol_doc_key.url()).or_default();
                 entry.push(text_edit);
                 Ok(())
             })?;

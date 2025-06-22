@@ -87,8 +87,8 @@ impl WithChat for OpenAIClient {
         let model_name = self
             .request_options()
             .get("model")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string);
         make_parsed_request(
             self,
             model_name,
@@ -185,8 +185,8 @@ impl WithStreamChat for OpenAIClient {
         let model_name = self
             .request_options()
             .get("model")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string);
         crate::internal::llm_client::primitive::stream_request::make_stream_request(
             self,
             either::Either::Right(prompt),
@@ -468,16 +468,14 @@ impl ToProviderMessageExt for OpenAIClient {
 impl CompletionToProviderBody for OpenAIClient {
     fn completion_to_provider_body(
         &self,
-        prompt: &String,
+        prompt: &str,
     ) -> serde_json::Map<String, serde_json::Value> {
         convert_completion_prompt_to_body(prompt)
     }
 }
 
 // converts completion prompt into JSON body for request
-fn convert_completion_prompt_to_body(
-    prompt: &String,
-) -> serde_json::Map<String, serde_json::Value> {
+fn convert_completion_prompt_to_body(prompt: &str) -> serde_json::Map<String, serde_json::Value> {
     let mut map = serde_json::Map::new();
     map.insert("prompt".into(), json!(prompt));
     map

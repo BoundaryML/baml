@@ -410,7 +410,7 @@ pub enum LogError {
     Config(String),
 }
 
-/// JSON-serializable log entry
+// /// JSON-serializable log entry
 // #[derive(Serialize)]
 // struct LogEntry<'a> {
 //     /// Timestamp in ISO 8601 format
@@ -463,10 +463,8 @@ impl ConfigSetting<Level> for LogLevel {
             Ok(mut config) => {
                 let old_level = config.level;
                 config.level = value;
-                if old_level != value {
-                    if value != Level::Off {
-                        println!("[BAML] Log level set to {}", value.colored());
-                    }
+                if old_level != value && value != Level::Off {
+                    println!("[BAML] Log level set to {}", value.colored());
                 }
                 Ok(())
             }
@@ -624,11 +622,7 @@ pub fn log_internal_once(
     file: Option<&str>,
     line: Option<u32>,
 ) {
-    let key = (
-        module_path.map(|s| s.to_string()),
-        file.map(|s| s.to_string()),
-        line,
-    );
+    let key = (module_path.map(String::from), file.map(String::from), line);
 
     let mut logged_lines = LOGGED_LINES.write().unwrap();
     if !logged_lines.contains(&key) {
@@ -646,7 +640,7 @@ pub fn log_internal(
     line: Option<u32>,
 ) {
     // Ensure the logger is initialized
-    let _ = INIT.call_once(|| {
+    INIT.call_once(|| {
         if let Ok(mut config) = CONFIG.write() {
             config.initialized = true;
         }
@@ -670,7 +664,7 @@ pub fn log_internal(
         .format("%Y-%m-%dT%H:%M:%S%.3f")
         .to_string();
     // Log the message
-    let _ = logger.log(now, level, message, module_path, file, line);
+    logger.log(now, level, message, module_path, file, line);
 }
 
 impl Logger {
@@ -735,7 +729,7 @@ pub fn log_event_internal<T: Loggable>(
     _line: Option<u32>,
 ) {
     // Ensure the logger is initialized
-    let _ = INIT.call_once(|| {
+    INIT.call_once(|| {
         if let Ok(mut config) = CONFIG.write() {
             config.initialized = true;
         }

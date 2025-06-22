@@ -11,7 +11,7 @@ fn is_type(ty: &Type, target: &str) -> bool {
             .path
             .segments
             .last()
-            .map_or(false, |seg| seg.ident == target),
+            .is_some_and(|seg| seg.ident == target),
         _ => false,
     }
 }

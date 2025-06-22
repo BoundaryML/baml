@@ -328,11 +328,13 @@ impl TypeCoercer for Class {
                                         .iter()
                                         .find(|(name, ..)| name.real_name() == k)
                                         .map(|f| f.1.clone().as_optional())
-                                        .expect(&format!(
-                                            "Field {} not found in class {}",
-                                            k,
-                                            self.name.real_name()
-                                        )),
+                                        .unwrap_or_else(|| {
+                                            panic!(
+                                                "Field {} not found in class {}",
+                                                k,
+                                                self.name.real_name()
+                                            )
+                                        }),
                                     DeserializerConditions::new().with_flag(Flag::Incomplete),
                                 ),
                             ),
@@ -343,11 +345,13 @@ impl TypeCoercer for Class {
                                         .iter()
                                         .find(|(name, ..)| name.real_name() == k)
                                         .map(|f| f.1.clone().as_optional())
-                                        .expect(&format!(
-                                            "Field {} not found in class {}",
-                                            k,
-                                            self.name.real_name()
-                                        )),
+                                        .unwrap_or_else(|| {
+                                            panic!(
+                                                "Field {} not found in class {}",
+                                                k,
+                                                self.name.real_name()
+                                            )
+                                        }),
                                     DeserializerConditions::new()
                                         .with_flag(Flag::DefaultButHadUnparseableValue(e))
                                         .with_flag(Flag::Incomplete),

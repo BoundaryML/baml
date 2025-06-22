@@ -1,3 +1,5 @@
+//! A simple text document structure similar to `vscode-languageserver-textdocument`
+
 use std::{
     collections::HashSet,
     fs, io,
@@ -5,8 +7,6 @@ use std::{
 };
 
 use lsp_types::{TextDocumentItem, Url};
-
-/// A simple text document structure similar to `vscode-languageserver-textdocument`
 
 /// Walks up from `file_path` until it finds a directory named `baml_src`.
 ///
@@ -82,10 +82,9 @@ pub fn gather_files(root_path: &Path, debug: bool) -> io::Result<Vec<PathBuf>> {
             if debug {
                 tracing::error!("Max directory limit reached ({})", max_dirs);
             }
-            return Err(io::Error::new(
-                io::ErrorKind::Other,
-                format!("Directory failed to load after {} iterations", iterations),
-            ));
+            return Err(io::Error::other(format!(
+                "Directory failed to load after {iterations} iterations"
+            )));
         }
         iterations += 1;
 
@@ -149,7 +148,7 @@ pub fn convert_to_text_document(file_path: &Path) -> io::Result<TextDocumentItem
     };
 
     let url = Url::from_file_path(file_path)
-        .map_err(|_| io::Error::new(io::ErrorKind::Other, "Invalid file path for URI"))?
+        .map_err(|_| io::Error::other("Invalid file path for URI"))?
         .to_string();
 
     Ok(TextDocumentItem {

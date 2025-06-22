@@ -97,9 +97,8 @@ impl WasmChatMessagePart {
     pub fn json_meta(&self, prompt: &WasmPrompt) -> Option<String> {
         match self.part.meta() {
             Some(meta) => {
-                let (allowed, skipped): (Vec<_>, Vec<_>) = meta
-                    .into_iter()
-                    .partition(|(k, _)| prompt.allowed.is_allowed(k));
+                let (allowed, skipped): (Vec<_>, Vec<_>) =
+                    meta.iter().partition(|(k, _)| prompt.allowed.is_allowed(k));
 
                 let allowed: HashMap<_, _> = allowed.into_iter().collect();
                 let skipped: HashMap<_, _> = skipped.into_iter().collect();
@@ -126,14 +125,13 @@ impl WasmChatMessagePart {
 
     #[wasm_bindgen]
     pub fn as_text(&self) -> Option<String> {
-        self.part.as_text().map(|s| s.clone())
+        self.part.as_text().cloned()
     }
 
     #[wasm_bindgen]
     pub fn as_media(&self) -> Option<WasmChatMessagePartMedia> {
-        let Some(m) = self.part.as_media() else {
-            return None;
-        };
+        let m = self.part.as_media()?;
+
         Some(match &m.content {
             BamlMediaContent::Url(u) => WasmChatMessagePartMedia {
                 r#type: WasmChatMessagePartMediaType::Url,

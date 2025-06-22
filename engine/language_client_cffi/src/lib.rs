@@ -102,10 +102,8 @@ extern "C" fn register_callbacks(callback_fn: CallbackFn, error_callback_fn: Cal
     let _ = env_logger::try_init_from_env(env_logger::Env::new().filter("BAML_INTERNAL_LOG"));
 
     // Create a global runtime or pass it along as needed.
-    unsafe {
-        let _ = RESULT_CALLBACK_FN.set(std::mem::transmute(callback_fn));
-        let _ = ERROR_CALLBACK_FN.set(std::mem::transmute(error_callback_fn));
-    }
+    let _ = RESULT_CALLBACK_FN.set(callback_fn);
+    let _ = ERROR_CALLBACK_FN.set(error_callback_fn);
 }
 
 fn safe_trigger_callback(

@@ -242,7 +242,7 @@ fn relevant_data_models<'a>(
             } => {
                 if checked_types.insert(output.to_string()) {
                     let overrides = ctx.enum_overrides.get(enm);
-                    let walker = ir.find_enum(&enm);
+                    let walker = ir.find_enum(enm);
                     let real_values = walker
                         .as_ref()
                         .map(|e| e.walk_values().map(|v| v.name().to_string()))
@@ -258,7 +258,7 @@ fn relevant_data_models<'a>(
                         .collect::<IndexSet<_>>()
                         .into_iter()
                         .map(|value| {
-                            let meta = find_enum_value(&enm, &value, &walker, &overrides, ctx)?;
+                            let meta = find_enum_value(enm, &value, &walker, &overrides, ctx)?;
                             Ok(meta)
                         })
                         .filter_map(|v| v.transpose())
@@ -342,7 +342,7 @@ fn relevant_data_models<'a>(
                         .into_iter()
                         .map(|field| {
                             let meta =
-                                find_existing_class_field(&cls, &field, &walker, &overrides, ctx)?;
+                                find_existing_class_field(cls, &field, &walker, &overrides, ctx)?;
                             Ok(meta)
                         });
 
@@ -350,7 +350,7 @@ fn relevant_data_models<'a>(
                         .map(|o| {
                             o.new_fields
                                 .keys()
-                                .map(|k| find_new_class_field(&cls, k, &walker, o, ctx))
+                                .map(|k| find_new_class_field(cls, k, &walker, o, ctx))
                         })
                         .into_iter()
                         .flatten();

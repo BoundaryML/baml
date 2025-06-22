@@ -38,7 +38,7 @@ impl FormatArgs {
         };
 
         for path in paths.iter() {
-            let source = fs::read_to_string(&path)?;
+            let source = fs::read_to_string(path)?;
             match format_schema(
                 &source,
                 FormatOptions {
@@ -50,7 +50,7 @@ impl FormatArgs {
                     if self.dry_run {
                         println!("{}", formatted);
                     } else {
-                        fs::write(&path, formatted)?;
+                        fs::write(path, formatted)?;
                     }
                 }
                 Err(e) => {

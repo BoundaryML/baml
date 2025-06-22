@@ -6,8 +6,8 @@ use baml_types::{BamlValueWithMeta, Constraint, HasFieldType};
 use super::{IntoRpcEvent, TypeLookup};
 
 impl<'a, T: HasFieldType> IntoRpcEvent<'a, runtime_api::BamlValue<'a>> for BamlValueWithMeta<T> {
-    fn into_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> runtime_api::BamlValue<'a> {
-        let type_ref = self.field_type().into_rpc_event(lookup);
+    fn to_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> runtime_api::BamlValue<'a> {
+        let type_ref = self.field_type().to_rpc_event(lookup);
         let value = match self {
             BamlValueWithMeta::String(s, _) => {
                 baml_rpc::runtime_api::ValueContent::String(Cow::Borrowed(s))
@@ -18,19 +18,19 @@ impl<'a, T: HasFieldType> IntoRpcEvent<'a, runtime_api::BamlValue<'a>> for BamlV
             BamlValueWithMeta::Map(index_map, _) => baml_rpc::runtime_api::ValueContent::Map(
                 index_map
                     .iter()
-                    .map(|(k, v)| (k.clone(), v.into_rpc_event(lookup)))
+                    .map(|(k, v)| (k.clone(), v.to_rpc_event(lookup)))
                     .collect(),
             ),
             BamlValueWithMeta::List(baml_value_with_metas, _) => {
                 baml_rpc::runtime_api::ValueContent::List(
                     baml_value_with_metas
                         .iter()
-                        .map(|v| v.into_rpc_event(lookup))
+                        .map(|v| v.to_rpc_event(lookup))
                         .collect(),
                 )
             }
             BamlValueWithMeta::Media(baml_media, _) => {
-                baml_rpc::runtime_api::ValueContent::Media(baml_media.into_rpc_event(lookup))
+                baml_rpc::runtime_api::ValueContent::Media(baml_media.to_rpc_event(lookup))
             }
             BamlValueWithMeta::Enum(name, value, _) => baml_rpc::runtime_api::ValueContent::Enum {
                 value: value.clone(),
@@ -39,7 +39,7 @@ impl<'a, T: HasFieldType> IntoRpcEvent<'a, runtime_api::BamlValue<'a>> for BamlV
                 baml_rpc::runtime_api::ValueContent::Class {
                     fields: index_map
                         .iter()
-                        .map(|(k, v)| (k.clone(), v.into_rpc_event(lookup)))
+                        .map(|(k, v)| (k.clone(), v.to_rpc_event(lookup)))
                         .collect(),
                 }
             }
@@ -50,8 +50,8 @@ impl<'a, T: HasFieldType> IntoRpcEvent<'a, runtime_api::BamlValue<'a>> for BamlV
     }
 }
 
-impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::FieldType {
-    fn into_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> baml_rpc::TypeReference {
+impl<'a> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::FieldType {
+    fn to_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> baml_rpc::TypeReference {
         let simplified = self.simplify();
         use baml_rpc::{LiteralTypeDefinition, MediaTypeDefinition, TypeMetadata, TypeReference};
         let mut base_ref = match simplified {
@@ -70,7 +70,7 @@ impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::FieldType
             },
             baml_types::FieldType::Enum { name, .. } => lookup
                 .type_lookup(name.as_str())
-                .map(|id| TypeReference::enum_type(id))
+                .map(TypeReference::enum_type)
                 .unwrap_or(TypeReference::Unknown),
             baml_types::FieldType::Literal(literal_value, _) => {
                 TypeReference::literal(match literal_value {
@@ -81,35 +81,32 @@ impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::FieldType
             }
             baml_types::FieldType::Class { name, .. } => lookup
                 .type_lookup(name.as_str())
-                .map(|id| TypeReference::class(id))
+                .map(TypeReference::class)
                 .unwrap_or(TypeReference::Unknown),
             baml_types::FieldType::List(field_type, _) => {
-                TypeReference::list(field_type.into_rpc_event(lookup))
+                TypeReference::list(field_type.to_rpc_event(lookup))
             }
             baml_types::FieldType::Map(field_type, field_type1, _) => TypeReference::map(
-                field_type.into_rpc_event(lookup),
-                field_type1.into_rpc_event(lookup),
+                field_type.to_rpc_event(lookup),
+                field_type1.to_rpc_event(lookup),
             ),
             baml_types::FieldType::Union(field_types, _) => TypeReference::union(
                 field_types
                     .iter_include_null()
                     .into_iter()
-                    .map(|t| t.into_rpc_event(lookup))
+                    .map(|t| t.to_rpc_event(lookup))
                     .collect(),
             ),
-            baml_types::FieldType::Tuple(field_types, _) => TypeReference::tuple(
-                field_types
-                    .iter()
-                    .map(|t| t.into_rpc_event(lookup))
-                    .collect(),
-            ),
+            baml_types::FieldType::Tuple(field_types, _) => {
+                TypeReference::tuple(field_types.iter().map(|t| t.to_rpc_event(lookup)).collect())
+            }
             baml_types::FieldType::RecursiveTypeAlias { name: alias, .. } => lookup
                 .type_lookup(alias.as_str())
-                .map(|id| TypeReference::recursive_type_alias(id))
+                .map(TypeReference::recursive_type_alias)
                 .unwrap_or(TypeReference::Unknown),
             baml_types::FieldType::Arrow(..) => TypeReference::Unknown,
         };
-        if self.meta().constraints.len() > 0 {
+        if !self.meta().constraints.is_empty() {
             let constraints = self.meta().constraints.clone();
             let (asserts, checks) = constraints
                 .into_iter()
@@ -119,7 +116,7 @@ impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::FieldType
                 .into_iter()
                 .map(|c| NarrowingType {
                     name: c.label.clone(),
-                    expressions: c.expression.into_rpc_event(lookup),
+                    expressions: c.expression.to_rpc_event(lookup),
                 })
                 .collect();
 
@@ -127,7 +124,7 @@ impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::FieldType
                 .into_iter()
                 .map(|c| NarrowingType {
                     name: c.label.expect("checks must be named").clone(),
-                    expressions: c.expression.into_rpc_event(lookup),
+                    expressions: c.expression.to_rpc_event(lookup),
                 })
                 .collect();
 
@@ -142,28 +139,26 @@ impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::FieldType
     }
 }
 
-impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::Expression> for baml_types::JinjaExpression {
-    fn into_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> baml_rpc::Expression {
+impl<'a> IntoRpcEvent<'a, baml_rpc::Expression> for baml_types::JinjaExpression {
+    fn to_rpc_event(&'a self, lookup: &(impl TypeLookup + ?Sized)) -> baml_rpc::Expression {
         baml_rpc::Expression::Jinja(self.0.to_string())
     }
 }
 
-impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::runtime_api::Media<'a>> for baml_types::BamlMedia {
-    fn into_rpc_event(
+impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::Media<'a>> for baml_types::BamlMedia {
+    fn to_rpc_event(
         &'a self,
         lookup: &(impl TypeLookup + ?Sized),
     ) -> baml_rpc::runtime_api::Media<'a> {
         baml_rpc::runtime_api::Media {
             mime_type: self.mime_type.clone(),
-            value: self.content.into_rpc_event(lookup),
+            value: self.content.to_rpc_event(lookup),
         }
     }
 }
 
-impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::runtime_api::MediaValue<'a>>
-    for baml_types::BamlMediaContent
-{
-    fn into_rpc_event(
+impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::MediaValue<'a>> for baml_types::BamlMediaContent {
+    fn to_rpc_event(
         &'a self,
         lookup: &(impl TypeLookup + ?Sized),
     ) -> baml_rpc::runtime_api::MediaValue<'a> {

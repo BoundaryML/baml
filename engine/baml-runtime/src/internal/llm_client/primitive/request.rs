@@ -192,8 +192,7 @@ pub(crate) async fn build_and_log_outbound_request(
                 HTTPBody::new(
                     built_req
                         .body()
-                        .map(reqwest::Body::as_bytes)
-                        .flatten()
+                        .and_then(reqwest::Body::as_bytes)
                         .unwrap_or_default()
                         .into(),
                 ),
@@ -244,13 +243,13 @@ pub async fn execute_request(
                         // Note, Wasm can't use :? for some reason (it makes it so the error looks like garbage). But only doing to_string also makes it so that the full error is not shown. E.g. DNS errors only say "error sending request for url".
                         format!(
                             "{}\n\nIf you haven't yet, try enabling the proxy (See API Keys button)",
-                            e.to_string()
+                            e
                         )
                     }
                 },
                 code: e
                     .status()
-                    .map_or(ErrorCode::Other(2), |s| ErrorCode::from_status(s)),
+                    .map_or(ErrorCode::Other(2), ErrorCode::from_status),
             }));
         }
     };
@@ -409,7 +408,7 @@ pub async fn make_parsed_request(
             start_time: system_now,
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
-            message: format!("Failed to parse JSON: {}", e.to_string()),
+            message: format!("Failed to parse JSON: {e}"),
             code: ErrorCode::from_status(response.status),
         })
     });
@@ -440,8 +439,7 @@ pub async fn make_parsed_request(
             latency: instant_now.elapsed(),
             message: format!(
                 "Request failed with status code: {}. {}",
-                response.status,
-                response_body.to_string()
+                response.status, response_body
             ),
             code: ErrorCode::from_status(response.status),
         });

@@ -2,10 +2,10 @@ use std::borrow::Cow;
 
 use super::{IntoRpcEvent, TypeLookup};
 
-impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::runtime_api::BamlFunctionCallError<'a>>
+impl<'a> IntoRpcEvent<'a, baml_rpc::runtime_api::BamlFunctionCallError<'a>>
     for baml_types::tracing::events::BamlError<'a>
 {
-    fn into_rpc_event(
+    fn to_rpc_event(
         &'a self,
         lookup: &(impl TypeLookup + ?Sized),
     ) -> baml_rpc::runtime_api::BamlFunctionCallError<'a> {

@@ -110,7 +110,7 @@ impl Index<AttributeContainer> for super::Ast {
             AttributeContainer::EnumValue(enum_id, value_idx) => {
                 &self[enum_id][value_idx].attributes
             }
-            AttributeContainer::TypeAlias(alias_id) => &self[alias_id].value.attributes(),
+            AttributeContainer::TypeAlias(alias_id) => self[alias_id].value.attributes(),
         }
     }
 }

@@ -65,7 +65,7 @@ pub(crate) enum PrepareFunctionError {
 }
 
 impl PrepareFunctionError {
-    pub fn as_error(self) -> anyhow::Error {
+    pub fn into_error(self) -> anyhow::Error {
         match self {
             PrepareFunctionError::FunctionNotFound {
                 function_name,
@@ -119,7 +119,7 @@ impl InternalBamlRuntime {
         };
 
         let baml_args = match self.ir().check_function_params(
-            &func.inputs(),
+            func.inputs(),
             params,
             ArgCoercer {
                 span_path: None,

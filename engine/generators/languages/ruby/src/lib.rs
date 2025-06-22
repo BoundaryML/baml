@@ -71,22 +71,22 @@ impl LanguageFeatures for RbLanguageFeatures {
         *content = {
             let mut new_content = self.content_prefix().to_string();
             if let Some(requires) = self.requires.lock().unwrap().get(path) {
-                new_content.push_str("\n");
+                new_content.push('\n');
                 for require in requires {
                     new_content.push_str(&format!("require \"{}\"\n", require));
                 }
             }
             if let Some(requires) = self.requires_relative.lock().unwrap().get(path) {
-                new_content.push_str("\n");
+                new_content.push('\n');
                 for require in requires {
                     new_content.push_str(&format!("require_relative \"{}\"\n", require));
                 }
             }
-            new_content.push_str("\n");
+            new_content.push('\n');
             new_content.push_str("module BamlClient\n");
             for line in content.split("\n") {
                 if line.trim().is_empty() {
-                    new_content.push_str("\n");
+                    new_content.push('\n');
                 } else {
                     new_content.push_str(&format!("  {}\n", line));
                 }
@@ -104,7 +104,7 @@ impl LanguageFeatures for RbLanguageFeatures {
         args: &GeneratorArgs,
     ) -> Result<(), anyhow::Error> {
         let pkg = package::CurrentRenderPackage::new("BamlClient", ir.clone());
-        let file_map = args.file_map_as_json_string()?;
+        let _file_map = args.file_map_as_json_string()?;
 
         // collector.add_file("b.rb", render_init(&pkg, &args.default_client_mode)?)?;
         // collector.add_file("inlinedbaml.rb", render_source_files(file_map)?)?;

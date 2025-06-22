@@ -15,6 +15,9 @@ elided_named_lifetimes = "deny"
 unused_imports = "deny"
 unused_variables = "deny"
 
+[lints.clippy]
+type_complexity = "allow"
+
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
 serde_json.workspace = true
@@ -24,4 +27,3 @@ colored = "2"
 lazy_static = "1.5.0"
 chrono = "0.4.40"
 log.workspace = true
-

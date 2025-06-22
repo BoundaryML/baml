@@ -45,7 +45,7 @@ impl VertexAuth {
                 // NB: this should never happen in WASM, there's no way to pass a JSON object in
                 log::debug!("Attempting to auth using JsonObject strategy");
                 Self(Some(serde_json::from_value(
-                    serde_json::to_value(&json).context("Failed to parse service account credentials as GCP service account creds (issue during serialization)")?).context("Failed to parse service account credentials as GCP service account creds (are you using JSON format creds?)")?))
+                    serde_json::to_value(json).context("Failed to parse service account credentials as GCP service account creds (issue during serialization)")?).context("Failed to parse service account credentials as GCP service account creds (are you using JSON format creds?)")?))
             }
             ResolvedGcpAuthStrategy::SystemDefault => Self(None),
         })
@@ -132,7 +132,7 @@ pub struct ServiceAccount {
 
 impl ServiceAccount {
     async fn get_oauth2_token(&self) -> Result<Token> {
-        let claims = Claims::from_service_account(&self);
+        let claims = Claims::from_service_account(self);
 
         let jwt = encode_jwt(&serde_json::to_value(claims)?, &self.private_key)
             .await

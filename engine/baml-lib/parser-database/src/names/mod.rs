@@ -35,7 +35,7 @@ struct DuplicateNames {
 }
 
 impl DuplicateNames {
-    fn to_errors(self, ctx: &mut Context<'_>) {
+    fn into_errors(self, ctx: &mut Context<'_>) {
         for category in [self.tops, self.generators] {
             for (name, ids) in category {
                 let ast_tops = ids.iter().map(|id| &ctx.ast[*id]).collect::<Vec<_>>();
@@ -285,7 +285,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
         }
     }
 
-    duplicate_names.to_errors(ctx);
+    duplicate_names.into_errors(ctx);
     let _ = std::mem::replace(ctx.names, names);
 }
 
@@ -307,24 +307,20 @@ fn insert_name(
             duplicate_names
                 .dynamic_types
                 .entry(name)
-                .or_insert_with(indexmap::IndexSet::default)
+                .or_default()
                 .insert(existing);
             duplicate_names
                 .dynamic_types
                 .entry(name)
-                .or_insert_with(indexmap::IndexSet::default)
+                .or_default()
                 .insert(top_id);
         } else {
             duplicate_names
                 .tops
                 .entry(name)
-                .or_insert_with(indexmap::IndexSet::default)
+                .or_default()
                 .insert(existing);
-            duplicate_names
-                .tops
-                .entry(name)
-                .or_insert_with(indexmap::IndexSet::default)
-                .insert(top_id);
+            duplicate_names.tops.entry(name).or_default().insert(top_id);
         }
     }
 }

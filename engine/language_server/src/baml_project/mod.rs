@@ -133,7 +133,7 @@ impl BamlProject {
 
         check_version(
             &generator_config.version,
-            &version(),
+            version(),
             generator_type,
             version_check_mode,
             generator_language,
@@ -562,8 +562,7 @@ impl BamlRuntimeExt for BamlRuntime {
                     args = f
                         .inputs()
                         .iter()
-                        .map(|(k, t)| get_dummy_field(2, k, t))
-                        .filter_map(|x| x) // Add this line to filter out None values
+                        .filter_map(|(k, t)| get_dummy_field(2, k, t))
                         .collect::<Vec<_>>()
                         .join("\n")
                 );
@@ -580,12 +579,11 @@ impl BamlRuntimeExt for BamlRuntime {
                         let inputs = f
                             .inputs()
                             .iter()
-                            .map(|(k, t)| get_dummy_field(2, k, t))
-                            .filter_map(|x| x) // Add this line to filter out None values
+                            .filter_map(|(k, t)| get_dummy_field(2, k, t))
                             .collect::<Vec<_>>()
                             .join(",");
 
-                        format!("({}) -> {}", inputs, f.output().to_string())
+                        format!("({}) -> {}", inputs, f.output())
                     },
                     test_snippet: snippet,
                     test_cases: f
@@ -1070,7 +1068,7 @@ impl Project {
     //     self.current_runtime = None;
     // }
 
-    /// Saves a file and marks the runtime as stale.
+    // /// Saves a file and marks the runtime as stale.
     // pub fn save_file<P: AsRef<Path>, S: AsRef<str>>(&mut self, file_path: P, content: S) {
     //     self.baml_project
     //         .save_file(file_path.as_ref().to_str().unwrap(), content.as_ref());
@@ -1430,8 +1428,5 @@ fn get_dummy_value(
 fn get_dummy_field(indent: usize, name: &str, t: &baml_runtime::FieldType) -> Option<String> {
     let indent_str = "  ".repeat(indent);
     let dummy = get_dummy_value(indent, true, t);
-    match dummy {
-        Some(dummy) => Some(format!("{indent_str}{name} {dummy}")),
-        _ => None,
-    }
+    dummy.map(|dummy| format!("{indent_str}{name} {dummy}"))
 }

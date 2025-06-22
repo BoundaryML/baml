@@ -45,7 +45,7 @@ impl From<FieldType> for ResponseValueMeta {
 }
 
 impl baml_types::HasFieldType for ResponseValueMeta {
-    fn field_type<'a>(&'a self) -> &'a FieldType {
+    fn field_type(&self) -> &FieldType {
         &self.3
     }
 }
@@ -89,11 +89,11 @@ impl serde::Serialize for SerializeResponseBamlValue<'_> {
         use BamlValueWithMeta::*;
         let serialize_mode = &self.serialize_mode;
         match &self.value {
-            String(s, ref meta) => serialize_with_meta(&s, &meta, serialize_mode, serializer),
-            Int(i, ref meta) => serialize_with_meta(&i, &meta, serialize_mode, serializer),
-            Float(f, ref meta) => serialize_with_meta(&f, &meta, serialize_mode, serializer),
-            Bool(b, ref meta) => serialize_with_meta(&b, &meta, serialize_mode, serializer),
-            Media(v, ref meta) => serialize_with_meta(&v, &meta, serialize_mode, serializer),
+            String(s, ref meta) => serialize_with_meta(&s, meta, serialize_mode, serializer),
+            Int(i, ref meta) => serialize_with_meta(&i, meta, serialize_mode, serializer),
+            Float(f, ref meta) => serialize_with_meta(&f, meta, serialize_mode, serializer),
+            Bool(b, ref meta) => serialize_with_meta(&b, meta, serialize_mode, serializer),
+            Media(v, ref meta) => serialize_with_meta(&v, meta, serialize_mode, serializer),
             Enum(ref _name, v, ref meta) => {
                 serialize_with_meta(&v, meta, serialize_mode, serializer)
             }
@@ -104,23 +104,23 @@ impl serde::Serialize for SerializeResponseBamlValue<'_> {
                         (
                             k.clone(),
                             SerializeResponseBamlValue {
-                                value: &v,
+                                value: v,
                                 serialize_mode: serialize_mode.clone(),
                             },
                         )
                     })
                     .collect::<IndexMap<std::string::String, SerializeResponseBamlValue<'_>>>();
-                serialize_with_meta(&new_items, &meta, serialize_mode, serializer)
+                serialize_with_meta(&new_items, meta, serialize_mode, serializer)
             }
             List(items, ref meta) => {
                 let new_items = items
-                    .into_iter()
+                    .iter()
                     .map(|v| SerializeResponseBamlValue {
                         value: v,
                         serialize_mode: serialize_mode.clone(),
                     })
                     .collect::<Vec<_>>();
-                serialize_with_meta(&new_items, &meta, serialize_mode, serializer)
+                serialize_with_meta(&new_items, meta, serialize_mode, serializer)
             }
             Class(_name, fields, ref meta) => {
                 let new_fields = fields
@@ -141,9 +141,9 @@ impl serde::Serialize for SerializeResponseBamlValue<'_> {
                         )
                     })
                     .collect::<IndexMap<_, _>>();
-                serialize_with_meta(&new_fields, &meta, serialize_mode, serializer)
+                serialize_with_meta(&new_fields, meta, serialize_mode, serializer)
             }
-            Null(ref meta) => serialize_with_meta(&(), &meta, serialize_mode, serializer),
+            Null(ref meta) => serialize_with_meta(&(), meta, serialize_mode, serializer),
         }
     }
 }
@@ -270,7 +270,7 @@ impl ResponseBamlValue {
                 }
                 .explanation(),
             };
-            if node.meta().0.len() > 0 {
+            if !node.meta().0.is_empty() {
                 expls.push(parsing_error)
             }
         })

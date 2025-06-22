@@ -53,11 +53,17 @@ jobs:
       - name: Check TS Lint
         run: pnpm biome ci . --organize-imports-enabled=false
         working-directory: typescript
-      - name: Check Rust Lint
+      - name: Check Rust Formatter
         # rustfmt can only run unstable features on stable toolchains if passed
         # through CLI. We don't want to download 2 toolchains just for this.
         run: cargo fmt --check -- --config imports_granularity="Crate" --config group_imports="StdExternalCrate"
         working-directory: engine
+      - name: Check Rust Lint (Clippy)
+        run: RUSTFLAGS="-A unused -D warnings" cargo clippy
+        working-directory: engine
+      - name: Check Rust Lint WASM (Clippy)
+        run: RUSTFLAGS="-A unused -D warnings" cargo clippy --target wasm32-unknown-unknown
+        working-directory: engine/baml-schema-wasm
   test_node_generator:
     runs-on: ubuntu-latest
     steps:

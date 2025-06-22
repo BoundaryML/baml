@@ -55,11 +55,10 @@ impl FunctionResultStream {
                 old_cb.unref(env)?;
             }
             self.callback = Some(cb);
-        } else {
-            if let Some(mut cb) = self.callback.take() {
-                cb.unref(env)?;
-            }
+        } else if let Some(mut cb) = self.callback.take() {
+            cb.unref(env)?;
         }
+
         env.get_undefined()
     }
 

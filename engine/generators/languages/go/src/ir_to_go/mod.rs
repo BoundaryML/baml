@@ -37,8 +37,8 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, _lookup: &impl TypeLookup
         },
         T::Literal(literal_value, _) => match literal_value {
             baml_types::LiteralValue::String(val) => TypeGo::String(Some(val.clone()), meta),
-            baml_types::LiteralValue::Int(val) => TypeGo::Int(Some(val.clone()), meta),
-            baml_types::LiteralValue::Bool(val) => TypeGo::Bool(Some(val.clone()), meta),
+            baml_types::LiteralValue::Int(val) => TypeGo::Int(Some(*val), meta),
+            baml_types::LiteralValue::Bool(val) => TypeGo::Bool(Some(*val), meta),
         },
         T::Class {
             name,
@@ -158,8 +158,8 @@ pub(crate) fn type_to_go(field: &Type, _lookup: &impl TypeLookups) -> TypeGo {
         },
         T::Literal(literal_value, _) => match literal_value {
             baml_types::LiteralValue::String(val) => TypeGo::String(Some(val.clone()), meta),
-            baml_types::LiteralValue::Int(val) => TypeGo::Int(Some(val.clone()), meta),
-            baml_types::LiteralValue::Bool(val) => TypeGo::Bool(Some(val.clone()), meta),
+            baml_types::LiteralValue::Int(val) => TypeGo::Int(Some(*val), meta),
+            baml_types::LiteralValue::Bool(val) => TypeGo::Bool(Some(*val), meta),
         },
         T::Class { name, dynamic, .. } => TypeGo::Class {
             package: type_pkg.clone(),

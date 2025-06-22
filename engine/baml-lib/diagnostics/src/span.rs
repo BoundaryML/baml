@@ -58,12 +58,11 @@ impl Span {
             }
         }
 
-        let res = match (start, end) {
+        match (start, end) {
             (Some(start), Some(end)) => (start, end),
             (Some(start), None) => (start, (line, column)),
             _ => ((0, 0), (0, 0)),
-        };
-        res
+        }
     }
 
     /// Create a fake span. Useful when generating test data that requires

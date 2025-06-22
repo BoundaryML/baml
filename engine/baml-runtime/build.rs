@@ -16,7 +16,7 @@ fn check_ruby_version() -> Result<()> {
         anyhow::anyhow!("Failed to extract Ruby version string from 'ruby -v' output")
     })?;
 
-    if version.chars().next().map_or(false, |c| c.is_ascii_digit()) && version >= "3.1" {
+    if version.chars().next().is_some_and(|c| c.is_ascii_digit()) && version >= "3.1" {
         Ok(())
     } else {
         Err(anyhow::anyhow!(

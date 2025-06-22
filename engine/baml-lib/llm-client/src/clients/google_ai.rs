@@ -150,7 +150,6 @@ impl<Meta: Clone> UnresolvedGoogleAI<Meta> {
         let role_selection = properties.ensure_roles_selection();
         let api_key = properties
             .ensure_api_key()
-            .map(|v| v.clone())
             .unwrap_or(StringOr::EnvVar("GOOGLE_API_KEY".to_string()));
 
         let model = properties

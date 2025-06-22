@@ -70,7 +70,7 @@ impl InternalBamlRuntime {
             //     .ok_or(anyhow::anyhow!("Failed to check function params."))?;
             let prepared = self
                 .prepare_function(function_name, params)
-                .map_err(|e| e.as_error())?;
+                .map_err(|e| e.into_error())?;
 
             Ok(FunctionResultStream {
                 function_name: prepared.function_name,
@@ -86,7 +86,7 @@ impl InternalBamlRuntime {
         } else {
             let prepared = self
                 .prepare_function(function_name, params)
-                .map_err(|e| e.as_error())?;
+                .map_err(|e| e.into_error())?;
 
             // let func = self.get_function(&function_name)?;
             let renderer = PromptRenderer::from_function(&prepared.func, self.ir(), &ctx)?;

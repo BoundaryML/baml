@@ -178,7 +178,7 @@ impl WasmAwsCreds {
         match cred_provider.aws_req(self.profile.clone()).await {
             Err(e) => {
                 log::error!("Error calling AWS cred provider: {:?}", e);
-                return Err(CredentialsError::unhandled(e));
+                Err(CredentialsError::unhandled(e))
             }
             Ok(aws_creds) => Ok(Credentials::new(
                 aws_creds.access_key_id,

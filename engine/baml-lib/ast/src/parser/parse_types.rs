@@ -252,7 +252,7 @@ fn parse_literal_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<F
 ///
 /// * `pair` - Input pair with array notation tokens.
 /// * `diagnostics` - Mutable reference to diagnostics collector for error
-/// reporting.
+///   reporting.
 ///
 /// # Implementation Details
 ///
@@ -304,12 +304,12 @@ fn parse_array(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldTyp
 ///
 /// * `pair` - The input pair containing map notation tokens.
 /// * `diagnostics` - Mutable reference to the diagnostics collector for error
-/// reporting.
+///   reporting.
 ///
 /// # Returns
 ///
 /// * `Some(FieldType::Map)` - Successfully parsed map type with appropriate
-/// arity.
+///   arity.
 /// * [`None`] - If parsing fails.
 ///
 /// # Implementation Details

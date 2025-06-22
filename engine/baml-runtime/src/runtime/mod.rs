@@ -46,7 +46,7 @@ impl CachedClient {
     pub fn has_env_vars_changed(&self, new_env_vars: &HashMap<String, String>) -> bool {
         self.env_vars
             .iter()
-            .any(|(k, v)| new_env_vars.get(k).map_or(false, |v2| v2 != v))
+            .any(|(k, v)| new_env_vars.get(k).is_some_and(|v2| v2 != v))
     }
 }
 

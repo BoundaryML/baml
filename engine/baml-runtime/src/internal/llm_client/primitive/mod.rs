@@ -216,7 +216,7 @@ impl LLMPrimitiveProvider {
 
     pub fn completion_to_provider_body(
         &self,
-        prompt: &String,
+        prompt: &str,
     ) -> Result<serde_json::Map<String, serde_json::Value>> {
         Ok(match self {
             LLMPrimitiveProvider::OpenAI(client) => client.completion_to_provider_body(prompt),

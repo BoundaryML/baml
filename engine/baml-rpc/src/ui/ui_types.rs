@@ -198,7 +198,6 @@ pub struct UiFunctionDefinition {
 // Matches the runtime TypeDefinition but replaces ids with strings instead of a struct.
 #[derive(Debug, Deserialize, Serialize, TS)]
 #[ts(export)]
-
 pub struct UiTypeDefinition {
     pub type_id: UiTypeIdString,
     #[serde(flatten)]
@@ -299,7 +298,7 @@ impl From<FunctionDefinition> for UiFunctionDefinition {
                     type_ref: input.type_ref,
                 })
                 .collect(),
-            output: value.output.into(),
+            output: value.output,
         }
     }
 }

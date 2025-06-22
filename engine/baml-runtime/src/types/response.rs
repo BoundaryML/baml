@@ -259,9 +259,9 @@ impl TestResponse {
                 let err = parsed.as_ref().unwrap_err();
                 match err.downcast_ref::<crate::errors::ExposedError>() {
                     Some(ExposedError::FinishReasonError { .. }) => {
-                        TestStatus::Fail(TestFailReason::TestFinishReasonFailed(&err))
+                        TestStatus::Fail(TestFailReason::TestFinishReasonFailed(err))
                     }
-                    _ => TestStatus::Fail(TestFailReason::TestParseFailure(&err)),
+                    _ => TestStatus::Fail(TestFailReason::TestParseFailure(err)),
                 }
             }
         } else {

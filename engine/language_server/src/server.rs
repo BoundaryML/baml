@@ -236,7 +236,7 @@ impl Server {
         session.reload(Some(notifier.clone()))?;
         let mut scheduler =
             schedule::Scheduler::new(&mut session, worker_threads, connection.make_sender());
-        Self::try_register_capabilities(&_client_capabilities, &mut scheduler);
+        Self::try_register_capabilities(_client_capabilities, &mut scheduler);
 
         for msg in connection.incoming() {
             if connection.handle_shutdown(&msg)? {

@@ -144,7 +144,7 @@ struct Init<'a> {
 }
 
 pub fn render_init(
-    pkg: &CurrentRenderPackage,
+    _pkg: &CurrentRenderPackage,
     client_mode: &GeneratorDefaultClientMode,
 ) -> Result<String, askama::Error> {
     Init {

@@ -170,8 +170,7 @@ pub struct WasmError {
 impl WasmProject {
     #[wasm_bindgen]
     pub fn new(root_dir_name: &str, files: JsValue) -> Result<WasmProject, JsError> {
-        let files: HashMap<String, String> =
-            serde_wasm_bindgen::from_value(files).map_err(|e| e)?;
+        let files: HashMap<String, String> = serde_wasm_bindgen::from_value(files)?;
 
         Ok(WasmProject {
             root_dir_name: root_dir_name.to_string(),
@@ -528,7 +527,7 @@ impl WasmFunctionResponse {
             self.function_response.llm_response(),
             self.function_response.scope(),
         )
-            .into_wasm()
+            .to_wasm()
     }
 
     #[wasm_bindgen]
@@ -599,7 +598,7 @@ impl WasmTestResponse {
             _ => Err(anyhow::anyhow!("No parsed value")),
         }
         .context("No parsed value")?;
-        let (flattened_checks, check_count) = serialize_value_counting_checks(&parsed_response);
+        let (flattened_checks, check_count) = serialize_value_counting_checks(parsed_response);
         Ok(WasmParsedTestResponse {
             value: serde_json::to_string(&flattened_checks)?,
             check_count,
@@ -636,7 +635,7 @@ impl WasmTestResponse {
                 r.function_response.llm_response(),
                 r.function_response.scope(),
             )
-                .into_wasm()
+                .to_wasm()
         })
     }
 
@@ -725,12 +724,12 @@ fn llm_response_to_wasm_error(
     }
 }
 
-trait IntoWasm {
+trait ToWasm {
     type Output;
-    fn into_wasm(&self) -> Self::Output;
+    fn to_wasm(&self) -> Self::Output;
 }
 
-impl IntoWasm
+impl ToWasm
     for (
         &baml_runtime::internal::llm_client::LLMResponse,
         &OrchestrationScope,
@@ -738,7 +737,7 @@ impl IntoWasm
 {
     type Output = Option<WasmLLMResponse>;
 
-    fn into_wasm(&self) -> Self::Output {
+    fn to_wasm(&self) -> Self::Output {
         match &self.0 {
             baml_runtime::internal::llm_client::LLMResponse::Success(s) => Some(WasmLLMResponse {
                 scope: self.1.clone(),
@@ -791,8 +790,8 @@ impl WithRenderError for baml_runtime::TestFailReason<'_> {
                 checks,
                 failed_assert,
             } => {
-                let checks_msg = if checks.len() > 0 {
-                    let check_msgs = checks.into_iter().map(|(name, pass)| {
+                let checks_msg = if !checks.is_empty() {
+                    let check_msgs = checks.iter().map(|(name, pass)| {
                         format!("{name}: {}", if *pass { "Passed" } else { "Failed" })
                     });
                     format!("Check results:\n{}", join(check_msgs, "\n"))
@@ -813,13 +812,13 @@ impl WithRenderError for baml_runtime::internal::llm_client::LLMResponse {
         match self {
             baml_runtime::internal::llm_client::LLMResponse::Success(_) => None,
             baml_runtime::internal::llm_client::LLMResponse::LLMFailure(f) => {
-                format!("{} {}", f.message, f.code.to_string()).into()
+                format!("{} {}", f.message, f.code).into()
             }
             baml_runtime::internal::llm_client::LLMResponse::UserFailure(e) => {
                 format!("user error: {}", e).into()
             }
             baml_runtime::internal::llm_client::LLMResponse::InternalFailure(e) => {
-                format!("{}", e).into()
+                e.to_string().into()
             }
         }
     }
@@ -920,10 +919,8 @@ fn get_dummy_value(
 fn get_dummy_field(indent: usize, name: &str, t: &baml_runtime::FieldType) -> Option<String> {
     let indent_str = "  ".repeat(indent);
     let dummy = get_dummy_value(indent, true, t);
-    match dummy {
-        Some(dummy) => Some(format!("{indent_str}{name} {dummy}")),
-        _ => None,
-    }
+
+    dummy.map(|dummy| format!("{indent_str}{name} {dummy}"))
 }
 
 // Rust-only methods
@@ -981,7 +978,7 @@ impl WasmRuntime {
                     .expr_fns_as_functions()
                     .iter()
                     .map(|f| Walker {
-                        ir: &self.runtime.internal().ir(),
+                        ir: self.runtime.internal().ir(),
                         item: f,
                     }),
             )
@@ -998,8 +995,7 @@ impl WasmRuntime {
                     args = f
                         .inputs()
                         .iter()
-                        .map(|(k, t)| get_dummy_field(2, k, t))
-                        .filter_map(|x| x) // Add this line to filter out None values
+                        .filter_map(|(k, t)| get_dummy_field(2, k, t))
                         .collect::<Vec<_>>()
                         .join("\n")
                 );
@@ -1016,12 +1012,11 @@ impl WasmRuntime {
                         let inputs = f
                             .inputs()
                             .iter()
-                            .map(|(k, t)| get_dummy_field(2, k, t))
-                            .filter_map(|x| x) // Add this line to filter out None values
+                            .filter_map(|(k, t)| get_dummy_field(2, k, t))
                             .collect::<Vec<_>>()
                             .join(",");
 
-                        format!("({}) -> {}", inputs, f.output().to_string())
+                        format!("({}) -> {}", inputs, f.output())
                     },
                     test_snippet: snippet,
                     test_cases: f
@@ -1394,7 +1389,7 @@ impl WasmRuntime {
                     tc.parent_functions.iter().find(|f| f.name == selected_func)
                 {
                     return functions.into_iter().find(|f| f.name == selected_func);
-                } else if let Some(first_function) = tc.parent_functions.get(0) {
+                } else if let Some(first_function) = tc.parent_functions.first() {
                     return functions
                         .into_iter()
                         .find(|f| f.name == first_function.name);
@@ -1413,7 +1408,7 @@ impl WasmRuntime {
                     tc.parent_functions.iter().find(|f| f.name == selected_func)
                 {
                     return functions.into_iter().find(|f| f.name == selected_func);
-                } else if let Some(first_function) = tc.parent_functions.get(0) {
+                } else if let Some(first_function) = tc.parent_functions.first() {
                     return functions
                         .into_iter()
                         .find(|f| f.name == first_function.name);
@@ -2046,7 +2041,7 @@ impl WasmFunction {
 
         let graph = rt
             .internal()
-            .orchestration_graph(&client_spec, &ctx)
+            .orchestration_graph(client_spec, &ctx)
             .map_err(|e| JsValue::from_str(&format!("{:?}", e)))?;
 
         // Serialize the scopes to JsValue

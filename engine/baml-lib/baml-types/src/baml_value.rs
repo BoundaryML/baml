@@ -389,7 +389,7 @@ impl<T: crate::HasFieldType> BamlValueWithMeta<T> {
                 UnionTypeViewGeneric::OneOfOptional(field_types) => field_types
                     .into_iter()
                     .find(|t| self.is_type(t, lookup))
-                    .map_or_else(|| FieldType::null(), |t| t.clone()),
+                    .map_or_else(FieldType::null, |t| t.clone()),
             };
         }
         field_type.clone()
@@ -397,7 +397,7 @@ impl<T: crate::HasFieldType> BamlValueWithMeta<T> {
 }
 
 impl<T: crate::HasFieldType> crate::HasFieldType for BamlValueWithMeta<T> {
-    fn field_type<'a>(&'a self) -> &'a crate::FieldType {
+    fn field_type(&self) -> &crate::FieldType {
         self.meta().field_type()
     }
 }
@@ -560,11 +560,7 @@ impl<T> BamlValueWithMeta<T> {
                     .iter()
                     .map(|(k, v)| (k.clone(), Self::with_default_meta(v)))
                     .collect();
-                let value_types = entries
-                    .values()
-                    .map(|v| v.field_type())
-                    .into_iter()
-                    .collect::<Vec<_>>();
+                let value_types = entries.values().map(|v| v.field_type()).collect::<Vec<_>>();
                 let field_type =
                     FieldType::union(value_types.into_iter().map(|v| v.to_owned()).collect());
 
@@ -573,11 +569,7 @@ impl<T> BamlValueWithMeta<T> {
             BamlValue::List(items) => {
                 let items: Vec<BamlValueWithMeta<T>> =
                     items.iter().map(|i| Self::with_default_meta(i)).collect();
-                let items_types = items
-                    .iter()
-                    .map(|i| i.field_type())
-                    .into_iter()
-                    .collect::<Vec<_>>();
+                let items_types = items.iter().map(|i| i.field_type()).collect::<Vec<_>>();
                 let field_type =
                     FieldType::union(items_types.into_iter().map(|v| v.to_owned()).collect());
                 List(items, T::from(field_type.simplify()))

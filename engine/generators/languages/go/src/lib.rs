@@ -49,19 +49,19 @@ impl LanguageFeatures for GoLanguageFeatures {
 
         let pkg = package::CurrentRenderPackage::new("baml_client", ir.clone());
         let file_map = args.file_map_as_json_string()?;
-        collector.add_file("baml_source_map.go", render_source_files(file_map)?);
-        collector.add_file("runtime.go", render_runtime_code(&pkg)?);
+        let _ = collector.add_file("baml_source_map.go", render_source_files(file_map)?);
+        let _ = collector.add_file("runtime.go", render_runtime_code(&pkg)?);
         let functions = ir
             .functions
             .iter()
             .map(|f| ir_to_go::functions::ir_function_to_go(f, &pkg))
             .collect::<Vec<_>>();
-        collector.add_file(
+        let _ = collector.add_file(
             "functions.go",
             render_functions(&functions, &pkg, go_mod_name)?,
         );
 
-        collector.add_file(
+        let _ = collector.add_file(
             "functions_stream.go",
             render_functions_stream(&functions, &pkg, go_mod_name)?,
         );
@@ -91,17 +91,17 @@ impl LanguageFeatures for GoLanguageFeatures {
             .collect::<Vec<_>>();
         go_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
-        collector.add_file(
+        let _ = collector.add_file(
             "type_map.go",
             render_type_map(&go_classes, &enums, &unions, go_mod_name)?,
         );
 
         pkg.set("baml_client.types");
-        collector.add_file("types/utils.go", render_go_types_utils(&pkg)?);
-        collector.add_file("types/classes.go", render_go_types(&go_classes, &pkg)?);
-        collector.add_file("types/enums.go", render_go_types(&enums, &pkg)?);
-        collector.add_file("types/unions.go", render_go_types(&unions, &pkg)?);
-        collector.add_file(
+        let _ = collector.add_file("types/utils.go", render_go_types_utils(&pkg)?);
+        let _ = collector.add_file("types/classes.go", render_go_types(&go_classes, &pkg)?);
+        let _ = collector.add_file("types/enums.go", render_go_types(&enums, &pkg)?);
+        let _ = collector.add_file("types/unions.go", render_go_types(&unions, &pkg)?);
+        let _ = collector.add_file(
             "types/type_aliases.go",
             render_go_types(&go_type_aliases, &pkg)?,
         );
@@ -129,16 +129,16 @@ impl LanguageFeatures for GoLanguageFeatures {
             .collect::<Vec<_>>();
 
         pkg.set("baml_client.stream_types");
-        collector.add_file("stream_types/utils.go", render_go_stream_types_utils(&pkg)?);
-        collector.add_file(
+        let _ = collector.add_file("stream_types/utils.go", render_go_stream_types_utils(&pkg)?);
+        let _ = collector.add_file(
             "stream_types/classes.go",
             render_go_stream_types(&go_classes, &pkg, go_mod_name)?,
         );
-        collector.add_file(
+        let _ = collector.add_file(
             "stream_types/unions.go",
             render_go_stream_types(&unions, &pkg, go_mod_name)?,
         );
-        collector.add_file(
+        let _ = collector.add_file(
             "stream_types/type_aliases.go",
             render_go_stream_types(&stream_type_aliases, &pkg, go_mod_name)?,
         );

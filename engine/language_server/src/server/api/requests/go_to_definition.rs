@@ -53,7 +53,7 @@ impl SyncRequestHandler for GotoDefinition {
             .internal_error()?;
 
         let document_key = DocumentKey::from_url(
-            &PathBuf::from(project.lock().unwrap().baml_project.root_dir_name.clone()),
+            &project.lock().unwrap().baml_project.root_dir_name,
             &params.text_document_position_params.text_document.uri,
         )
         .internal_error()?;

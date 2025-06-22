@@ -69,9 +69,7 @@ impl TraceStorage {
         *count += 1;
 
         // Ensure call_map has an entry for the ID; create if not present.
-        self.call_map
-            .entry(function_id.clone())
-            .or_insert_with(Vec::new);
+        self.call_map.entry(function_id.clone()).or_default();
     }
 
     /// Decrease the reference count for the given FunctionCallId,
@@ -181,7 +179,7 @@ fn build_function_log(
     let guard = events; // A reference to the vector.
 
     let mut function_start: Option<&FunctionStart<_>> = None;
-    let mut function_end: Option<&FunctionEnd<_>> = None;
+    // let mut function_end: Option<&FunctionEnd<_>> = None;
 
     let mut function_start_time: Option<i64> = None;
     let mut function_end_time: Option<i64> = None;
@@ -207,7 +205,7 @@ fn build_function_log(
                 }
             }
             TraceData::FunctionEnd(end) => {
-                function_end = Some(end);
+                // function_end = Some(end);
                 function_end_time = Some(time_ms);
             }
 

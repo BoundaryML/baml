@@ -200,7 +200,7 @@ impl BamlRuntime {
 
         let runtime = BamlRuntime {
             inner: inner.clone(),
-            tracer_wrapper: Arc::new(BamlTracerWrapper::new(&env_vars)?),
+            tracer_wrapper: Arc::new(BamlTracerWrapper::new(env_vars)?),
             #[cfg(not(target_arch = "wasm32"))]
             async_runtime: rt.clone(),
         };
@@ -346,9 +346,9 @@ impl BamlRuntime {
         ctx: &RuntimeContext,
     ) -> Result<Arc<LLMProvider>> {
         let renderer = PromptRenderer::from_function(
-            &self.inner.get_function(&function_name)?,
+            &self.inner.get_function(function_name)?,
             self.inner.ir(),
-            &ctx,
+            ctx,
         )?;
 
         self.inner.get_llm_provider(renderer.client_spec(), ctx)
@@ -367,8 +367,8 @@ impl BamlRuntime {
         let constraints = self
             .inner
             .get_test_constraints(function_name, test_name, ctx)
-            .unwrap_or(vec![]); // TODO: Fix this.
-                                // .get_test_constraints(function_name, test_name, ctx)?;
+            .unwrap_or_default(); // TODO: Fix this.
+                                  // .get_test_constraints(function_name, test_name, ctx)?;
         Ok((params, constraints))
     }
 
@@ -504,7 +504,7 @@ impl BamlRuntime {
             };
 
             let mut stream = self.inner.stream_function_impl(
-                function_name.into(),
+                function_name,
                 &params,
                 self.tracer_wrapper.get_or_create_tracer(&env_vars),
                 rctx,
@@ -545,7 +545,7 @@ impl BamlRuntime {
                         evaluate_test_constraints(
                             &params,
                             &value_with_constraints,
-                            &complete_resp,
+                            complete_resp,
                             constraints,
                         )
                     }
@@ -685,8 +685,7 @@ impl BamlRuntime {
                         .ir()
                         .expr_fns
                         .iter()
-                        .find(|f| f.elem.name == function_name)
-                        .is_some();
+                        .any(|f| f.elem.name == function_name);
                     if !is_expr_fn {
                         let call_id_stack = rctx.call_id_stack.clone();
                         // TODO: is this the right naming?
@@ -707,15 +706,15 @@ impl BamlRuntime {
                             match &result {
                                 Ok(result) => match result.result_with_constraints_content() {
                                     Ok(value) => Ok(value.0.map_meta(|f| f.3.clone())),
-                                    Err(e) => Err((&e).into_baml_error()), // None => Err(baml_types::tracing::errors::BamlError::Base {
-                                                                           //     message: format!(
-                                                                           //         "No parsed result found for function: {}",
-                                                                           //         function_name
-                                                                           //     )
-                                                                           //     .into(),
-                                                                           // }),
+                                    Err(e) => Err((&e).to_baml_error()), // None => Err(baml_types::tracing::errors::BamlError::Base {
+                                                                         //     message: format!(
+                                                                         //         "No parsed result found for function: {}",
+                                                                         //         function_name
+                                                                         //     )
+                                                                         //     .into(),
+                                                                         // }),
                                 },
-                                Err(e) => Err(e.into_baml_error()),
+                                Err(e) => Err(e.to_baml_error()),
                             },
                         );
                         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
@@ -734,7 +733,7 @@ impl BamlRuntime {
                             .expect("We checked earlier that this function is an expr_fn")
                             .elem;
                         let fn_expr = expr_fn.expr.clone();
-                        let context = initial_context(&self.inner.ir());
+                        let context = initial_context(self.inner.ir());
                         let env = EvalEnv {
                             context,
                             runtime: self,
@@ -868,7 +867,7 @@ impl BamlRuntime {
             ctx.create_ctx(tb, cb, env_vars, ctx.call_id_stack(true)?)?,
             #[cfg(not(target_arch = "wasm32"))]
             self.async_runtime.clone(),
-            collectors.unwrap_or_else(|| vec![]),
+            collectors.unwrap_or_default(),
         )
     }
 
@@ -910,7 +909,7 @@ impl BamlRuntime {
         let provider = self.llm_provider_from_function(&function_name, &ctx)?;
 
         let prompt = self
-            .render_prompt(&function_name, &ctx, &params, None)
+            .render_prompt(&function_name, &ctx, params, None)
             .await
             .map(|(prompt, ..)| prompt)?;
 
@@ -941,8 +940,7 @@ impl BamlRuntime {
             HTTPBody::new(
                 request
                     .body()
-                    .map(reqwest::Body::as_bytes)
-                    .flatten()
+                    .and_then(reqwest::Body::as_bytes)
                     .unwrap_or_default()
                     .into(),
             ),
@@ -994,7 +992,7 @@ impl BamlRuntime {
             &ctx,
         )?;
 
-        renderer.parse(&self.inner.ir(), &ctx, &llm_response, allow_partials)
+        renderer.parse(self.inner.ir(), &ctx, &llm_response, allow_partials)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1221,7 +1219,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
         }
         #[cfg(target_arch = "wasm32")]
         {
-            let _ = wasm_bindgen_futures::spawn_local(async move {
+            wasm_bindgen_futures::spawn_local(async move {
                 if let Err(e) = flush().await {
                     baml_log::error!("Failed to flush: {}", e);
                 }
@@ -1327,7 +1325,7 @@ async fn expr_eval_result(
         Ok(expr_fn) => {
             log::trace!("Calling function: {}", function_name);
             let collectors = collector.as_ref().map(|c| vec![c.clone()]);
-            let call = tracer.start_call(&function_name, mgr, params, true, false, collectors);
+            let call = tracer.start_call(function_name, mgr, params, true, false, collectors);
 
             let ctx = mgr.create_ctx(tb, cb, env_vars.clone(), call.new_call_id_stack.clone())?;
             let env = EvalEnv {

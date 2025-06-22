@@ -200,8 +200,8 @@ pub fn predicate_implications<'a>(
 
             ast::BinOpKind::Ne => {
                 let maybe_non_null_variable = match (&binary_op.left, &binary_op.right) {
-                    (Var { .. }, Const(n)) if fuzzy_null(&n) => Some(&binary_op.left),
-                    (Const(n), Var { .. }) if fuzzy_null(&n) => Some(&binary_op.right),
+                    (Var { .. }, Const(n)) if fuzzy_null(n) => Some(&binary_op.left),
+                    (Const(n), Var { .. }) if fuzzy_null(n) => Some(&binary_op.right),
                     _ => None,
                 };
                 if let Some(non_null_variable) = maybe_non_null_variable {

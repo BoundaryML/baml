@@ -16,6 +16,6 @@ pub fn ir_enum_to_go<'a>(
             .collect(),
         docstring: enum_.elem.docstring.as_ref().map(|d| d.0.clone()),
         dynamic: enum_.attributes.dynamic(),
-        pkg: pkg,
+        pkg,
     }
 }

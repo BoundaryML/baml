@@ -23,9 +23,32 @@ use crate::{
 
 mod configurations;
 mod prompt;
-mod types;
 
-pub(crate) use types::{EnumAttributes, *};
+#[derive(Debug, Default, Clone)]
+pub struct EnumAttributes {
+    pub value_serializers: HashMap<FieldId, Attributes>,
+
+    pub serializer: Option<Attributes>,
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct ClassAttributes {
+    pub field_serilizers: HashMap<FieldId, Attributes>,
+
+    pub serilizer: Option<Attributes>,
+}
+
+impl ClassAttributes {
+    pub fn extend_serializer(&mut self, other: &Option<Attributes>) {
+        let new_serializer = match (self.serilizer.as_mut(), other) {
+            (Some(self_attrs), Some(other_attrs)) => Some(self_attrs.combine(other_attrs)),
+            (Some(self_attrs), None) => Some(self_attrs.clone()),
+            (None, Some(other_attrs)) => Some(other_attrs.clone()),
+            (None, None) => None,
+        };
+        self.serilizer = new_serializer;
+    }
+}
 
 use self::configurations::visit_retry_policy;
 pub use crate::attributes::Attributes;
@@ -91,7 +114,7 @@ pub(super) fn resolve_type_aliases(ctx: &mut Context<'_>) {
     for alias_id in aliases {
         // We can ignore the error here because it's already reported in the
         // diagnostics at [`visit_type_alias`].
-        if let Ok(resolved) = resolve_type_alias(&ctx.ast[*alias_id].value, &ctx) {
+        if let Ok(resolved) = resolve_type_alias(&ctx.ast[*alias_id].value, ctx) {
             ctx.types.resolved_type_aliases.insert(*alias_id, resolved);
         }
     }

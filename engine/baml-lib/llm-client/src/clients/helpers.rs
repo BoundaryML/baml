@@ -330,7 +330,7 @@ impl<Meta: Clone> PropertyHandler<Meta> {
         self.ensure_string("client_response_type", false)
             .and_then(|(key_span, value, _)| {
                 if let StringOr::Value(value) = value {
-                    return Some(match value.as_str() {
+                    Some(match value.as_str() {
                         "openai" => UnresolvedResponseType::OpenAI,
                         "anthropic" => UnresolvedResponseType::Anthropic,
                         "google" => UnresolvedResponseType::Google,

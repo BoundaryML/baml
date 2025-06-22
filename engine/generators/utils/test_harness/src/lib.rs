@@ -31,7 +31,7 @@ impl<L: TestLanguageFeatures> Drop for TestStructure<L> {
 
 impl<L: TestLanguageFeatures> TestStructure<L> {
     fn new(dir: PathBuf, generator: L, persist: bool) -> Result<Self, anyhow::Error> {
-        let project_name = dir.iter().last().expect("must have a folder name");
+        let project_name = dir.iter().next_back().expect("must have a folder name");
 
         let cargo_root = get_cargo_root()?;
         let base_test_dir = cargo_root
@@ -65,7 +65,7 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
 
     pub fn ensure_consistent_codegen(&self) -> Result<(), anyhow::Error> {
         // read all .baml_files in the test_dir
-        let baml_files = glob::glob(&self.src_dir.join("**/*.baml").to_str().unwrap())?;
+        let baml_files = glob::glob(self.src_dir.join("**/*.baml").to_str().unwrap())?;
         let baml_files = baml_files
             .into_iter()
             .map(|b| match b {
@@ -108,7 +108,8 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
             let files = self
                 .generator
                 .generate_sdk_files_for_test(self.ir.clone(), &args)?;
-            return Ok(files);
+
+            Ok(files)
         };
 
         // run 100 times and ensure the files are the same
@@ -130,7 +131,7 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
             .unwrap_or(false);
 
         // read all .baml_files in the test_dir
-        let baml_files = glob::glob(&self.src_dir.join("**/*.baml").to_str().unwrap())?;
+        let baml_files = glob::glob(self.src_dir.join("**/*.baml").to_str().unwrap())?;
         let baml_files = baml_files
             .into_iter()
             .map(|b| match b {
@@ -173,7 +174,7 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
 
         for cmd_str in args.on_generate {
             let mut cmd = Command::new("sh");
-            cmd.args(&["-c", &cmd_str]);
+            cmd.args(["-c", &cmd_str]);
             cmd.current_dir(&self.src_dir);
             let output = cmd.output().expect("failed to run command");
             assert!(
@@ -187,21 +188,18 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
         }
 
         if also_run_tests {
-            match args.client_type {
-                baml_types::GeneratorOutputType::Go => {
-                    let mut cmd = Command::new(&format!("./{}", &self.project_name));
-                    cmd.current_dir(&self.src_dir);
-                    let dylib_path = get_cargo_root()?.join("target/debug/libbaml_cffi.dylib");
-                    let so_path = get_cargo_root()?.join("target/debug/libbaml_cffi.so");
-                    let cargo_target_dir = if dylib_path.exists() {
-                        dylib_path
-                    } else {
-                        so_path
-                    };
-                    cmd.env("BAML_LIBRARY_PATH", cargo_target_dir);
-                    run_and_stream(&mut cmd)?;
-                }
-                _ => {}
+            if let baml_types::GeneratorOutputType::Go = args.client_type {
+                let mut cmd = Command::new(format!("./{}", &self.project_name));
+                cmd.current_dir(&self.src_dir);
+                let dylib_path = get_cargo_root()?.join("target/debug/libbaml_cffi.dylib");
+                let so_path = get_cargo_root()?.join("target/debug/libbaml_cffi.so");
+                let cargo_target_dir = if dylib_path.exists() {
+                    dylib_path
+                } else {
+                    so_path
+                };
+                cmd.env("BAML_LIBRARY_PATH", cargo_target_dir);
+                run_and_stream(&mut cmd)?;
             }
         } else {
             println!("Not running! Set RUN_GENERATOR_TESTS=1 to run tests");
@@ -228,7 +226,7 @@ fn run_and_stream(cmd: &mut Command) -> anyhow::Result<()> {
     // Spawn two threads that forward each line to your library in real time.
     let out_handle = thread::spawn(move || {
         let reader = BufReader::new(stdout);
-        for line in reader.lines().flatten() {
+        for line in reader.lines().map_while(Result::ok) {
             // Swap out the `println!` for whatever your library needs,
             // e.g. log::info! or a channel send.
             println!("{line}");
@@ -238,7 +236,7 @@ fn run_and_stream(cmd: &mut Command) -> anyhow::Result<()> {
 
     let err_handle = thread::spawn(move || {
         let reader = BufReader::new(stderr);
-        for line in reader.lines().flatten() {
+        for line in reader.lines().map_while(Result::ok) {
             eprintln!("{line}");
             // flush stderr
             let _ = std::io::stderr().flush();

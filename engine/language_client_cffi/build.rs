@@ -1,8 +1,6 @@
 use std::path::Path;
 
-use cbindgen;
 use flatc::flatc;
-use flatc_rust;
 
 fn main() {
     // Re-run build.rs if these files change.
@@ -35,6 +33,7 @@ fn main() {
     // Use cbindgen to generate the C header for your Rust library.
     let crate_dir = std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR not set");
 
+    #[allow(clippy::single_element_loop)]
     for out_path in
         [Path::new(&crate_dir).join("../language_client_go/include/baml_cffi_generated.h")]
     {
@@ -46,14 +45,12 @@ fn main() {
             .generate()
             .expect("Failed to generate C header")
             .write_to_file(out_path.clone());
-        if std::env::var("CI").is_ok() {
-            if res {
-                let new_content = std::fs::read_to_string(&out_path).unwrap();
-                println!("New header content: \n==============\n{}", new_content);
-                println!("\n\n");
-                println!("Old header content: \n==============\n{}", outpath_content);
-                panic!("cbindgen generated a diff");
-            }
+        if std::env::var("CI").is_ok() && res {
+            let new_content = std::fs::read_to_string(&out_path).unwrap();
+            println!("New header content: \n==============\n{}", new_content);
+            println!("\n\n");
+            println!("Old header content: \n==============\n{}", outpath_content);
+            panic!("cbindgen generated a diff");
         }
     }
 }

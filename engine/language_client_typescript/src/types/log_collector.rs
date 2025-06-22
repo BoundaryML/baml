@@ -125,9 +125,9 @@ impl FunctionLog {
 
         format!(
             "FunctionLog(id={}, function_name={}, type={}, timing={}, usage={}, calls=[{}], raw_llm_response={})",
-            inner.id().to_string(),
+            inner.id(),
             inner.function_name(),
-            inner.log_type().to_string(),
+            inner.log_type(),
             Timing { inner: inner.timing() }.to_string(),
             Usage { inner: inner.usage() }.to_string(),
             calls_str,

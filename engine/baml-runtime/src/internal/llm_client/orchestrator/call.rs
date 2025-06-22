@@ -119,7 +119,7 @@ pub async fn orchestrate(
         // Currently, we break out of the loop if an LLM responded, even if we couldn't parse the result.
         if results
             .last()
-            .map_or(false, |(_, r, _)| matches!(r, LLMResponse::Success(_)))
+            .is_some_and(|(_, r, _)| matches!(r, LLMResponse::Success(_)))
         {
             break;
         } else if let Some(duration) = sleep_duration {

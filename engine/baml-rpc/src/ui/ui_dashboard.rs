@@ -5,7 +5,7 @@ use ts_rs::TS;
 use crate::{base::EpochMsTimestamp, rpc::ApiEndpoint};
 
 /**
- * interface Expression<T> {
+interface Expression<T> {
     operator: "gt" | "lt" | "lte" | "gte" | "eq" | "ne" | "in" | "contains" | "regex" | "exists";
     unary_operator?: "length"
     value: T;

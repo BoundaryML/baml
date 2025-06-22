@@ -111,7 +111,7 @@ impl RuntimeAST {
     where
         TEndpoint: ApiEndpoint,
     {
-        if !self.api_key().is_some() {
+        if self.api_key().is_none() {
             return Err(ApiError::Http {
                 status: reqwest::StatusCode::UNAUTHORIZED,
                 body: format!("BOUNDARY_API_KEY is not set for {}", TEndpoint::path()),
@@ -154,8 +154,7 @@ impl RuntimeAST {
         }
 
         // D) happy path: 2xx → attempt to parse into T
-        Ok(serde_json::from_slice::<TEndpoint::Response<'resp>>(&bytes)
-            .map_err(ApiError::Deserialize)?)
+        serde_json::from_slice::<TEndpoint::Response<'resp>>(&bytes).map_err(ApiError::Deserialize)
     }
 }
 
@@ -284,7 +283,7 @@ impl TracePublisher {
                 // Process any incoming command or event.
                 Some(message) = self.rx.recv() => {
 
-                    if !self.lookup.api_key().is_some() {
+                    if self.lookup.api_key().is_none() {
                         tracing::debug!("Skipping trace event because BOUNDARY_API_KEY is not set");
                         continue;
                     }
@@ -324,7 +323,7 @@ impl TracePublisher {
                 }
                 // Periodic flush of pending events.
                 _ = tick_interval.tick() => {
-                    if !self.lookup.api_key().is_some() {
+                    if self.lookup.api_key().is_none() {
                         tracing::debug!("Skipping trace event because BOUNDARY_API_KEY is not set");
                         continue;
                     }
@@ -357,19 +356,19 @@ impl TracePublisher {
                     .iter()
                     .map(|(name, field_type)| NamedType {
                         name: name.clone(),
-                        type_ref: field_type.into_rpc_event(self.lookup.as_ref()),
+                        type_ref: field_type.to_rpc_event(self.lookup.as_ref()),
                     })
                     .collect();
 
                 FunctionDefinition {
                     function_id: signature.function_id.0.clone(),
                     inputs,
-                    output: signature.output.into_rpc_event(self.lookup.as_ref()),
+                    output: signature.output.to_rpc_event(self.lookup.as_ref()),
                     dependencies: signature
                         .function_id
                         .1
                         .iter()
-                        .map(|dep| (**dep).0.clone())
+                        .map(|dep| dep.0.clone())
                         .collect(),
                 }
             })
@@ -378,8 +377,8 @@ impl TracePublisher {
         // Convert types
         let types: Vec<TypeDefinition> =
             ast.types
-                .iter()
-                .map(|(_name, type_with_deps)| {
+                .values()
+                .map(|type_with_deps| {
                     let type_id_arc = &type_with_deps.type_id.0;
                     let dependencies_arc = &type_with_deps.type_id.1;
 
@@ -400,7 +399,7 @@ impl TracePublisher {
                                         .map(|(name, field_type_arc)| NamedType {
                                             name: name.clone(),
                                             type_ref: (**field_type_arc)
-                                                .into_rpc_event(self.lookup.as_ref()),
+                                                .to_rpc_event(self.lookup.as_ref()),
                                         })
                                         .collect()
                                 });
@@ -431,7 +430,7 @@ impl TracePublisher {
                         }
                         "type_alias" => TypeDefinition::Alias {
                             type_id: concrete_type_id,
-                            rhs: (*type_with_deps.field_type).into_rpc_event(self.lookup.as_ref()),
+                            rhs: (*type_with_deps.field_type).to_rpc_event(self.lookup.as_ref()),
                         },
                         _ => TypeDefinition::Alias {
                             type_id: concrete_type_id,

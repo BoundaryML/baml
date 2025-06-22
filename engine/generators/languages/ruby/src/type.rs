@@ -148,7 +148,9 @@ pub enum TypeRb {
 
 impl TypeRb {
     pub fn with_meta(mut self, meta: TypeMetaRb) -> Self {
-        self.meta_mut().map(|m| *m = meta);
+        if let Some(m) = self.meta_mut() {
+            *m = meta;
+        }
         self
     }
 
@@ -222,7 +224,7 @@ impl SerializeType for TypeRb {
             TypeRb::Class { package, name, .. } | TypeRb::TypeAlias { package, name, .. } => {
                 if pkg.is_defining_alias(name) {
                     // Recursive types are not supported in sorbet, so we use T.anything
-                    format!("T.anything")
+                    "T.anything".to_string()
                 } else {
                     format!("{}{}", package.relative_from(pkg), name)
                 }
@@ -232,7 +234,7 @@ impl SerializeType for TypeRb {
                     "T.any({})",
                     variants
                         .iter()
-                        .map(|v| v.serialize_type(&pkg))
+                        .map(|v| v.serialize_type(pkg))
                         .collect::<Vec<_>>()
                         .join(", ")
                 )

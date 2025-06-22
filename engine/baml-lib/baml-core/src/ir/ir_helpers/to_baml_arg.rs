@@ -34,6 +34,9 @@ pub struct ArgCoercer {
     pub allow_implicit_cast_to_string: bool,
 }
 
+/// Linter doesn't like `Result<T, ()>` so we'll use this as a placeholder.
+pub struct ArgCoerceError;
+
 impl ArgCoercer {
     pub fn coerce_arg(
         &self,
@@ -41,7 +44,7 @@ impl ArgCoercer {
         field_type: &FieldType,
         value: &BamlValue, // original value passed in by user
         scope: &mut ScopeStack,
-    ) -> Result<BamlValueWithMeta<FieldType>, ()> {
+    ) -> Result<BamlValueWithMeta<FieldType>, ArgCoerceError> {
         let metadata = field_type.meta();
 
         let value = match field_type {
@@ -72,7 +75,7 @@ impl ArgCoercer {
                     )),
                     _ => {
                         scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
-                        Err(())
+                        Err(ArgCoerceError)
                     }
                 },
                 (TypeValue::Int, BamlValue::Int(v)) => {
@@ -102,7 +105,7 @@ impl ArgCoercer {
                         Some(v) => match v.as_str() {
                             None => {
                                 scope.push_error(format!("Invalid property `media_type` on media {}: expected string, got {:?}", media_type, v.r#type()));
-                                return Err(());
+                                return Err(ArgCoerceError);
                             }
                             Some(val) => Some(val.to_string()),
                         },
@@ -132,7 +135,7 @@ impl ArgCoercer {
                                     "BAML internal error: span is missing, cannot resolve file ref"
                                         .to_string(),
                                 );
-                                Err(())
+                                Err(ArgCoerceError)
                             }
                         }
                     } else if let Some(BamlValue::String(s)) = kv.get("url") {
@@ -168,12 +171,12 @@ impl ArgCoercer {
                             "Invalid media source: expected `file`, `url`, or `base64`, got `{}`",
                             value
                         ));
-                        Err(())
+                        Err(ArgCoerceError)
                     }
                 }
                 (_, _) => {
                     scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
-                    Err(())
+                    Err(ArgCoerceError)
                 }
             },
             FieldType::Enum { name, .. } => match value {
@@ -197,11 +200,11 @@ impl ArgCoercer {
                                     .join(" | "),
                                 s
                             ));
-                            Err(())
+                            Err(ArgCoerceError)
                         }
                     } else {
                         scope.push_error(format!("Enum {} not found", name));
-                        Err(())
+                        Err(ArgCoerceError)
                     }
                 }
                 BamlValue::Enum(n, s) if n == name => Ok(BamlValueWithMeta::Enum(
@@ -211,7 +214,7 @@ impl ArgCoercer {
                 )),
                 _ => {
                     scope.push_error(format!("Invalid enum {}: Got `{}`", name, value));
-                    Err(())
+                    Err(ArgCoerceError)
                 }
             },
             FieldType::Literal(literal, _) => match (literal, value) {
@@ -226,7 +229,7 @@ impl ArgCoercer {
                 }
                 _ => {
                     scope.push_error(format!("Expected literal {:?}, got `{}`", literal, value));
-                    Err(())
+                    Err(ArgCoerceError)
                 }
             },
             FieldType::Class { name, .. } => match value {
@@ -274,12 +277,12 @@ impl ArgCoercer {
                     }
                     Err(_) => {
                         scope.push_error(format!("Class {} not found", name));
-                        Err(())
+                        Err(ArgCoerceError)
                     }
                 },
                 _ => {
                     scope.push_error(format!("Expected class {}, got `{}`", name, value));
-                    Err(())
+                    Err(ArgCoerceError)
                 }
             },
             FieldType::RecursiveTypeAlias { name, .. } => {
@@ -296,7 +299,7 @@ impl ArgCoercer {
                     Some(coerced) => Ok(coerced),
                     None => {
                         scope.push_error(format!("Recursive type alias {} not found", name));
-                        Err(())
+                        Err(ArgCoerceError)
                     }
                 }
             }
@@ -312,12 +315,12 @@ impl ArgCoercer {
                 }
                 _ => {
                     scope.push_error(format!("Expected array, got `{}`", value));
-                    Err(())
+                    Err(ArgCoerceError)
                 }
             },
             FieldType::Tuple(_, _) => {
                 scope.push_error("Tuples are not yet supported".to_string());
-                Err(())
+                Err(ArgCoerceError)
             }
             FieldType::Map(k, v, _) => match value {
                 BamlValue::Map(kv) => {
@@ -339,11 +342,11 @@ impl ArgCoercer {
                 }
                 _ => {
                     scope.push_error(format!("Expected map, got `{}`", value));
-                    Err(())
+                    Err(ArgCoerceError)
                 }
             },
             FieldType::Union(options, _) => {
-                let mut first_good_result = Err(());
+                let mut first_good_result = Err(ArgCoerceError);
                 for option in options.iter_include_null() {
                     let mut scope = ScopeStack::new();
                     if first_good_result.is_err() {
@@ -355,30 +358,32 @@ impl ArgCoercer {
                 }
                 if first_good_result.is_err() {
                     scope.push_error(format!("Expected one of {:?}, got `{}`", options, value));
-                    Err(())
+                    Err(ArgCoerceError)
                 } else {
                     first_good_result
                 }
             }
             FieldType::Arrow(_, _) => {
-                scope.push_error(format!(
-                    "A json value may not be coerced into a function type"
+                scope.push_error(String::from(
+                    "A json value may not be coerced into a function type",
                 ));
-                Err(())
+                Err(ArgCoerceError)
             }
         }?;
 
         let search_for_failures_result =
             first_failing_assert_nested(ir, &value.clone().value(), field_type).map_err(|e| {
                 scope.push_error(format!("Failed to evaluate assert: {:?}", e));
+                ArgCoerceError
             })?;
+
         match search_for_failures_result {
             Some(Constraint {
                 label, expression, ..
             }) => {
                 let msg = label.as_ref().unwrap_or(&expression.0);
                 scope.push_error(format!("Failed assert: {msg}"));
-                Err(())
+                Err(ArgCoerceError)
             }
             None => Ok(value),
         }

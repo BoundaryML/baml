@@ -331,16 +331,7 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                         (span.clone(), Some(FieldType::int())),
                     ))
                 })
-                .or_else(|_| {
-                    val.parse::<f64>()
-                        .map(|v| {
-                            Expr::Atom(BamlValueWithMeta::Float(
-                                v,
-                                (span.clone(), Some(FieldType::float())),
-                            ))
-                        })
-                        .or_else(|_| Err(anyhow!("Invalid numeric value: {}", val)))
-                }),
+                .map_err(|_| anyhow!("Invalid numeric value: {}", val)),
             ast::Expression::StringValue(val, span) => Ok(Expr::Atom(BamlValueWithMeta::String(
                 val.to_string(),
                 (span.clone(), Some(FieldType::string())),
@@ -491,7 +482,7 @@ impl WithRepr<Expr<ExprMetadata>> for ast::Expression {
                 Ok(Expr::If(
                     Arc::new(cond),
                     Arc::new(then),
-                    else_.map(|e| Arc::new(e)),
+                    else_.map(Arc::new),
                     (span.clone(), None),
                 ))
             }
@@ -801,7 +792,7 @@ impl IntermediateRepr {
             .filter_map(|c| {
                 if c.attributes.dynamic()
                     || c.attributes.streaming_behavior() != default_streaming_behavior
-                    || c.attributes.constraints.len() > 0
+                    || !c.attributes.constraints.is_empty()
                 {
                     Some((c.elem.name.clone(), c.attributes.clone()))
                 } else {
@@ -815,7 +806,7 @@ impl IntermediateRepr {
             .filter_map(|e| {
                 if e.attributes.dynamic()
                     || e.attributes.streaming_behavior() != default_streaming_behavior
-                    || e.attributes.constraints.len() > 0
+                    || !e.attributes.constraints.is_empty()
                 {
                     Some((e.elem.name.clone(), e.attributes.clone()))
                 } else {
@@ -1048,10 +1039,7 @@ pub struct NodeAttributes {
 }
 
 fn is_some_true(maybe_value: Option<&UnresolvedValue<()>>) -> bool {
-    match maybe_value {
-        Some(Resolvable::Bool(true, _)) => true,
-        _ => false,
-    }
+    matches!(maybe_value, Some(Resolvable::Bool(true, _)))
 }
 
 impl NodeAttributes {
@@ -1175,7 +1163,7 @@ fn to_ir_attributes(
         streaming_state,
     ]
     .into_iter()
-    .filter_map(|s| s)
+    .flatten()
     .collect();
 
     (meta, constraints.clone())
@@ -1252,8 +1240,7 @@ impl WithRepr<FieldType> for ast::FieldType {
         if self
             .attributes()
             .iter()
-            .find(|Attribute { name, .. }| name.name() == "stream.done")
-            .is_some()
+            .any(|Attribute { name, .. }| name.name() == "stream.done")
         {
             let val: UnresolvedValue<()> = Resolvable::Bool(true, ());
             meta.insert("stream.done".to_string(), val);
@@ -1261,8 +1248,7 @@ impl WithRepr<FieldType> for ast::FieldType {
         if self
             .attributes()
             .iter()
-            .find(|Attribute { name, .. }| name.name() == "stream.with_state")
-            .is_some()
+            .any(|Attribute { name, .. }| name.name() == "stream.with_state")
         {
             let val: UnresolvedValue<()> = Resolvable::Bool(true, ());
             meta.insert("stream.with_state".to_string(), val);
@@ -1270,8 +1256,7 @@ impl WithRepr<FieldType> for ast::FieldType {
         if self
             .attributes()
             .iter()
-            .find(|Attribute { name, .. }| name.name() == "stream.not_null")
-            .is_some()
+            .any(|Attribute { name, .. }| name.name() == "stream.not_null")
         {
             let val: UnresolvedValue<()> = Resolvable::Bool(true, ());
             meta.insert("stream.not_null".to_string(), val);
@@ -1855,8 +1840,8 @@ impl ExprFunction {
                             };
                             annotate_variable(target, r#type.clone(), body)
                         });
-                let res = Expr::Lambda(*arity, Arc::new(new_body), meta.clone());
-                res
+
+                Expr::Lambda(*arity, Arc::new(new_body), meta.clone())
             }
             // TODO: Handle other cases - traverse the tree.
             // It seems like only Expr::Lambda is admissable as an ExprBody's expr field?
@@ -1954,14 +1939,13 @@ pub fn annotate_variable(
                     )
                 })
                 .collect();
-            let new_spread = match spread {
-                None => None,
-                Some(expr) => Some(Box::new(annotate_variable(
+            let new_spread = spread.as_ref().map(|expr| {
+                Box::new(annotate_variable(
                     target,
                     r#type.clone(),
                     expr.as_ref().clone(),
-                ))),
-            };
+                ))
+            });
             Expr::ClassConstructor {
                 name: name.clone(),
                 fields: new_fields,
@@ -2009,7 +1993,7 @@ pub fn annotate_variable(
             Expr::If(
                 Arc::new(new_cond),
                 Arc::new(new_then),
-                new_else.map(|e| Arc::new(e)),
+                new_else.map(Arc::new),
                 meta.clone(),
             )
         }
@@ -2092,6 +2076,8 @@ impl WithRepr<Function> for FunctionWalker<'_> {
 
         for arg in self.walk_input_args().chain(self.walk_output_args()) {
             let node_attrs = WithRepr::attributes(arg.field_type(), db);
+
+            #[allow(clippy::map_entry)] // can't use map.entry() without cloning spans here
             for (symbol, mut spans) in node_attrs.symbol_spans {
                 if !symbol_spans.contains_key(&symbol) {
                     symbol_spans.insert(symbol, spans);
@@ -2392,10 +2378,10 @@ impl WithRepr<Prompt> for PromptAst<'_> {
 pub fn make_test_ir(source_code: &str) -> anyhow::Result<IntermediateRepr> {
     let (ir, diagnostics) = make_test_ir_and_diagnostics(source_code)?;
     if diagnostics.has_errors() {
-        return Err(anyhow::anyhow!(
+        Err(anyhow::anyhow!(
             "Source code was invalid: \n{:?}",
             diagnostics.errors()
-        ));
+        ))
     } else {
         Ok(ir)
     }
@@ -2405,7 +2391,7 @@ pub fn make_test_ir_from_dir(dir: &std::path::PathBuf) -> anyhow::Result<Interme
     // load all *.baml files in the directory
     let files = std::fs::read_dir(dir)?
         .filter_map(|file| file.ok())
-        .filter(|file| file.path().extension().map_or(false, |ext| ext == "baml"))
+        .filter(|file| file.path().extension().is_some_and(|ext| ext == "baml"))
         .map(|file| file.path())
         .map(|path| Ok((path.clone(), std::fs::read_to_string(path)?).into()))
         .collect::<Result<Vec<_>>>()?;
@@ -2447,7 +2433,7 @@ pub fn make_test_ir_and_diagnostics(
 /// This is useful for generating IR test fixtures. Also return the
 /// `Diagnostics`.
 fn make_test_ir_and_diagnostics_from_dir(
-    root_dir: &std::path::PathBuf,
+    root_dir: &std::path::Path,
     source_code: Vec<internal_baml_diagnostics::SourceFile>,
 ) -> anyhow::Result<(IntermediateRepr, Diagnostics)> {
     use std::path::PathBuf;
@@ -2456,7 +2442,7 @@ fn make_test_ir_and_diagnostics_from_dir(
 
     use crate::{validate, ValidatedSchema};
 
-    let validated_schema: ValidatedSchema = validate(&root_dir, source_code);
+    let validated_schema: ValidatedSchema = validate(root_dir, source_code);
     let diagnostics = validated_schema.diagnostics;
     let ir = IntermediateRepr::from_parser_database(
         &validated_schema.db,

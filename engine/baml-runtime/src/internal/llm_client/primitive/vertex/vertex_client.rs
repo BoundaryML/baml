@@ -62,7 +62,7 @@ fn resolve_properties(
         );
     };
 
-    if !props.anthropic_version.is_some() && props.model.starts_with("claude") {
+    if props.anthropic_version.is_none() && props.model.starts_with("claude") {
         props.anthropic_version =
             Some(internal_llm_client::anthropic::DEFAULT_ANTHROPIC_VERSION.to_string());
     }
@@ -158,11 +158,7 @@ impl VertexClient {
                 resolve_image_urls: ResolveMediaUrls::EnsureMime,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
-            retry_policy: client
-                .elem()
-                .retry_policy_id
-                .as_ref()
-                .map(|s| s.to_string()),
+            retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),
             client: create_client()?,
             properties,
         })
@@ -314,9 +310,7 @@ impl WithChat for VertexClient {
 }
 
 //simple, Map with key "prompt" and value of the prompt string
-fn convert_completion_prompt_to_body(
-    prompt: &String,
-) -> serde_json::Map<String, serde_json::Value> {
+fn convert_completion_prompt_to_body(prompt: &str) -> serde_json::Map<String, serde_json::Value> {
     let mut map = serde_json::Map::new();
     let content = json!({
         "role": "user",
@@ -424,7 +418,7 @@ impl ToProviderMessageExt for VertexClient {
 impl CompletionToProviderBody for VertexClient {
     fn completion_to_provider_body(
         &self,
-        prompt: &String,
+        prompt: &str,
     ) -> serde_json::Map<String, serde_json::Value> {
         convert_completion_prompt_to_body(prompt)
     }

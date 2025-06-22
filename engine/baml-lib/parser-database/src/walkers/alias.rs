@@ -11,7 +11,7 @@ pub type TypeAliasWalker<'db> = super::Walker<'db, ast::TypeAliasId>;
 impl<'db> TypeAliasWalker<'db> {
     /// Name of the type alias.
     pub fn name(&self) -> &str {
-        &self.db.ast[self.id].identifier.name()
+        self.db.ast[self.id].identifier.name()
     }
 
     /// Identifier span.
@@ -39,6 +39,6 @@ impl<'db> TypeAliasWalker<'db> {
 
     /// Add to Jinja types.
     pub fn add_to_types(self, types: &mut internal_baml_jinja_types::PredefinedTypes) {
-        types.add_alias(self.name(), self.db.to_jinja_type(&self.target()))
+        types.add_alias(self.name(), self.db.to_jinja_type(self.target()))
     }
 }

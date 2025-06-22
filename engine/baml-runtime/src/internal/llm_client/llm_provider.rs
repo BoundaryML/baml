@@ -93,7 +93,7 @@ impl LLMProvider {
 
     pub fn completion_to_provider_body<'a>(
         &self,
-        prompt: &String,
+        prompt: &str,
         ctx: &RuntimeContext,
         client_lookup: &'a dyn InternalClientLookup<'a>,
     ) -> Result<serde_json::Map<String, serde_json::Value>> {

@@ -294,10 +294,10 @@ pub fn parse_jinja_expression(token: Pair<'_>, diagnostics: &mut Diagnostics) ->
                         _ => inner_text.push(c),
                     }
                 }
-                return Expression::JinjaExpressionValue(
+                Expression::JinjaExpressionValue(
                     JinjaExpression(inner_text),
                     diagnostics.span(token.as_span()),
-                );
+                )
             }
             _ => unreachable_rule!(token, Rule::jinja_expression),
         })

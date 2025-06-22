@@ -86,6 +86,7 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                 // if a client exists, check if the env vars have changed
                 if clients.contains_key(client_name) {
                     // make sure to clone the client to avoid holding a lock, otherwise dashmap will deadlock!
+                    #[allow(clippy::map_clone)]
                     let client = clients.get(client_name).map(|c| c.clone()).unwrap();
                     // if the env vars haven't changed, return the cached client
                     if !client.has_env_vars_changed(ctx.env_vars()) {
@@ -183,7 +184,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         let func = self.get_function(function_name)?;
         let function_params = func.inputs();
         let baml_args = self.ir().check_function_params(
-            &function_params,
+            function_params,
             params,
             ArgCoercer {
                 span_path: None,
@@ -283,7 +284,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
             let test = self.ir().find_test(&func, test_name)?;
             let test_case_params = test.test_case_params(&ctx.eval_ctx(strict))?;
             let inputs = func.inputs().clone();
-            let span = test.span().clone();
+            let span = test.span();
             Ok((test_case_params, inputs, span.cloned()))
         });
         let maybe_expr_test_and_params =
@@ -291,7 +292,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
                 let test = self.ir().find_expr_fn_test(&func, test_name)?;
                 let test_case_params = test.test_case_params(&ctx.eval_ctx(strict))?;
                 let inputs = func.inputs().clone();
-                let span = test.span().clone();
+                let span = test.span();
                 Ok((test_case_params, inputs, span.cloned()))
             });
 

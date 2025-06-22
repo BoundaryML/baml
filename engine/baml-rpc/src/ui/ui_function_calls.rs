@@ -193,19 +193,14 @@ impl<T> FilterExpression<T> {
 //   - Get calls after a timestamp: ?startAt={"op":"gte","v":1748131389246}
 //   - Complex query: ?project_id=proj_123&function_name={"op":"regex","v":"^test_.*"}&status={"op":"eq","v":"success"}
 
-#[derive(Debug, Deserialize, Serialize, TS, Clone)]
+#[derive(Debug, Deserialize, Serialize, TS, Clone, Default)]
 #[ts(export)]
 pub enum SortDirection {
     #[serde(rename = "asc")]
     Ascending,
+    #[default]
     #[serde(rename = "desc")]
     Descending,
-}
-
-impl Default for SortDirection {
-    fn default() -> Self {
-        SortDirection::Descending
-    }
 }
 
 #[derive(Debug, Deserialize, Serialize, TS, Clone)]

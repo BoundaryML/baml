@@ -17,7 +17,7 @@ pub(super) fn coerce_array(
 
     log::debug!(
         "scope: {scope} :: coercing to: {name} (current: {current})",
-        name = list_target.to_string(),
+        name = list_target,
         scope = ctx.display_scope(),
         current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
     );

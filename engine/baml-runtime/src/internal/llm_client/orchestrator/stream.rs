@@ -13,6 +13,7 @@ use super::{call::CtxWithHttpRequestId, OrchestrationScope, OrchestratorNodeIter
 use crate::{
     internal::{
         llm_client::{
+            orchestrator::ExecutionScope,
             parsed_value_to_response,
             traits::{HttpContext, WithClientProperties, WithPrompt, WithStreamable},
             LLMErrorResponse, LLMResponse, ResponseBamlValue,
@@ -152,7 +153,11 @@ where
                 &final_response,
                 ctx.runtime_context().call_id_stack.clone(),
                 ctx.http_request_id(),
-                node.scope.scope.iter().map(|s| s.to_string()).collect(),
+                node.scope
+                    .scope
+                    .iter()
+                    .map(ExecutionScope::to_string)
+                    .collect(),
             );
             BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
         }
@@ -172,7 +177,7 @@ where
         // Currently, we break out of the loop if an LLM responded, even if we couldn't parse the result.
         if results
             .last()
-            .map_or(false, |(_, r, _)| matches!(r, LLMResponse::Success(_)))
+            .is_some_and(|(_, r, _)| matches!(r, LLMResponse::Success(_)))
         {
             break;
         }

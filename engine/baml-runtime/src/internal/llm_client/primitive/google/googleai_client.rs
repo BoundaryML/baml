@@ -120,7 +120,7 @@ impl WithStreamChat for GoogleAIClient {
 
 impl GoogleAIClient {
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<Self> {
-        let properties = resolve_properties(&client.elem().provider, &client.options(), ctx)?;
+        let properties = resolve_properties(&client.elem().provider, client.options(), ctx)?;
         Ok(Self {
             name: client.name().into(),
             context: RenderContext_Client {
@@ -137,11 +137,7 @@ impl GoogleAIClient {
                 resolve_image_urls: ResolveMediaUrls::IfMatchesGoogleFileUri,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
-            retry_policy: client
-                .elem()
-                .retry_policy_id
-                .as_ref()
-                .map(|s| s.to_string()),
+            retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),
             client: create_client()?,
             properties,
         })
@@ -250,9 +246,7 @@ impl WithChat for GoogleAIClient {
 }
 
 //simple, Map with key "prompt" and value of the prompt string
-fn convert_completion_prompt_to_body(
-    prompt: &String,
-) -> serde_json::Map<String, serde_json::Value> {
+fn convert_completion_prompt_to_body(prompt: &str) -> serde_json::Map<String, serde_json::Value> {
     let mut map = serde_json::Map::new();
     let content = json!({
         "role": "user",
@@ -353,7 +347,7 @@ impl ToProviderMessage for GoogleAIClient {
 impl CompletionToProviderBody for GoogleAIClient {
     fn completion_to_provider_body(
         &self,
-        prompt: &String,
+        prompt: &str,
     ) -> serde_json::Map<String, serde_json::Value> {
         convert_completion_prompt_to_body(prompt)
     }

@@ -44,7 +44,7 @@ impl From<CFFIValueHolder<'_>> for BamlValue {
                 .value_as_cffivalue_map()
                 .and_then(|m| m.entries())
                 .map(|v| v.into_iter().map(|v| v.into()).collect())
-                .map(|kv| BamlValue::Map(kv))
+                .map(BamlValue::Map)
                 .expect("Failed to convert CFFIValueMap to BamlValue"),
             CFFIValueUnion::CFFIValueClass => value
                 .value_as_cffivalue_class()

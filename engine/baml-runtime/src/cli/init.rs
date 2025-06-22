@@ -184,12 +184,12 @@ fn generate_main_baml_content(
             openapi_generate_command.trim_start()
         )
     } else if matches!(output_type, GeneratorOutputType::Go) {
-        format!(
+        String::from(
             r#"
     // 'baml-cli generate' will run this after generating go code
     // This command will be run from within $output_dir/baml_client
     on_generate "gofmt -w . && goimports -w ."
-    "#
+    "#,
         )
     } else {
         "".to_string()

@@ -40,7 +40,7 @@ pub fn parse(root_path: &Path, source: &SourceFile) -> Result<(Ast, Diagnostics)
         diagnostics.push_error(DatamodelError::new_validation_error(
             &format!(
                 "A BAML file must have the file extension `.baml`, but found: {}",
-                source.path().to_string()
+                source.path()
             ),
             Span::empty(source.clone()),
         ));
@@ -65,17 +65,17 @@ pub fn parse(root_path: &Path, source: &SourceFile) -> Result<(Ast, Diagnostics)
             while let Some(current) = pairs.next() {
                 match current.as_rule() {
                     Rule::top_level_assignment => {
-                        parse_top_level_assignment(current, &mut diagnostics).map(
-                            |top_level_assignment| {
-                                top_level_definitions
-                                    .push(Top::TopLevelAssignment(top_level_assignment));
-                            },
-                        );
+                        if let Some(top_level_assignment) =
+                            parse_top_level_assignment(current, &mut diagnostics)
+                        {
+                            top_level_definitions
+                                .push(Top::TopLevelAssignment(top_level_assignment));
+                        }
                     }
                     Rule::expr_fn => {
-                        parse_expr_fn(current, &mut diagnostics).map(|expr_fn| {
+                        if let Some(expr_fn) = parse_expr_fn(current, &mut diagnostics) {
                             top_level_definitions.push(Top::ExprFn(expr_fn));
-                        });
+                        }
                     }
                     Rule::type_expression_block => {
                         let type_expr = parse_type_expression_block(

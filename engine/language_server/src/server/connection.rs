@@ -171,7 +171,7 @@ impl ClientSender {
         let Some(sender) = self.weak_sender.upgrade() else {
             anyhow::bail!("The connection with the client has been closed");
         };
-        let res = sender.send(msg)?;
-        Ok(res)
+        sender.send(msg)?;
+        Ok(())
     }
 }

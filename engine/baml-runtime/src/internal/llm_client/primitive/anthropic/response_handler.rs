@@ -19,7 +19,7 @@ fn to_prompt(
 }
 
 fn is_done(stop_reason: &Option<String>) -> bool {
-    stop_reason.as_ref().map_or(false, |r| {
+    stop_reason.as_ref().is_some_and(|r| {
         r.eq_ignore_ascii_case("end_turn") || r.eq_ignore_ascii_case("stop_sequence")
     })
 }
@@ -110,7 +110,7 @@ pub fn scan_anthropic_response_stream(
         Err(e) => return Ok(()),
     };
 
-    let event = match MessageChunk::deserialize(&event_body)
+    let event = MessageChunk::deserialize(&event_body)
         .context(format!(
             "Failed to parse into a response accepted by {}: {}",
             std::any::type_name::<MessageChunk>(),
@@ -120,15 +120,13 @@ pub fn scan_anthropic_response_stream(
             client: client_name.to_string(),
             model: model_name.clone(),
             prompt: prompt.clone(),
-            start_time: system_now.clone(),
+            start_time: *system_now,
             request_options: request_options.clone(),
             latency: instant_now.elapsed(),
             message: format!("{:?}", e),
             code: ErrorCode::Other(2),
-        }) {
-        Ok(response) => response,
-        Err(e) => return Err(e),
-    };
+        })?;
+
     match event {
         MessageChunk::MessageStart(chunk) => {
             let body = chunk.message;
@@ -140,12 +138,11 @@ pub fn scan_anthropic_response_stream(
             inner.output_tokens = Some(body.usage.output_tokens);
             inner.total_tokens = Some(body.usage.input_tokens + body.usage.output_tokens);
         }
-        MessageChunk::ContentBlockDelta(event) => match event.delta {
-            super::types::ContentBlockDelta::TextDelta { text } => {
+        MessageChunk::ContentBlockDelta(event) => {
+            if let super::types::ContentBlockDelta::TextDelta { text } = event.delta {
                 inner.content += &text;
             }
-            _ => (),
-        },
+        }
         MessageChunk::ContentBlockStart(_) => (),
         MessageChunk::ContentBlockStop(_) => (),
         MessageChunk::Ping => (),
@@ -164,7 +161,7 @@ pub fn scan_anthropic_response_stream(
                 model: model_name.clone(),
                 prompt: prompt.clone(),
                 request_options: request_options.clone(),
-                start_time: system_now.clone(),
+                start_time: *system_now,
                 latency: instant_now.elapsed(),
                 message: err.message,
                 code: ErrorCode::Other(2),

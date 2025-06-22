@@ -301,11 +301,11 @@ impl<T> UnionTypeGeneric<T> {
 }
 
 pub trait HasFieldType {
-    fn field_type<'a>(&'a self) -> &'a FieldType;
+    fn field_type(&self) -> &FieldType;
 }
 
 impl HasFieldType for FieldType {
-    fn field_type<'a>(&'a self) -> &'a FieldType {
+    fn field_type(&self) -> &FieldType {
         self
     }
 }
@@ -344,37 +344,37 @@ impl<T> TypeGeneric<T> {
     ) -> Vec<&'a TypeGeneric<T>> {
         if predicate(self) {
             return vec![self];
-        } else {
-            match self {
-                TypeGeneric::Primitive(..)
-                | TypeGeneric::Enum { .. }
-                | TypeGeneric::Literal(..)
-                | TypeGeneric::Class { .. }
-                | TypeGeneric::RecursiveTypeAlias { .. } => vec![],
-                TypeGeneric::List(inner, _) => inner.find_if(predicate),
-                TypeGeneric::Map(type_generic, type_generic1, _) => {
-                    let mut res = type_generic.find_if(predicate);
-                    res.extend(type_generic1.find_if(predicate));
-                    res
-                }
-                TypeGeneric::Tuple(type_generics, _) => type_generics
+        }
+
+        match self {
+            TypeGeneric::Primitive(..)
+            | TypeGeneric::Enum { .. }
+            | TypeGeneric::Literal(..)
+            | TypeGeneric::Class { .. }
+            | TypeGeneric::RecursiveTypeAlias { .. } => vec![],
+            TypeGeneric::List(inner, _) => inner.find_if(predicate),
+            TypeGeneric::Map(type_generic, type_generic1, _) => {
+                let mut res = type_generic.find_if(predicate);
+                res.extend(type_generic1.find_if(predicate));
+                res
+            }
+            TypeGeneric::Tuple(type_generics, _) => type_generics
+                .iter()
+                .flat_map(|t| t.find_if(predicate))
+                .collect(),
+            TypeGeneric::Union(union_type_generic, _) => union_type_generic
+                .iter_skip_null()
+                .iter()
+                .flat_map(|t| t.find_if(predicate))
+                .collect(),
+            TypeGeneric::Arrow(arrow_generic, _) => {
+                let res = arrow_generic
+                    .param_types
                     .iter()
-                    .flat_map(|t| t.find_if(predicate))
-                    .collect(),
-                TypeGeneric::Union(union_type_generic, _) => union_type_generic
-                    .iter_skip_null()
-                    .iter()
-                    .flat_map(|t| t.find_if(predicate))
-                    .collect(),
-                TypeGeneric::Arrow(arrow_generic, _) => {
-                    let res = arrow_generic
-                        .param_types
-                        .iter()
-                        .flat_map(|t| t.find_if(predicate));
-                    let mut returned = arrow_generic.return_type.find_if(predicate);
-                    returned.extend(res);
-                    returned
-                }
+                    .flat_map(|t| t.find_if(predicate));
+                let mut returned = arrow_generic.return_type.find_if(predicate);
+                returned.extend(res);
+                returned
             }
         }
     }
@@ -426,7 +426,6 @@ impl<T> TypeGeneric<T> {
 
     /// For types that are unions, replace the variants list with
     /// a simplified (flattened) variants list.
-
     pub fn is_primitive(&self) -> bool {
         match self {
             TypeGeneric::Primitive(_, _) => true,
@@ -447,10 +446,7 @@ impl<T> TypeGeneric<T> {
     }
 
     pub fn is_null(&self) -> bool {
-        match self {
-            TypeGeneric::Primitive(TypeValue::Null, _) => true,
-            _ => false,
-        }
+        matches!(self, TypeGeneric::Primitive(TypeValue::Null, _))
     }
 
     /// The immediate (non transitive) dependencies of a given type?
@@ -535,7 +531,7 @@ fn partialize(r#type: &Type, lookup: &impl TypeLookups) -> TypeStreaming {
             state,
         } = r#type
             .streaming_behavior()
-            .combine(&inherent_streaming_behavior(&r#type, lookup));
+            .combine(&inherent_streaming_behavior(r#type, lookup));
 
         // A copy of the metadata to use in the new type.
         let meta = type_meta::Streaming {
@@ -773,11 +769,11 @@ impl TypeGeneric<type_meta::Base> {
 
 pub trait ToUnionName<T> {
     fn to_union_name(&self) -> String;
-    fn find_union_types<'a>(&'a self) -> IndexSet<&'a TypeGeneric<T>>;
+    fn find_union_types(&self) -> IndexSet<&TypeGeneric<T>>;
 }
 
 impl<Meta: std::hash::Hash + std::cmp::Eq> ToUnionName<Meta> for TypeGeneric<Meta> {
-    fn find_union_types<'a>(&'a self) -> IndexSet<&'a TypeGeneric<Meta>> {
+    fn find_union_types(&self) -> IndexSet<&TypeGeneric<Meta>> {
         use TypeGeneric as T;
         // TODO: its pretty hard to get type aliases here
         // let value = self.simplify();
@@ -812,8 +808,8 @@ impl<Meta: std::hash::Hash + std::cmp::Eq> ToUnionName<Meta> for TypeGeneric<Met
                         .map(|c| if c.is_alphanumeric() { c } else { '_' })
                         .collect::<String>()
                 ),
-                LiteralValue::Int(val) => format!("int_{}", val.to_string()),
-                LiteralValue::Bool(val) => format!("bool_{}", val.to_string()),
+                LiteralValue::Int(val) => format!("int_{}", val),
+                LiteralValue::Bool(val) => format!("bool_{}", val),
             },
             T::Class { name, .. } => name.to_string(),
             T::List(field_type, _) => {
@@ -849,7 +845,6 @@ impl<Meta: std::hash::Hash + std::cmp::Eq> ToUnionName<Meta> for TypeGeneric<Met
                     .map(|v| v.to_union_name())
                     .collect::<Vec<_>>()
                     .join("__")
-                    .to_string()
             ),
             T::RecursiveTypeAlias { name, .. } => name.to_string(),
             T::Arrow(_, _) => "function".to_string(),

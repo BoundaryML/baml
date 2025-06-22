@@ -260,7 +260,7 @@ impl ThreadedTracer {
                     // '["d", "e", "f"]'
                     ValueType::String(value) => serde_json::from_str::<serde_json::Value>(&value)
                         .ok()
-                        .and_then(|json_value| json_value.as_str().map(|s| s.to_string()))
+                        .and_then(|json_value| json_value.as_str().map(str::to_string))
                         .or(Some(value)),
                     _ => serde_json::to_string_pretty(&output.value)
                         .ok()
