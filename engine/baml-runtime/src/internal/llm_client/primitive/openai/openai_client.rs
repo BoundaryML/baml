@@ -87,8 +87,8 @@ impl WithChat for OpenAIClient {
         let model_name = self
             .request_options()
             .get("model")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string);
         make_parsed_request(
             self,
             model_name,
@@ -185,8 +185,8 @@ impl WithStreamChat for OpenAIClient {
         let model_name = self
             .request_options()
             .get("model")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string);
         crate::internal::llm_client::primitive::stream_request::make_stream_request(
             self,
             either::Either::Right(prompt),

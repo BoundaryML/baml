@@ -249,7 +249,11 @@ impl WithSingleCallable for OrchestratorNode {
                 &response,
                 ctx.runtime_context().call_id_stack.clone(),
                 ctx.http_request_id(),
-                self.scope.scope.iter().map(|s| s.to_string()).collect(),
+                self.scope
+                    .scope
+                    .iter()
+                    .map(ExecutionScope::to_string)
+                    .collect(),
             );
             BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
         }
@@ -310,7 +314,11 @@ impl WithStreamable for OrchestratorNode {
                 err_resp,
                 ctx.runtime_context().call_id_stack.clone(),
                 ctx.http_request_id(),
-                self.scope.scope.iter().map(|s| s.to_string()).collect(),
+                self.scope
+                    .scope
+                    .iter()
+                    .map(ExecutionScope::to_string)
+                    .collect(),
             );
             BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
         }

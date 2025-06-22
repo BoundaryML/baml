@@ -580,7 +580,7 @@ impl DatamodelError {
     ) -> DatamodelError {
         let names = valid_clients
             .iter()
-            .map(|s| s.to_string())
+            .map(String::to_owned)
             .collect::<Vec<_>>();
         let close_names = sort_by_match(client_name, &names, Some(10));
 

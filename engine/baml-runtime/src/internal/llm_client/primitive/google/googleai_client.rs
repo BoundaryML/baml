@@ -137,11 +137,7 @@ impl GoogleAIClient {
                 resolve_image_urls: ResolveMediaUrls::IfMatchesGoogleFileUri,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
-            retry_policy: client
-                .elem()
-                .retry_policy_id
-                .as_ref()
-                .map(|s| s.to_string()),
+            retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),
             client: create_client()?,
             properties,
         })

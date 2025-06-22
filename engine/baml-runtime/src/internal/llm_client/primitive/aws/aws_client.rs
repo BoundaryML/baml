@@ -260,7 +260,7 @@ impl AwsClient {
                 resolve_image_urls: ResolveMediaUrls::Always,
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
-            retry_policy: client.retry_policy.as_ref().map(|s| s.to_string()),
+            retry_policy: client.retry_policy.as_ref().map(String::to_owned),
             properties,
         })
     }
@@ -284,11 +284,7 @@ impl AwsClient {
                 resolve_image_urls: ResolveMediaUrls::Always,
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
-            retry_policy: client
-                .elem()
-                .retry_policy_id
-                .as_ref()
-                .map(|s| s.to_string()),
+            retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),
             properties,
         })
     }

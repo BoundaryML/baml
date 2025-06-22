@@ -622,11 +622,7 @@ pub fn log_internal_once(
     file: Option<&str>,
     line: Option<u32>,
 ) {
-    let key = (
-        module_path.map(|s| s.to_string()),
-        file.map(|s| s.to_string()),
-        line,
-    );
+    let key = (module_path.map(String::from), file.map(String::from), line);
 
     let mut logged_lines = LOGGED_LINES.write().unwrap();
     if !logged_lines.contains(&key) {

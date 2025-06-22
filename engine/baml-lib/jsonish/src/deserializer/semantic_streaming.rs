@@ -102,7 +102,7 @@ fn process_node(
         )),
         BamlValueWithMeta::Class(ref class_name, value_fields, _) => {
             let value_field_names: IndexSet<String> =
-                value_fields.keys().map(|s| s.to_string()).collect();
+                value_fields.keys().map(String::to_owned).collect();
             let needed_fields: HashSet<String> =
                 needed_fields(ir, class_name, allow_partials_in_sub_nodes)?;
 

@@ -714,7 +714,7 @@ impl BamlTracer {
     }
 
     pub fn tracing_project_id(&self) -> Option<String> {
-        self.options.project_id().map(|s| s.to_string())
+        self.options.project_id().map(str::to_string)
     }
 }
 
@@ -907,7 +907,7 @@ impl<T: ToLogSchema> ToLogSchema for Result<T> {
         match self {
             Ok(r) => r.to_log_schema(api, event_chain, tags, call),
             Err(e) => LogSchema {
-                project_id: api.project_id().map(|s| s.to_string()),
+                project_id: api.project_id().map(str::to_string),
                 event_type: api_wrapper::core_types::EventType::FuncCode,
                 root_event_id: event_chain.first().map(|s| s.call_id).unwrap().to_string(),
                 event_id: event_chain.last().map(|s| s.call_id).unwrap().to_string(),
@@ -939,7 +939,7 @@ impl ToLogSchema for Option<BamlValue> {
         call: TracingCall,
     ) -> LogSchema {
         LogSchema {
-            project_id: api.project_id().map(|s| s.to_string()),
+            project_id: api.project_id().map(str::to_string),
             event_type: api_wrapper::core_types::EventType::FuncCode,
             root_event_id: event_chain.first().map(|s| s.call_id).unwrap().to_string(),
             event_id: event_chain.last().map(|s| s.call_id).unwrap().to_string(),
@@ -983,7 +983,7 @@ impl ToLogSchema for FunctionResult {
         call: TracingCall,
     ) -> LogSchema {
         LogSchema {
-            project_id: api.project_id().map(|s| s.to_string()),
+            project_id: api.project_id().map(str::to_string),
             event_type: api_wrapper::core_types::EventType::FuncLlm,
             root_event_id: event_chain.first().map(|s| s.call_id).unwrap().to_string(),
             event_id: event_chain.last().map(|s| s.call_id).unwrap().to_string(),

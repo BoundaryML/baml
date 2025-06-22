@@ -117,7 +117,7 @@ impl WithStreamChat for AnthropicClient {
             .request_options()
             .get("model")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(String::from);
         crate::internal::llm_client::primitive::stream_request::make_stream_request(
             self,
             either::Either::Right(prompt),
@@ -173,11 +173,7 @@ impl AnthropicClient {
                 resolve_image_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
-            retry_policy: client
-                .elem()
-                .retry_policy_id
-                .as_ref()
-                .map(|s| s.to_string()),
+            retry_policy: client.elem().retry_policy_id.as_ref().map(String::from),
             client: create_client()?,
             properties,
         })
@@ -280,8 +276,8 @@ impl WithChat for AnthropicClient {
         let model_name = self
             .request_options()
             .get("model")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .and_then(serde_json::Value::as_str)
+            .map(String::from);
         make_parsed_request(
             self,
             model_name,

@@ -125,7 +125,7 @@ impl From<CFFIValueMedia<'_>> for BamlMedia {
         let media_value = value
             .media_value()
             .expect("Failed to have CFFIMediaType media_value");
-        let mime_type = media_value.mime_type().map(|s| s.to_string());
+        let mime_type = media_value.mime_type().map(str::to_string);
         match media_value.content_type() {
             CFFIMediaContentUnion::CFFIMediaContentBase64 => BamlMedia::base64(
                 media_type,
