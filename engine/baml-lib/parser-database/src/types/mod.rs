@@ -26,9 +26,9 @@ mod prompt;
 
 #[derive(Debug, Default, Clone)]
 pub struct EnumAttributes {
-    pub value_serilizers: HashMap<FieldId, Attributes>,
+    pub value_serializers: HashMap<FieldId, Attributes>,
 
-    pub serilizer: Option<Attributes>,
+    pub serializer: Option<Attributes>,
 }
 
 #[derive(Debug, Default, Clone)]

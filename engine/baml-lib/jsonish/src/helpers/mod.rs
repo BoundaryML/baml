@@ -152,10 +152,7 @@ fn relevant_data_models<'a>(
                     let values = real_values
                         .into_iter()
                         .flatten()
-                        .map(|value| {
-                            let meta = find_enum_value(name, &value, &walker, env_values)?;
-                            Ok(meta)
-                        })
+                        .map(|value| find_enum_value(name, &value, &walker, env_values))
                         .filter_map(|v| v.transpose())
                         .collect::<Result<Vec<_>>>()?;
 
@@ -213,10 +210,10 @@ fn relevant_data_models<'a>(
                         .map(|e| e.walk_fields().map(|v| v.name().to_string()))
                         .ok();
 
-                    let fields = real_fields.into_iter().flatten().map(|field| {
-                        let meta = find_existing_class_field(name, &field, &walker, env_values)?;
-                        Ok(meta)
-                    });
+                    let fields = real_fields
+                        .into_iter()
+                        .flatten()
+                        .map(|field| find_existing_class_field(name, &field, &walker, env_values));
 
                     let fields = fields.collect::<Result<Vec<_>>>()?;
 

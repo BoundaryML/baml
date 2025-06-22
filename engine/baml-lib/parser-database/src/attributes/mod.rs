@@ -138,14 +138,14 @@ fn resolve_type_exp_block_attributes<'db>(
             for (value_idx, _value) in ast_typexpr.iter_fields() {
                 ctx.assert_all_attributes_processed((type_id, value_idx).into());
                 if let Some(attrs) = to_string_attribute::visit(ctx, &span, false) {
-                    enum_attributes.value_serilizers.insert(value_idx, attrs);
+                    enum_attributes.value_serializers.insert(value_idx, attrs);
                 }
                 ctx.validate_visited_attributes();
             }
 
             // Now validate the enum attributes.
             ctx.assert_all_attributes_processed(type_id.into());
-            enum_attributes.serilizer = to_string_attribute::visit(ctx, &span, true);
+            enum_attributes.serializer = to_string_attribute::visit(ctx, &span, true);
             ctx.validate_visited_attributes();
 
             ctx.types.enum_attributes.insert(type_id, enum_attributes);
