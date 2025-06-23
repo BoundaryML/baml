@@ -1,14 +1,18 @@
 use std::str::FromStr;
 
+use baml_types::{LiteralValue, TypeValue};
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+
 use super::{helpers::Pair, parse_attribute::parse_attribute, Rule};
 use crate::{
     assert_correct_parser,
     ast::*,
-    parser::{helpers::parsing_catch_all, parse_field::parse_field_type_with_attr, parse_identifier::parse_identifier},
+    parser::{
+        helpers::parsing_catch_all, parse_field::parse_field_type_with_attr,
+        parse_identifier::parse_identifier,
+    },
     unreachable_rule,
 };
-use baml_types::{LiteralValue, TypeValue};
-use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub fn parse_field_type(pair: Pair<'_>, diagnostics: &mut Diagnostics) -> Option<FieldType> {
     assert_correct_parser!(pair, Rule::field_type, Rule::openParan, Rule::closeParan);
@@ -436,8 +440,9 @@ pub fn reassociate_union_attributes(field_type: &mut FieldType) {
 
 #[cfg(test)]
 mod tests {
-    use super::super::{BAMLParser, Rule};
     use pest::{consumes_to, parses_to};
+
+    use super::super::{BAMLParser, Rule};
 
     #[test]
     fn type_attributes() {

@@ -1,16 +1,15 @@
+use std::iter::ExactSizeIterator;
+
 use either::Either;
-use internal_baml_diagnostics::DatamodelError;
 use internal_baml_ast::ast::{ArgumentId, Identifier, WithIdentifier, WithSpan};
+use internal_baml_diagnostics::DatamodelError;
 use internal_llm_client::ClientSpec;
 
+use super::{ClassWalker, ConfigurationWalker, EnumWalker, TypeWalker, Walker};
 use crate::{
     ast::{self, WithName},
     types::FunctionType,
 };
-
-use super::{ClassWalker, ConfigurationWalker, EnumWalker, TypeWalker, Walker};
-
-use std::iter::ExactSizeIterator;
 
 /// A `function` declaration in the Prisma schema.
 pub type FunctionWalker<'db> = Walker<'db, (bool, ast::ValExpId)>;

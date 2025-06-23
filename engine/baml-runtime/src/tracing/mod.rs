@@ -1,31 +1,26 @@
 pub mod api_wrapper;
 
-use crate::on_log_event::LogEventCallbackSync;
-use crate::tracingv2::storage::storage::{Collector, BAML_TRACER};
-use crate::InnerTraceStats;
-use anyhow::{Context, Result};
-use baml_types::tracing::events::{
-    EvaluationContext, FunctionStart, FunctionType, TraceData, TraceEvent,
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::SystemTime,
 };
-use baml_types::{BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta};
+
+use ::tracing as rust_tracing;
+use anyhow::{Context, Result};
+use baml_types::{
+    tracing::events::{EvaluationContext, FunctionStart, FunctionType, TraceData, TraceEvent},
+    BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta,
+};
 use cfg_if::cfg_if;
 use colored::{ColoredString, Colorize};
 use internal_baml_core::ir::ir_helpers::infer_type;
 use internal_baml_jinja::RenderedPrompt;
-use serde::Serialize;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
-use tracing::Instrument;
-
 use jsonish::ResponseBamlValue;
+use serde::Serialize;
+use tracing::Instrument;
 use uuid::Uuid;
-
-use crate::{
-    client_registry::ClientRegistry, internal::llm_client::LLMResponse,
-    tracing::api_wrapper::core_types::Role, type_builder::TypeBuilder, CallCtx, FunctionResult,
-    RuntimeContext, RuntimeContextManager, TestResponse, TraceStats,
-};
+use valuable::Valuable;
 
 use self::api_wrapper::{
     core_types::{
@@ -35,8 +30,16 @@ use self::api_wrapper::{
     },
     APIWrapper,
 };
-use ::tracing as rust_tracing;
-use valuable::Valuable;
+use crate::{
+    client_registry::ClientRegistry,
+    internal::llm_client::LLMResponse,
+    on_log_event::LogEventCallbackSync,
+    tracing::api_wrapper::core_types::Role,
+    tracingv2::storage::storage::{Collector, BAML_TRACER},
+    type_builder::TypeBuilder,
+    CallCtx, FunctionResult, InnerTraceStats, RuntimeContext, RuntimeContextManager, TestResponse,
+    TraceStats,
+};
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {

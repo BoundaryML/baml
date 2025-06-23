@@ -1,10 +1,10 @@
+use anyhow::Result;
+
+use super::ParseOptions;
 use crate::jsonish::{
     parser::{entry, ParsingMode},
     Value,
 };
-
-use super::ParseOptions;
-use anyhow::Result;
 
 #[derive(Debug)]
 pub enum MarkdownResult {
@@ -81,9 +81,9 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
 #[cfg(test)]
 mod test {
     use baml_types::CompletionState;
+    use test_log::test;
 
     use super::*;
-    use test_log::test;
 
     #[test]
     fn basic_parse() -> Result<()> {

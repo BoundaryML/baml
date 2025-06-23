@@ -1,11 +1,13 @@
-use crate::package::Package;
-use crate::r#type::{LiteralValue, MediaTypeTS, TypeMetaTS, TypeTS, TypeWrapper};
 use baml_types::{
     baml_value::TypeLookups,
     ir_type::{Type, TypeStreaming},
-    type_meta::base::TypeMeta,
-    type_meta::stream::TypeMetaStreaming,
+    type_meta::{base::TypeMeta, stream::TypeMetaStreaming},
     BamlMediaType, ConstraintLevel, TypeValue,
+};
+
+use crate::{
+    package::Package,
+    r#type::{LiteralValue, MediaTypeTS, TypeMetaTS, TypeTS, TypeWrapper},
 };
 
 pub mod classes;
@@ -92,7 +94,13 @@ pub(crate) fn stream_type_to_ts(field: &TypeStreaming, _lookup: &impl TypeLookup
                     .iter()
                     .any(|c| matches!(c.level, ConstraintLevel::Check))
                 {
-                    type_go.meta_mut().make_checked(union_meta.constraints.iter().map(|c| c.label.clone()).collect());
+                    type_go.meta_mut().make_checked(
+                        union_meta
+                            .constraints
+                            .iter()
+                            .map(|c| c.label.clone())
+                            .collect(),
+                    );
                 }
                 type_go.meta_mut().make_optional();
                 if union_meta.streaming_behavior.state {
@@ -137,13 +145,12 @@ pub(crate) fn type_to_ts(field: &Type, _lookup: &impl TypeLookups) -> TypeTS {
             },
             TypeValue::Media(baml_media_type) => TypeTS::Media(baml_media_type.into(), meta),
         },
-        T::Enum { name, dynamic, .. } => {
-            TypeTS::Enum {
+        T::Enum { name, dynamic, .. } => TypeTS::Enum {
             package: type_pkg.clone(),
             name: name.clone(),
             dynamic: *dynamic,
             meta,
-        }},
+        },
         T::Literal(literal_value, _) => TypeTS::Literal(
             match literal_value {
                 baml_types::LiteralValue::String(val) => LiteralValue::String(val.to_string()),
@@ -190,7 +197,13 @@ pub(crate) fn type_to_ts(field: &Type, _lookup: &impl TypeLookups) -> TypeTS {
                     .iter()
                     .any(|c| matches!(c.level, ConstraintLevel::Check))
                 {
-                    type_ts.meta_mut().make_checked(union_meta.constraints.iter().map(|c| c.label.clone()).collect());
+                    type_ts.meta_mut().make_checked(
+                        union_meta
+                            .constraints
+                            .iter()
+                            .map(|c| c.label.clone())
+                            .collect(),
+                    );
                 }
                 type_ts
             }
@@ -221,7 +234,11 @@ fn meta_to_ts(meta: &TypeMeta) -> TypeMetaTS {
 
     let wrapper = TypeWrapper::default();
     let wrapper = if has_checks {
-        let names = meta.constraints.iter().map(|c| c.label.as_ref().map(|l| l.to_string())).collect();
+        let names = meta
+            .constraints
+            .iter()
+            .map(|c| c.label.as_ref().map(|l| l.to_string()))
+            .collect();
         wrapper.wrap_with_checked(names)
     } else {
         wrapper
@@ -242,7 +259,12 @@ fn stream_meta_to_ts(meta: &TypeMetaStreaming) -> TypeMetaTS {
 
     let wrapper = TypeWrapper::default();
     let wrapper = if has_checks {
-        wrapper.wrap_with_checked(meta.constraints.iter().map(|c| c.label.as_ref().map(|l| l.to_string())).collect())
+        wrapper.wrap_with_checked(
+            meta.constraints
+                .iter()
+                .map(|c| c.label.as_ref().map(|l| l.to_string()))
+                .collect(),
+        )
     } else {
         wrapper
     };

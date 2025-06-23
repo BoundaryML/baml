@@ -11,15 +11,12 @@ mod match_string;
 use std::collections::{HashMap, HashSet};
 
 use anyhow::Result;
-
 use baml_types::{BamlValue, Constraint, JinjaExpression};
+use internal_baml_core::ir::{jinja_helpers::evaluate_predicate, FieldType};
 use internal_baml_jinja::types::OutputFormatContent;
 
-use internal_baml_core::ir::{jinja_helpers::evaluate_predicate, FieldType};
-
-use crate::jsonish;
-
 use super::types::BamlValueWithFlags;
+use crate::jsonish;
 
 pub struct ParsingContext<'a> {
     pub scope: Vec<String>,

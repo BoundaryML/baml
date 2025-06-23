@@ -1,23 +1,29 @@
-use std::borrow::Cow;
-use std::sync::{Arc, Mutex};
+use std::{
+    borrow::Cow,
+    sync::{Arc, Mutex},
+};
 
-use lsp_types::request::DocumentDiagnosticRequest;
 use lsp_types::{
-    DocumentDiagnosticParams, DocumentDiagnosticReport, DocumentDiagnosticReportResult,
-    FullDocumentDiagnosticReport, RelatedFullDocumentDiagnosticReport,
-    RelatedUnchangedDocumentDiagnosticReport, UnchangedDocumentDiagnosticReport, Url,
+    request::DocumentDiagnosticRequest, DocumentDiagnosticParams, DocumentDiagnosticReport,
+    DocumentDiagnosticReportResult, FullDocumentDiagnosticReport,
+    RelatedFullDocumentDiagnosticReport, RelatedUnchangedDocumentDiagnosticReport,
+    UnchangedDocumentDiagnosticReport, Url,
 };
 
-use crate::baml_project::Project;
-use crate::server::api::diagnostics::{file_diagnostics, project_diagnostics};
-use crate::server::api::traits::{
-    BackgroundDocumentRequestHandler, RequestHandler, SyncRequestHandler,
+use crate::{
+    baml_project::Project,
+    server::{
+        api::{
+            diagnostics::{file_diagnostics, project_diagnostics},
+            traits::{BackgroundDocumentRequestHandler, RequestHandler, SyncRequestHandler},
+            ResultExt,
+        },
+        client::{Notifier, Requester},
+        Result,
+    },
+    session::Session,
+    DocumentSnapshot,
 };
-use crate::server::api::ResultExt;
-use crate::server::client::{Notifier, Requester};
-use crate::server::Result;
-use crate::session::Session;
-use crate::DocumentSnapshot;
 
 pub(crate) struct DocumentDiagnosticRequestHandler;
 

@@ -1,4 +1,5 @@
 use std::collections::{HashMap, HashSet};
+
 use baml_types::GeneratorOutputType;
 
 // This list of keywords was copied from
@@ -37,19 +38,15 @@ pub fn reserved_names(
     let language_keywords: Vec<(&str, GeneratorOutputType)> = [
         if generator_output_types.contains(&GeneratorOutputType::PythonPydantic) {
             match mode {
-                ReservedNamesMode::FieldNames => {
-                    RESERVED_NAMES_PYTHON
-                        .iter()
-                        .map(|name| (*name, GeneratorOutputType::PythonPydantic))
-                        .collect()
-                }
-                ReservedNamesMode::FunctionParameters => {
-                    RESERVED_NAMES_FUNCTION_PARAMETERS
-                        .iter()
-                        .chain(RESERVED_NAMES_PYTHON.iter())
-                        .map(|name| (*name, GeneratorOutputType::PythonPydantic))
-                        .collect()
-                }
+                ReservedNamesMode::FieldNames => RESERVED_NAMES_PYTHON
+                    .iter()
+                    .map(|name| (*name, GeneratorOutputType::PythonPydantic))
+                    .collect(),
+                ReservedNamesMode::FunctionParameters => RESERVED_NAMES_FUNCTION_PARAMETERS
+                    .iter()
+                    .chain(RESERVED_NAMES_PYTHON.iter())
+                    .map(|name| (*name, GeneratorOutputType::PythonPydantic))
+                    .collect(),
             }
         } else {
             Vec::new()

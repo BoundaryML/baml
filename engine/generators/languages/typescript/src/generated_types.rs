@@ -1,5 +1,7 @@
-use crate::package::CurrentRenderPackage;
-use crate::r#type::{SerializeType, TypeTS};
+use crate::{
+    package::CurrentRenderPackage,
+    r#type::{SerializeType, TypeTS},
+};
 
 mod filters {
     // This filter does not have extra arguments
@@ -177,7 +179,7 @@ mod type_aliases {
     ///  */
     /// {%- endif %}
     /// export type {{ name }} = {{ target_type.serialize_type(pkg) }}
-    /// 
+    ///
     /// ```
     #[derive(askama::Template)]
     #[template(in_doc = true, escape = "none", ext = "txt")]
@@ -264,13 +266,13 @@ struct TypeBuilder<'a> {
     enums: &'a [EnumTS<'a>],
 }
 
-pub(crate) fn render_type_builder(classes: &[ClassTS], enums: &[EnumTS]) -> Result<String, askama::Error> {
+pub(crate) fn render_type_builder(
+    classes: &[ClassTS],
+    enums: &[EnumTS],
+) -> Result<String, askama::Error> {
     use askama::Template;
 
-    TypeBuilder {
-        classes,
-        enums,
-    }.render()
+    TypeBuilder { classes, enums }.render()
 }
 
 pub use class::{ClassTS, FieldTS};

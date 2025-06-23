@@ -1,9 +1,10 @@
+use colored::{ColoredString, Colorize};
+
 use crate::{
     error::sort_by_match,
     pretty_print::{pretty_print, DiagnosticColorer},
     Span,
 };
-use colored::{ColoredString, Colorize};
 // use indoc::indoc;
 
 /// A non-fatal warning emitted by the schema parser.

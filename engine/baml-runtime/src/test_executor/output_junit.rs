@@ -1,8 +1,9 @@
-use std::{collections::BTreeMap, time::Duration, fs::File};
+use std::{collections::BTreeMap, fs::File, time::Duration};
+
 use junit_report::{Report, TestCase, TestSuite};
 
-use crate::TestStatus;
 use super::{RenderTestExecutionStatus, TestExecutionStatus, TestExecutionStatusMap};
+use crate::TestStatus;
 
 pub(super) struct JUnitXMLRenderer {
     target_file: String,
@@ -29,13 +30,17 @@ impl RenderTestExecutionStatus for JUnitXMLRenderer {
         let mut report = Report::new();
 
         // Group tests by function (using function name as the testsuite name)
-        let mut grouped_tests: BTreeMap<&str, Vec<(&str, &TestExecutionStatus, Option<Duration>)>> = BTreeMap::new();
+        let mut grouped_tests: BTreeMap<&str, Vec<(&str, &TestExecutionStatus, Option<Duration>)>> =
+            BTreeMap::new();
         for ((func, test), status) in test_status_map.iter() {
             let duration = match status {
                 TestExecutionStatus::Finished(_, dur) => Some(*dur),
                 _ => None,
             };
-            grouped_tests.entry(func).or_default().push((test, status, duration));
+            grouped_tests
+                .entry(func)
+                .or_default()
+                .push((test, status, duration));
         }
 
         for (func_name, tests) in grouped_tests.iter() {
@@ -47,33 +52,31 @@ impl RenderTestExecutionStatus for JUnitXMLRenderer {
                 let nanos = duration.as_nanos();
                 let seconds = (nanos / 1_000_000_000) as i64;
                 let nanos = (nanos % 1_000_000_000) as i32;
-                
+
                 let duration = junit_report::Duration::new(seconds, nanos);
 
                 match status {
-                    TestExecutionStatus::Finished(Ok(response), _) => {
-                        match response.status() {
-                            TestStatus::Pass => {
-                                suite.add_testcase(TestCase::success(test_name, duration));
-                            }
-                            TestStatus::Fail(details) => {
-                                suite.add_testcase(TestCase::failure(
-                                    test_name,
-                                    duration,
-                                    "Fail",
-                                    &details.to_string(),
-                                ));
-                            }
-                            TestStatus::NeedsHumanEval(details) => {
-                                suite.add_testcase(TestCase::failure(
-                                    test_name,
-                                    duration,
-                                    "Needs Human Evaluation",
-                                    &details.join(", "),
-                                ));
-                            }
+                    TestExecutionStatus::Finished(Ok(response), _) => match response.status() {
+                        TestStatus::Pass => {
+                            suite.add_testcase(TestCase::success(test_name, duration));
                         }
-                    }
+                        TestStatus::Fail(details) => {
+                            suite.add_testcase(TestCase::failure(
+                                test_name,
+                                duration,
+                                "Fail",
+                                &details.to_string(),
+                            ));
+                        }
+                        TestStatus::NeedsHumanEval(details) => {
+                            suite.add_testcase(TestCase::failure(
+                                test_name,
+                                duration,
+                                "Needs Human Evaluation",
+                                &details.join(", "),
+                            ));
+                        }
+                    },
                     TestExecutionStatus::Finished(Err(details), _) => {
                         suite.add_testcase(TestCase::error(
                             test_name,

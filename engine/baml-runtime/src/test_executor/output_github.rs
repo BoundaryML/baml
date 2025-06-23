@@ -8,14 +8,17 @@ impl GithubTestExecutionStatusRenderer {
 
 use std::collections::BTreeMap;
 
-use crate::TestStatus;
-
 use super::{RenderTestExecutionStatus, TestExecutionStatus, TestExecutionStatusMap};
+use crate::TestStatus;
 
 impl RenderTestExecutionStatus for GithubTestExecutionStatusRenderer {
     fn render_progress(&self, test_status_map: &TestExecutionStatusMap) {}
 
-    fn render_final(&self, test_status_map: &TestExecutionStatusMap, selected_tests: &BTreeMap<(String, String), String>) {
+    fn render_final(
+        &self,
+        test_status_map: &TestExecutionStatusMap,
+        selected_tests: &BTreeMap<(String, String), String>,
+    ) {
         for ((function_name, test_name), status) in test_status_map.iter() {
             match status {
                 TestExecutionStatus::Pending => {

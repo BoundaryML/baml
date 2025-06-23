@@ -1,15 +1,22 @@
-use crate::baml_project::position_utils::get_word_at_position;
-use crate::baml_project::{trim_line, BamlRuntimeExt};
-use crate::server::api::traits::{RequestHandler, SyncRequestHandler};
-use crate::server::api::ResultExt;
-use crate::server::client::Requester;
-use crate::server::{client::Notifier, Result};
-use crate::{DocumentKey, Session};
+use std::path::PathBuf;
+
 use lsp_types::{
     self, request as req, GotoDefinitionParams, GotoDefinitionResponse, Location, Position, Range,
     Url,
 };
-use std::path::PathBuf;
+
+use crate::{
+    baml_project::{position_utils::get_word_at_position, trim_line, BamlRuntimeExt},
+    server::{
+        api::{
+            traits::{RequestHandler, SyncRequestHandler},
+            ResultExt,
+        },
+        client::{Notifier, Requester},
+        Result,
+    },
+    DocumentKey, Session,
+};
 
 pub struct GotoDefinition;
 

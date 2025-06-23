@@ -1,11 +1,10 @@
 // This is designed to build any type of client, not just primitives
+use std::{collections::HashMap, str::FromStr, sync::Arc};
+
 use anyhow::{Context, Result};
+use baml_types::{BamlMap, BamlValue};
 pub use internal_llm_client::ClientProvider;
 use internal_llm_client::{ClientSpec, PropertyHandler, UnresolvedClientProperty};
-use std::{collections::HashMap, str::FromStr};
-use std::sync::Arc;
-
-use baml_types::{BamlMap, BamlValue};
 use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::{internal::llm_client::llm_provider::LLMProvider, RuntimeContext};
@@ -138,19 +137,24 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use serde_json;
     use std::collections::HashMap;
+
+    use serde_json;
+
+    use super::*;
 
     #[test]
     fn test_each_provider() {
         for provider in ClientProvider::allowed_providers() {
-            let json = format!(r#"{{"name": "dummy_name", "provider": "{}", "retry_policy": null, "options": {{"model": "gpt-3"}}}}"#, provider);
+            let json = format!(
+                r#"{{"name": "dummy_name", "provider": "{}", "retry_policy": null, "options": {{"model": "gpt-3"}}}}"#,
+                provider
+            );
             let client: ClientProperty = serde_json::from_str(&json).unwrap();
             assert_eq!(client.provider, ClientProvider::from_str(provider).unwrap());
         }
     }
-    
+
     #[test]
     fn test_deserialize_valid_client() {
         let json = r#"
@@ -163,9 +167,15 @@ mod tests {
         "#;
         let client: ClientProperty = serde_json::from_str(json).unwrap();
         assert_eq!(client.name, "dummy_name");
-        assert_eq!(client.provider, ClientProvider::OpenAI(internal_llm_client::OpenAIClientProviderVariant::Base));
+        assert_eq!(
+            client.provider,
+            ClientProvider::OpenAI(internal_llm_client::OpenAIClientProviderVariant::Base)
+        );
         assert_eq!(client.retry_policy, None);
-        assert_eq!(client.options.get("model"), Some(&BamlValue::String("gpt-3".to_string())));
+        assert_eq!(
+            client.options.get("model"),
+            Some(&BamlValue::String("gpt-3".to_string()))
+        );
     }
 
     #[test]
@@ -179,7 +189,10 @@ mod tests {
             }
         "#;
         let result: Result<ClientProperty, _> = serde_json::from_str(json);
-        assert!(result.is_err(), "Deserialization should fail for an invalid provider");
+        assert!(
+            result.is_err(),
+            "Deserialization should fail for an invalid provider"
+        );
     }
 
     #[test]
@@ -199,7 +212,10 @@ mod tests {
         let registry: ClientRegistry = serde_json::from_str(json).unwrap();
         assert_eq!(registry.clients.len(), 1);
         let client = registry.clients.get("dummy_name").unwrap();
-        assert_eq!(client.provider, ClientProvider::OpenAI(internal_llm_client::OpenAIClientProviderVariant::Base));
+        assert_eq!(
+            client.provider,
+            ClientProvider::OpenAI(internal_llm_client::OpenAIClientProviderVariant::Base)
+        );
         assert_eq!(registry.primary, None);
     }
 }

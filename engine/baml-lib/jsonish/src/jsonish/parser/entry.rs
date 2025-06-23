@@ -1,5 +1,7 @@
 use anyhow::Result;
+use baml_types::CompletionState;
 
+use super::ParseOptions;
 use crate::jsonish::{
     parser::{
         fixing_parser,
@@ -9,9 +11,6 @@ use crate::jsonish::{
     value::Fixes,
     Value,
 };
-use baml_types::CompletionState;
-
-use super::ParseOptions;
 
 pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
     log::debug!("Parsing:\n{:?}\n-------\n{}\n-------", options, str);
@@ -118,7 +117,11 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                             _ => None,
                         })
                         .map(|(s, v)| {
-                            Value::Markdown(s.to_string(), Box::new(v.clone()), v.completion_state().clone())
+                            Value::Markdown(
+                                s.to_string(),
+                                Box::new(v.clone()),
+                                v.completion_state().clone(),
+                            )
                         })
                         .collect::<Vec<_>>();
                     let array = Value::Array(items.clone(), CompletionState::Incomplete);
@@ -141,8 +144,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
             Ok(items) => match items.len() {
                 0 => {}
                 1 => {
-                    let ret =
-                      Value::AnyOf(
+                    let ret = Value::AnyOf(
                         vec![Value::FixedJson(
                             items
                                 .into_iter()
@@ -160,12 +162,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                     let items = items
                         .into_iter()
                         .chain(std::iter::once(items_clone))
-                        .map(|v| {
-                            Value::FixedJson(
-                                v.into(),
-                                vec![Fixes::GreppedForJSON],
-                            )
-                        })
+                        .map(|v| Value::FixedJson(v.into(), vec![Fixes::GreppedForJSON]))
                         .collect::<Vec<_>>();
                     return Ok(Value::AnyOf(items, str.to_string()));
                 }
@@ -186,10 +183,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                             anyhow::anyhow!("Expected 1 item when performing fixes")
                         })?;
                         return Ok(Value::AnyOf(
-                            vec![Value::FixedJson(
-                                v.into(),
-                                fixes,
-                            )],
+                            vec![Value::FixedJson(v.into(), fixes)],
                             str.to_string(),
                         ));
                     }
@@ -204,9 +198,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
 
                         let items = items
                             .into_iter()
-                            .map(|(v, fixes)| {
-                                Value::FixedJson(v.into(), fixes)
-                            })
+                            .map(|(v, fixes)| Value::FixedJson(v.into(), fixes))
                             .collect::<Vec<_>>();
 
                         let items_clone = Value::Array(items.clone(), CompletionState::Incomplete);
@@ -234,9 +226,10 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
 
 #[cfg(test)]
 mod tests {
+    use baml_types::CompletionState;
+
     use super::*;
     use crate::jsonish::Value;
-    use baml_types::CompletionState;
 
     fn to_any_of(inner: Value, s: &str) -> Value {
         Value::AnyOf(vec![inner], s.to_string())
@@ -276,23 +269,25 @@ mod tests {
         assert_eq!(
             res,
             to_any_of(
-            to_fixed(
-                to_any_of(
-                    to_fixed(
-                        Value::Array(
-                            vec![
-                                Value::Number(1.into(), CompletionState::Complete),
-                                Value::Number(2.into(), CompletionState::Incomplete),
-                            ],
-                            CompletionState::Incomplete
+                to_fixed(
+                    to_any_of(
+                        to_fixed(
+                            Value::Array(
+                                vec![
+                                    Value::Number(1.into(), CompletionState::Complete),
+                                    Value::Number(2.into(), CompletionState::Incomplete),
+                                ],
+                                CompletionState::Incomplete
+                            ),
+                            &[]
                         ),
-                    &[]
-                    ),
                         "[1, 2"
+                    ),
+                    &[Fixes::GreppedForJSON]
                 ),
-                &[Fixes::GreppedForJSON]
-            ), "[1, 2"
-        ));
+                "[1, 2"
+            )
+        );
     }
 
     #[test]
@@ -301,26 +296,26 @@ mod tests {
         assert_eq!(
             res,
             to_any_of(
-            to_fixed(
-                to_any_of(
-                    to_fixed(
-                        Value::Array(
-                            vec![
-                                Value::Number(1.into(), CompletionState::Complete),
-                                Value::Number(2.into(), CompletionState::Complete),
-                                Value::Array(
-                                    vec![Value::Number(3.into(), CompletionState::Incomplete),],
-                                    CompletionState::Incomplete
-                                )
-                            ],
-                            CompletionState::Incomplete
+                to_fixed(
+                    to_any_of(
+                        to_fixed(
+                            Value::Array(
+                                vec![
+                                    Value::Number(1.into(), CompletionState::Complete),
+                                    Value::Number(2.into(), CompletionState::Complete),
+                                    Value::Array(
+                                        vec![Value::Number(3.into(), CompletionState::Incomplete),],
+                                        CompletionState::Incomplete
+                                    )
+                                ],
+                                CompletionState::Incomplete
+                            ),
+                            &[]
                         ),
-                        &[]
-                    ),
                         "[1, 2, [3"
+                    ),
+                    &[Fixes::GreppedForJSON]
                 ),
-                &[Fixes::GreppedForJSON]
-            ),
                 "[1, 2, [3"
             )
         );

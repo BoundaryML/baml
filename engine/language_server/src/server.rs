@@ -1,39 +1,43 @@
 //! Scheduling, I/O, and API endpoints.
 
-use log::info;
-use lsp_types::{
-    WorkspaceClientCapabilities, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
-};
-use std::num::NonZeroUsize;
 // The new PanicInfoHook name requires MSRV >= 1.82
 #[allow(deprecated)]
 use std::panic::PanicInfo;
-use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::{
+    num::NonZeroUsize,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
 
+use log::info;
 use lsp_server::Message;
 use lsp_types::{
     notification::DidChangeTextDocument, ClientCapabilities, CodeLensOptions, CompletionOptions,
     DiagnosticOptions, DiagnosticServerCapabilities, FileSystemWatcher, HoverProviderCapability,
     InitializeParams, MessageType, SaveOptions, ServerCapabilities, TextDocumentSyncCapability,
     TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url,
+    WorkspaceClientCapabilities, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
 use schedule::Task;
 
-use self::connection::{Connection, ConnectionInitializer};
-use self::schedule::event_loop_thread;
-use crate::baml_project::file_utils::{find_baml_src, find_top_level_parent};
-
-use crate::session::{AllSettings, ClientSettings, Session};
-use crate::PositionEncoding;
+use self::{
+    connection::{Connection, ConnectionInitializer},
+    schedule::event_loop_thread,
+};
+use crate::{
+    baml_project::file_utils::{find_baml_src, find_top_level_parent},
+    session::{AllSettings, ClientSettings, Session},
+    PositionEncoding,
+};
 
 pub mod api;
 pub mod client;
 pub mod connection;
 mod schedule;
 
-use crate::message::try_show_message;
 pub(crate) use connection::ClientSender;
+
+use crate::message::try_show_message;
 
 pub type Result<T> = std::result::Result<T, api::Error>;
 

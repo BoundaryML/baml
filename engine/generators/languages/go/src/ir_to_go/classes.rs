@@ -1,7 +1,9 @@
-use crate::generated_types::{ClassGo, FieldGo};
 use internal_baml_core::ir::{Class, Field};
 
-use crate::package::CurrentRenderPackage;
+use crate::{
+    generated_types::{ClassGo, FieldGo},
+    package::CurrentRenderPackage,
+};
 
 pub fn ir_class_to_go<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -> ClassGo<'a> {
     ClassGo {
@@ -72,8 +74,6 @@ fn ir_field_to_go_stream<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> Fi
 #[cfg(test)]
 mod tests {
     use internal_baml_core::ir::{repr::make_test_ir, IRHelper};
-
-    
 
     use super::*;
 

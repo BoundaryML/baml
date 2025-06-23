@@ -1,7 +1,8 @@
+use core::result::Result;
+
 use baml_types::{BamlMediaContent, BamlValue};
 
 use super::error::BamlError;
-use core::result::Result;
 
 pub(super) trait BamlServeValidate {
     fn validate_for_baml_serve(&self) -> Result<(), BamlError>;

@@ -1,7 +1,9 @@
+use internal_baml_diagnostics::DatamodelError; // Add this line
 use internal_baml_diagnostics::Diagnostics;
 
 use super::{
-    helpers::parsing_catch_all, parse_field::parse_field_type_chain,
+    helpers::{parsing_catch_all, Pair},
+    parse_field::parse_field_type_chain,
     parse_identifier::parse_identifier,
 };
 use crate::{
@@ -9,9 +11,6 @@ use crate::{
     ast::{BlockArg, BlockArgs, Identifier, WithName, WithSpan},
     parser::Rule,
 };
-use internal_baml_diagnostics::DatamodelError; // Add this line
-
-use super::helpers::Pair;
 
 pub(crate) fn parse_named_argument_list(
     pair: Pair<'_>,

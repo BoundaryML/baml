@@ -35,7 +35,6 @@ impl Package {
         self.type_definition_scope
     }
 
-
     pub fn relative_from(&self, other: &CurrentRenderPackage) -> String {
         let other = other.get();
         if self.package_path == other.package_path {
@@ -82,7 +81,9 @@ pub(crate) struct CurrentRenderPackage {
 impl CurrentRenderPackage {
     pub fn new(package: &str, lookup: std::sync::Arc<IntermediateRepr>) -> Self {
         Self {
-            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(Package::new(package)))),
+            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(Package::new(
+                package,
+            )))),
             lookup,
             currently_defining_alias: None,
         }
@@ -90,14 +91,19 @@ impl CurrentRenderPackage {
 
     pub fn define_alias(&self, name: &str) -> Self {
         Self {
-            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(self.get().clone_as_type_definition()))),
+            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(
+                self.get().clone_as_type_definition(),
+            ))),
             lookup: self.lookup.clone(),
             currently_defining_alias: Some(name.to_string()),
         }
     }
 
     pub fn is_defining_alias(&self, name: &str) -> bool {
-        self.currently_defining_alias.as_ref().map(|s| s == name).unwrap_or(false)
+        self.currently_defining_alias
+            .as_ref()
+            .map(|s| s == name)
+            .unwrap_or(false)
     }
 
     pub fn lookup(&self) -> &impl TypeLookups {

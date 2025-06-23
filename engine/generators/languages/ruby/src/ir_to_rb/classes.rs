@@ -1,8 +1,9 @@
-use crate::{generated_types::{ClassRb, FieldRb}};
 use internal_baml_core::ir::{Class, Field};
 
-use crate::package::CurrentRenderPackage;
-
+use crate::{
+    generated_types::{ClassRb, FieldRb},
+    package::CurrentRenderPackage,
+};
 
 pub fn ir_class_to_rb<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -> ClassRb<'a> {
     ClassRb {
@@ -14,7 +15,12 @@ pub fn ir_class_to_rb<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -> Class
             .map(|docstring| docstring.0.clone()),
         dynamic: class.attributes.dynamic(),
         pkg,
-        fields: class.elem.static_fields.iter().map(|field| ir_field_to_rb(field, pkg)).collect(),
+        fields: class
+            .elem
+            .static_fields
+            .iter()
+            .map(|field| ir_field_to_rb(field, pkg))
+            .collect(),
     }
 }
 
@@ -28,16 +34,24 @@ pub fn ir_class_to_rb_stream<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -
             .map(|docstring| docstring.0.clone()),
         dynamic: class.attributes.dynamic(),
         pkg,
-        fields: class.elem.static_fields.iter().map(|field| ir_field_to_rb_stream(field, pkg)).collect(),
+        fields: class
+            .elem
+            .static_fields
+            .iter()
+            .map(|field| ir_field_to_rb_stream(field, pkg))
+            .collect(),
     }
 }
-
 
 fn ir_field_to_rb<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> FieldRb<'a> {
     FieldRb {
         name: field.elem.name.clone(),
         r#type: super::type_to_rb(&field.elem.r#type.elem, pkg.lookup()),
-        docstring: field.elem.docstring.clone().map(|docstring| docstring.0.clone()),
+        docstring: field
+            .elem
+            .docstring
+            .clone()
+            .map(|docstring| docstring.0.clone()),
         pkg,
     }
 }
@@ -47,7 +61,11 @@ fn ir_field_to_rb_stream<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> Fi
     FieldRb {
         name: field.elem.name.clone(),
         r#type: super::stream_type_to_rb(&partialized, pkg.lookup()),
-        docstring: field.elem.docstring.clone().map(|docstring| docstring.0.clone()),
+        docstring: field
+            .elem
+            .docstring
+            .clone()
+            .map(|docstring| docstring.0.clone()),
         pkg,
     }
 }
@@ -55,8 +73,6 @@ fn ir_field_to_rb_stream<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> Fi
 #[cfg(test)]
 mod tests {
     use internal_baml_core::ir::{repr::make_test_ir, IRHelper};
-
-    
 
     use super::*;
 
@@ -77,7 +93,13 @@ mod tests {
         let class_rb = ir_class_to_rb_stream(&class, &pkg);
         assert_eq!(class_rb.name, "SimpleClass");
         assert_eq!(class_rb.fields.len(), 1);
-        assert_eq!(class_rb.fields[0].r#type.meta().map(|m| m.wrap_stream_state), Some(true));
+        assert_eq!(
+            class_rb.fields[0]
+                .r#type
+                .meta()
+                .map(|m| m.wrap_stream_state),
+            Some(true)
+        );
         println!("{}", class_rb.fields[0]);
     }
 
@@ -98,7 +120,10 @@ mod tests {
         let class_rb = ir_class_to_rb_stream(&class, &pkg);
         let digits_field = class_rb.fields.iter().find(|f| f.name == "digits").unwrap();
         eprintln!("{:?}", digits_field);
-        assert_eq!(digits_field.r#type.meta().map(|m| m.wrap_stream_state), Some(true));
+        assert_eq!(
+            digits_field.r#type.meta().map(|m| m.wrap_stream_state),
+            Some(true)
+        );
         assert_eq!(class_rb.name, "ChildClass");
         assert_eq!(class_rb.fields.len(), 1);
         println!("{}", class_rb.fields[0]);

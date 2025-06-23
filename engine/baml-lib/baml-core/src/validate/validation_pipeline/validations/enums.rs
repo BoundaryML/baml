@@ -1,10 +1,13 @@
-use super::types::validate_type;
-use crate::validate::validation_pipeline::context::Context;
-use crate::validate::validation_pipeline::validations::reserved_names::RESERVED_NAMES_PYTHON;
-use baml_types::GeneratorOutputType;
-use internal_baml_diagnostics::DatamodelError;
-use internal_baml_ast::ast::{WithName, WithSpan};
 use std::collections::HashSet;
+
+use baml_types::GeneratorOutputType;
+use internal_baml_ast::ast::{WithName, WithSpan};
+use internal_baml_diagnostics::DatamodelError;
+
+use super::types::validate_type;
+use crate::validate::validation_pipeline::{
+    context::Context, validations::reserved_names::RESERVED_NAMES_PYTHON,
+};
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
     let mut defined_types = internal_baml_jinja_types::PredefinedTypes::default(

@@ -2,11 +2,11 @@ use std::collections::VecDeque;
 
 use baml_types::{LiteralValue, TypeValue};
 use either::Either;
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
-use internal_baml_parser_database::TypeWalker;
 use internal_baml_ast::ast::{
     Argument, Attribute, Expression, FieldArity, FieldType, Identifier, WithName, WithSpan,
 };
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
+use internal_baml_parser_database::TypeWalker;
 
 use crate::validate::validation_pipeline::context::Context;
 

@@ -1,6 +1,7 @@
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
 use functions::{
-    render_async_client, render_async_request, render_config, render_globals, render_index, render_inlinedbaml, render_parser, render_sync_client, render_sync_request, render_tracing
+    render_async_client, render_async_request, render_config, render_globals, render_index,
+    render_inlinedbaml, render_parser, render_sync_client, render_sync_request, render_tracing,
 };
 use generated_types::{render_partial_types, render_ts_types, render_type_builder};
 mod functions;
@@ -139,8 +140,9 @@ mod generated_tests {
 mod tests {
     #[test]
     fn test_name() {
-        use dir_writer::LanguageFeatures;
         use std::str::FromStr;
+
+        use dir_writer::LanguageFeatures;
 
         let gen_type = baml_types::GeneratorOutputType::from_str(crate::TsLanguageFeatures::name())
             .expect("TsLanguageFeatures name should be a valid GeneratorOutputType");

@@ -1,9 +1,8 @@
 use anyhow::Result;
 use internal_baml_core::ir::FieldType;
 
-use crate::deserializer::types::BamlValueWithFlags;
-
 use super::{ParsingContext, ParsingError, TypeCoercer};
+use crate::deserializer::types::BamlValueWithFlags;
 
 pub fn coerce_alias(
     ctx: &ParsingContext,

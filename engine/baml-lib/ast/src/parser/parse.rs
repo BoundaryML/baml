@@ -2,6 +2,9 @@
 
 use std::path::{Path, PathBuf};
 
+use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
+use pest::Parser;
+
 use super::{
     parse_assignment::parse_assignment,
     parse_expr::{parse_expr_fn, parse_top_level_assignment},
@@ -11,8 +14,6 @@ use super::{
     BAMLParser, Rule,
 };
 use crate::ast::*;
-use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile};
-use pest::Parser;
 
 #[cfg(feature = "debug_parser")]
 fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) {
@@ -202,11 +203,12 @@ mod tests {
 
     use std::path::Path;
 
-    use super::parse;
-    use crate::ast::*;
     use baml_types::{expr::Expr, TypeValue};
     // Add this line to import the ast module
     use internal_baml_diagnostics::SourceFile;
+
+    use super::parse;
+    use crate::ast::*;
 
     #[test]
     // #[test_log::test]

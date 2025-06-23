@@ -1,16 +1,14 @@
 mod panic_with_diff;
 
-use baml_lib::SourceFile;
-use internal_baml_core::ir::repr::IntermediateRepr;
-
-use std::sync::Once;
-
 use std::{
     fs,
     io::Write as _,
     path::{self, PathBuf},
-    sync::Arc,
+    sync::{Arc, Once},
 };
+
+use baml_lib::SourceFile;
+use internal_baml_core::ir::repr::IntermediateRepr;
 use strip_ansi_escapes::strip_str;
 
 const TESTS_ROOT: &str = concat!(env!("CARGO_MANIFEST_DIR"), "/tests/validation_files");

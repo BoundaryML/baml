@@ -23,11 +23,10 @@ mod range;
 mod size;
 mod traits;
 
-pub use crate::{
-    baml_text_size::range::TextRange,
-    baml_text_size::size::TextSize,
-    baml_text_size::traits::Ranged,
-    baml_text_size::traits::TextLen,
+pub use crate::baml_text_size::{
+    range::TextRange,
+    size::TextSize,
+    traits::{Ranged, TextLen},
 };
 
 #[cfg(target_pointer_width = "16")]

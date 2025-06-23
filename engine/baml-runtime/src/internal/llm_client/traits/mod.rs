@@ -7,23 +7,27 @@ use serde_json::{json, Map};
 
 mod chat;
 mod completion;
-pub use self::{
-    chat::{WithChat, WithStreamChat},
-    completion::{WithCompletion, WithNoCompletion, WithStreamCompletion},
-};
-use super::{primitive::request::RequestBuilder, LLMResponse, ModelFeatures};
-use crate::{internal::llm_client::ResolveMediaUrls, RenderCurlSettings};
-use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
+use std::borrow::Cow;
+
 use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue, MediaBase64, MediaUrl};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use futures::stream::StreamExt;
 use infer;
 use internal_baml_core::ir::repr::IntermediateRepr;
-use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
-use internal_baml_jinja::{RenderContext_Client, RenderedPrompt};
-
+use internal_baml_jinja::{
+    ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
+};
 use shell_escape::escape;
-use std::borrow::Cow;
+
+pub use self::{
+    chat::{WithChat, WithStreamChat},
+    completion::{WithCompletion, WithNoCompletion, WithStreamCompletion},
+};
+use super::{primitive::request::RequestBuilder, LLMResponse, ModelFeatures};
+use crate::{
+    internal::{llm_client::ResolveMediaUrls, prompt_renderer::PromptRenderer},
+    RenderCurlSettings, RuntimeContext,
+};
 
 pub trait HttpContext {
     fn http_request_id(&self) -> &baml_ids::HttpRequestId;

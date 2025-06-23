@@ -1,11 +1,10 @@
-use super::argument::ArgumentId;
-use super::type_builder_block::TypeBuilderBlock;
+use std::fmt::{Display, Formatter};
+
 use super::{
-    traits::WithAttributes, Attribute, Comment, Expression, Field, FieldType, Identifier, Span,
-    WithDocumentation, WithIdentifier, WithSpan,
+    argument::ArgumentId, traits::WithAttributes, type_builder_block::TypeBuilderBlock, Attribute,
+    Comment, Expression, Field, FieldType, Identifier, Span, WithDocumentation, WithIdentifier,
+    WithSpan,
 };
-use std::fmt::Display;
-use std::fmt::Formatter;
 
 /// An opaque identifier for a field in an AST model. Use the
 /// `model[field_id]` syntax to resolve the id to an `ast::Field`.

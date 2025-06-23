@@ -1,19 +1,27 @@
-use crate::errors::{BamlError, BamlInvalidArgumentError};
-use crate::parse_py_type::parse_py_type;
-use crate::types::function_result_stream::{FunctionResultStream, SyncFunctionResultStream};
-use crate::types::function_results::{pythonize_strict, FunctionResult};
-use crate::types::runtime_ctx_manager::RuntimeContextManager;
-use crate::types::trace_stats::TraceStats;
-use crate::types::type_builder::TypeBuilder;
-use crate::types::{ClientRegistry, Collector, HTTPRequest};
-use baml_runtime::runtime_interface::ExperimentalTracingInterface;
-use baml_runtime::BamlRuntime as CoreBamlRuntime;
-use pyo3::prelude::{pymethods, PyResult};
-use pyo3::types::{PyAnyMethods, PyList};
-use pyo3::{pyclass, Bound, IntoPyObjectExt, PyObject, PyRef, Python};
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
+
+use baml_runtime::{
+    runtime_interface::ExperimentalTracingInterface, BamlRuntime as CoreBamlRuntime,
+};
+use pyo3::{
+    prelude::{pymethods, PyResult},
+    pyclass,
+    types::{PyAnyMethods, PyList},
+    Bound, IntoPyObjectExt, PyObject, PyRef, Python,
+};
+
+use crate::{
+    errors::{BamlError, BamlInvalidArgumentError},
+    parse_py_type::parse_py_type,
+    types::{
+        function_result_stream::{FunctionResultStream, SyncFunctionResultStream},
+        function_results::{pythonize_strict, FunctionResult},
+        runtime_ctx_manager::RuntimeContextManager,
+        trace_stats::TraceStats,
+        type_builder::TypeBuilder,
+        ClientRegistry, Collector, HTTPRequest,
+    },
+};
 
 crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe, root_path: String = String::new(), env_vars: HashMap<String, String> = HashMap::new());
 
@@ -84,8 +92,11 @@ impl BamlRuntime {
     #[staticmethod]
     fn __setstate__(state: (String, std::collections::HashMap<String, String>)) -> PyResult<Self> {
         let (root_path, env_vars) = state;
-        let core = CoreBamlRuntime::from_directory(&std::path::PathBuf::from(&root_path), env_vars.clone())
-            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{e}")))?;
+        let core = CoreBamlRuntime::from_directory(
+            &std::path::PathBuf::from(&root_path),
+            env_vars.clone(),
+        )
+        .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{e}")))?;
         Ok(BamlRuntime {
             inner: std::sync::Arc::new(core),
             root_path,
@@ -124,8 +135,10 @@ impl BamlRuntime {
         files: HashMap<String, String>,
         env_vars: HashMap<String, String>,
     ) -> PyResult<()> {
-        self.inner = std::sync::Arc::new(CoreBamlRuntime::from_file_content(&root_path, &files, env_vars.clone())
-            .map_err(BamlError::from_anyhow)?);
+        self.inner = std::sync::Arc::new(
+            CoreBamlRuntime::from_file_content(&root_path, &files, env_vars.clone())
+                .map_err(BamlError::from_anyhow)?,
+        );
         self.root_path = root_path;
         self.env_vars = env_vars;
         Ok(())
@@ -542,14 +555,5 @@ impl BamlRuntime {
                 .set_log_event_callback(None)
                 .map_err(BamlError::from_anyhow)
         }
-    }
-
-    #[new]
-    fn new() -> PyResult<Self> {
-        Ok(BamlRuntime {
-            inner: Arc::new(CoreBamlRuntime::default()),
-            root_path: String::new(),
-            env_vars: HashMap::new(),
-        })
     }
 }

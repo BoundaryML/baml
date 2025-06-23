@@ -1,7 +1,8 @@
+use std::str::FromStr;
+
 use baml_types::LiteralValue;
 use indexmap::IndexMap;
 use minijinja::machinery::ast;
-use std::str::FromStr;
 
 use super::{
     pretty_print::pretty_print,
@@ -388,43 +389,41 @@ fn infer_const_type(v: &minijinja::value::Value) -> Type {
             Err(_) => Type::Bool,
         },
         minijinja::value::ValueKind::String => Type::Literal(LiteralValue::String(v.to_string())),
-        minijinja::value::ValueKind::Seq => {
-            match v.len() {
-                Some(0) => Type::List(Box::new(Type::Unknown)),
-                Some(_) => {
-                    if let Ok(iter) = v.try_iter() {
-                        let inner = iter
-                            .map(|x| infer_const_type(&x))
-                            .fold(None, |acc, x| match acc {
-                                None => Some(x),
-                                Some(Type::Union(acc)) => {
-                                    let t = Type::Union(acc);
-                                    if x.is_subtype_of(&t) {
-                                        Some(t)
-                                    } else if let Type::Union(mut acc) = t {
-                                        acc.push(x);
-                                        Some(Type::Union(acc))
-                                    } else {
-                                        unreachable!("minijinja")
-                                    }
+        minijinja::value::ValueKind::Seq => match v.len() {
+            Some(0) => Type::List(Box::new(Type::Unknown)),
+            Some(_) => {
+                if let Ok(iter) = v.try_iter() {
+                    let inner = iter
+                        .map(|x| infer_const_type(&x))
+                        .fold(None, |acc, x| match acc {
+                            None => Some(x),
+                            Some(Type::Union(acc)) => {
+                                let t = Type::Union(acc);
+                                if x.is_subtype_of(&t) {
+                                    Some(t)
+                                } else if let Type::Union(mut acc) = t {
+                                    acc.push(x);
+                                    Some(Type::Union(acc))
+                                } else {
+                                    unreachable!("minijinja")
                                 }
-                                Some(acc) => {
-                                    if x.is_subtype_of(&acc) {
-                                        Some(acc)
-                                    } else {
-                                        Some(Type::Union(vec![acc, x]))
-                                    }
+                            }
+                            Some(acc) => {
+                                if x.is_subtype_of(&acc) {
+                                    Some(acc)
+                                } else {
+                                    Some(Type::Union(vec![acc, x]))
                                 }
-                            })
-                            .unwrap_or(Type::Unknown);
-                        Type::List(Box::new(inner))
-                    } else {
-                        Type::List(Box::new(Type::Unknown))
-                    }
+                            }
+                        })
+                        .unwrap_or(Type::Unknown);
+                    Type::List(Box::new(inner))
+                } else {
+                    Type::List(Box::new(Type::Unknown))
                 }
-                None => Type::List(Box::new(Type::Unknown)),
             }
-        }
+            None => Type::List(Box::new(Type::Unknown)),
+        },
         minijinja::value::ValueKind::Map => Type::Unknown,
         // We don't handle these types
         minijinja::value::ValueKind::Number => match i64::from_str(&v.to_string()) {

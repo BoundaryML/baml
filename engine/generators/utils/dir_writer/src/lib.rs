@@ -1,15 +1,17 @@
+use std::{
+    collections::BTreeMap,
+    io::ErrorKind,
+    path::{Path, PathBuf},
+    thread::sleep,
+    time::Duration,
+};
+
 use anyhow::Result;
 use indexmap::IndexMap;
-use internal_baml_core::configuration::GeneratorDefaultClientMode;
-use internal_baml_core::configuration::GeneratorOutputType;
-use internal_baml_core::configuration::ModuleFormat;
+use internal_baml_core::configuration::{
+    GeneratorDefaultClientMode, GeneratorOutputType, ModuleFormat,
+};
 pub use internal_baml_core::ir::repr::IntermediateRepr;
-use std::collections::BTreeMap;
-use std::io::ErrorKind;
-use std::path::Path;
-use std::path::PathBuf;
-use std::thread::sleep;
-use std::time::Duration;
 
 pub struct GeneratorArgs {
     /// Output directory for the generated client, relative to baml_src
@@ -105,7 +107,6 @@ impl GeneratorArgs {
             .collect()
     }
 
-
     pub fn output_dir(&self) -> PathBuf {
         use sugar_path::SugarPath;
         self.baml_src_dir
@@ -170,7 +171,11 @@ pub trait LanguageFeatures: Default + Sized {
     /// backwards compat implications for the other generators
     const GITIGNORE: Option<&'static str> = None;
 
-    fn generate_sdk<'a>(&'a self, ir: std::sync::Arc<IntermediateRepr>, args: &GeneratorArgs) -> Result<IndexMap<PathBuf, String>, anyhow::Error> {
+    fn generate_sdk<'a>(
+        &'a self,
+        ir: std::sync::Arc<IntermediateRepr>,
+        args: &GeneratorArgs,
+    ) -> Result<IndexMap<PathBuf, String>, anyhow::Error> {
         let mut collector: FileCollector<'a, Self> = FileCollector::<'a, Self>::new();
         collector.on_file_created.push(Box::new(|path, content| {
             self.on_file_created(path, content)
@@ -182,7 +187,11 @@ pub trait LanguageFeatures: Default + Sized {
         collector.commit(&args.output_dir())
     }
 
-    fn generate_sdk_files_for_test<'a>(&'a self, ir: std::sync::Arc<IntermediateRepr>, args: &GeneratorArgs) -> Result<IndexMap<PathBuf, String>, anyhow::Error> {
+    fn generate_sdk_files_for_test<'a>(
+        &'a self,
+        ir: std::sync::Arc<IntermediateRepr>,
+        args: &GeneratorArgs,
+    ) -> Result<IndexMap<PathBuf, String>, anyhow::Error> {
         let mut collector: FileCollector<'a, Self> = FileCollector::<'a, Self>::new();
         collector.on_file_created.push(Box::new(|path, content| {
             self.on_file_created(path, content)
@@ -255,7 +264,7 @@ fn try_delete_tmp_dir(temp_path: &Path) -> Result<()> {
     Ok(())
 }
 
-impl<'a, L: LanguageFeatures + Default> FileCollector<'a, L> {    
+impl<'a, L: LanguageFeatures + Default> FileCollector<'a, L> {
     pub fn new() -> Self {
         Self {
             files: IndexMap::new(),
@@ -284,7 +293,10 @@ impl<'a, L: LanguageFeatures + Default> FileCollector<'a, L> {
     }
 
     pub fn append_to_file<K: AsRef<str>>(&mut self, name: K, contents: &str) -> Result<()> {
-        let file = self.files.get_mut(&PathBuf::from(name.as_ref())).ok_or_else(|| anyhow::anyhow!("File not found: {}", name.as_ref()))?;
+        let file = self
+            .files
+            .get_mut(&PathBuf::from(name.as_ref()))
+            .ok_or_else(|| anyhow::anyhow!("File not found: {}", name.as_ref()))?;
         file.push('\n');
         file.push_str(contents);
         Ok(())

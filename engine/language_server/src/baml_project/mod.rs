@@ -1,4 +1,19 @@
+// use rustc_hash::FxHashSet;
+// use std::sync::Arc;
+use std::{
+    collections::{hash_map::DefaultHasher, HashMap},
+    hash::{Hash, Hasher},
+    io,
+    path::{Path, PathBuf},
+    str::FromStr,
+    time::Instant,
+};
+
 use anyhow::Context;
+use baml_lsp_types::{
+    BamlFunction, BamlGeneratorConfig, BamlParam, BamlParentFunction, BamlSpan, BamlTestCase,
+    SymbolLocation,
+};
 use baml_runtime::{
     // internal::llm_client::LLMResponse,
     BamlRuntime,
@@ -7,35 +22,21 @@ use baml_runtime::{
     // RenderedPrompt,
     // runtime::InternalBamlRuntime
 };
-use baml_types::{BamlMediaType, TypeValue};
-use baml_types::{BamlValue, GeneratorOutputType};
+use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, TypeValue};
 use file_utils::gather_files;
-use internal_baml_codegen::version_check::{check_version, GeneratorType, VersionCheckMode};
-use internal_baml_codegen::GenerateOutput;
+use internal_baml_codegen::{
+    version_check::{check_version, GeneratorType, VersionCheckMode},
+    GenerateOutput,
+};
 use internal_baml_diagnostics::Diagnostics;
 use lsp_server::Notification;
-
-use baml_lsp_types::{
-    BamlFunction, BamlGeneratorConfig, BamlParam, BamlParentFunction, BamlSpan, BamlTestCase,
-    SymbolLocation,
-};
 use lsp_types::{
     Diagnostic, DiagnosticSeverity, Hover, HoverContents, Position, Range, TextDocumentItem,
 };
 use position_utils::get_word_at_position;
 use semver::Version;
-// use rustc_hash::FxHashSet;
-use std::collections::{hash_map::DefaultHasher, HashMap};
-use std::io;
-use std::path::{Path, PathBuf};
-// use std::sync::Arc;
-use std::time::Instant;
 
-use crate::server::client::Notifier;
-use crate::{version, DocumentKey, TextDocument};
-use std::str::FromStr;
-
-use std::hash::{Hash, Hasher};
+use crate::{server::client::Notifier, version, DocumentKey, TextDocument};
 
 pub mod file_utils;
 pub mod position_utils;

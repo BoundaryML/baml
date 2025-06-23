@@ -1,9 +1,5 @@
 use std::sync::Arc;
 
-use crate::{
-    internal::llm_client::traits::HttpContext,
-    tracingv2::storage::{make_trace_event_for_response, storage::BAML_TRACER},
-};
 use anyhow::Result;
 use async_std::stream::StreamExt;
 use baml_ids::HttpRequestId;
@@ -13,19 +9,19 @@ use jsonish::BamlValueWithFlags;
 use serde_json::json;
 use web_time::Duration;
 
+use super::{call::CtxWithHttpRequestId, OrchestrationScope, OrchestratorNodeIterator};
 use crate::{
     internal::{
         llm_client::{
             parsed_value_to_response,
-            traits::{WithClientProperties, WithPrompt, WithStreamable},
+            traits::{HttpContext, WithClientProperties, WithPrompt, WithStreamable},
             LLMErrorResponse, LLMResponse, ResponseBamlValue,
         },
         prompt_renderer::PromptRenderer,
     },
+    tracingv2::storage::{make_trace_event_for_response, storage::BAML_TRACER},
     FunctionResult, RuntimeContext,
 };
-
-use super::{call::CtxWithHttpRequestId, OrchestrationScope, OrchestratorNodeIterator};
 
 pub async fn orchestrate_stream<F>(
     iter: OrchestratorNodeIterator,

@@ -1,10 +1,11 @@
-use super::repr::{Class, Enum, EnumValue, ExprFunction, Field, Node, NodeAttributes};
-use crate::{ir::repr::IntermediateRepr, Configuration};
 use baml_types::{
     expr::{Builtin, Expr, ExprMetadata},
     Arrow, FieldType,
 };
 use internal_baml_diagnostics::Span;
+
+use super::repr::{Class, Enum, EnumValue, ExprFunction, Field, Node, NodeAttributes};
+use crate::{ir::repr::IntermediateRepr, Configuration};
 
 pub mod functions {
     pub const FETCH_VALUE: &str = "std::fetch_value";
@@ -125,7 +126,9 @@ pub fn builtin_enums() -> Vec<Node<Enum>> {
 pub fn builtin_generic_fn(f: Builtin, return_type: FieldType) -> Expr<ExprMetadata> {
     let signature = match f {
         // fn fetch_value<T>(request: std::Request) -> T
-        Builtin::FetchValue => FieldType::arrow(vec![FieldType::class(classes::REQUEST)], return_type)
+        Builtin::FetchValue => {
+            FieldType::arrow(vec![FieldType::class(classes::REQUEST)], return_type)
+        }
     };
 
     Expr::Builtin(f, (Span::fake(), Some(signature)))

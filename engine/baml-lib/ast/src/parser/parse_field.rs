@@ -1,3 +1,5 @@
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_attribute::parse_attribute,
@@ -8,7 +10,6 @@ use super::{
     Rule,
 };
 use crate::ast::*;
-use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub(crate) fn parse_value_expr(
     model_name: &Option<Identifier>,
@@ -277,12 +278,15 @@ fn combine_field_types(types: Vec<FieldType>) -> Option<FieldType> {
 #[cfg(test)]
 mod tests {
 
-    use super::super::{BAMLParser, Rule};
-    use super::*;
-    use crate::test_parse_baml_type;
     use baml_types::TypeValue;
     use internal_baml_diagnostics::{Diagnostics, SourceFile};
     use pest::Parser;
+
+    use super::{
+        super::{BAMLParser, Rule},
+        *,
+    };
+    use crate::test_parse_baml_type;
 
     #[test]
     fn type_union_association() {

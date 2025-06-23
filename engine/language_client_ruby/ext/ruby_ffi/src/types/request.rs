@@ -1,5 +1,6 @@
-use crate::Result;
 use magnus::{class, method, r_array::TypedArray, Error, Module, RModule, Ruby};
+
+use crate::Result;
 
 crate::lang_wrapper!(
     HTTPRequest,

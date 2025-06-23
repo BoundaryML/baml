@@ -1,8 +1,9 @@
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+
 use super::{
     helpers::{parsing_catch_all, Pair},
     Rule,
 };
-
 use crate::{
     assert_correct_parser,
     ast::*,
@@ -11,7 +12,6 @@ use crate::{
         parse_type_expression_block::parse_type_expression_block,
     },
 };
-use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub fn parse_type_builder_block(
     pair: Pair<'_>,
@@ -148,10 +148,11 @@ pub fn parse_type_builder_contents_from_str(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::parser::{BAMLParser, Rule};
     use internal_baml_diagnostics::{Diagnostics, SourceFile};
     use pest::Parser;
+
+    use super::*;
+    use crate::parser::{BAMLParser, Rule};
 
     #[test]
     fn parse_block() {

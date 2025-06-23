@@ -1,7 +1,8 @@
 use anyhow::Result;
-use baml_types::{FieldType};
+use baml_types::FieldType;
 use internal_baml_jinja::types::Enum;
 
+use super::ParsingContext;
 use crate::deserializer::{
     coercer::{
         ir_ref::coerce_class::apply_constraints, match_string::match_string, ParsingError,
@@ -9,8 +10,6 @@ use crate::deserializer::{
     },
     types::BamlValueWithFlags,
 };
-
-use super::ParsingContext;
 
 fn enum_match_candidates(enm: &Enum) -> Vec<(&str, Vec<String>)> {
     enm.values

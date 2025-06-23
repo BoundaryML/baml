@@ -1,5 +1,6 @@
-use super::*;
 use baml_types::type_meta::base::TypeMeta;
+
+use super::*;
 
 //
 const FOO_FILE: &str = r#"

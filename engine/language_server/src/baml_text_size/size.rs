@@ -1,12 +1,11 @@
-use {
-    crate::baml_text_size::traits::TextLen,
-    std::{
-        convert::TryFrom,
-        fmt, iter,
-        num::TryFromIntError,
-        ops::{Add, AddAssign, Sub, SubAssign},
-    },
+use std::{
+    convert::TryFrom,
+    fmt, iter,
+    num::TryFromIntError,
+    ops::{Add, AddAssign, Sub, SubAssign},
 };
+
+use crate::baml_text_size::traits::TextLen;
 
 /// A measure of text length. Also, equivalently, an index into text.
 ///

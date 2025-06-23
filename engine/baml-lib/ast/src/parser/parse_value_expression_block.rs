@@ -1,3 +1,5 @@
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_attribute::parse_attribute,
@@ -8,9 +10,7 @@ use super::{
     parse_type_builder_block::parse_type_builder_block,
     Rule,
 };
-
-use crate::ast::*;
-use internal_baml_diagnostics::{DatamodelError, Diagnostics}; // Add this line
+use crate::ast::*; // Add this line
 
 pub(crate) fn parse_value_expression_block(
     pair: Pair<'_>,
@@ -39,7 +39,9 @@ pub(crate) fn parse_value_expression_block(
             },
             Rule::ARROW => has_arrow = true,
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
-            Rule::named_argument_list => { input = Some(parse_named_argument_list(current, diagnostics))},
+            Rule::named_argument_list => {
+                input = Some(parse_named_argument_list(current, diagnostics))
+            }
             Rule::field_type | Rule::field_type_chain => {
                 match parse_function_arg(current, diagnostics) {
                     Ok(arg) => output = Some(arg),

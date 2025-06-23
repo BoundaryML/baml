@@ -1,19 +1,17 @@
 mod validate_reserved_names;
 
-use crate::{
-    ast::{self, TopId, WithAttributes, WithName, WithSpan},
-    coerce, coerce_array, Context, DatamodelError, StaticType, StringId,
-};
-
 use baml_types::{BamlMap, FieldType};
 use indexmap::map::IndexedEntry;
-use internal_baml_diagnostics::Span;
 use internal_baml_ast::ast::{ConfigBlockProperty, Expression, Field, WithIdentifier};
-
+use internal_baml_diagnostics::Span;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use validate_reserved_names::*;
 
 use self::validate_reserved_names::{validate_enum_value_name, validate_function_name};
+use crate::{
+    ast::{self, TopId, WithAttributes, WithName, WithSpan},
+    coerce, coerce_array, Context, DatamodelError, StaticType, StringId,
+};
 
 /// Resolved names for use in the validation process.
 #[derive(Default, Clone)]

@@ -7,17 +7,15 @@ pub mod roundrobin;
 use internal_baml_core::ir::ClientWalker;
 use internal_llm_client::{ClientProvider, StrategyClientProvider};
 
-use crate::{
-    client_registry::ClientProperty, runtime_interface::InternalClientLookup, RuntimeContext,
-};
-
 use self::{fallback::FallbackStrategy, roundrobin::RoundRobinStrategy};
-
 use super::{
     orchestrator::{
         IterOrchestrator, OrchestrationScope, OrchestrationState, OrchestratorNodeIterator,
     },
     traits::WithRetryPolicy,
+};
+use crate::{
+    client_registry::ClientProperty, runtime_interface::InternalClientLookup, RuntimeContext,
 };
 
 pub enum LLMStrategyProvider {

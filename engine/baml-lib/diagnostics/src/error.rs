@@ -1,11 +1,11 @@
+use std::{borrow::Cow, iter::Iterator, ops::Index};
+
 use colored::{ColoredString, Colorize};
 
 use crate::{
     pretty_print::{pretty_print, DiagnosticColorer},
     Span,
 };
-use std::iter::Iterator;
-use std::{borrow::Cow, ops::Index};
 
 #[derive(Debug, Clone)]
 pub struct DatamodelError {

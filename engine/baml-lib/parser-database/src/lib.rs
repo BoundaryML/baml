@@ -41,6 +41,8 @@ use std::collections::{HashMap, HashSet, VecDeque};
 pub use coerce_expression::{coerce, coerce_array, coerce_opt};
 pub use internal_baml_ast::ast;
 use internal_baml_ast::ast::{Ast, FieldType, ValExpId, WithName};
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+use names::Names;
 pub use tarjan::Tarjan;
 pub use types::{
     Attributes, ClientProperties, ContantDelayStrategy, ExponentialBackoffStrategy, PrinterType,
@@ -49,8 +51,6 @@ pub use types::{
 pub use walkers::TypeWalker;
 
 use self::{context::Context, interner::StringId, types::Types};
-use internal_baml_diagnostics::{DatamodelError, Diagnostics};
-use names::Names;
 
 /// ParserDatabase is a container for a Schema AST, together with information
 /// gathered during schema validation. Each validation step enriches the
@@ -350,10 +350,11 @@ impl std::ops::Index<StringId> for ParserDatabase {
 mod test {
     use std::path::PathBuf;
 
-    use super::*;
     use ast::FieldArity;
     use baml_types::TypeValue;
     use internal_baml_diagnostics::{Diagnostics, SourceFile};
+
+    use super::*;
 
     fn parse(baml: &'static str) -> Result<ParserDatabase, Diagnostics> {
         let mut db = ParserDatabase::new();

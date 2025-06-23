@@ -1,15 +1,22 @@
 use std::time::Instant;
 
-use lsp_types::notification::DidChangeTextDocument;
-use lsp_types::{DidChangeTextDocumentParams, PublishDiagnosticsParams};
+use lsp_types::{
+    notification::DidChangeTextDocument, DidChangeTextDocumentParams, PublishDiagnosticsParams,
+};
 
-use crate::server::api::diagnostics::publish_diagnostics;
-use crate::server::api::traits::{NotificationHandler, SyncNotificationHandler};
-use crate::server::api::ResultExt;
-use crate::server::client::{Notifier, Requester};
-use crate::server::Result;
-use crate::session::Session;
-use crate::DocumentKey;
+use crate::{
+    server::{
+        api::{
+            diagnostics::publish_diagnostics,
+            traits::{NotificationHandler, SyncNotificationHandler},
+            ResultExt,
+        },
+        client::{Notifier, Requester},
+        Result,
+    },
+    session::Session,
+    DocumentKey,
+};
 
 pub(crate) struct DidChangeTextDocumentHandler;
 

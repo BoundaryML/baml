@@ -23,99 +23,84 @@ pub mod tracingv2;
 pub mod type_builder;
 mod types;
 
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::{hash_map::DefaultHasher, HashMap},
+    hash::{Hash, Hasher},
+    path::PathBuf,
+    sync::{Arc, Mutex, OnceLock},
+};
 
-use anyhow::Context;
-use anyhow::Result;
-use baml_ids::FunctionCallId;
-use baml_ids::HttpRequestId;
-use baml_types::tracing::events::TraceEvent;
-use eval_expr::ExprEvalResult;
-use futures::channel::mpsc;
-use internal_baml_core::ast::Span;
-use internal_baml_core::internal_baml_diagnostics::SerializedSpan;
-use internal_baml_core::ir::repr::initial_context;
-use internal_baml_core::ir::repr::IntermediateRepr;
-use jsonish::ResponseValueMeta;
-use tracingv2::publisher::flush;
-
-use crate::errors::IntoBamlError;
-use crate::internal::llm_client::LLMCompleteResponse;
-use baml_types::expr::{Expr, ExprMetadata};
-use baml_types::tracing::events::HTTPBody;
-use baml_types::tracing::events::HTTPRequest;
-use baml_types::BamlMap;
-use baml_types::BamlValue;
-use baml_types::BamlValueWithMeta;
-use baml_types::Completion;
-use baml_types::Constraint;
+use anyhow::{Context, Result};
+use baml_ids::{FunctionCallId, HttpRequestId};
+use baml_types::{
+    expr::{Expr, ExprMetadata},
+    tracing::events::{HTTPBody, HTTPRequest, TraceEvent},
+    BamlMap, BamlValue, BamlValueWithMeta, Completion, Constraint,
+};
 use cfg_if::cfg_if;
-use client_registry::ClientRegistry;
-use dashmap::DashMap;
-use eval_expr::EvalEnv;
-use futures::future::join;
-use futures::future::join_all;
-use indexmap::IndexMap;
-use internal::llm_client::llm_provider::LLMProvider;
-use internal::llm_client::orchestrator::OrchestrationScope;
-use internal::llm_client::primitive::json_body;
-use internal::llm_client::primitive::json_headers;
-use internal::llm_client::primitive::JsonBodyInput;
-use internal::llm_client::retry_policy::CallablePolicy;
-use internal::prompt_renderer::PromptRenderer;
-use internal_baml_core::configuration::CloudProject;
-use internal_baml_core::configuration::CodegenGenerator;
-use internal_baml_core::configuration::Generator;
-use internal_baml_core::configuration::GeneratorOutputType;
-use internal_baml_core::ir::FunctionWalker;
-use internal_baml_core::ir::IRHelperExtended;
-use internal_llm_client::AllowedRoleMetadata;
-use internal_llm_client::ClientSpec;
-use jsonish::ResponseBamlValue;
-use on_log_event::LogEventCallbackSync;
-use runtime::InternalBamlRuntime;
-use runtime_interface::InternalClientLookup;
-use serde_json;
-use serde_json::json;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use std::sync::OnceLock;
-use tracingv2::storage::storage::Collector;
-use tracingv2::storage::storage::BAML_TRACER;
-use web_time::SystemTime;
-
-use crate::internal::llm_client::LLMCompleteResponseMetadata;
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli::RuntimeCliDefaults;
-pub use runtime_context::BamlSrcReader;
-use runtime_interface::ExperimentalTracingInterface;
-use runtime_interface::RuntimeConstructor;
-use tracing::{BamlTracer, TracingCall};
-use type_builder::TypeBuilder;
-pub use types::*;
-use web_time::Duration;
-
+use client_registry::ClientRegistry;
+use dashmap::DashMap;
+use eval_expr::{EvalEnv, ExprEvalResult};
+use futures::{
+    channel::mpsc,
+    future::{join, join_all},
+};
+use indexmap::IndexMap;
+use internal::{
+    llm_client::{
+        llm_provider::LLMProvider,
+        orchestrator::OrchestrationScope,
+        primitive::{json_body, json_headers, JsonBodyInput},
+        retry_policy::CallablePolicy,
+    },
+    prompt_renderer::PromptRenderer,
+};
+use internal_baml_core::{
+    ast::Span,
+    configuration::{CloudProject, CodegenGenerator, Generator, GeneratorOutputType},
+    internal_baml_diagnostics::SerializedSpan,
+    ir::{
+        repr::{initial_context, IntermediateRepr},
+        FunctionWalker, IRHelperExtended,
+    },
+};
+pub use internal_baml_core::{
+    internal_baml_diagnostics,
+    internal_baml_diagnostics::Diagnostics as DiagnosticsError,
+    ir::{ir_helpers::infer_type, scope_diagnostics, FieldType, IRHelper, TypeValue},
+};
 #[cfg(feature = "internal")]
 pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
-#[cfg(feature = "internal")]
-pub use runtime_interface::InternalRuntimeInterface;
-
 #[cfg(not(feature = "internal"))]
 pub(crate) use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
+use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
+use jsonish::{ResponseBamlValue, ResponseValueMeta};
+use on_log_event::LogEventCallbackSync;
+use runtime::InternalBamlRuntime;
+pub use runtime_context::BamlSrcReader;
+#[cfg(feature = "internal")]
+pub use runtime_interface::InternalRuntimeInterface;
 #[cfg(not(feature = "internal"))]
 pub(crate) use runtime_interface::InternalRuntimeInterface;
-
-pub use internal_baml_core::internal_baml_diagnostics;
-pub use internal_baml_core::internal_baml_diagnostics::Diagnostics as DiagnosticsError;
-pub use internal_baml_core::ir::{
-    ir_helpers::infer_type, scope_diagnostics, FieldType, IRHelper, TypeValue,
-};
+use runtime_interface::{ExperimentalTracingInterface, InternalClientLookup, RuntimeConstructor};
 pub(crate) use runtime_methods::prepare_function::PreparedFunctionArgs;
+use serde_json::{self, json};
+use tracing::{BamlTracer, TracingCall};
+use tracingv2::{
+    publisher::flush,
+    storage::storage::{Collector, BAML_TRACER},
+};
+use type_builder::TypeBuilder;
+pub use types::*;
+use web_time::{Duration, SystemTime};
 
-use crate::internal::llm_client::LLMResponse;
-use crate::test_constraints::{evaluate_test_constraints, TestConstraintsResult};
+use crate::{
+    errors::IntoBamlError,
+    internal::llm_client::{LLMCompleteResponse, LLMCompleteResponseMetadata, LLMResponse},
+    test_constraints::{evaluate_test_constraints, TestConstraintsResult},
+};
 
 #[cfg(not(target_arch = "wasm32"))]
 static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
@@ -411,7 +396,6 @@ impl BamlRuntime {
     where
         F: Fn(FunctionResult),
     {
-
         baml_log::set_from_env(&env_vars).unwrap();
 
         let call = self

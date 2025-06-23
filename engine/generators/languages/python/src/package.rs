@@ -35,7 +35,6 @@ impl Package {
         self.type_definition_scope
     }
 
-
     pub fn relative_from(&self, other: &CurrentRenderPackage) -> String {
         // Py does wierd imports, so we return only the last part of the package
         // unless the other package is the same as self, in which case we return empty
@@ -81,9 +80,15 @@ pub(crate) struct CurrentRenderPackage {
 }
 
 impl CurrentRenderPackage {
-    pub fn new(package: &str, lookup: std::sync::Arc<IntermediateRepr>, is_pydantic_2: bool) -> Self {
+    pub fn new(
+        package: &str,
+        lookup: std::sync::Arc<IntermediateRepr>,
+        is_pydantic_2: bool,
+    ) -> Self {
         Self {
-            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(Package::new(package)))),
+            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(Package::new(
+                package,
+            )))),
             lookup,
             is_pydantic_2,
         }
@@ -91,12 +96,13 @@ impl CurrentRenderPackage {
 
     pub fn in_type_definition(&self) -> Self {
         Self {
-            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(self.get().clone_as_type_definition()))),
+            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(
+                self.get().clone_as_type_definition(),
+            ))),
             lookup: self.lookup.clone(),
             is_pydantic_2: self.is_pydantic_2,
         }
     }
-
 
     pub fn lookup(&self) -> &impl TypeLookups {
         self.lookup.as_ref()

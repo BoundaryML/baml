@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use aws_config::Region;
-use aws_config::{identity::IdentityCache, retry::RetryConfig, BehaviorVersion, ConfigLoader};
+use anyhow::{Context, Result};
+use aws_config::{
+    identity::IdentityCache, retry::RetryConfig, BehaviorVersion, ConfigLoader, Region,
+};
 use aws_credential_types::{
     provider::{
         error::{CredentialsError, CredentialsNotLoaded},
@@ -11,52 +11,53 @@ use aws_credential_types::{
     },
     Credentials,
 };
-use aws_sdk_bedrockruntime::config::{Intercept, StalledStreamProtectionConfig};
-use aws_sdk_bedrockruntime::Client as BedrockRuntimeClient;
-use aws_sdk_bedrockruntime::{self as bedrock, operation::converse::ConverseOutput};
-
-use anyhow::{Context, Result};
+use aws_sdk_bedrockruntime::{
+    self as bedrock,
+    config::{Intercept, StalledStreamProtectionConfig},
+    operation::converse::ConverseOutput,
+    Client as BedrockRuntimeClient,
+};
 use aws_smithy_json::serialize::JsonObjectWriter;
-use aws_smithy_runtime_api::client::result::SdkError;
-use aws_smithy_runtime_api::http::Headers;
-use aws_smithy_types::Blob;
-use aws_smithy_types::Document;
+use aws_smithy_runtime_api::{client::result::SdkError, http::Headers};
+use aws_smithy_types::{Blob, Document};
 use baml_ids::HttpRequestId;
-use baml_types::tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, TraceData, TraceEvent};
-use baml_types::{ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
+use baml_types::{
+    tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, TraceData, TraceEvent},
+    ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent, BamlMediaType,
+};
 use futures::stream;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-use internal_llm_client::aws_bedrock::{self, ResolvedAwsBedrock};
 use internal_llm_client::{
+    aws_bedrock::{self, ResolvedAwsBedrock},
     AllowedRoleMetadata, ClientProvider, ResolvedClientProperty, UnresolvedClientProperty,
 };
 use secrecy::ExposeSecret;
 use serde::Deserialize;
 use serde_json::{json, Map};
 use uuid::Uuid;
-use web_time::Instant;
-use web_time::SystemTime;
+use web_time::{Instant, SystemTime};
 
-use crate::client_registry::ClientProperty;
-use crate::internal::llm_client::traits::{
-    HttpContext, ToProviderMessageExt, WithClientProperties,
-};
-use crate::internal::llm_client::{
-    primitive::request::RequestBuilder,
-    traits::{
-        StreamResponse, WithChat, WithClient, WithNoCompletion, WithRenderRawCurl, WithRetryPolicy,
-        WithStreamChat,
-    },
-    ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
-    ModelFeatures, ResolveMediaUrls,
-};
-use crate::tracingv2::storage::storage::BAML_TRACER;
-use crate::{json_body, JsonBodyInput, RenderCurlSettings, RuntimeContext};
 // See https://github.com/awslabs/aws-sdk-rust/issues/169
 use super::custom_http_client;
 #[cfg(target_arch = "wasm32")]
 use super::wasm::WasmAwsCreds;
+use crate::{
+    client_registry::ClientProperty,
+    internal::llm_client::{
+        primitive::request::RequestBuilder,
+        traits::{
+            HttpContext, StreamResponse, ToProviderMessageExt, WithChat, WithClient,
+            WithClientProperties, WithNoCompletion, WithRenderRawCurl, WithRetryPolicy,
+            WithStreamChat,
+        },
+        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+        ModelFeatures, ResolveMediaUrls,
+    },
+    json_body,
+    tracingv2::storage::storage::BAML_TRACER,
+    JsonBodyInput, RenderCurlSettings, RuntimeContext,
+};
 
 // represents client that interacts with the Bedrock API
 pub struct AwsClient {

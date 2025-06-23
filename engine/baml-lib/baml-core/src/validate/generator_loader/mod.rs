@@ -1,8 +1,9 @@
 mod v2;
 
-use crate::{configuration::Generator, internal_baml_diagnostics::*};
-use internal_baml_parser_database::ast;
 use internal_baml_ast::ast::WithSpan;
+use internal_baml_parser_database::ast;
+
+use crate::{configuration::Generator, internal_baml_diagnostics::*};
 
 /// Load and validate Generators defined in an AST.
 pub(crate) fn load_generators_from_ast<'i>(

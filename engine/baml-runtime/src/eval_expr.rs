@@ -1,21 +1,28 @@
+use std::{
+    collections::HashMap,
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
+
 use anyhow::{anyhow, Context};
-use futures::channel::mpsc;
-use futures::stream::{self as stream, StreamExt};
-use internal_baml_core::internal_baml_diagnostics::SerializedSpan;
-use internal_baml_core::internal_baml_parser_database::coerce;
-use internal_baml_core::ir::builtin;
+use baml_types::{
+    expr::{Builtin, Expr, ExprMetadata, Name, VarIndex},
+    type_meta::base::TypeMeta,
+    Arrow, BamlMap, BamlValue, BamlValueWithMeta, EvaluationContext, FieldType, TypeValue,
+};
+use futures::{
+    channel::mpsc,
+    stream::{self as stream, StreamExt},
+};
+use internal_baml_core::{
+    internal_baml_diagnostics::SerializedSpan,
+    internal_baml_parser_database::coerce,
+    ir::{builtin, repr::IntermediateRepr},
+};
 use internal_baml_jinja::types::OutputFormatContent;
-use jsonish::deserializer::deserialize_flags::Flag;
-use jsonish::helpers::render_output_format;
-use std::collections::HashMap;
-use std::str::FromStr;
-use std::sync::{Arc, Mutex};
+use jsonish::{deserializer::deserialize_flags::Flag, helpers::render_output_format};
 
 use crate::{BamlRuntime, FunctionResult};
-use baml_types::{Arrow, FieldType,  EvaluationContext, type_meta::base::TypeMeta, TypeValue};
-use baml_types::expr::{Builtin, Expr, ExprMetadata, Name, VarIndex};
-use baml_types::{BamlMap, BamlValue, BamlValueWithMeta};
-use internal_baml_core::ir::repr::IntermediateRepr;
 
 const MAX_STEPS: usize = 1000;
 
@@ -828,14 +835,12 @@ pub async fn eval_to_value<'a>(
 
 #[cfg(test)]
 mod tests {
-    use crate::internal_baml_diagnostics::Span;
     use baml_types::{BamlMap, BamlValue};
     use futures::channel::mpsc;
-    use internal_baml_core::ir::repr::make_test_ir;
-    use internal_baml_core::ir::IRHelper;
+    use internal_baml_core::ir::{repr::make_test_ir, IRHelper};
 
     use super::*;
-    use crate::BamlRuntime;
+    use crate::{internal_baml_diagnostics::Span, BamlRuntime};
 
     // Make a testing runtime. It assumes the presence of
     // OPENAI_API_KEY environment variable.

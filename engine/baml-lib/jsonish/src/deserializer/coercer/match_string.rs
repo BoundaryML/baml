@@ -7,6 +7,7 @@ use std::{cmp::Ordering, collections::HashMap};
 use anyhow::Result;
 use baml_types::{FieldType, TypeValue};
 
+use super::ParsingContext;
 use crate::{
     deserializer::{
         coercer::ParsingError,
@@ -15,8 +16,6 @@ use crate::{
     },
     jsonish,
 };
-
-use super::ParsingContext;
 
 /// Heuristic match of different possible values against an input string.
 pub(super) fn match_string(

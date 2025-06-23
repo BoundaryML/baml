@@ -1,17 +1,21 @@
-use lsp_server::ErrorCode;
-use lsp_types::notification::DidCloseTextDocument;
-use lsp_types::DidCloseTextDocumentParams;
 use std::path::PathBuf;
+
+use lsp_server::ErrorCode;
+use lsp_types::{notification::DidCloseTextDocument, DidCloseTextDocumentParams};
 
 // use crate::server::api::diagnostics::clear_diagnostics;
 use crate::server::api::traits::{NotificationHandler, SyncNotificationHandler};
 // use crate::server::api::LSPResult;
 use crate::server::api::LSPResult;
-use crate::server::api::ResultExt;
-use crate::server::client::{Notifier, Requester};
-use crate::server::Result;
-use crate::session::Session;
-use crate::DocumentKey;
+use crate::{
+    server::{
+        api::ResultExt,
+        client::{Notifier, Requester},
+        Result,
+    },
+    session::Session,
+    DocumentKey,
+};
 // use crate::system::{url_to_any_system_path, AnySystemPath};
 
 pub(crate) struct DidCloseTextDocumentHandler;

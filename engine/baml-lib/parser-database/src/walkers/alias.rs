@@ -1,8 +1,9 @@
 use std::collections::HashSet;
 
-use super::TypeWalker;
-use internal_baml_diagnostics::Span;
 use internal_baml_ast::ast::{self, FieldType, Identifier, WithName, WithSpan};
+use internal_baml_diagnostics::Span;
+
+use super::TypeWalker;
 
 /// Type alias walker
 pub type TypeAliasWalker<'db> = super::Walker<'db, ast::TypeAliasId>;

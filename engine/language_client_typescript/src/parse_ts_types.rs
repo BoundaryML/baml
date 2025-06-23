@@ -1,18 +1,10 @@
-use baml_types::BamlMap;
-use baml_types::BamlValue;
-use napi::bindgen_prelude::*;
-use napi::JsBoolean;
+use baml_types::{BamlMap, BamlValue};
+use napi::{
+    bindgen_prelude::*, JsBoolean, JsDate, JsExternal, JsNumber, JsObject, JsString, JsUnknown,
+    NapiRaw,
+};
 
-use napi::JsDate;
-use napi::JsExternal;
-use napi::JsNumber;
-use napi::JsObject;
-use napi::JsString;
-use napi::JsUnknown;
-use napi::NapiRaw;
-
-use crate::types::audio::BamlAudio;
-use crate::types::image::BamlImage;
+use crate::types::{audio::BamlAudio, image::BamlImage};
 
 struct SerializationError {
     position: Vec<String>,

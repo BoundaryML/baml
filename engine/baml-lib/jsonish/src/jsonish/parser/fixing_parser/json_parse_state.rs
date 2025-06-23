@@ -1,10 +1,10 @@
 use std::iter::Peekable;
 
-use crate::jsonish::{value::Fixes, Value};
 use anyhow::Result;
 use baml_types::CompletionState;
 
 use super::json_collection::JsonCollection;
+use crate::jsonish::{value::Fixes, Value};
 
 #[derive(Debug)]
 pub struct JsonParseState {

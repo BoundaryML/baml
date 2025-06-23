@@ -1,6 +1,7 @@
-use super::*;
 use pretty_assertions::assert_eq;
 use unindent::Unindent as _;
+
+use super::*;
 
 #[track_caller]
 fn assert_format_eq(schema: &str, expected: &str) -> Result<()> {

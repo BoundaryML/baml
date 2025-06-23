@@ -1,26 +1,5 @@
-use crate::client_registry::ClientProperty;
-use crate::internal::llm_client::primitive::request::ResponseType;
-use crate::internal::llm_client::traits::{
-    CompletionToProviderBody, HttpContext, ToProviderMessage, ToProviderMessageExt,
-    WithClientProperties,
-};
-use crate::internal::llm_client::ResolveMediaUrls;
-use crate::RuntimeContext;
-use crate::{
-    internal::llm_client::{
-        primitive::{
-            google::types::GoogleResponse,
-            request::{make_parsed_request, make_request, RequestBuilder},
-        },
-        traits::{
-            SseResponseTrait, StreamResponse, WithChat, WithClient, WithNoCompletion,
-            WithRetryPolicy, WithStreamChat,
-        },
-        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
-        ModelFeatures,
-    },
-    request::create_client,
-};
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent};
 use eventsource_stream::Eventsource;
@@ -28,13 +7,31 @@ use futures::StreamExt;
 use http::header;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-use internal_llm_client::google_ai::ResolvedGoogleAI;
 use internal_llm_client::{
-    AllowedRoleMetadata, ClientProvider, ResolvedClientProperty, UnresolvedClientProperty,
+    google_ai::ResolvedGoogleAI, AllowedRoleMetadata, ClientProvider, ResolvedClientProperty,
+    UnresolvedClientProperty,
 };
 use secrecy::ExposeSecret;
 use serde_json::json;
-use std::collections::HashMap;
+
+use crate::{
+    client_registry::ClientProperty,
+    internal::llm_client::{
+        primitive::{
+            google::types::GoogleResponse,
+            request::{make_parsed_request, make_request, RequestBuilder, ResponseType},
+        },
+        traits::{
+            CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse,
+            ToProviderMessage, ToProviderMessageExt, WithChat, WithClient, WithClientProperties,
+            WithNoCompletion, WithRetryPolicy, WithStreamChat,
+        },
+        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+        ModelFeatures, ResolveMediaUrls,
+    },
+    request::create_client,
+    RuntimeContext,
+};
 
 pub struct GoogleAIClient {
     pub name: String,

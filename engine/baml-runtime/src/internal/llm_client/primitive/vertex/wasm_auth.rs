@@ -1,7 +1,8 @@
+use std::{future::Future, pin::Pin, sync::Arc};
+
 use anyhow::{Context, Result};
 use internal_llm_client::vertex::ResolvedGcpAuthStrategy;
 use serde::{Deserialize, Serialize};
-use std::{future::Future, pin::Pin, sync::Arc};
 
 use crate::{
     internal::wasm_jwt::encode_jwt,

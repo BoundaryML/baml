@@ -1,13 +1,12 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
+use serde::Deserialize;
+use serde_json::Value;
 
 use super::types::{GoogleResponse, Part};
 use crate::internal::llm_client::{
     primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse,
     LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
 };
-use anyhow::Context;
-use serde::Deserialize;
-use serde_json::Value;
 
 fn to_prompt(
     prompt: either::Either<&String, &[internal_baml_jinja::RenderedChatMessage]>,
@@ -170,14 +169,14 @@ pub fn scan_google_response_stream(
 
 #[cfg(test)]
 mod tests {
+    use pretty_assertions::assert_eq;
+    use web_time::Duration;
+
+    use super::*;
     use crate::internal::llm_client::primitive::{
         google::types::{Candidate, Content, Part, UsageMetaData},
         tests::MockClient,
     };
-
-    use super::*;
-    use pretty_assertions::assert_eq;
-    use web_time::Duration;
 
     const RESPONSE: &str = r#"
 {

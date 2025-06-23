@@ -20,8 +20,6 @@ mod traits;
 mod type_builder_block;
 mod type_expression_block;
 mod value_expression_block;
-pub(crate) use self::comment::Comment;
-
 pub use app::App;
 pub use argument::{Argument, ArgumentId, ArgumentsList};
 pub use assignment::Assignment;
@@ -42,6 +40,8 @@ pub use traits::{WithAttributes, WithDocumentation, WithIdentifier, WithName, Wi
 pub use type_builder_block::{TypeBuilderBlock, TypeBuilderEntry, DYNAMIC_TYPE_NAME_PREFIX};
 pub use type_expression_block::{FieldId, SubType, TypeExpressionBlock};
 pub use value_expression_block::{BlockArg, BlockArgs, ValueExprBlock, ValueExprBlockType};
+
+pub(crate) use self::comment::Comment;
 
 /// AST representation of the Baml source code.
 ///

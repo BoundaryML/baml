@@ -1,12 +1,12 @@
-use anyhow::Result;
+use std::{collections::HashMap, sync::Arc};
 
+use anyhow::Result;
 use baml_types::{
     tracing::events::{FunctionEnd, FunctionStart, TraceData, TraceEvent},
     BamlValueWithMeta, FieldType,
 };
 use internal_baml_core::ir::repr::IntermediateRepr;
 use serde_json::json;
-use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     client_registry::ClientRegistry,

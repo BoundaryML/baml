@@ -1,16 +1,17 @@
 use std::{borrow::Cow, collections::HashMap};
 
+use baml_ids::{FunctionCallId, FunctionEventId};
+use serde::{Deserialize, Serialize};
+use ts_rs::TS;
+
+use super::{
+    baml_function_call_error::BamlFunctionCallError,
+    baml_value::{BamlValue, Media},
+};
 use crate::{
     ast::{evaluation_context::TypeBuilderValue, tops::BamlFunctionId},
     base::EpochMsTimestamp,
 };
-use serde::{Deserialize, Serialize};
-
-use baml_ids::{FunctionCallId, FunctionEventId};
-use ts_rs::TS;
-
-use super::baml_function_call_error::BamlFunctionCallError;
-use super::baml_value::{BamlValue, Media};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct TraceEventBatch<'a> {

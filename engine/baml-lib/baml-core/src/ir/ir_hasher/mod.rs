@@ -1,12 +1,12 @@
-use anyhow::Result;
-use baml_types::HasFieldType;
 use std::{
     collections::{HashMap, HashSet},
     hash::{Hash, Hasher},
     sync::Arc,
 };
 
+use anyhow::Result;
 use baml_rpc::{NamedType, TypeDefinition, TypeReference};
+use baml_types::HasFieldType;
 
 use super::{repr::Node, FieldType, IntermediateRepr, Walker};
 

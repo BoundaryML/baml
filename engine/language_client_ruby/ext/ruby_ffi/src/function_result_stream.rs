@@ -1,13 +1,9 @@
-use std::cell::RefCell;
-use std::sync::Arc;
+use std::{cell::RefCell, collections::HashMap, sync::Arc};
 
 use magnus::{class, method, Module, RModule, Ruby};
 
 use super::types::runtime_ctx_manager::RuntimeContextManager;
-use crate::function_result::FunctionResult;
-use crate::Error;
-use crate::Result;
-use std::collections::HashMap;
+use crate::{function_result::FunctionResult, Error, Result};
 
 #[magnus::wrap(class = "Baml::Ffi::FunctionResultStream", free_immediately, size)]
 pub struct FunctionResultStream {
@@ -41,12 +37,13 @@ impl FunctionResultStream {
             None
         };
 
-        match rb_self.t.block_on(
-            rb_self
-                .inner
-                .borrow_mut()
-                .run(on_event, &ctx.inner, None, None, HashMap::new()),
-        ) {
+        match rb_self.t.block_on(rb_self.inner.borrow_mut().run(
+            on_event,
+            &ctx.inner,
+            None,
+            None,
+            HashMap::new(),
+        )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
             (Err(e), _) => Err(Error::new(
                 ruby.exception_runtime_error(),

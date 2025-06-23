@@ -1,6 +1,6 @@
+use std::{fmt, sync::Arc};
+
 use crate::{BamlMedia, BamlValue};
-use std::fmt;
-use std::sync::Arc;
 
 /// A wrapper around a jinja expression. The inner `String` should not contain
 /// the interpolation brackets `{{ }}`; it should be a bare expression like

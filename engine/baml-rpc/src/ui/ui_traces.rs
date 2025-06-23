@@ -1,14 +1,14 @@
-use crate::base::EpochMsTimestamp;
-use crate::rpc::ApiEndpoint;
-use crate::ProjectId;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-use super::ui_function_calls::{
-    FilterExpression, FunctionCallStatus, OrderBy, OrderField, RelativeTime, SortDirection,
-    TagFilter,
+use super::{
+    ui_function_calls::{
+        FilterExpression, FunctionCallStatus, OrderBy, OrderField, RelativeTime, SortDirection,
+        TagFilter,
+    },
+    ui_types,
 };
-use super::ui_types;
+use crate::{base::EpochMsTimestamp, rpc::ApiEndpoint, ProjectId};
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
@@ -219,8 +219,9 @@ impl ApiEndpoint for GetTraceChildren {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json;
+
+    use super::*;
 
     #[test]
     fn test_list_traces_lazy_loading() {

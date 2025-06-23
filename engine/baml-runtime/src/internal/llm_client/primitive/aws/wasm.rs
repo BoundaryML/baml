@@ -1,7 +1,13 @@
 // Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
 // SPDX-License-Identifier: Apache-2.0
 
-use aws_config::ConfigLoader;
+use core::{
+    pin::Pin,
+    task::{Context, Poll},
+};
+use std::{sync::Arc, time::SystemTime};
+
+use aws_config::{BehaviorVersion, ConfigLoader, SdkConfig};
 use aws_credential_types::{
     provider::{
         error::{CredentialsError, CredentialsNotLoaded},
@@ -13,8 +19,6 @@ use aws_smithy_async::{
     rt::sleep::{AsyncSleep, Sleep},
     time::TimeSource,
 };
-use aws_smithy_runtime_api::client::result::{ConnectorError, SdkError};
-use aws_smithy_runtime_api::http::{self, Request};
 use aws_smithy_runtime_api::{
     client::{
         http::{
@@ -22,20 +26,16 @@ use aws_smithy_runtime_api::{
             SharedHttpConnector,
         },
         orchestrator::HttpRequest,
+        result::{ConnectorError, SdkError},
         runtime_components::RuntimeComponents,
     },
+    http::{self, Request},
     shared::IntoShared,
 };
 use aws_smithy_types::body::SdkBody;
-
-use aws_config::{BehaviorVersion, SdkConfig};
 use chrono::{DateTime, Utc};
-use core::pin::Pin;
-use core::task::{Context, Poll};
 use futures::Stream;
 use pin_project_lite::pin_project;
-use std::sync::Arc;
-use std::time::SystemTime;
 use time::OffsetDateTime;
 
 use crate::{js_callback_provider::get_js_callback_provider, AwsCredResult, JsCallbackProvider};

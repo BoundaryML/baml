@@ -1,17 +1,16 @@
 use std::collections::HashSet;
 
-use crate::{
-    AllowedRoleMetadata, FinishReasonFilter, ResponseType, RolesSelection, SupportedRequestModes,
-    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedResponseType,
-    UnresolvedRolesSelection,
-};
 use anyhow::Result;
-
 use baml_derive::BamlHash;
 use baml_types::{ApiKeyWithProvenance, GetEnvVar, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
+use crate::{
+    AllowedRoleMetadata, FinishReasonFilter, ResponseType, RolesSelection, SupportedRequestModes,
+    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedResponseType,
+    UnresolvedRolesSelection,
+};
 
 #[derive(Debug, Clone, BamlHash)]
 pub struct UnresolvedOpenAI<Meta> {

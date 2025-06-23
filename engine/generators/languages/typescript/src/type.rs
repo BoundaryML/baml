@@ -276,7 +276,7 @@ impl SerializeType for TypeTS {
                     TypeTS::Enum { .. } | TypeTS::Union { .. } => {
                         format!("Partial<Record<{}, {}>>", k, v)
                     }
-                    _ => format!("Record<{}, {}>", k, v)
+                    _ => format!("Record<{}, {}>", k, v),
                 }
             }
             TypeTS::Any { .. } => "undefined".to_string(),

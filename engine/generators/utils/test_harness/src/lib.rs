@@ -38,7 +38,11 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
             .join("generators/languages")
             .join(L::test_name())
             .join("generated_tests");
-        let test_dir = utils::unique_dir(&base_test_dir, project_name.to_string_lossy().as_ref(), persist);
+        let test_dir = utils::unique_dir(
+            &base_test_dir,
+            project_name.to_string_lossy().as_ref(),
+            persist,
+        );
         std::fs::create_dir_all(&test_dir)?;
 
         // clear test_dir only if it already exists (unlikely with unique_dir)

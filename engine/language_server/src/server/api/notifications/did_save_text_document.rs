@@ -1,12 +1,15 @@
-use crate::server::api::notifications::baml_src_version::BamlSrcVersionPayload;
-use crate::server::api::ResultExt;
-use crate::server::client::{Notifier, Requester};
-use crate::server::{Result, Task};
-use crate::session::{DocumentSnapshot, Session};
-use lsp_types::notification as notif;
-use lsp_types::request::Request;
-use lsp_types::{self as types, ConfigurationParams};
 use std::borrow::Cow;
+
+use lsp_types::{self as types, notification as notif, request::Request, ConfigurationParams};
+
+use crate::{
+    server::{
+        api::{notifications::baml_src_version::BamlSrcVersionPayload, ResultExt},
+        client::{Notifier, Requester},
+        Result, Task,
+    },
+    session::{DocumentSnapshot, Session},
+};
 
 pub struct DidSaveTextDocument;
 

@@ -2,22 +2,29 @@ pub mod common;
 use std::{collections::HashSet, path::PathBuf};
 
 use anyhow::Result;
-use baml_types::{type_meta::base::StreamingBehavior, BamlValueWithMeta, ResponseCheck};
-use baml_types::{EvaluationContext, JinjaExpression};
+use baml_types::{
+    type_meta::base::StreamingBehavior, BamlValueWithMeta, EvaluationContext, JinjaExpression,
+    ResponseCheck,
+};
 use indexmap::{IndexMap, IndexSet};
-use internal_baml_core::ir::IRHelperExtended;
 use internal_baml_core::{
     ast::Field,
     internal_baml_diagnostics::SourceFile,
-    ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType, IRHelper, TypeValue},
+    ir::{
+        repr::IntermediateRepr, ClassWalker, EnumWalker, FieldType, IRHelper, IRHelperExtended,
+        TypeValue,
+    },
     validate,
 };
-use internal_baml_jinja::types::{Builder, Name, OutputFormatContent};
-use internal_baml_jinja::types::{Class, Enum};
+use internal_baml_jinja::types::{Builder, Class, Enum, Name, OutputFormatContent};
 
-use crate::deserializer::deserialize_flags::{constraint_results, Flag};
-use crate::deserializer::semantic_streaming::validate_streaming_state;
-use crate::{BamlValueWithFlags, ResponseBamlValue};
+use crate::{
+    deserializer::{
+        deserialize_flags::{constraint_results, Flag},
+        semantic_streaming::validate_streaming_state,
+    },
+    BamlValueWithFlags, ResponseBamlValue,
+};
 
 pub fn load_test_ir(file_content: &str) -> IntermediateRepr {
     let mut schema = validate(

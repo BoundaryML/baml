@@ -1,7 +1,7 @@
+use std::{borrow::Cow, fmt, path::PathBuf};
+
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
-
-use std::{borrow::Cow, fmt, path::PathBuf};
 
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize, Eq, Hash, Ord, PartialOrd)]
 pub enum BamlMediaType {

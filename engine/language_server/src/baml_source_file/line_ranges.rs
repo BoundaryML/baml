@@ -1,7 +1,11 @@
-use crate::baml_source_file::newlines::find_newline;
-use crate::baml_text_size::{TextLen, TextRange, TextSize};
-use memchr::{memchr2, memrchr2};
 use std::ops::Add;
+
+use memchr::{memchr2, memrchr2};
+
+use crate::{
+    baml_source_file::newlines::find_newline,
+    baml_text_size::{TextLen, TextRange, TextSize},
+};
 
 /// Extension trait for [`str`] that provides methods for working with ranges of lines.
 pub trait LineRanges {

@@ -1,12 +1,12 @@
 use std::collections::HashMap;
 
-use pyo3::prelude::{pymethods, PyResult};
-use pyo3::{PyObject, PyRefMut, Python};
+use pyo3::{
+    prelude::{pymethods, PyResult},
+    PyObject, PyRefMut, Python,
+};
 
+use super::{function_results::FunctionResult, runtime_ctx_manager::RuntimeContextManager};
 use crate::errors::BamlError;
-
-use super::function_results::FunctionResult;
-use super::runtime_ctx_manager::RuntimeContextManager;
 
 crate::lang_wrapper!(
     FunctionResultStream,
@@ -32,7 +32,7 @@ impl FunctionResultStream {
         event: Option<PyObject>,
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
-        env_vars: HashMap<String, String>
+        env_vars: HashMap<String, String>,
     ) -> Self {
         Self {
             inner: std::sync::Arc::new(tokio::sync::Mutex::new(inner)),
@@ -50,7 +50,7 @@ impl SyncFunctionResultStream {
         event: Option<PyObject>,
         tb: Option<baml_runtime::type_builder::TypeBuilder>,
         cb: Option<baml_runtime::client_registry::ClientRegistry>,
-        env_vars: HashMap<String, String>
+        env_vars: HashMap<String, String>,
     ) -> Self {
         Self {
             inner: std::sync::Arc::new(std::sync::Mutex::new(inner)),

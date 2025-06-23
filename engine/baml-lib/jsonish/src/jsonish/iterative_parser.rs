@@ -4,6 +4,7 @@ use std::iter::Peekable;
 
 use anyhow::Result;
 use baml_types::CompletionState;
+
 use crate::jsonish::Value;
 
 /* Try and see if there is a json object somewhere in the string
@@ -131,7 +132,9 @@ impl JsonCollection {
 impl From<JsonCollection> for Option<Value> {
     fn from(collection: JsonCollection) -> Option<Value> {
         Some(match collection {
-            JsonCollection::TrailingComment(_, _) | JsonCollection::BlockComment(_, _) => return None,
+            JsonCollection::TrailingComment(_, _) | JsonCollection::BlockComment(_, _) => {
+                return None
+            }
             JsonCollection::Object(keys, values, object_completion) => {
                 let mut object = Vec::new();
                 for (key, value) in keys.into_iter().zip(values.into_iter()) {
@@ -139,9 +142,13 @@ impl From<JsonCollection> for Option<Value> {
                 }
                 Value::Object(object, object_completion)
             }
-            JsonCollection::Array(values, completion_state) => Value::Array(values, completion_state),
+            JsonCollection::Array(values, completion_state) => {
+                Value::Array(values, completion_state)
+            }
             JsonCollection::QuotedString(s, completion_state) => Value::String(s, completion_state),
-            JsonCollection::SingleQuotedString(s, completion_state) => Value::String(s, completion_state),
+            JsonCollection::SingleQuotedString(s, completion_state) => {
+                Value::String(s, completion_state)
+            }
             JsonCollection::UnquotedString(s, completion_state) => {
                 let s = s.trim();
                 if s == "true" {
@@ -292,7 +299,9 @@ impl JsonParseState {
                     counter = idx;
                     match c {
                         // If at some point we find a valid json character, we'll close the string
-                        '{' | '[' => return CloseStringResult::Close(idx, CompletionState::Complete),
+                        '{' | '[' => {
+                            return CloseStringResult::Close(idx, CompletionState::Complete)
+                        }
                         x => {
                             let _ = self.consume(x);
                         }
@@ -325,7 +334,10 @@ impl JsonParseState {
                             if let Some((_, next_c)) = next.peek() {
                                 match next_c {
                                     '\n' => {
-                                        return CloseStringResult::Close(idx, CompletionState::Complete);
+                                        return CloseStringResult::Close(
+                                            idx,
+                                            CompletionState::Complete,
+                                        );
                                     }
                                     _ => {
                                         let _ = self.consume(c);
@@ -536,7 +548,9 @@ impl JsonParseState {
                     // - A terminating json character (comma, colon, bracket, space, newline)
                     // - A character
                     let res = self.consume(token);
-                    if let CloseStringResult::Close(count, completion_state) = self.should_close_unescaped_string(next) {
+                    if let CloseStringResult::Close(count, completion_state) =
+                        self.should_close_unescaped_string(next)
+                    {
                         self.complete_collection(completion_state);
                         Ok(count)
                     } else {
@@ -593,31 +607,44 @@ impl JsonParseState {
     ) -> Result<usize> {
         match token {
             '{' => {
-                self.collection_stack
-                    .push(JsonCollection::Object(vec![], vec![], CompletionState::Incomplete));
+                self.collection_stack.push(JsonCollection::Object(
+                    vec![],
+                    vec![],
+                    CompletionState::Incomplete,
+                ));
             }
             '[' => {
-                self.collection_stack.push(JsonCollection::Array(vec![], CompletionState::Incomplete));
+                self.collection_stack
+                    .push(JsonCollection::Array(vec![], CompletionState::Incomplete));
             }
             '"' => {
-                self.collection_stack
-                    .push(JsonCollection::QuotedString(String::new(), CompletionState::Incomplete));
+                self.collection_stack.push(JsonCollection::QuotedString(
+                    String::new(),
+                    CompletionState::Incomplete,
+                ));
             }
             '\'' => {
                 self.collection_stack
-                    .push(JsonCollection::SingleQuotedString(String::new(), CompletionState::Incomplete));
+                    .push(JsonCollection::SingleQuotedString(
+                        String::new(),
+                        CompletionState::Incomplete,
+                    ));
             }
             '/' => {
                 // Could be a comment
                 match next.peek() {
                     Some((_, '/')) => {
-                        self.collection_stack
-                            .push(JsonCollection::TrailingComment(String::new(), CompletionState::Incomplete));
+                        self.collection_stack.push(JsonCollection::TrailingComment(
+                            String::new(),
+                            CompletionState::Incomplete,
+                        ));
                         return Ok(1);
                     }
                     Some((_, '*')) => {
-                        self.collection_stack
-                            .push(JsonCollection::BlockComment(String::new(), CompletionState::Incomplete));
+                        self.collection_stack.push(JsonCollection::BlockComment(
+                            String::new(),
+                            CompletionState::Incomplete,
+                        ));
                         return Ok(1);
                     }
                     _ => {}
@@ -625,9 +652,13 @@ impl JsonParseState {
             }
             x if x.is_whitespace() => {}
             x => {
-                self.collection_stack
-                    .push(JsonCollection::UnquotedString(x.into(), CompletionState::Incomplete));
-                if let CloseStringResult::Close(count, completion_state) = self.should_close_unescaped_string(next) {
+                self.collection_stack.push(JsonCollection::UnquotedString(
+                    x.into(),
+                    CompletionState::Incomplete,
+                ));
+                if let CloseStringResult::Close(count, completion_state) =
+                    self.should_close_unescaped_string(next)
+                {
                     self.complete_collection(completion_state);
                     return Ok(count);
                 }
@@ -691,7 +722,7 @@ pub fn try_fix_jsonish(str: &str) -> Result<Value> {
             if state.completed_values.iter().all(|f| f.0 == "string") {
                 Ok(Value::Array(
                     state.completed_values.iter().map(|f| f.1.clone()).collect(),
-                    CompletionState::Incomplete
+                    CompletionState::Incomplete,
                 ))
             } else {
                 // Filter for only objects and arrays
@@ -758,9 +789,7 @@ pub fn parse_jsonish_value(str: &str, options: JSONishOptions) -> Result<Value> 
 
     // Try naive parsing first to see if it's valid JSON
     match serde_json::from_str(str) {
-        Ok(value) => {
-            return Ok(value)
-        },
+        Ok(value) => return Ok(value),
         Err(e) => {
             log::trace!("Failed to parse JSON: {:?}\n{str}", e);
         }
@@ -772,10 +801,13 @@ pub fn parse_jsonish_value(str: &str, options: JSONishOptions) -> Result<Value> 
             if options.depth > 0 {
                 return Ok(value);
             }
-            return Ok(Value::Array(vec![
-                value,
-                Value::String(str.into(), CompletionState::Incomplete), // TODO: Correct?
-            ], CompletionState::Complete)); // TODO: Correct?
+            return Ok(Value::Array(
+                vec![
+                    value,
+                    Value::String(str.into(), CompletionState::Incomplete), // TODO: Correct?
+                ],
+                CompletionState::Complete,
+            )); // TODO: Correct?
         }
     }
 
@@ -785,10 +817,13 @@ pub fn parse_jsonish_value(str: &str, options: JSONishOptions) -> Result<Value> 
             if options.depth > 0 {
                 return Ok(value);
             }
-            return Ok(Value::Array(vec![
-                value,
-                Value::String(str.into(), CompletionState::Complete), // TODO: Correct?
-            ], CompletionState::Complete)); // TODO: Correct?
+            return Ok(Value::Array(
+                vec![
+                    value,
+                    Value::String(str.into(), CompletionState::Complete), // TODO: Correct?
+                ],
+                CompletionState::Complete,
+            )); // TODO: Correct?
         }
     }
 
@@ -796,10 +831,13 @@ pub fn parse_jsonish_value(str: &str, options: JSONishOptions) -> Result<Value> 
     if options.allow_fixes {
         match try_fix_jsonish(str) {
             Ok(value) => {
-                return Ok(Value::Array(vec![
-                    value,
-                    Value::String(str.into(), CompletionState::Complete), // TODO: Correct completion state?
-                ], CompletionState::Complete)); // TODO: Correct completion state?
+                return Ok(Value::Array(
+                    vec![
+                        value,
+                        Value::String(str.into(), CompletionState::Complete), // TODO: Correct completion state?
+                    ],
+                    CompletionState::Complete,
+                )); // TODO: Correct completion state?
             }
             Err(e) => {
                 log::trace!("Failed to fix JSON: {:?}", e);
@@ -818,5 +856,5 @@ pub fn parse_jsonish_value(str: &str, options: JSONishOptions) -> Result<Value> 
 
 enum CloseStringResult {
     Close(usize, CompletionState),
-    Continue
+    Continue,
 }

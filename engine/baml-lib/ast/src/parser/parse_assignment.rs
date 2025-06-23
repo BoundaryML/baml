@@ -1,17 +1,16 @@
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_identifier::parse_identifier,
     parse_named_args_list::parse_named_argument_list,
     Rule,
 };
-
 use crate::{
     assert_correct_parser,
     ast::*,
     parser::{parse_field::parse_field_type_with_attr, parse_types::parse_field_type},
 };
-
-use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 /// Parses an assignment in the form of `keyword identifier = FieldType`.
 ///
@@ -74,11 +73,12 @@ pub(crate) fn parse_assignment(pair: Pair<'_>, diagnostics: &mut Diagnostics) ->
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::parser::{BAMLParser, Rule};
     use baml_types::TypeValue;
     use internal_baml_diagnostics::{Diagnostics, SourceFile};
     use pest::{consumes_to, fails_with, parses_to, Parser};
+
+    use super::*;
+    use crate::parser::{BAMLParser, Rule};
 
     fn parse_type_alias(input: &'static str) -> Assignment {
         let path = "test.baml";

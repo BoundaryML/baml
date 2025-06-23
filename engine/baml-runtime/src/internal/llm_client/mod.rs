@@ -9,8 +9,9 @@ pub mod retry_policy;
 mod strategy;
 pub mod traits;
 
-use anyhow::{Context, Result};
+use std::error::Error;
 
+use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlValueWithMeta, FieldType, JinjaExpression, ResponseCheck};
 use internal_baml_core::ir::{repr::IntermediateRepr, ClientWalker, IRHelper, IRHelperExtended};
 use internal_baml_jinja::RenderedPrompt;
@@ -23,11 +24,8 @@ use jsonish::{
     },
     BamlValueWithFlags,
 };
-use serde::{Deserialize, Serialize};
-use std::error::Error;
-
 use reqwest::StatusCode;
-
+use serde::{Deserialize, Serialize};
 #[cfg(target_arch = "wasm32")]
 use wasm_bindgen::JsValue;
 
@@ -396,13 +394,14 @@ impl crate::tracing::Visualize for LLMErrorResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_types::{BamlValueWithMeta, FieldType};
     use internal_baml_core::ir::repr::{make_test_ir, IntermediateRepr};
     use jsonish::{
         deserializer::{deserialize_flags::DeserializerConditions, types::ValueWithFlags},
         BamlValueWithFlags,
     };
+
+    use super::*;
 
     fn mk_ir() -> IntermediateRepr {
         make_test_ir(

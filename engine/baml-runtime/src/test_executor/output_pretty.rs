@@ -1,11 +1,16 @@
-use std::{cell::RefCell, collections::{BTreeMap, BTreeSet}, iter, time::Duration};
+use std::{
+    cell::RefCell,
+    collections::{BTreeMap, BTreeSet},
+    io::Write,
+    iter,
+    time::Duration,
+};
 
 use colored::Colorize;
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 
-use crate::TestStatus;
 use super::{RenderTestExecutionStatus, TestExecutionStatus, TestExecutionStatusMap};
-use std::io::Write;
+use crate::TestStatus;
 
 pub(super) struct PrettyTestExecutionStatusRenderer {
     multi_progress: MultiProgress,
@@ -181,7 +186,8 @@ impl PrettyTestExecutionStatusRenderer {
         file_name: Option<&String>,
         indent: usize,
     ) -> Option<String> {
-        let file_name_string = file_name.map(|name| write_indented_string(&format!(" {}", name), 4, |s| s.dimmed()));
+        let file_name_string =
+            file_name.map(|name| write_indented_string(&format!(" {}", name), 4, |s| s.dimmed()));
         let target = format!("  {}::{}", func, test);
         let mut output = String::new();
 
@@ -190,20 +196,36 @@ impl PrettyTestExecutionStatusRenderer {
                 let time_str = format_duration(duration);
                 match response.status() {
                     TestStatus::Pass => {
-                        output.push_str(&write_indented_string(&format!("{time_str} {:<10} {}\n", "PASSED".green(), target), indent, |s| s.into()));
+                        output.push_str(&write_indented_string(
+                            &format!("{time_str} {:<10} {}\n", "PASSED".green(), target),
+                            indent,
+                            |s| s.into(),
+                        ));
                         if let Some(file_name_str) = &file_name_string {
                             output.push_str(file_name_str);
                         }
                     }
                     TestStatus::Fail(details) => {
-                        output.push_str(&write_indented_string(&format!("{time_str} {:<10} {}", "FAILED".red(), target), indent, |s| s.into()));
+                        output.push_str(&write_indented_string(
+                            &format!("{time_str} {:<10} {}", "FAILED".red(), target),
+                            indent,
+                            |s| s.into(),
+                        ));
                         if let Some(file_name_str) = &file_name_string {
                             output.push_str(file_name_str);
                         }
-                        output.push_str(&write_indented_string(&details.to_string(), indent + 2, |s| s.red().dimmed()));
+                        output.push_str(&write_indented_string(
+                            &details.to_string(),
+                            indent + 2,
+                            |s| s.red().dimmed(),
+                        ));
                     }
                     TestStatus::NeedsHumanEval(details) => {
-                        output.push_str(&write_indented_string(&format!("{time_str} {:<10} {}", "NEEDS EVAL".yellow(), target), indent, |s| s.into()));
+                        output.push_str(&write_indented_string(
+                            &format!("{time_str} {:<10} {}", "NEEDS EVAL".yellow(), target),
+                            indent,
+                            |s| s.into(),
+                        ));
                         if let Some(file_name_str) = &file_name_string {
                             output.push_str(file_name_str);
                         }
@@ -215,23 +237,43 @@ impl PrettyTestExecutionStatusRenderer {
             }
             TestExecutionStatus::Finished(Err(details), duration) => {
                 let time_str = format_duration(duration);
-                output.push_str(&write_indented_string(&format!("{time_str} {:<10} {}", "ERROR".bright_red(), target), indent, |s| s.into()));
+                output.push_str(&write_indented_string(
+                    &format!("{time_str} {:<10} {}", "ERROR".bright_red(), target),
+                    indent,
+                    |s| s.into(),
+                ));
                 if let Some(file_name_str) = &file_name_string {
                     output.push_str(file_name_str);
                 }
-                output.push_str(&write_indented_string(&details.to_string(), indent + 2, |s| s.red().dimmed()));
+                output.push_str(&write_indented_string(
+                    &details.to_string(),
+                    indent + 2,
+                    |s| s.red().dimmed(),
+                ));
             }
             TestExecutionStatus::Pending => {
-                output.push_str(&write_indented_string(&format!("{:<10} {}", "CANCELLED".bright_cyan(), target), indent, |s| s.dimmed()));
+                output.push_str(&write_indented_string(
+                    &format!("{:<10} {}", "CANCELLED".bright_cyan(), target),
+                    indent,
+                    |s| s.dimmed(),
+                ));
             }
             TestExecutionStatus::Running => {
-                output.push_str(&write_indented_string(&format!("{:<10} {}", "CANCELLED".bright_cyan(), target), indent, |s| s.dimmed()));
+                output.push_str(&write_indented_string(
+                    &format!("{:<10} {}", "CANCELLED".bright_cyan(), target),
+                    indent,
+                    |s| s.dimmed(),
+                ));
                 if let Some(file_name_str) = &file_name_string {
                     output.push_str(file_name_str);
                 }
             }
             TestExecutionStatus::Excluded => {
-                output.push_str(&write_indented_string(&format!("{:<10} {}", "SKIPPED".bright_yellow(), target), indent, |s| s.dimmed()));
+                output.push_str(&write_indented_string(
+                    &format!("{:<10} {}", "SKIPPED".bright_yellow(), target),
+                    indent,
+                    |s| s.dimmed(),
+                ));
             }
         }
 
@@ -263,7 +305,16 @@ impl PrettyTestExecutionStatusRenderer {
         for (func, tests) in grouped {
             let counts = count_tests(tests.iter().map(|(_, status)| *status));
             if counts.total() == counts.cancelled() {
-                println!("{}", format!("{} {} ({} cancelled)", "function".blue(), func.blue(), counts.cancelled()).dimmed());
+                println!(
+                    "{}",
+                    format!(
+                        "{} {} ({} cancelled)",
+                        "function".blue(),
+                        func.blue(),
+                        counts.cancelled()
+                    )
+                    .dimmed()
+                );
                 continue;
             }
 
@@ -346,7 +397,10 @@ impl RenderTestExecutionStatus for PrettyTestExecutionStatusRenderer {
                 let running_count = counts.running - 4;
                 let pending_count = counts.pending;
                 let summary_str = if pending_count > 0 {
-                    format!("Running {} more tests... {} pending", running_count, pending_count)
+                    format!(
+                        "Running {} more tests... {} pending",
+                        running_count, pending_count
+                    )
                 } else {
                     format!("Running {} more tests...", running_count)
                 };
@@ -400,17 +454,23 @@ impl RenderTestExecutionStatus for PrettyTestExecutionStatusRenderer {
         // --- New code: Immediately print outputs for tests that have finished with errors, failures, or need human evaluation ---
         for ((func, test), status) in test_status_map {
             // Only print if not already printed.
-            if self.printed_tests.borrow().contains(&(func.clone(), test.clone())) {
+            if self
+                .printed_tests
+                .borrow()
+                .contains(&(func.clone(), test.clone()))
+            {
                 continue;
             }
 
             match status {
                 TestExecutionStatus::Finished(Ok(response), _) => {
                     match response.status() {
-                        TestStatus::Pass => {}, // Do not print passes immediately in progress
+                        TestStatus::Pass => {} // Do not print passes immediately in progress
                         TestStatus::Fail(_) | TestStatus::NeedsHumanEval(_) => {
                             let file_name_option = None; // File name not available here during progress.
-                            if let Some(output) = self.print_test_result(func, test, status, file_name_option, 0) {
+                            if let Some(output) =
+                                self.print_test_result(func, test, status, file_name_option, 0)
+                            {
                                 self.multi_progress.println(&output).unwrap();
                             }
                         }
@@ -418,14 +478,18 @@ impl RenderTestExecutionStatus for PrettyTestExecutionStatusRenderer {
                 }
                 TestExecutionStatus::Finished(Err(_), _) => {
                     let file_name_option = None; // File name not available here during progress.
-                    if let Some(output) = self.print_test_result(func, test, status, file_name_option, 0) {
+                    if let Some(output) =
+                        self.print_test_result(func, test, status, file_name_option, 0)
+                    {
                         self.multi_progress.println(&output).unwrap();
                     }
                 }
                 _ => {}
             }
             if matches!(status, TestExecutionStatus::Finished(_, _)) {
-                self.printed_tests.borrow_mut().insert((func.clone(), test.clone()));
+                self.printed_tests
+                    .borrow_mut()
+                    .insert((func.clone(), test.clone()));
             }
         }
     }

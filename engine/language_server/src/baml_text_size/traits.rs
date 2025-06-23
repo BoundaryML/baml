@@ -1,10 +1,8 @@
-use std::sync::Arc;
-use {
-    crate::baml_text_size::range::TextRange, crate::baml_text_size::size::TextSize,
-    std::convert::TryInto,
-};
+use std::{convert::TryInto, sync::Arc};
 
 use priv_in_pub::Sealed;
+
+use crate::baml_text_size::{range::TextRange, size::TextSize};
 mod priv_in_pub {
     pub trait Sealed {}
 }

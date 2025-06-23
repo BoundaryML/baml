@@ -1,9 +1,9 @@
-use crate::baml_value::TypeLookups;
-use crate::BamlMediaType;
-use crate::ConstraintLevel;
+use std::collections::HashSet;
+
 use indexmap::IndexSet;
 use itertools::Itertools;
-use std::collections::HashSet;
+
+use crate::{baml_value::TypeLookups, BamlMediaType, ConstraintLevel};
 
 mod builder;
 mod display;
@@ -877,9 +877,8 @@ pub struct TypeMetaIR {
 
 #[cfg(test)]
 mod tests {
-    use crate::Constraint;
-
     use super::*;
+    use crate::Constraint;
 
     fn make_optional(inner: TypeStreaming) -> TypeStreaming {
         if let TypeStreaming::Union(items, meta) = inner {

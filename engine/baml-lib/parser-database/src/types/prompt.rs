@@ -2,9 +2,8 @@ use internal_baml_ast::ast::RawString;
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::{CodeBlock, PromptAst, Top, Variable};
 
-use crate::context::Context;
-
 use super::PromptVariable;
+use crate::context::Context;
 
 /// Function returns the raw_string without any comments.
 pub(super) fn validate_prompt(

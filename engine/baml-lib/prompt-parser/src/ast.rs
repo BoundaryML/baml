@@ -11,10 +11,9 @@ pub use comment_block::{CommentBlock, CommentBlockId};
 pub use internal_baml_diagnostics::Span;
 pub use prompt_text::{PromptText, PromptTextId};
 pub use top::Top;
+pub use traits::{WithDocumentation, WithName, WithSpan};
 pub use variable::{Variable, VariableId};
 pub use white_space_text::{WhiteSpace, WhiteSpaceId};
-
-pub use traits::{WithDocumentation, WithName, WithSpan};
 
 #[derive(Debug, Clone)]
 pub struct PromptAst {

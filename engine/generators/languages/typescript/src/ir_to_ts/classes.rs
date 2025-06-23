@@ -1,7 +1,9 @@
-use crate::generated_types::{ClassTS, FieldTS};
 use internal_baml_core::ir::{Class, Field};
 
-use crate::package::CurrentRenderPackage;
+use crate::{
+    generated_types::{ClassTS, FieldTS},
+    package::CurrentRenderPackage,
+};
 
 pub fn ir_class_to_ts<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -> ClassTS<'a> {
     ClassTS {
@@ -72,8 +74,6 @@ fn ir_field_to_ts_stream<'a>(field: &Field, pkg: &'a CurrentRenderPackage) -> Fi
 #[cfg(test)]
 mod tests {
     use internal_baml_core::ir::{repr::make_test_ir, IRHelper};
-
-    
 
     use super::*;
 

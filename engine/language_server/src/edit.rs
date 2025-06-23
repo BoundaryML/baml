@@ -2,10 +2,11 @@
 mod range;
 mod text_document;
 
+use std::path::{Path, PathBuf};
+
 use lsp_types::{PositionEncodingKind, Url};
 pub(crate) use range::RangeExt;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
 pub(crate) use text_document::DocumentVersion;
 pub use text_document::TextDocument;
 
@@ -72,9 +73,10 @@ impl DocumentKey {
     pub fn from_url(root_path: &Path, url: &Url) -> anyhow::Result<Self> {
         Self::from_path(
             root_path,
-            &PathBuf::from(&url.to_file_path().map_err(|e| {
-                anyhow::anyhow!("Could not convert url to path {}: {e:?}", url)
-            })?),
+            &PathBuf::from(
+                &url.to_file_path()
+                    .map_err(|e| anyhow::anyhow!("Could not convert url to path {}: {e:?}", url))?,
+            ),
         )
     }
 
@@ -123,9 +125,11 @@ impl TryFrom<&lsp_types::PositionEncodingKind> for PositionEncoding {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::path::{Path, PathBuf};
+
     use url::Url;
+
+    use super::*;
 
     #[test]
     fn parse_windows_path() {

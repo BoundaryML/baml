@@ -1,24 +1,28 @@
+use std::{
+    cell::RefCell,
+    io::Write,
+    path::{Path, PathBuf},
+    time::Duration,
+};
+
 use anyhow::{Context, Result};
 use baml_runtime::{baml_src_files, BamlRuntime};
 use bstd::ProjectFqn;
 use console::style;
-use dialoguer::theme::ColorfulTheme;
-use dialoguer::Confirm;
+use dialoguer::{theme::ColorfulTheme, Confirm};
 use futures::join;
 use indexmap::IndexMap;
-use std::cell::RefCell;
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::time::Duration;
 use tokio::time::sleep;
 
-use crate::api_client::{
-    ApiClient, CreateDeploymentRequest, CreateDeploymentResponse, CreateProjectRequest,
-    ListProjectsRequest, Project, DEPLOYMENT_ID,
+use crate::{
+    api_client::{
+        ApiClient, CreateDeploymentRequest, CreateDeploymentResponse, CreateProjectRequest,
+        ListProjectsRequest, Project, DEPLOYMENT_ID,
+    },
+    colordiff::print_diff,
+    propelauth::PersistedTokenData,
+    tui::FutureWithProgress,
 };
-use crate::colordiff::print_diff;
-use crate::propelauth::PersistedTokenData;
-use crate::tui::FutureWithProgress;
 
 // Constants (replace with actual values as needed)
 #[derive(clap::Args, Debug)]

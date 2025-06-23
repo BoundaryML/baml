@@ -1,39 +1,40 @@
+use core::time::Duration;
+use std::{
+    any::type_name,
+    borrow::Cow,
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
+
 use anyhow::{Context, Result};
-use baml_rpc::ast::tops::{FunctionDefinition, SourceCode, AST};
-use baml_rpc::TypeDefinition;
-use baml_rpc::TypeReference;
 use baml_rpc::{
+    ast::tops::{FunctionDefinition, SourceCode, AST},
     ApiEndpoint, BamlSrcUploadS3File, CheckBamlSrcUpload, CheckBamlSrcUploadRequest,
     CreateTraceEventUploadUrl, CreateTraceEventUploadUrlRequest, CreateTraceEventUploadUrlResponse,
-    S3UploadMetadata, TraceEventBatch,
+    NamedType, S3UploadMetadata, TraceEventBatch, TypeDefinition, TypeDefinitionSource,
+    TypeReference,
 };
-use baml_rpc::{NamedType, TypeDefinitionSource};
-use baml_types::FieldType;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use tracing::field;
-
-use baml_types::tracing::events::{TraceData, TraceEvent};
-use baml_types::{BamlValueWithMeta, HasFieldType};
-use core::time::Duration;
+use baml_types::{
+    tracing::events::{TraceData, TraceEvent},
+    BamlValueWithMeta, FieldType, HasFieldType,
+};
 use futures::StreamExt;
 use http::{HeaderMap, HeaderName, HeaderValue};
 use once_cell::sync::OnceCell;
 use serde::Serialize;
-use std::any::type_name;
-use std::borrow::Cow;
-use std::sync::Arc;
 use tokio::sync::mpsc;
 #[cfg(not(target_family = "wasm"))]
 use tokio::time::*;
-
+use tracing::field;
 #[cfg(target_family = "wasm")]
 use wasmtimer::tokio::*;
 
-use crate::runtime::{AstSignatureWrapper, InternalBamlRuntime};
-use crate::tracingv2::storage::interface::TraceEventWithMeta;
-
 use super::rpc_converters::{to_rpc_event, IntoRpcEvent, TypeLookup};
+use crate::{
+    runtime::{AstSignatureWrapper, InternalBamlRuntime},
+    tracingv2::storage::interface::TraceEventWithMeta,
+};
 
 enum PublisherMessage {
     Trace(Arc<TraceEventWithMeta>),

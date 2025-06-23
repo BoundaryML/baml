@@ -14,11 +14,7 @@ pub(super) struct AttributesValidationState {
 }
 
 impl AttributesValidationState {
-    pub(super) fn set_attributes(
-        &mut self,
-        attributes: ast::AttributeContainer,
-        ast: &ast::Ast,
-    ) {
+    pub(super) fn set_attributes(&mut self, attributes: ast::AttributeContainer, ast: &ast::Ast) {
         let attribute_ids = (0..ast[attributes].len())
             .map(|idx| ast::AttributeId::new_in_container(attributes, idx));
         self.unused_attributes.clear();

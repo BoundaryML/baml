@@ -1,15 +1,13 @@
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{path::PathBuf, sync::Arc};
 
 use lsp_types::Url;
 use rustc_hash::FxHashMap;
 
+use super::ClientSettings;
 use crate::{
     edit::{DocumentKey, DocumentVersion},
     PositionEncoding, TextDocument,
 };
-
-use super::ClientSettings;
 
 /// Stores and tracks all open documents in a session, along with their associated settings.
 #[derive(Default, Debug)]
@@ -82,7 +80,10 @@ impl Index {
         // };
 
         let Some(_) = self.documents.remove(&document_key) else {
-            anyhow::bail!("tried to close document that didn't exist at {}", document_key)
+            anyhow::bail!(
+                "tried to close document that didn't exist at {}",
+                document_key
+            )
         };
         Ok(())
     }
@@ -176,7 +177,7 @@ impl DocumentQuery {
         }
     }
 
-    pub (crate) fn file_document_key(&self) -> &DocumentKey {
+    pub(crate) fn file_document_key(&self) -> &DocumentKey {
         match self {
             Self::Text { document_key, .. } => document_key,
         }

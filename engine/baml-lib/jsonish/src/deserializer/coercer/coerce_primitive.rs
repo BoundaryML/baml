@@ -1,15 +1,14 @@
 use anyhow::Result;
 use baml_types::{BamlMediaType, CompletionState};
 use internal_baml_core::ir::{FieldType, TypeValue};
+use regex::Regex;
 
+use super::{array_helper::coerce_array_to_singular, ParsingContext, ParsingError};
 use crate::deserializer::{
     coercer::TypeCoercer,
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
 };
-use regex::Regex;
-
-use super::{array_helper::coerce_array_to_singular, ParsingContext, ParsingError};
 
 impl TypeCoercer for TypeValue {
     fn coerce(

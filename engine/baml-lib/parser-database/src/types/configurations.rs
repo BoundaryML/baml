@@ -1,17 +1,18 @@
-use baml_types::Constraint;
-use baml_types::UnresolvedValue;
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
+use std::{collections::HashSet, ops::Deref};
+
+use baml_types::{Constraint, UnresolvedValue};
 use internal_baml_ast::ast::{
     Attribute, ValExpId, ValueExprBlock, WithIdentifier, WithName, WithSpan,
 };
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 use regex::Regex;
-use std::{collections::HashSet, ops::Deref};
-
-use crate::attributes::constraint::attribute_as_constraint;
-use crate::{coerce, coerce_array, coerce_expression::coerce_map, context::Context};
 
 use super::{
     Attributes, ContantDelayStrategy, ExponentialBackoffStrategy, RetryPolicy, RetryPolicyStrategy,
+};
+use crate::{
+    attributes::constraint::attribute_as_constraint, coerce, coerce_array,
+    coerce_expression::coerce_map, context::Context,
 };
 
 fn dedent(s: &str) -> String {

@@ -1,11 +1,11 @@
 use std::path::Path;
 
-use crate::{assert_correct_parser, ast::*, unreachable_rule};
 use internal_baml_ast::ast::{RawString, WithSpan};
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 use pest::Parser;
 
 use super::{BAMLPromptParser, Rule};
+use crate::{assert_correct_parser, ast::*, unreachable_rule};
 
 #[cfg(feature = "debug_parser")]
 fn pretty_print<'a>(pair: pest::iterators::Pair<'a, Rule>, indent_level: usize) {

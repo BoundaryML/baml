@@ -1,8 +1,9 @@
-use anyhow::Result;
 use std::borrow::Cow;
 
-use super::{IntoRpcEvent, TypeLookup};
+use anyhow::Result;
 use baml_types::{tracing::events::FunctionType, HasFieldType};
+
+use super::{IntoRpcEvent, TypeLookup};
 
 impl<'a, T: HasFieldType> IntoRpcEvent<'a, baml_rpc::runtime_api::TraceData<'a>>
     for baml_types::tracing::events::FunctionStart<T>

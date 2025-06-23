@@ -1,9 +1,8 @@
 use anyhow::Result;
 use internal_baml_jinja::{ChatOptions, RenderedChatMessage};
 
-use crate::{internal::llm_client::LLMResponse, RuntimeContext};
-
 use super::{HttpContext, StreamResponse};
+use crate::{internal::llm_client::LLMResponse, RuntimeContext};
 
 pub trait WithChatOptions {
     fn chat_options(&self, ctx: &RuntimeContext) -> Result<ChatOptions>;

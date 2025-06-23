@@ -1,8 +1,8 @@
-use std::iter::FusedIterator;
-use std::ops::Deref;
+use std::{iter::FusedIterator, ops::Deref};
+
+use memchr::{memchr2, memrchr2};
 
 use crate::baml_text_size::{TextLen, TextRange, TextSize};
-use memchr::{memchr2, memrchr2};
 
 /// Extension trait for [`str`] that provides a [`UniversalNewlineIterator`].
 pub trait UniversalNewlines {

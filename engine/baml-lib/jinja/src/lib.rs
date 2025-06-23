@@ -74,8 +74,9 @@ pub fn validate_template(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use indexmap::IndexMap;
+
+    use super::*;
 
     fn mk_params() -> PredefinedTypes {
         let mut types = PredefinedTypes::default(JinjaContext::Prompt);

@@ -8,23 +8,24 @@ use std::collections::HashMap;
 pub mod jsonish;
 
 use baml_types::{
-    BamlValue, BamlValueWithMeta, FieldType, HasFieldType, JinjaExpression, ResponseCheck,
+    BamlValue, BamlValueWithMeta, Completion, CompletionState, FieldType, HasFieldType,
+    JinjaExpression, ResponseCheck,
 };
+pub use deserializer::types::BamlValueWithFlags;
 use deserializer::{
     coercer::{ParsingContext, ParsingError, TypeCoercer},
-    deserialize_flags::DeserializerConditions,
+    deserialize_flags::{DeserializerConditions, Flag},
+    types::ParsingErrorToUiJson,
 };
-
-pub use deserializer::types::BamlValueWithFlags;
 use internal_baml_core::ir::TypeValue;
 use internal_baml_jinja::types::OutputFormatContent;
+use jsonish::Value;
+use serde::{
+    ser::{SerializeMap, SerializeStruct},
+    Serialize, Serializer,
+};
 
 use crate::deserializer::score::WithScore;
-use baml_types::{Completion, CompletionState};
-use deserializer::deserialize_flags::Flag;
-use deserializer::types::ParsingErrorToUiJson;
-use jsonish::Value;
-use serde::{ser::SerializeMap, ser::SerializeStruct, Serialize, Serializer};
 
 #[derive(Clone, Debug)]
 pub struct ResponseBamlValue(pub BamlValueWithMeta<ResponseValueMeta>);

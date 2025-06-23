@@ -1,12 +1,13 @@
 use std::str::FromStr;
 
 use baml_runtime::client_registry;
-use pyo3::prelude::{pymethods, PyResult};
-use pyo3::{IntoPyObjectExt, PyObject, Python};
-
-use crate::errors::BamlInvalidArgumentError;
-use crate::parse_py_type::parse_py_type;
 use client_registry::ClientProvider;
+use pyo3::{
+    prelude::{pymethods, PyResult},
+    IntoPyObjectExt, PyObject, Python,
+};
+
+use crate::{errors::BamlInvalidArgumentError, parse_py_type::parse_py_type};
 
 crate::lang_wrapper!(ClientRegistry, client_registry::ClientRegistry);
 

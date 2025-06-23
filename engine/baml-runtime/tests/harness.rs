@@ -1,8 +1,8 @@
-use assert_cmd::prelude::*;
+use std::{any, path::PathBuf, process::Command};
 
 use anyhow::Result;
+use assert_cmd::prelude::*;
 use indoc::indoc;
-use std::{any, path::PathBuf, process::Command};
 
 #[derive(Debug, Eq, PartialEq)]
 pub struct CliOutput {

@@ -1,41 +1,35 @@
 pub mod generator;
 pub mod runtime_prompt;
-use self::runtime_prompt::WasmScope;
-use crate::runtime_wasm::runtime_prompt::WasmPrompt;
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
+
 use anyhow::Context;
-use baml_runtime::internal::llm_client::orchestrator::ExecutionScope;
-use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
-use baml_runtime::internal::llm_client::orchestrator::OrchestratorNode;
-use baml_runtime::internal::prompt_renderer::PromptRenderer;
-use baml_runtime::internal_baml_diagnostics::SerializedSpan;
-use baml_runtime::BamlSrcReader;
-use baml_runtime::FunctionResult;
-use baml_runtime::InternalRuntimeInterface;
-use baml_runtime::RenderCurlSettings;
 use baml_runtime::{
-    internal::llm_client::LLMResponse, BamlRuntime, DiagnosticsError, IRHelper, RenderedPrompt,
+    internal::{
+        llm_client::{
+            orchestrator::{ExecutionScope, OrchestrationScope, OrchestratorNode},
+            LLMResponse,
+        },
+        prompt_renderer::PromptRenderer,
+    },
+    internal_baml_diagnostics::SerializedSpan,
+    BamlRuntime, BamlSrcReader, DiagnosticsError, FunctionResult, IRHelper,
+    InternalRuntimeInterface, RenderCurlSettings, RenderedPrompt,
 };
-use baml_types::ResponseCheck;
-use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, TypeValue};
+use baml_types::{BamlMediaType, BamlValue, GeneratorOutputType, ResponseCheck, TypeValue};
+use futures::{channel::mpsc, StreamExt};
 use indexmap::IndexMap;
-use internal_baml_codegen::version_check::GeneratorType;
-use internal_baml_codegen::version_check::{check_version, VersionCheckMode};
+use internal_baml_codegen::version_check::{check_version, GeneratorType, VersionCheckMode};
 use internal_baml_core::ir::repr::Walker;
 use internal_llm_client::AllowedRoleMetadata;
-
-use futures::channel::mpsc;
-use futures::StreamExt;
 use itertools::join;
-use js_sys::Promise;
-use js_sys::Uint8Array;
+use js_sys::{Promise, Uint8Array};
 use jsonish::ResponseBamlValue;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::str::FromStr;
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsValue;
+use wasm_bindgen::{prelude::*, JsValue};
 use wasm_bindgen_futures::JsFuture;
+
+use self::runtime_prompt::WasmScope;
+use crate::runtime_wasm::runtime_prompt::WasmPrompt;
 
 type JsResult<T> = core::result::Result<T, JsError>;
 
@@ -867,7 +861,7 @@ fn get_dummy_value(
         baml_runtime::FieldType::Literal(_, _) => None,
         baml_runtime::FieldType::Enum { .. } => None,
         baml_runtime::FieldType::Class { .. } => None,
-        baml_runtime::FieldType::RecursiveTypeAlias{ .. } => None,
+        baml_runtime::FieldType::RecursiveTypeAlias { .. } => None,
         baml_runtime::FieldType::List(item, _) => {
             let dummy = get_dummy_value(indent + 1, allow_multiline, item);
             // Repeat it 2 times

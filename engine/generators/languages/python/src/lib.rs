@@ -115,7 +115,10 @@ impl LanguageFeatures for PyLanguageFeatures {
         pkg.set("baml_client.stream_types");
         collector.add_file("stream_types.py", render_py_stream_types_utils(&pkg)?)?;
         collector.append_to_file("stream_types.py", &render_py_types(&py_classes, &pkg)?)?;
-        collector.append_to_file("stream_types.py", &render_py_types(&py_stream_type_aliases, &pkg)?)?;
+        collector.append_to_file(
+            "stream_types.py",
+            &render_py_types(&py_stream_type_aliases, &pkg)?,
+        )?;
 
         Ok(())
     }
@@ -138,8 +141,9 @@ mod generated_tests {
 mod tests {
     #[test]
     fn test_name() {
-        use dir_writer::LanguageFeatures;
         use std::str::FromStr;
+
+        use dir_writer::LanguageFeatures;
 
         let gen_type = baml_types::GeneratorOutputType::from_str(crate::PyLanguageFeatures::name())
             .expect("PyLanguageFeatures name should be a valid GeneratorOutputType");

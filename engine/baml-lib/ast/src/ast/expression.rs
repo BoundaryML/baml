@@ -3,12 +3,13 @@ use internal_baml_diagnostics::Diagnostics;
 
 type UnresolvedValue = UnresolvedValueBase<Span>;
 
-use crate::ast::Span;
-use bstd::dedent;
 use std::fmt;
 
-use super::{app::App, ArgumentsList, Identifier, WithName, WithSpan};
 use baml_types::JinjaExpression;
+use bstd::dedent;
+
+use super::{app::App, ArgumentsList, Identifier, WithName, WithSpan};
+use crate::ast::Span;
 
 #[derive(Debug, Clone)]
 pub struct RawString {

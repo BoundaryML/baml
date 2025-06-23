@@ -4,10 +4,7 @@ use internal_baml_core::ir::FunctionNode;
 use super::{stream_type_to_ts, type_to_ts};
 use crate::{functions::FunctionTS, package::CurrentRenderPackage};
 
-pub fn ir_function_to_ts(
-    function: &FunctionNode,
-    pkg: &CurrentRenderPackage,
-) -> FunctionTS {
+pub fn ir_function_to_ts(function: &FunctionNode, pkg: &CurrentRenderPackage) -> FunctionTS {
     FunctionTS {
         documentation: None,
         name: function.elem.name().to_string(),

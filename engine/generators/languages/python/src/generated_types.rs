@@ -1,5 +1,7 @@
-use crate::package::CurrentRenderPackage;
-use crate::r#type::{SerializeType, TypePy};
+use crate::{
+    package::CurrentRenderPackage,
+    r#type::{SerializeType, TypePy},
+};
 
 mod class {
     use super::*;
@@ -92,7 +94,6 @@ mod enums {
     }
 }
 
-
 mod type_builder {
     pub trait TypeBuilderPropertyTrait {
         fn name(&self) -> &str;
@@ -118,17 +119,18 @@ mod type_builder {
         }
     }
 
-
     impl TypeBuilderPropertyTrait for super::EnumPy {
         fn name(&self) -> &str {
             &self.name
         }
         fn type_builder_name(&self) -> String {
-            format!("{}{}", self.name, if self.dynamic { "Builder" } else { "Viewer" })
+            format!(
+                "{}{}",
+                self.name,
+                if self.dynamic { "Builder" } else { "Viewer" }
+            )
         }
     }
-
-
 
     impl super::ClassPy<'_> {
         pub fn to_type_builder_property(&self) -> TypeBuilderProperty<'_, Self> {
@@ -136,16 +138,18 @@ mod type_builder {
         }
     }
 
-
     impl TypeBuilderPropertyTrait for super::ClassPy<'_> {
         fn name(&self) -> &str {
             &self.name
         }
         fn type_builder_name(&self) -> String {
-            format!("{}{}", self.name, if self.dynamic { "Builder" } else { "Viewer" })
+            format!(
+                "{}{}",
+                self.name,
+                if self.dynamic { "Builder" } else { "Viewer" }
+            )
         }
     }
-
 
     /// An object in a type builder.
     ///
@@ -156,45 +160,45 @@ mod type_builder {
     ///         self._bldr = _tb.class_("{{ class.name }}")
     ///         self._properties: typing.Set[str] = set([ {% for field in class.fields %} "{{ field.name }}", {% endfor %} ])
     ///         self._props = {{ class.name }}Properties(self._bldr, self._properties)
-    /// 
+    ///
     ///     def type(self) -> baml_py.FieldType:
     ///         return self._bldr.field()
-    /// 
+    ///
     ///     @property
     ///     def props(self) -> "{{ class.name }}Properties":
     ///         return self._props
-    /// 
-    /// 
+    ///
+    ///
     /// class {{ class.type_builder_object_name() }}({{ class.name }}Ast):
     ///     def __init__(self, tb: type_builder.TypeBuilder):
     ///         super().__init__(tb)
-    /// 
+    ///
     ///     {% if class.dynamic %}
     ///     def add_property(self, name: str, type: baml_py.FieldType) -> {{ class.class_property_type() }}:
     ///         if name in self._properties:
     ///             raise ValueError(f"Property {name} already exists.")
     ///         return self._bldr.property(name).type(type)
-    /// 
+    ///
     ///     def list_properties(self) -> typing.List[typing.Tuple[str, {{ class.class_property_type() }}]]:
     ///         return [(name, self._bldr.property(name)) for name in self._properties]
-    /// 
+    ///
     ///     {% else %}
     ///     def list_properties(self) -> typing.List[typing.Tuple[str, {{ class.class_property_type() }}]]:
     ///         return [(name, {{ class.class_property_type() }}(self._bldr.property(name))) for name in self._properties]
     ///     {% endif %}
-    /// 
-    /// 
+    ///
+    ///
     /// class {{ class.name }}Properties:
     ///     def __init__(self, bldr: baml_py.ClassBuilder, properties: typing.Set[str]):
     ///         self.__bldr = bldr
     ///         self.__properties = properties # type: ignore (we know how to use this private attribute) # noqa: F821
-    /// 
+    ///
     ///     {% if class.dynamic %}
     ///     def __getattr__(self, name: str) -> {{ class.class_property_type() }}:
     ///         if name not in self.__properties:
     ///             raise AttributeError(f"Property {name} not found.")
     ///         return self.__bldr.property(name)
-    /// 
+    ///
     ///     {% for field in class.fields %}
     ///     @property
     ///     def {{ field.name }}(self) -> {{ class.class_property_type() }}:
@@ -207,7 +211,7 @@ mod type_builder {
     ///         return {{ class.class_property_type() }}(self.__bldr.property("{{ field.name }}"))
     ///     {% endfor %}
     ///     {% endif %}
-    /// 
+    ///
     /// ```
     #[derive(askama::Template)]
     #[template(in_doc = true, escape = "none", ext = "txt")]
@@ -217,7 +221,11 @@ mod type_builder {
 
     impl<'a> super::ClassPy<'a> {
         fn type_builder_object_type(&self) -> &str {
-            if self.dynamic { "Builder" } else { "Viewer" }
+            if self.dynamic {
+                "Builder"
+            } else {
+                "Viewer"
+            }
         }
 
         fn type_builder_object_name(&self) -> String {
@@ -225,15 +233,21 @@ mod type_builder {
         }
 
         fn class_property_type(&self) -> String {
-            format!("{}.ClassProperty{}", if self.dynamic { "baml_py" } else { "type_builder" }, self.type_builder_object_type())
+            format!(
+                "{}.ClassProperty{}",
+                if self.dynamic {
+                    "baml_py"
+                } else {
+                    "type_builder"
+                },
+                self.type_builder_object_type()
+            )
         }
 
         pub fn to_type_builder_object(&'a self) -> TypeBuilderClassObject<'a> {
-            TypeBuilderClassObject { class: self }  
+            TypeBuilderClassObject { class: self }
         }
     }
-
-
 
     /// An object in a type builder.
     ///
@@ -244,19 +258,19 @@ mod type_builder {
     ///         self._bldr = _tb.enum("{{ enum_.name }}")
     ///         self._values: typing.Set[str] = set([ {% for (value, _) in enum_.values %} "{{ value }}", {% endfor %} ])
     ///         self._vals = {{ enum_.name }}Values(self._bldr, self._values)
-    /// 
+    ///
     ///     def type(self) -> baml_py.FieldType:
     ///         return self._bldr.field()
-    /// 
+    ///
     ///     @property
     ///     def values(self) -> "{{ enum_.name }}Values":
     ///         return self._vals
-    /// 
-    /// 
+    ///
+    ///
     /// class {{ enum_.type_builder_object_name() }}({{ enum_.name }}Ast):
     ///     def __init__(self, tb: type_builder.TypeBuilder):
     ///         super().__init__(tb)
-    /// 
+    ///
     ///     {% if enum_.dynamic %}
     ///     def list_values(self) -> typing.List[typing.Tuple[str, {{ enum_.enum_value_type() }}]]:
     ///         return [(name, self._bldr.value(name)) for name in self._values]
@@ -269,18 +283,18 @@ mod type_builder {
     ///     def list_values(self) -> typing.List[typing.Tuple[str, {{ enum_.enum_value_type() }}]]:
     ///         return [(name, {{ enum_.enum_value_type() }}(self._bldr.value(name))) for name in self._values]
     ///     {% endif %}
-    /// 
+    ///
     /// class {{ enum_.name }}Values:
     ///     def __init__(self, enum_bldr: baml_py.EnumBuilder, values: typing.Set[str]):
     ///         self.__bldr = enum_bldr
     ///         self.__values = values # type: ignore (we know how to use this private attribute) # noqa: F821
-    /// 
+    ///
     ///     {% if enum_.dynamic %}
     ///     def __getattr__(self, name: str) -> {{ enum_.enum_value_type() }}:
     ///         if name not in self.__values:
     ///             raise AttributeError(f"Value {name} not found.")
     ///         return self.__bldr.value(name)
-    /// 
+    ///
     ///     {% for (value, _) in enum_.values %}
     ///     @property
     ///     def {{ value }}(self) -> {{ enum_.enum_value_type() }}:
@@ -293,7 +307,7 @@ mod type_builder {
     ///         return {{ enum_.enum_value_type() }}(self.__bldr.value("{{ value }}"))
     ///     {% endfor %}
     ///     {% endif %}
-    /// 
+    ///
     /// ```
     #[derive(askama::Template)]
     #[template(in_doc = true, escape = "none", ext = "txt")]
@@ -303,7 +317,11 @@ mod type_builder {
 
     impl<'a> super::EnumPy {
         fn type_builder_object_type(&self) -> &str {
-            if self.dynamic { "Builder" } else { "Viewer" }
+            if self.dynamic {
+                "Builder"
+            } else {
+                "Viewer"
+            }
         }
 
         fn type_builder_object_name(&self) -> String {
@@ -311,11 +329,19 @@ mod type_builder {
         }
 
         fn enum_value_type(&self) -> String {
-            format!("{}.EnumValue{}", if self.dynamic { "baml_py" } else { "type_builder" }, self.type_builder_object_type())
+            format!(
+                "{}.EnumValue{}",
+                if self.dynamic {
+                    "baml_py"
+                } else {
+                    "type_builder"
+                },
+                self.type_builder_object_type()
+            )
         }
 
         pub fn to_type_builder_object(&'a self) -> TypeBuilderEnumObject<'a> {
-            TypeBuilderEnumObject { enum_: self }  
+            TypeBuilderEnumObject { enum_: self }
         }
     }
 }
@@ -354,9 +380,9 @@ mod type_aliases {
 /// from pydantic import BaseModel, Extra
 /// from pydantic.generics import GenericModel
 /// {% endif %}
-/// 
+///
 /// import baml_py
-/// 
+///
 /// CheckT = typing_extensions.TypeVar('CheckT')
 /// CheckName = typing_extensions.TypeVar('CheckName', bound=str)
 ///
@@ -377,7 +403,7 @@ mod type_aliases {
 ///     return list(checks.values())
 ///
 /// def all_succeeded(checks: typing.Dict[CheckName, Check]) -> bool:
-///     return all(check.status == "succeeded" for check in get_checks(checks)) 
+///     return all(check.status == "succeeded" for check in get_checks(checks))
 /// ```
 ///
 #[derive(askama::Template)]
@@ -389,7 +415,7 @@ struct PyTypesUtils<'a> {
 pub(crate) fn render_py_types_utils(pkg: &CurrentRenderPackage) -> Result<String, askama::Error> {
     use askama::Template;
 
-    PyTypesUtils{pkg}.render()
+    PyTypesUtils { pkg }.render()
 }
 
 /// A list of types in Py.
@@ -415,12 +441,16 @@ pub(crate) fn render_py_types<T: askama::Template>(
 ) -> Result<String, askama::Error> {
     use askama::Template;
 
-    PyTypes { items, name: match std::any::type_name::<T>() {
-        "generators_python::generated_types::class::ClassPy" => "classes",
-        "generators_python::generated_types::enums::EnumPy" => "enums",
-        "generators_python::generated_types::type_aliases::TypeAliasPy" => "type aliases",
-        other => panic!("Unknown type: {}", other),
-    } }.render()
+    PyTypes {
+        items,
+        name: match std::any::type_name::<T>() {
+            "generators_python::generated_types::class::ClassPy" => "classes",
+            "generators_python::generated_types::enums::EnumPy" => "enums",
+            "generators_python::generated_types::type_aliases::TypeAliasPy" => "type aliases",
+            other => panic!("Unknown type: {}", other),
+        },
+    }
+    .render()
 }
 
 /// A list of types in Py.
@@ -428,16 +458,16 @@ pub(crate) fn render_py_types<T: askama::Template>(
 /// ```askama
 /// import typing
 /// import typing_extensions
-/// 
+///
 /// {%- if pkg.is_pydantic_2 %}
 /// from pydantic import BaseModel, ConfigDict
 /// {%- else %}
 /// from pydantic import BaseModel, Extra
 /// from pydantic.generics import GenericModel
 /// {%- endif %}
-/// 
+///
 /// import baml_py
-/// 
+///
 /// from . import types
 ///
 /// StreamStateValueT = typing.TypeVar('StreamStateValueT')
@@ -463,7 +493,6 @@ pub(crate) fn render_py_stream_types_utils(
     PyStreamTypesUtils { pkg }.render()
 }
 
-
 #[derive(askama::Template)]
 #[template(path = "type_builder.py.j2", escape = "none", ext = "txt")]
 struct PyTypeBuilder<'a> {
@@ -479,10 +508,6 @@ pub(crate) fn render_py_type_builder(
 
     PyTypeBuilder { classes, enums }.render()
 }
-
-
-
-
 
 pub use class::{ClassPy, FieldPy};
 pub use enums::EnumPy;

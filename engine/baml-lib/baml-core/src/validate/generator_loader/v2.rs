@@ -5,8 +5,8 @@ use std::{
 };
 
 use bstd::ProjectFqn;
-use internal_baml_diagnostics::DatamodelError;
 use internal_baml_ast::ast::{self, WithName, WithSpan};
+use internal_baml_diagnostics::DatamodelError;
 use semver::Version;
 use strum::VariantNames;
 

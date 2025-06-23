@@ -1,15 +1,21 @@
-use crate::server::api::diagnostics::publish_session_lsp_diagnostics;
-use crate::server::api::notifications::baml_src_version::BamlSrcVersionPayload;
-use crate::server::api::traits::{NotificationHandler, SyncNotificationHandler};
-use crate::server::api::ResultExt;
-use crate::server::client::{Notifier, Requester};
-use crate::server::{Result, Task};
-use crate::session::Session;
-use crate::{DocumentKey, TextDocument};
-use lsp_types::notification::DidOpenTextDocument;
 use lsp_types::{
-    self as types, ConfigurationItem, ConfigurationParams, DidOpenTextDocumentParams,
-    PublishDiagnosticsParams, TextDocumentItem,
+    self as types, notification::DidOpenTextDocument, ConfigurationItem, ConfigurationParams,
+    DidOpenTextDocumentParams, PublishDiagnosticsParams, TextDocumentItem,
+};
+
+use crate::{
+    server::{
+        api::{
+            diagnostics::publish_session_lsp_diagnostics,
+            notifications::baml_src_version::BamlSrcVersionPayload,
+            traits::{NotificationHandler, SyncNotificationHandler},
+            ResultExt,
+        },
+        client::{Notifier, Requester},
+        Result, Task,
+    },
+    session::Session,
+    DocumentKey, TextDocument,
 };
 pub(crate) struct DidOpenTextDocumentHandler;
 

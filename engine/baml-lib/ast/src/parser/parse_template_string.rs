@@ -1,3 +1,5 @@
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_comments::*,
@@ -7,7 +9,6 @@ use super::{
     Rule,
 };
 use crate::ast::*;
-use internal_baml_diagnostics::{DatamodelError, Diagnostics};
 
 pub(crate) fn parse_template_string(
     pair: Pair<'_>,
@@ -25,7 +26,9 @@ pub(crate) fn parse_template_string(
             Rule::TEMPLATE_KEYWORD => {}
             Rule::identifier => name = Some(parse_identifier(current, diagnostics)),
             Rule::assignment => {}
-            Rule::named_argument_list => { input = Some(parse_named_argument_list(current, diagnostics))},
+            Rule::named_argument_list => {
+                input = Some(parse_named_argument_list(current, diagnostics))
+            }
             Rule::raw_string_literal => {
                 value = Some(Expression::RawStringValue(parse_raw_string(
                     current,

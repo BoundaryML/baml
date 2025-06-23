@@ -1,12 +1,6 @@
 use anyhow::Result;
 use baml_types::{BamlMap, CompletionState, Constraint, ConstraintLevel, LiteralValue};
-use internal_baml_core::{ir::FieldType, ir::TypeValue};
-
-use crate::deserializer::{
-    coercer::{run_user_checks, DefaultValue, TypeCoercer},
-    deserialize_flags::{DeserializerConditions, Flag},
-    types::BamlValueWithFlags,
-};
+use internal_baml_core::ir::{FieldType, TypeValue};
 
 use super::{
     array_helper,
@@ -15,6 +9,11 @@ use super::{
     coerce_union::coerce_union,
     ir_ref::{coerce_alias::coerce_alias, IrRef},
     ParsingContext, ParsingError,
+};
+use crate::deserializer::{
+    coercer::{run_user_checks, DefaultValue, TypeCoercer},
+    deserialize_flags::{DeserializerConditions, Flag},
+    types::BamlValueWithFlags,
 };
 
 impl TypeCoercer for FieldType {

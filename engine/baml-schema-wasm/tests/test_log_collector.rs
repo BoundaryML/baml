@@ -8,26 +8,22 @@
 #[cfg(test)]
 mod tests {
 
-    use core::time;
-    use core::time::Duration;
-    use once_cell::sync::Lazy;
-    use std::sync::Mutex;
-    use wasmtimer::tokio::*;
+    use core::{time, time::Duration};
+    use std::{collections::HashMap, sync::Mutex};
 
+    use baml_runtime::{tracingv2::publisher::publisher::flush, BamlRuntime, RuntimeContext};
     // pub static GLOBAL_TRACE_STORAGE: Lazy<Mutex<u32>> = Lazy::new(|| Mutex::new(0));
     use baml_runtime::{
         tracingv2::storage::storage::{Collector, BAML_TRACER},
         InternalRuntimeInterface,
     };
-    use std::collections::HashMap;
-
     use baml_schema_build::runtime_wasm::{WasmProject, WasmRuntime};
-
-    use baml_runtime::{tracingv2::publisher::publisher::flush, BamlRuntime, RuntimeContext};
+    use once_cell::sync::Lazy;
     use serde_wasm_bindgen::to_value;
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::*;
     use wasm_logger;
+    use wasmtimer::tokio::*;
 
     // instantiate logger
 

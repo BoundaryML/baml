@@ -2,8 +2,7 @@ use magnus::{
     class, exception::runtime_error, method, prelude::*, value::Value, Error, RModule, Ruby,
 };
 
-use crate::ruby_to_json;
-use crate::Result;
+use crate::{ruby_to_json, Result};
 
 #[magnus::wrap(class = "Baml::Ffi::FunctionResult", free_immediately, size)]
 pub struct FunctionResult {
@@ -39,15 +38,19 @@ impl FunctionResult {
         allow_partials: bool,
     ) -> Result<Value> {
         let res = match rb_self.inner.result_with_constraints_content() {
-            Ok(parsed) => {
-                ruby_to_json::RubyToJson::serialize_baml(ruby, types, partial_types, allow_partials, parsed.clone())
-                .map_err(|e| {
-                    magnus::Error::new(
-                        ruby.exception_type_error(),
-                        format!("failing inside parsed_using_types: {:?}", e),
-                    )
-                })
-            },
+            Ok(parsed) => ruby_to_json::RubyToJson::serialize_baml(
+                ruby,
+                types,
+                partial_types,
+                allow_partials,
+                parsed.clone(),
+            )
+            .map_err(|e| {
+                magnus::Error::new(
+                    ruby.exception_type_error(),
+                    format!("failing inside parsed_using_types: {:?}", e),
+                )
+            }),
             Err(_) => Err(Error::new(
                 ruby.exception_runtime_error(),
                 format!("Failed to parse LLM response: {}", rb_self.inner),

@@ -1,7 +1,6 @@
-use crate::{package::{CurrentRenderPackage, Package}};
+use crate::package::{CurrentRenderPackage, Package};
 
-#[derive(Clone, PartialEq, Debug)]
-#[derive(Default)]
+#[derive(Clone, PartialEq, Debug, Default)]
 pub enum TypeWrapper {
     #[default]
     None,
@@ -15,13 +14,11 @@ impl TypeWrapper {
     }
 }
 
-#[derive(Clone, PartialEq, Debug)]
-#[derive(Default)]
+#[derive(Clone, PartialEq, Debug, Default)]
 pub struct TypeMetaRb {
     pub type_wrapper: TypeWrapper,
     pub wrap_stream_state: bool,
 }
-
 
 impl TypeMetaRb {
     pub fn is_optional(&self) -> bool {
@@ -48,7 +45,6 @@ impl TypeMetaRb {
     }
 }
 
-
 trait WrapType {
     fn wrap_type(&self, params: (&CurrentRenderPackage, String)) -> String;
 }
@@ -63,10 +59,7 @@ impl WrapType for TypeWrapper {
                 Package::checked().relative_from(pkg),
                 inner.wrap_type(params),
             ),
-            TypeWrapper::Optional(inner) => format!(
-                "T.nilable({})",
-                inner.wrap_type(params)
-            ),
+            TypeWrapper::Optional(inner) => format!("T.nilable({})", inner.wrap_type(params)),
         }
     }
 }
@@ -119,7 +112,7 @@ pub enum TypeRb {
     String(Option<String>, TypeMetaRb),
     Int(Option<i64>, TypeMetaRb),
     Bool(Option<bool>, TypeMetaRb),
-    
+
     Float(TypeMetaRb),
     Media(MediaTypeRb, TypeMetaRb),
     // unions become classes
@@ -226,8 +219,7 @@ impl SerializeType for TypeRb {
             TypeRb::Bool(..) => "T::Boolean".to_string(),
             TypeRb::Float(_) => "Float".to_string(),
             TypeRb::Media(media, _) => media.serialize_type(pkg),
-            TypeRb::Class { package, name, .. } |
-            TypeRb::TypeAlias { package, name, .. } => {
+            TypeRb::Class { package, name, .. } | TypeRb::TypeAlias { package, name, .. } => {
                 if pkg.is_defining_alias(name) {
                     // Recursive types are not supported in sorbet, so we use T.anything
                     format!("T.anything")
@@ -236,16 +228,28 @@ impl SerializeType for TypeRb {
                 }
             }
             TypeRb::Union { variants, .. } => {
-                format!("T.any({})", variants.iter().map(|v| v.serialize_type(&pkg)).collect::<Vec<_>>().join(", "))
+                format!(
+                    "T.any({})",
+                    variants
+                        .iter()
+                        .map(|v| v.serialize_type(&pkg))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
             }
-            TypeRb::Enum { package, name, dynamic, .. } => {
+            TypeRb::Enum {
+                package,
+                name,
+                dynamic,
+                ..
+            } => {
                 let enm = format!("{}{}", package.relative_from(pkg), name);
                 if *dynamic {
                     format!("T.any({}, String)", enm)
                 } else {
                     enm
                 }
-            },
+            }
             TypeRb::List(inner, _) => format!("T::Array[{}]", inner.serialize_type(pkg)),
             TypeRb::Map(key, value, _) => {
                 format!(

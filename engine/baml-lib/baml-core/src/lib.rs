@@ -2,22 +2,20 @@
 #![deny(rust_2018_idioms, unsafe_code)]
 #![allow(clippy::derive_partial_eq_without_eq)]
 
-use enumflags2::BitFlags;
-pub use internal_baml_diagnostics;
-use internal_baml_parser_database::TypeWalker;
-pub use internal_baml_parser_database::{self};
-
-use internal_baml_ast::ast::{Identifier, WithName};
-pub use internal_baml_ast::{self, ast};
-
-use ir::repr::WithRepr;
-use rayon::prelude::*;
 use std::{
     path::{Path, PathBuf},
     sync::Mutex,
 };
 
+use enumflags2::BitFlags;
+use internal_baml_ast::ast::{Identifier, WithName};
+pub use internal_baml_ast::{self, ast};
+pub use internal_baml_diagnostics;
 use internal_baml_diagnostics::{DatamodelError, Diagnostics, SourceFile, Span};
+use internal_baml_parser_database::TypeWalker;
+pub use internal_baml_parser_database::{self};
+use ir::repr::WithRepr;
+use rayon::prelude::*;
 
 mod common;
 pub mod configuration;
@@ -26,7 +24,6 @@ pub mod ir;
 mod validate;
 
 use self::validate::generator_loader;
-
 pub use crate::{
     common::{PreviewFeature, PreviewFeatures, ALL_PREVIEW_FEATURES},
     configuration::Configuration,
@@ -53,8 +50,9 @@ pub fn validate(root_path: &Path, files: Vec<SourceFile>) -> ValidatedSchema {
     {
         let diagnostics = Mutex::new(&mut diagnostics);
         let db = Mutex::new(&mut db);
-        files.par_iter().for_each(
-            |file| match internal_baml_ast::parse(root_path, file) {
+        files
+            .par_iter()
+            .for_each(|file| match internal_baml_ast::parse(root_path, file) {
                 Ok((ast, err)) => {
                     let mut diagnostics = diagnostics.lock().unwrap();
                     let mut db = db.lock().unwrap();
@@ -65,8 +63,7 @@ pub fn validate(root_path: &Path, files: Vec<SourceFile>) -> ValidatedSchema {
                     let mut diagnostics = diagnostics.lock().unwrap();
                     diagnostics.push(err);
                 }
-            },
-        );
+            });
     }
 
     if let Err(d) = db.validate(&mut diagnostics) {

@@ -1,12 +1,5 @@
 use std::collections::HashMap;
 
-use crate::{
-    internal::llm_client::{
-        traits::{HttpContext, StreamResponse, WithClient},
-        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
-    },
-    RuntimeContext,
-};
 use anyhow::{Context, Result};
 use baml_types::BamlMap;
 use eventsource_stream::Eventsource;
@@ -24,6 +17,13 @@ use super::{
         RequestBuilder, ResponseType,
     },
     vertex::response_handler::scan_vertex_response_stream,
+};
+use crate::{
+    internal::llm_client::{
+        traits::{HttpContext, StreamResponse, WithClient},
+        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+    },
+    RuntimeContext,
 };
 
 pub async fn make_stream_request(

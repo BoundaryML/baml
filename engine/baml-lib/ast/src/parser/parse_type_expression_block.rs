@@ -1,3 +1,5 @@
+use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+
 use super::{
     helpers::{parsing_catch_all, Pair},
     parse_attribute::parse_attribute,
@@ -6,11 +8,11 @@ use super::{
     parse_named_args_list::parse_named_argument_list,
     Rule,
 };
-
-use crate::{assert_correct_parser, ast::*};
-use crate::{ast::TypeExpressionBlock, parser::parse_field::parse_type_expr}; // Add this line to import DatamodelParser
-
-use internal_baml_diagnostics::{DatamodelError, Diagnostics};
+use crate::{
+    assert_correct_parser,
+    ast::{TypeExpressionBlock, *},
+    parser::parse_field::parse_type_expr,
+}; // Add this line to import DatamodelParser
 
 pub(crate) fn parse_type_expression_block(
     pair: Pair<'_>,
@@ -75,7 +77,9 @@ pub(crate) fn parse_type_expression_block(
             }
 
             Rule::BLOCK_OPEN | Rule::BLOCK_CLOSE => {}
-            Rule::named_argument_list => { input = Some(parse_named_argument_list(current, diagnostics))},
+            Rule::named_argument_list => {
+                input = Some(parse_named_argument_list(current, diagnostics))
+            }
             Rule::type_expression_contents => {
                 let mut pending_field_comment: Option<Pair<'_>> = None;
 
@@ -148,10 +152,11 @@ pub(crate) fn parse_type_expression_block(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::parser::{BAMLParser, Rule};
     use internal_baml_diagnostics::{Diagnostics, SourceFile};
     use pest::{consumes_to, fails_with, parses_to, Parser};
+
+    use super::*;
+    use crate::parser::{BAMLParser, Rule};
 
     #[test]
     fn keyword_name_mandatory_whitespace() {

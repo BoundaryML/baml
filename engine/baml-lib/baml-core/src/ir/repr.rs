@@ -1,18 +1,22 @@
-use std::collections::{HashMap, HashSet};
-use std::sync::Arc;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use anyhow::{anyhow, Result};
-use baml_types::baml_value::TypeLookups;
-use baml_types::expr::Builtin;
-use baml_types::ir_type::ArrowGeneric;
-use baml_types::BamlMap;
 use baml_types::{
-    expr::{self, Expr, ExprMetadata, Name, VarIndex},
-    type_meta, Arrow, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, JinjaExpression,
-    Resolvable, StringOr, TypeValue, UnionType, UnresolvedValue,
+    baml_value::TypeLookups,
+    expr::{self, Builtin, Expr, ExprMetadata, Name, VarIndex},
+    ir_type::ArrowGeneric,
+    type_meta, Arrow, BamlMap, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType,
+    JinjaExpression, Resolvable, StringOr, TypeValue, UnionType, UnresolvedValue,
 };
 use either::Either;
 use indexmap::{IndexMap, IndexSet};
+use internal_baml_ast::ast::{
+    self, Attribute, FieldArity, SubType, ValExpId, WithAttributes, WithIdentifier, WithName,
+    WithSpan,
+};
 use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_parser_database::{
     walkers::{
@@ -22,18 +26,14 @@ use internal_baml_parser_database::{
     },
     Attributes, ParserDatabase, PromptAst, RetryPolicyStrategy, TypeWalker,
 };
-
-use internal_baml_ast::ast::{
-    self, Attribute, FieldArity, SubType, ValExpId, WithAttributes, WithIdentifier, WithName,
-    WithSpan,
-};
 use internal_llm_client::{ClientProvider, ClientSpec, UnresolvedClientProperty};
 use serde::Serialize;
 
-use crate::validate::validation_pipeline::validations::expr_typecheck::infer_types_in_context;
-use crate::Configuration;
-
 use super::builtin::{builtin_classes, builtin_generic_fn, builtin_ir, is_builtin_identifier};
+use crate::{
+    validate::validation_pipeline::validations::expr_typecheck::infer_types_in_context,
+    Configuration,
+};
 
 /// This class represents the intermediate representation of the BAML AST.
 /// It is a representation of the BAML AST that is easier to work with than the
@@ -2426,10 +2426,11 @@ pub fn make_test_ir_from_dir(dir: &std::path::PathBuf) -> anyhow::Result<Interme
 pub fn make_test_ir_and_diagnostics(
     source_code: &str,
 ) -> anyhow::Result<(IntermediateRepr, Diagnostics)> {
-    use crate::validate;
-    use crate::ValidatedSchema;
-    use internal_baml_diagnostics::SourceFile;
     use std::path::PathBuf;
+
+    use internal_baml_diagnostics::SourceFile;
+
+    use crate::{validate, ValidatedSchema};
 
     let path: PathBuf = "fake_file.baml".into();
     let source_file: SourceFile = (path.clone(), source_code).into();
@@ -2449,10 +2450,11 @@ fn make_test_ir_and_diagnostics_from_dir(
     root_dir: &std::path::PathBuf,
     source_code: Vec<internal_baml_diagnostics::SourceFile>,
 ) -> anyhow::Result<(IntermediateRepr, Diagnostics)> {
-    use crate::validate;
-    use crate::ValidatedSchema;
-    use internal_baml_diagnostics::SourceFile;
     use std::path::PathBuf;
+
+    use internal_baml_diagnostics::SourceFile;
+
+    use crate::{validate, ValidatedSchema};
 
     let validated_schema: ValidatedSchema = validate(&root_dir, source_code);
     let diagnostics = validated_schema.diagnostics;

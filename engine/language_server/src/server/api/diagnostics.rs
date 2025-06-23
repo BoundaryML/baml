@@ -1,21 +1,23 @@
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
+
 use baml_runtime::InternalRuntimeInterface;
 use internal_baml_diagnostics::{SourceFile, Span};
 use lsp_server::{ErrorCode, Notification, Request};
 use lsp_types::{
     notification::PublishDiagnostics, Diagnostic, DiagnosticSeverity, PublishDiagnosticsParams, Url,
 };
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-
-use crate::baml_project::{self, Project};
-use crate::baml_text_size::TextSize;
-use crate::server::api::ResultExt;
-use crate::server::client::Notifier;
-use crate::server::Result;
-use crate::{DocumentKey, Session};
 
 use super::LSPResult;
+use crate::{
+    baml_project::{self, Project},
+    baml_text_size::TextSize,
+    server::{api::ResultExt, client::Notifier, Result},
+    DocumentKey, Session,
+};
 
 pub(super) fn clear_diagnostics(uri: &Url, notifier: &Notifier) -> Result<()> {
     notifier

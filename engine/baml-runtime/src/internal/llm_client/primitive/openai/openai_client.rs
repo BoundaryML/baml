@@ -1,39 +1,34 @@
 use std::collections::HashMap;
 
-use crate::internal::llm_client::ResolveMediaUrls;
 use anyhow::Result;
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
+use eventsource_stream::Eventsource;
+use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-use internal_llm_client::openai::ResolvedOpenAI;
-use internal_llm_client::{AllowedRoleMetadata, FinishReasonFilter};
+use internal_llm_client::{openai::ResolvedOpenAI, AllowedRoleMetadata, FinishReasonFilter};
 use secrecy::ExposeSecret;
 use serde_json::json;
 
-use crate::internal::llm_client::{
-    ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse,
+use super::{
+    properties,
+    types::{ChatCompletionResponse, ChatCompletionResponseDelta},
 };
-
-use super::properties;
-use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta};
-
-use crate::client_registry::ClientProperty;
-use crate::internal::llm_client::primitive::request::{
-    make_parsed_request, make_request, RequestBuilder, ResponseType,
+use crate::{
+    client_registry::ClientProperty,
+    internal::llm_client::{
+        primitive::request::{make_parsed_request, make_request, RequestBuilder, ResponseType},
+        traits::{
+            CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse,
+            ToProviderMessage, ToProviderMessageExt, WithChat, WithClient, WithClientProperties,
+            WithNoCompletion, WithRetryPolicy, WithStreamChat,
+        },
+        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+        ModelFeatures, ResolveMediaUrls,
+    },
+    request::create_client,
+    RuntimeContext,
 };
-use crate::internal::llm_client::traits::{
-    CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse, ToProviderMessage,
-    ToProviderMessageExt, WithClientProperties, WithStreamChat,
-};
-use crate::internal::llm_client::{
-    traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
-    LLMResponse, ModelFeatures,
-};
-
-use crate::request::create_client;
-use crate::RuntimeContext;
-use eventsource_stream::Eventsource;
-use futures::StreamExt;
 
 pub struct OpenAIClient {
     pub name: String,

@@ -1,15 +1,11 @@
+use std::{
+    collections::{HashMap, HashSet, VecDeque},
+    hash::Hash,
+    ops::Deref,
+};
+
 use baml_derive::BamlHash;
-use ouroboros::self_referencing;
-use std::collections::{HashMap, HashSet, VecDeque};
-use std::hash::Hash;
-use std::ops::Deref;
-
-use crate::types::configurations::visit_test_case;
-use crate::{coerce, ParserDatabase, Tarjan};
-use crate::{context::Context, DatamodelError};
-
-use baml_types::Constraint;
-use baml_types::{StringOr, UnresolvedValue};
+use baml_types::{Constraint, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 use internal_baml_ast::ast::{
     self, BlockArgs, Expression, FieldId, FieldType, RawString, TypeAliasId, TypeBuilderBlock,
@@ -18,16 +14,21 @@ use internal_baml_ast::ast::{
 use internal_baml_diagnostics::{Diagnostics, Span};
 use internal_baml_prompt_parser::ast::{ChatBlock, PrinterBlock, Variable};
 use internal_llm_client::{ClientProvider, PropertyHandler, UnresolvedClientProperty};
+use ouroboros::self_referencing;
+
+use crate::{
+    coerce, context::Context, types::configurations::visit_test_case, DatamodelError,
+    ParserDatabase, Tarjan,
+};
 
 mod configurations;
 mod prompt;
 mod types;
 
-pub use crate::attributes::Attributes;
-pub(crate) use types::EnumAttributes;
-pub(crate) use types::*;
+pub(crate) use types::{EnumAttributes, *};
 
 use self::configurations::visit_retry_policy;
+pub use crate::attributes::Attributes;
 
 pub(super) fn resolve_types(ctx: &mut Context<'_>) {
     for (top_id, top) in ctx.ast.iter_tops() {

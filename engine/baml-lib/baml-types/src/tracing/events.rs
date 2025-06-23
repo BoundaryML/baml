@@ -1,11 +1,11 @@
-use anyhow::Result;
 use std::{collections::HashMap, sync::Arc};
 
-use crate::{BamlMap, BamlMedia, BamlValueWithMeta, HasFieldType};
+use anyhow::Result;
 use baml_ids::{FunctionCallId, FunctionEventId, HttpRequestId};
 use serde::{Deserialize, Serialize};
 
 pub use super::errors::BamlError;
+use crate::{BamlMap, BamlMedia, BamlValueWithMeta, HasFieldType};
 
 pub type TraceTags = serde_json::Map<String, serde_json::Value>;
 
@@ -525,8 +525,9 @@ pub struct LLMUsage {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_ids::HttpRequestId;
+
+    use super::*;
 
     #[test]
     fn test_headers_redaction_in_serialization() {

@@ -1,10 +1,12 @@
-use baml_types::ir_type::{Type, TypeValue, UnionTypeViewGeneric};
-use baml_types::{BamlMediaType, Constraint, ConstraintLevel, LiteralValue};
-use indexmap::{IndexMap, IndexSet};
-use internal_baml_core::ir::ir_helpers::IRHelper;
-use internal_baml_core::ir::repr::IntermediateRepr;
-use serde::Serialize;
 use std::hash::Hash;
+
+use baml_types::{
+    ir_type::{Type, TypeValue, UnionTypeViewGeneric},
+    BamlMediaType, Constraint, ConstraintLevel, LiteralValue,
+};
+use indexmap::{IndexMap, IndexSet};
+use internal_baml_core::ir::{ir_helpers::IRHelper, repr::IntermediateRepr};
+use serde::Serialize;
 /// The abstract type system of OpenAPI.
 /// We convert IR into this, before generating the OpenAPI yaml file.
 ///

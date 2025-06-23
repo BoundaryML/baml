@@ -138,11 +138,11 @@ impl TypeGo {
                 let safe_name = safe_name(v);
                 format!("K{}", safe_name)
             }),
-            TypeGo::Int(val, _) => val.map_or("Int".to_string(), |v| {
-                format!("IntK{}", v)
-            }),
+            TypeGo::Int(val, _) => val.map_or("Int".to_string(), |v| format!("IntK{}", v)),
             TypeGo::Float(_) => "Float".to_string(),
-            TypeGo::Bool(val, _) => val.map_or("Bool".to_string(), |v| format!("BoolK{}", if v { "True" } else { "False" })),
+            TypeGo::Bool(val, _) => val.map_or("Bool".to_string(), |v| {
+                format!("BoolK{}", if v { "True" } else { "False" })
+            }),
             TypeGo::Media(media_type_go, _) => match media_type_go {
                 MediaTypeGo::Image => "Image".to_string(),
                 MediaTypeGo::Audio => "Audio".to_string(),
@@ -166,10 +166,14 @@ impl TypeGo {
             return "nil".to_string();
         }
         match self {
-            TypeGo::String(val, _) => val.as_ref().map_or("\"\"".to_string(), |v| format!("\"{}\"", v.replace("\"", "\\\"")).to_string()),
+            TypeGo::String(val, _) => val.as_ref().map_or("\"\"".to_string(), |v| {
+                format!("\"{}\"", v.replace("\"", "\\\"")).to_string()
+            }),
             TypeGo::Int(val, _) => val.map_or("0".to_string(), |v| format!("{}", v)),
             TypeGo::Float(_) => "0.0".to_string(),
-            TypeGo::Bool(val, _) => val.map_or("false".to_string(), |v| if v { "true" } else { "false" }.to_string()),
+            TypeGo::Bool(val, _) => val.map_or("false".to_string(), |v| {
+                if v { "true" } else { "false" }.to_string()
+            }),
             TypeGo::Media(..) | TypeGo::Class { .. } | TypeGo::Union { .. } => {
                 format!("{}{{}}", self.serialize_type(pkg))
             }

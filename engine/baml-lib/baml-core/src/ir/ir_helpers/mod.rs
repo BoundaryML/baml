@@ -4,13 +4,20 @@ mod to_baml_arg;
 
 use std::collections::HashSet;
 
+use anyhow::Result;
+use baml_types::{
+    BamlMap, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, LiteralValue,
+    TypeValue, UnionType,
+};
 use indexmap::IndexMap;
+use internal_baml_ast::ast::{WithIdentifier, WithSpan};
 use internal_baml_diagnostics::Span;
 use internal_baml_parser_database::walkers::ExprFnWalker;
-use internal_baml_ast::ast::{WithIdentifier, WithSpan};
 use itertools::Itertools;
+pub use to_baml_arg::ArgCoercer;
 
 use self::scope_diagnostics::ScopeStack;
+use super::{repr, ExprFunctionNode};
 use crate::{
     error_not_found,
     ir::{
@@ -19,15 +26,6 @@ use crate::{
         TypeAlias,
     },
 };
-
-use anyhow::Result;
-use baml_types::{
-    BamlMap, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, LiteralValue,
-    TypeValue, UnionType,
-};
-pub use to_baml_arg::ArgCoercer;
-
-use super::{repr, ExprFunctionNode};
 
 pub type FunctionWalker<'a> = Walker<'a, &'a FunctionNode>;
 pub type ExprFunctionWalker<'a> = Walker<'a, &'a ExprFunctionNode>;
@@ -343,10 +341,7 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
             }
 
             BamlValueWithMeta::Class(name, fields, meta) => {
-                if !self.is_subtype(
-                    &FieldType::class(name.as_str()),
-                    &field_type,
-                ) {
+                if !self.is_subtype(&FieldType::class(name.as_str()), &field_type) {
                     anyhow::bail!("Could not unify Class {} with {:?}", name, field_type);
                 } else {
                     let class_fields = self.class_fields(&name)?;
@@ -1029,21 +1024,17 @@ pub fn infer_type(value: &BamlValue) -> Option<FieldType> {
             TypeValue::Media(m.media_type),
             Default::default(),
         )),
-        BamlValue::Enum(enum_name, _) => {
-            Some(FieldType::Enum {
-                name: enum_name.clone(),
-                dynamic: false,
-                meta: Default::default(),
-            })
-        }
-        BamlValue::Class(class_name, _) => {
-            Some(FieldType::Class {
-                name: class_name.clone(),
-                mode: baml_types::ir_type::StreamingMode::NonStreaming,
-                dynamic: false,
-                meta: Default::default(),
-            })
-        }
+        BamlValue::Enum(enum_name, _) => Some(FieldType::Enum {
+            name: enum_name.clone(),
+            dynamic: false,
+            meta: Default::default(),
+        }),
+        BamlValue::Class(class_name, _) => Some(FieldType::Class {
+            name: class_name.clone(),
+            mode: baml_types::ir_type::StreamingMode::NonStreaming,
+            dynamic: false,
+            meta: Default::default(),
+        }),
     };
     ret
 }
@@ -1103,33 +1094,30 @@ pub fn infer_type_with_meta<T>(value: &BamlValueWithMeta<T>) -> Option<FieldType
             TypeValue::Media(m.media_type),
             Default::default(),
         )),
-        BamlValueWithMeta::Enum(enum_name, _, _) => {
-            Some(FieldType::Enum {
-                name: enum_name.clone(),
-                dynamic: false,
-                meta: Default::default(),
-            })
-        }
-        BamlValueWithMeta::Class(class_name, _, _) => {
-            Some(FieldType::Class {
-                name: class_name.clone(),
-                mode: baml_types::ir_type::StreamingMode::NonStreaming,
-                dynamic: false,
-                meta: Default::default(),
-            })
-        }
+        BamlValueWithMeta::Enum(enum_name, _, _) => Some(FieldType::Enum {
+            name: enum_name.clone(),
+            dynamic: false,
+            meta: Default::default(),
+        }),
+        BamlValueWithMeta::Class(class_name, _, _) => Some(FieldType::Class {
+            name: class_name.clone(),
+            mode: baml_types::ir_type::StreamingMode::NonStreaming,
+            dynamic: false,
+            meta: Default::default(),
+        }),
     };
     ret
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_types::{
         BamlMedia, BamlMediaContent, BamlMediaType, BamlValue, Constraint, ConstraintLevel,
         FieldType, JinjaExpression, MediaBase64, TypeValue,
     };
     use repr::make_test_ir;
+
+    use super::*;
 
     fn int_type() -> FieldType {
         FieldType::Primitive(TypeValue::Int, Default::default())
@@ -1516,8 +1504,10 @@ mod tests {
 // refactored to match the `is_subtype` changes. Do something with this.
 #[cfg(test)]
 mod subtype_tests {
-    use baml_types::BamlMediaType;
-    use baml_types::{type_meta::base::StreamingBehavior, type_meta::base::TypeMeta};
+    use baml_types::{
+        type_meta::base::{StreamingBehavior, TypeMeta},
+        BamlMediaType,
+    };
     use minijinja::machinery::ast::Expr;
     use repr::make_test_ir;
 

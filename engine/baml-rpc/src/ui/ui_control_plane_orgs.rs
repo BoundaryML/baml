@@ -1,6 +1,7 @@
-use crate::rpc::ApiEndpoint;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+
+use crate::rpc::ApiEndpoint;
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]

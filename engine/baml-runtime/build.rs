@@ -1,6 +1,6 @@
+use std::{env, process::Command};
+
 use anyhow::{Context, Result};
-use std::env;
-use std::process::Command;
 
 fn check_ruby_version() -> Result<()> {
     // Run the 'ruby -v' command to get the Ruby version

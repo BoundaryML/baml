@@ -19,8 +19,9 @@ use serde_json::json;
 // run the CLI using debug build using: engine/target/debug/baml-runtime dev
 #[cfg(not(feature = "skip-integ-tests"))]
 mod test_cli {
-    use super::*;
     use pretty_assertions::assert_eq;
+
+    use super::*;
 
     #[rstest]
     fn init() -> Result<()> {

@@ -16,32 +16,30 @@ mod test_partials;
 mod test_streaming;
 mod test_unions;
 
-use indexmap::{IndexMap, IndexSet};
 use std::{
     collections::{HashMap, HashSet},
     path::PathBuf,
 };
 
-use crate::deserializer::deserialize_flags::Flag;
-use crate::deserializer::semantic_streaming::validate_streaming_state;
-use crate::{BamlValueWithFlags, ResponseBamlValue};
 use anyhow::Result;
 use baml_types::{
     BamlValue, BamlValueWithMeta, CompletionState, EvaluationContext, FieldType, JinjaExpression,
     ResponseCheck,
 };
-use internal_baml_core::ir::repr::IntermediateRepr;
-use internal_baml_jinja::types::{Class, Enum, Name, OutputFormatContent};
-
+use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::{
     ast::Field,
     internal_baml_diagnostics::SourceFile,
-    ir::{ClassWalker, EnumWalker, IRHelper, TypeValue},
+    ir::{repr::IntermediateRepr, ClassWalker, EnumWalker, IRHelper, TypeValue},
     validate,
 };
+use internal_baml_jinja::types::{Class, Enum, Name, OutputFormatContent};
 use serde_json::json;
 
-use crate::from_str;
+use crate::{
+    deserializer::{deserialize_flags::Flag, semantic_streaming::validate_streaming_state},
+    from_str, BamlValueWithFlags, ResponseBamlValue,
+};
 
 const EMPTY_FILE: &str = r#"
 "#;

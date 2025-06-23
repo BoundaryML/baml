@@ -94,8 +94,9 @@ pub fn evaluate_predicate(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_types::BamlValue;
+
+    use super::*;
 
     #[test]
     fn test_render_expressions() {

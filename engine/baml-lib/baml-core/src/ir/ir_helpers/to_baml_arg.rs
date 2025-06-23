@@ -1,14 +1,13 @@
+use core::result::Result;
+use std::path::PathBuf;
+
 use baml_types::{
     BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType,
     LiteralValue, TypeValue,
 };
-use core::result::Result;
-use std::path::PathBuf;
-
-use crate::ir::{ir_helpers::infer_type, IntermediateRepr};
 
 use super::{scope_diagnostics::ScopeStack, IRHelper, IRHelperExtended};
-use crate::ir::jinja_helpers::evaluate_predicate;
+use crate::ir::{ir_helpers::infer_type, jinja_helpers::evaluate_predicate, IntermediateRepr};
 
 #[derive(Default)]
 pub struct ParameterError {
@@ -427,11 +426,13 @@ fn first_failing_assert_nested<'a>(
 
 #[cfg(test)]
 mod tests {
-    use baml_types::{JinjaExpression, type_meta::base::StreamingBehavior, type_meta::base::TypeMeta};
-
-    use crate::ir::repr::make_test_ir;
+    use baml_types::{
+        type_meta::base::{StreamingBehavior, TypeMeta},
+        JinjaExpression,
+    };
 
     use super::*;
+    use crate::ir::repr::make_test_ir;
 
     #[test]
     fn test_malformed_check_in_argument() {

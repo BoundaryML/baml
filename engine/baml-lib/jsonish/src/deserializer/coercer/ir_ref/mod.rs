@@ -7,9 +7,8 @@ use core::panic;
 use anyhow::Result;
 use internal_baml_core::ir::FieldType;
 
-use crate::deserializer::{coercer::TypeCoercer, types::BamlValueWithFlags};
-
 use super::{ParsingContext, ParsingError};
+use crate::deserializer::{coercer::TypeCoercer, types::BamlValueWithFlags};
 
 pub(super) enum IrRef<'a> {
     Enum(&'a String),

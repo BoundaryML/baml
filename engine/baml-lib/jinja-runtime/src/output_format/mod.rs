@@ -6,9 +6,8 @@ use minijinja::{value::Kwargs, ErrorKind, Value};
 use strum::VariantNames;
 use types::HoistClasses;
 
-use crate::{types::RenderOptions, RenderContext};
-
 use self::types::OutputFormatContent;
+use crate::{types::RenderOptions, RenderContext};
 
 // TODO: Rename the field to `content`.
 #[derive(Debug)]
@@ -208,7 +207,7 @@ impl minijinja::value::Object for OutputFormat {
             None => Ok(Value::from_serialize("")),
         }
     }
-    
+
     fn call_method(
         self: &std::sync::Arc<Self>,
         _state: &minijinja::State<'_, '_>,

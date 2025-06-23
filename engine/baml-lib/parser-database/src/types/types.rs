@@ -21,12 +21,8 @@ pub struct ClassAttributes {
 impl ClassAttributes {
     pub fn extend_serializer(&mut self, other: &Option<Attributes>) {
         let new_serializer = match (self.serilizer.as_mut(), other) {
-            (Some(self_attrs), Some(other_attrs)) => {
-                Some(self_attrs.combine(other_attrs))
-            }
-            (Some(self_attrs), None) => {
-                Some(self_attrs.clone())
-            },
+            (Some(self_attrs), Some(other_attrs)) => Some(self_attrs.combine(other_attrs)),
+            (Some(self_attrs), None) => Some(self_attrs.clone()),
             (None, Some(other_attrs)) => Some(other_attrs.clone()),
             (None, None) => None,
         };

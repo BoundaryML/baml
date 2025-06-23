@@ -6,18 +6,17 @@ mod enums;
 mod expr_fns;
 pub mod expr_typecheck;
 mod functions;
+mod reserved_names;
 mod template_strings;
 mod tests;
 mod types;
-mod reserved_names;
+
+use std::collections::HashSet;
 
 use baml_types::GeneratorOutputType;
 
-use crate::{configuration::Generator, validate::generator_loader::load_generators_from_ast};
-
 use super::context::Context;
-
-use std::collections::HashSet;
+use crate::{configuration::Generator, validate::generator_loader::load_generators_from_ast};
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
     enums::validate(ctx);

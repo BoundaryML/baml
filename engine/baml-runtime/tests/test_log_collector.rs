@@ -4,19 +4,19 @@
 #[cfg(feature = "internal")]
 #[cfg(not(feature = "skip-integ-tests"))]
 mod internal_tests {
-    use std::any;
-    use std::collections::HashMap;
-
-    use baml_runtime::tracingv2::publisher::publisher::flush;
-    use baml_runtime::tracingv2::storage::storage::Collector;
-    use baml_runtime::{tracingv2::storage::storage::BAML_TRACER, BamlRuntime};
-    use std::sync::Once;
+    use std::{any, collections::HashMap, sync::Once};
 
     // use baml_runtime::internal::llm_client::orchestrator::OrchestrationScope;
     use baml_runtime::InternalRuntimeInterface;
-    use baml_runtime::{internal::llm_client::LLMResponse, DiagnosticsError, IRHelper};
+    use baml_runtime::{
+        internal::llm_client::LLMResponse,
+        tracingv2::{
+            publisher::publisher::flush,
+            storage::storage::{Collector, BAML_TRACER},
+        },
+        BamlRuntime, DiagnosticsError, IRHelper,
+    };
     use baml_types::BamlValue;
-
     use wasm_bindgen_test::*;
 
     #[test_log::test]
