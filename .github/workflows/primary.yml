@@ -53,6 +53,9 @@ jobs:
       - name: Check TS Lint
         run: pnpm biome ci . --organize-imports-enabled=false
         working-directory: typescript
+      - name: Build web-panel for language server
+        run: bash ./scripts/build.sh
+        working-directory: engine/language_server
       - name: Check Rust Formatter
         # rustfmt can only run unstable features on stable toolchains if passed
         # through CLI. We don't want to download 2 toolchains just for this.
