@@ -400,10 +400,7 @@ impl Server {
                 loop {
                     // Check if port is available before attempting to bind
                     let port_available = {
-                        match std::net::TcpListener::bind(("127.0.0.1", playground_port)) {
-                            Ok(_) => true,
-                            Err(_) => false,
-                        }
+                        std::net::TcpListener::bind(("127.0.0.1", playground_port)).is_ok()
                     };
 
                     if port_available {

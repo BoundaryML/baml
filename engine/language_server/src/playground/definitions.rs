@@ -35,10 +35,16 @@ pub struct PlaygroundState {
     _rx: broadcast::Receiver<String>,
 }
 
-impl PlaygroundState {
-    pub fn new() -> Self {
+impl Default for PlaygroundState {
+    fn default() -> Self {
         let (tx, rx) = broadcast::channel(100);
         Self { tx, _rx: rx }
+    }
+}
+
+impl PlaygroundState {
+    pub fn new() -> Self {
+        Self::default()
     }
 
     pub fn broadcast_update(&self, msg: String) -> anyhow::Result<()> {

@@ -103,10 +103,8 @@ impl SyncRequestHandler for GotoDefinition {
                     // Get the first function from the current file if available
                     if let Some(function) = guard
                         .list_functions()
-                        .unwrap_or(vec![])
-                        .into_iter()
-                        .filter(|f| f.span.file_path == document_key.path().to_string_lossy())
-                        .next()
+                        .unwrap_or_default()
+                        .into_iter().find(|f| f.span.file_path == document_key.path().to_string_lossy())
                     {
                         tracing::info!("Broadcasting function change for: {}", function.name);
                         let root_path = guard.root_path().to_string_lossy().to_string();
