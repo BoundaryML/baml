@@ -2,6 +2,7 @@ use std::fmt;
 
 use askama::Template;
 use baml_types::GeneratorDefaultClientMode;
+use indexmap::IndexMap;
 
 use crate::{
     package::CurrentRenderPackage,
@@ -213,3 +214,103 @@ pub fn render_parser(
     }
     .render()
 }
+
+// React-specific templates
+#[derive(askama::Template)]
+#[template(path = "react/hooks.tsx.j2", escape = "none")]
+struct ReactHooks<'a> {
+    functions: &'a [FunctionTS],
+    types: &'a [String],
+    pkg: &'a CurrentRenderPackage,
+}
+
+pub fn render_react_hooks(
+    functions: &[FunctionTS],
+    types: &[String],
+    pkg: &CurrentRenderPackage,
+) -> Result<String, askama::Error> {
+    ReactHooks {
+        functions,
+        types,
+        pkg,
+    }
+    .render()
+}
+
+#[derive(askama::Template)]
+#[template(path = "react/server.ts.j2", escape = "none")]
+struct ReactServer<'a> {
+    functions: &'a [FunctionTS],
+    types: &'a [String],
+    pkg: &'a CurrentRenderPackage,
+}
+
+pub fn render_react_server(
+    functions: &[FunctionTS],
+    types: &[String],
+    pkg: &CurrentRenderPackage,
+) -> Result<String, askama::Error> {
+    ReactServer {
+        functions,
+        types,
+        pkg,
+    }
+    .render()
+}
+
+#[derive(askama::Template)]
+#[template(path = "react/server_streaming.ts.j2", escape = "none")]
+struct ReactServerStreaming<'a> {
+    functions: &'a [FunctionTS],
+    types: &'a [String],
+    pkg: &'a CurrentRenderPackage,
+}
+
+pub fn render_react_server_streaming(
+    functions: &[FunctionTS],
+    types: &[String],
+    pkg: &CurrentRenderPackage,
+) -> Result<String, askama::Error> {
+    ReactServerStreaming {
+        functions,
+        types,
+        pkg,
+    }
+    .render()
+}
+
+#[derive(askama::Template)]
+#[template(path = "react/server_streaming_types.ts.j2", escape = "none")]
+struct ReactServerStreamingTypes<'a> {
+    streaming_types: &'a IndexMap<String, String>,
+    types: &'a [String],
+    pkg: &'a CurrentRenderPackage,
+}
+
+pub fn render_react_server_streaming_types(
+    functions: &[FunctionTS],
+    types: &[String],
+    pkg: &CurrentRenderPackage
+) -> Result<String, askama::Error> {
+    let mut streaming_types: IndexMap<String, String> = functions
+        .iter()
+        .map(|f| (f.name.clone(), f.stream_return_type.to_string()))
+        .collect();
+    streaming_types.sort_keys();
+
+    ReactServerStreamingTypes {
+        streaming_types: &streaming_types,
+        types,
+        pkg,
+    }
+    .render()
+}
+
+#[derive(askama::Template)]
+#[template(path = "react/media.ts.j2", escape = "none")]
+struct ReactMedia;
+
+pub fn render_react_media() -> Result<String, askama::Error> {
+    ReactMedia.render()
+}
+

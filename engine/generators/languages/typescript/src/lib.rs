@@ -2,8 +2,13 @@ use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeature
 use functions::{
     render_async_client, render_async_request, render_config, render_globals, render_index,
     render_inlinedbaml, render_parser, render_sync_client, render_sync_request, render_tracing,
+    render_react_hooks, render_react_server, render_react_server_streaming, 
+    render_react_server_streaming_types, render_react_media,
 };
 use generated_types::{render_partial_types, render_ts_types, render_type_builder};
+use baml_types::GeneratorOutputType;
+use internal_baml_core::configuration::ModuleFormat;
+use regex::Regex;
 mod functions;
 mod generated_types;
 mod ir_to_ts;
@@ -61,6 +66,8 @@ $ pnpm add @boundaryml/baml
             .iter()
             .map(|f| ir_to_ts::functions::ir_function_to_ts(f, &pkg))
             .collect::<Vec<_>>();
+
+        // Generate base TypeScript files (always generated)
         collector.add_file("inlinedbaml.ts", render_inlinedbaml(&pkg, file_map)?)?;
         collector.add_file("config.ts", render_config(&pkg)?)?;
         collector.add_file("index.ts", render_index(&args.default_client_mode)?)?;
@@ -83,6 +90,8 @@ $ pnpm add @boundaryml/baml
             "sync_request.ts",
             &render_sync_request(&functions, &types, &pkg)?,
         )?;
+
+        // Generate type files
         let classes = ir.walk_classes().collect::<Vec<_>>();
         let ts_classes = classes
             .iter()
@@ -119,8 +128,83 @@ $ pnpm add @boundaryml/baml
             render_type_builder(&ts_classes, &ts_enums)?,
         )?;
 
+        // Generate React-specific files if this is a TypescriptReact generator
+        if args.client_type == GeneratorOutputType::TypescriptReact {
+            // Generate React-specific files
+            collector.add_file(
+                "react/hooks.tsx",
+                render_react_hooks(&functions, &types, &pkg)?,
+            )?;
+            collector.add_file(
+                "react/server.ts",
+                render_react_server(&functions, &types, &pkg)?,
+            )?;
+            collector.add_file(
+                "react/server_streaming.ts",
+                render_react_server_streaming(&functions, &types, &pkg)?,
+            )?;
+            collector.add_file(
+                "react/server_streaming_types.ts",
+                render_react_server_streaming_types(&functions, &types, &pkg)?,
+            )?;
+            collector.add_file(
+                "react/media.ts",
+                render_react_media()?,
+            )?;
+        }
+
+        // Apply ESM transformations if module format is ESM
+        if args.module_format == Some(ModuleFormat::Esm) {
+            collector.modify_files(|content: &mut String| {
+                *content = add_js_suffix_to_imports(content);
+            });
+        }
+
         Ok(())
     }
+}
+
+fn add_js_suffix_to_imports(content: &str) -> String {
+    // Regex to find import/export statements with module specifiers.
+    // It captures the import/export part, quotes, and the path itself.
+    // Escaped curly braces in the character set just in case.
+    let re = Regex::new(r#"(import(?:["'\s]*(?:[\w\*\{\}\n\r\t, ]+)from\s*)?|export(?:["'\s]*(?:[\w\*\{\}\n\r\t, ]+)from\s*)?)(["'])([^"']+)(["'])"#).unwrap();
+
+    re.replace_all(content, |caps: &regex::Captures| {
+        let import_export_part = &caps[1];
+        let quote = &caps[2];
+        let path = &caps[3];
+        let closing_quote = &caps[4];
+
+        // Check if it's a relative path (starts with ./ or ../)
+        if path.starts_with("./") || path.starts_with("../") {
+            // Check if it already has a common JS/TS/CSS extension
+            if !path.ends_with(".js") &&
+               !path.ends_with(".mjs") &&
+               !path.ends_with(".cjs") &&
+               !path.ends_with(".jsx") && // Consider react specific extensions too
+               !path.ends_with(".tsx") &&
+               !path.ends_with(".css") && // Ignore CSS files
+               !path.ends_with(".json")
+            {
+                // Remove existing .ts if present before adding .js
+                let base_path = if path.ends_with(".ts") {
+                    &path[..path.len() - 3]
+                } else {
+                    path
+                };
+                // Append .js
+                format!("{import_export_part}{quote}{base_path}.js{closing_quote}")
+            } else {
+                // Already has a recognized extension, leave it as is.
+                caps[0].to_string()
+            }
+        } else {
+            // Not a relative path (e.g., external package like 'react' or '@boundaryml/baml'), leave it as is.
+            caps[0].to_string()
+        }
+    })
+    .to_string()
 }
 
 #[cfg(test)]
@@ -138,14 +222,96 @@ mod generated_tests {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn test_name() {
-        use std::str::FromStr;
+    fn test_add_js_suffix_to_imports() {
+        // Add .js to relative paths without extension
+        assert_eq!(
+            add_js_suffix_to_imports("import { Foo } from './bar';"),
+            "import { Foo } from './bar.js';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("export * from \"../baz/qux\";"),
+            "export * from \"../baz/qux.js\";"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import type { Bar } from './bar'"),
+            "import type { Bar } from './bar.js'"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import {\n  Thing1,\n  Thing2\n} from \"./things\";"),
+            "import {\n  Thing1,\n  Thing2\n} from \"./things.js\";"
+        );
 
-        use dir_writer::LanguageFeatures;
+        // Replace .ts with .js in relative paths
+        assert_eq!(
+            add_js_suffix_to_imports("import { Foo } from './bar.ts';"),
+            "import { Foo } from './bar.js';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("export * from \"../baz/qux.ts\";"),
+            "export * from \"../baz/qux.js\";"
+        );
 
-        let gen_type = baml_types::GeneratorOutputType::from_str(crate::TsLanguageFeatures::name())
-            .expect("TsLanguageFeatures name should be a valid GeneratorOutputType");
-        assert_eq!(gen_type, baml_types::GeneratorOutputType::Typescript);
+        // Should ignore already correct .js paths
+        assert_eq!(
+            add_js_suffix_to_imports("import { Foo } from './bar.js';"),
+            "import { Foo } from './bar.js';"
+        );
+        // Should ignore other extensions like .css, .mjs, .cjs
+        assert_eq!(
+            add_js_suffix_to_imports("import styles from './styles.css';"),
+            "import styles from './styles.css';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import config from './config.json';"),
+            "import config from './config.json';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import { util } from './util.mjs';"),
+            "import { util } from './util.mjs';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import { main } from '../main.cjs';"),
+            "import { main } from '../main.cjs';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import { Comp } from './Comp.tsx';"),
+            "import { Comp } from './Comp.tsx';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import { Button } from './Button.jsx';"),
+            "import { Button } from './Button.jsx';"
+        );
+
+        // Should ignore absolute paths or URLs
+        assert_eq!(
+            add_js_suffix_to_imports("import React from 'react';"),
+            "import React from 'react';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import { BamlClient } from '@boundaryml/baml';"),
+            "import { BamlClient } from '@boundaryml/baml';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("const path = '/path/to/file.ts';"),
+            "const path = '/path/to/file.ts';" // This is not an import/export statement
+        );
+
+        // Empty string
+        assert_eq!(add_js_suffix_to_imports(""), "");
+        // String with no imports
+        assert_eq!(
+            add_js_suffix_to_imports("const x = 10; function y() {}"),
+            "const x = 10; function y() {}"
+        );
+        // Mixed content
+        assert_eq!(
+            add_js_suffix_to_imports(
+                "console.log('hello');\nimport { a } from './a.ts';\nimport { b } from './b';\nimport { c } from './c.js';\nimport { d } from 'd-lib';\nexport { e } from '../e.ts';\nconsole.log('world');"
+            ),
+            "console.log('hello');\nimport { a } from './a.js';\nimport { b } from './b.js';\nimport { c } from './c.js';\nimport { d } from 'd-lib';\nexport { e } from '../e.js';\nconsole.log('world');"
+        );
     }
 }
