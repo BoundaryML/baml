@@ -6,7 +6,8 @@
     "build": "tsc",
     "start": "node ./dist/main.js",
     "build:debug": "cd ../../engine/language_client_typescript && pnpm run build:debug && cd - && pnpm i",
-    "generate": "baml-cli generate --from ../baml_src"
+    "generate": "baml-cli generate --from ../baml_src",
+    "typecheck": "tsc --noEmit"
   },
   "engines": {
     "node": ">=20"

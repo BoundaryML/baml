@@ -69,7 +69,7 @@ $ pnpm add @boundaryml/baml
 
         // Generate base TypeScript files (always generated)
         collector.add_file("inlinedbaml.ts", render_inlinedbaml(&pkg, file_map)?)?;
-        collector.add_file("config.ts", render_config(&pkg)?)?;
+        collector.add_file("config.ts", render_config()?)?;
         collector.add_file("index.ts", render_index(&args.default_client_mode)?)?;
         collector.add_file("globals.ts", render_globals(&pkg)?)?;
         collector.add_file("tracing.ts", render_tracing(&pkg)?)?;
@@ -103,24 +103,175 @@ $ pnpm add @boundaryml/baml
             .collect::<Vec<_>>();
         let ts_enums = ir
             .walk_enums()
-            .map(|e| ir_to_ts::enums::ir_enum_to_ts(e.item, &pkg))
+            .map(|e| ir_to_ts::enums::ir_enum_to_ts(e.item))
             .collect::<Vec<_>>();
-        let mut type_aliases = ir
+        let type_aliases = ir
             .walk_type_aliases()
-            .map(|a| ir_to_ts::type_aliases::ir_type_alias_to_ts(a.item, &pkg))
             .collect::<Vec<_>>();
-        type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
+        
+        // Get the conversion map to determine which type aliases should become interfaces
+        let conversion_map = ir.get_typescript_alias_conversion_map();
+        
+        let mut ts_type_aliases = Vec::new();
+        let mut ts_interface_aliases = Vec::new();
+        
+        // Collect all alias names that are part of recursive cycles to avoid duplicates
+        let recursive_alias_names: std::collections::HashSet<String> = ir.structural_recursive_alias_cycles
+            .iter()
+            .flat_map(|cycle| cycle.keys())
+            .cloned()
+            .collect();
+        
+        // Process regular type aliases (skip those that are part of recursive cycles)
+        for alias_walker in type_aliases.iter() {
+            let alias_name = &alias_walker.item.elem.name;
+            
+            // Skip if this alias is part of a recursive cycle (will be processed separately)
+            if recursive_alias_names.contains(alias_name) {
+                continue;
+            }
+            
+            if conversion_map.get(alias_name) == Some(&true) {
+                // Convert to interface
+                if let Some(interface) = ir_to_ts::type_aliases::ir_type_alias_to_ts_interface(alias_walker.item, &pkg) {
+                    ts_interface_aliases.push(interface);
+                } else {
+                    // Fallback to regular type alias if interface conversion fails
+                    ts_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts(alias_walker.item, &pkg));
+                }
+            } else {
+                // Keep as type alias
+                ts_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts(alias_walker.item, &pkg));
+            }
+        }
+        
+        // Process recursive alias cycles
+        for cycle in &ir.structural_recursive_alias_cycles {
+            for (alias_name, field_type) in cycle {
+                if conversion_map.get(alias_name) == Some(&true) {
+                    // Create a synthetic TypeAlias for the interface generation
+                    use internal_baml_core::ir::repr::{TypeAlias, Node, NodeAttributes};
+                    let synthetic_alias = Node {
+                        attributes: NodeAttributes::default(),
+                        elem: TypeAlias {
+                            name: alias_name.clone(),
+                            r#type: Node {
+                                attributes: NodeAttributes::default(),
+                                elem: field_type.clone(),
+                            },
+                            docstring: None,
+                        },
+                    };
+                    
+                    if let Some(interface) = ir_to_ts::type_aliases::ir_type_alias_to_ts_interface(&synthetic_alias, &pkg) {
+                        ts_interface_aliases.push(interface);
+                    } else {
+                        // Fallback to regular type alias
+                        ts_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts(&synthetic_alias, &pkg));
+                    }
+                } else {
+                    // Create a synthetic TypeAlias for regular alias generation
+                    use internal_baml_core::ir::repr::{TypeAlias, Node, NodeAttributes};
+                    let synthetic_alias = Node {
+                        attributes: NodeAttributes::default(),
+                        elem: TypeAlias {
+                            name: alias_name.clone(),
+                            r#type: Node {
+                                attributes: NodeAttributes::default(),
+                                elem: field_type.clone(),
+                            },
+                            docstring: None,
+                        },
+                    };
+                    ts_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts(&synthetic_alias, &pkg));
+                }
+            }
+        }
+        
+        ts_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
+        ts_interface_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
         pkg.set("baml_client.types");
         collector.add_file(
             "types.ts",
-            render_ts_types(&ts_enums, &ts_classes, &type_aliases, &pkg)?,
+            render_ts_types(&ts_enums, &ts_classes, &ts_type_aliases, &ts_interface_aliases, &pkg)?,
         )?;
 
         pkg.set("baml_client.partial_types");
+        let mut ts_stream_type_aliases = Vec::new();
+        let mut ts_stream_interface_aliases = Vec::new();
+        
+        // Process regular type aliases (skip those that are part of recursive cycles)
+        for alias_walker in type_aliases.iter() {
+            let alias_name = &alias_walker.item.elem.name;
+            
+            // Skip if this alias is part of a recursive cycle (will be processed separately)
+            if recursive_alias_names.contains(alias_name) {
+                continue;
+            }
+            
+            if conversion_map.get(alias_name) == Some(&true) {
+                // Convert to interface
+                if let Some(interface) = ir_to_ts::type_aliases::ir_type_alias_to_ts_interface_stream(alias_walker.item, &pkg) {
+                    ts_stream_interface_aliases.push(interface);
+                } else {
+                    // Fallback to regular type alias if interface conversion fails
+                    ts_stream_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts_stream(alias_walker.item, &pkg));
+                }
+            } else {
+                // Keep as type alias
+                ts_stream_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts_stream(alias_walker.item, &pkg));
+            }
+        }
+        
+        // Process recursive alias cycles for streaming
+        for cycle in &ir.structural_recursive_alias_cycles {
+            for (alias_name, field_type) in cycle {
+                if conversion_map.get(alias_name) == Some(&true) {
+                    // Create a synthetic TypeAlias for the interface generation
+                    use internal_baml_core::ir::repr::{TypeAlias, Node, NodeAttributes};
+                    let synthetic_alias = Node {
+                        attributes: NodeAttributes::default(),
+                        elem: TypeAlias {
+                            name: alias_name.clone(),
+                            r#type: Node {
+                                attributes: NodeAttributes::default(),
+                                elem: field_type.clone(),
+                            },
+                            docstring: None,
+                        },
+                    };
+                    
+                    if let Some(interface) = ir_to_ts::type_aliases::ir_type_alias_to_ts_interface_stream(&synthetic_alias, &pkg) {
+                        ts_stream_interface_aliases.push(interface);
+                    } else {
+                        // Fallback to regular type alias
+                        ts_stream_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts_stream(&synthetic_alias, &pkg));
+                    }
+                } else {
+                    // Create a synthetic TypeAlias for regular alias generation
+                    use internal_baml_core::ir::repr::{TypeAlias, Node, NodeAttributes};
+                    let synthetic_alias = Node {
+                        attributes: NodeAttributes::default(),
+                        elem: TypeAlias {
+                            name: alias_name.clone(),
+                            r#type: Node {
+                                attributes: NodeAttributes::default(),
+                                elem: field_type.clone(),
+                            },
+                            docstring: None,
+                        },
+                    };
+                    ts_stream_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts_stream(&synthetic_alias, &pkg));
+                }
+            }
+        }
+        
+        ts_stream_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
+        ts_stream_interface_aliases.sort_by(|a, b| a.name.cmp(&b.name));
         collector.add_file(
             "partial_types.ts",
-            render_partial_types(&ts_classes_stream, &types, &pkg)?,
+            render_partial_types(&ts_classes_stream, &types, &ts_stream_type_aliases, &ts_stream_interface_aliases)?,
         )?;
 
         collector.add_file(
@@ -133,7 +284,7 @@ $ pnpm add @boundaryml/baml
             // Generate React-specific files
             collector.add_file(
                 "react/hooks.tsx",
-                render_react_hooks(&functions, &types, &pkg)?,
+                render_react_hooks(&functions, &pkg)?,
             )?;
             collector.add_file(
                 "react/server.ts",

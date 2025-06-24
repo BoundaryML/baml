@@ -40,7 +40,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AaaSamOutputFormat",
         {
@@ -62,7 +65,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AliasThatPointsToRecursiveType",
         {
@@ -84,7 +90,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AliasWithMultipleAttrs",
         {
@@ -106,7 +115,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AliasedInputClass",
         {
@@ -128,7 +140,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AliasedInputClass2",
         {
@@ -150,7 +165,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AliasedInputClassNested",
         {
@@ -172,7 +190,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AliasedInputEnum",
         {
@@ -194,7 +215,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AliasedInputList",
         {
@@ -216,7 +240,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AllowedOptionals",
         {
@@ -238,7 +265,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AssertFn",
         {
@@ -260,7 +290,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AudioInput",
         {
@@ -282,7 +315,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AudioInputOpenai",
         {
@@ -304,7 +340,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "BuildLinkedList",
         {
@@ -326,7 +365,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "BuildTree",
         {
@@ -348,7 +390,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ClassThatPointsToRecursiveClassThroughAlias",
         {
@@ -370,7 +415,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ClassifyDynEnumTwo",
         {
@@ -392,7 +440,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ClassifyMessage",
         {
@@ -414,7 +465,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ClassifyMessage2",
         {
@@ -436,7 +490,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ClassifyMessage3",
         {
@@ -458,7 +515,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "Completion",
         {
@@ -480,7 +540,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "CustomTask",
         {
@@ -502,7 +565,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DescribeImage",
         {
@@ -524,7 +590,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DescribeImage2",
         {
@@ -546,7 +615,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DescribeImage3",
         {
@@ -568,7 +640,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DescribeImage4",
         {
@@ -590,7 +665,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DescribeMedia1599",
         {
@@ -612,7 +690,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DifferentiateUnions",
         {
@@ -634,7 +715,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DummyOutputFunction",
         {
@@ -656,7 +740,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DynamicFunc",
         {
@@ -678,7 +765,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DynamicInputOutput",
         {
@@ -700,7 +790,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DynamicListInputOutput",
         {
@@ -722,7 +815,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExpectFailure",
         {
@@ -744,7 +840,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractContactInfo",
         {
@@ -766,7 +865,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractEntities",
         {
@@ -788,7 +890,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractHobby",
         {
@@ -810,7 +915,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractNames",
         {
@@ -832,7 +940,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractPeople",
         {
@@ -854,7 +965,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractReceiptInfo",
         {
@@ -876,7 +990,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractResume",
         {
@@ -898,7 +1015,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractResume2",
         {
@@ -920,7 +1040,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnClassOptionalOutput",
         {
@@ -942,7 +1065,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnClassOptionalOutput2",
         {
@@ -964,7 +1090,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnEnumListOutput",
         {
@@ -986,7 +1115,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnEnumOutput",
         {
@@ -1008,7 +1140,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnLiteralClassInputOutput",
         {
@@ -1030,7 +1165,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnLiteralUnionClassInputOutput",
         {
@@ -1052,7 +1190,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnNamedArgsSingleStringOptional",
         {
@@ -1074,7 +1215,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputBool",
         {
@@ -1096,7 +1240,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputClass",
         {
@@ -1118,7 +1265,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputClassList",
         {
@@ -1140,7 +1290,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputClassNested",
         {
@@ -1162,7 +1315,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputClassWithEnum",
         {
@@ -1184,7 +1340,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputInt",
         {
@@ -1206,7 +1365,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputLiteralBool",
         {
@@ -1228,7 +1390,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputLiteralInt",
         {
@@ -1250,7 +1415,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputLiteralString",
         {
@@ -1272,7 +1440,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputStringList",
         {
@@ -1294,7 +1465,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnTestAliasedEnumOutput",
         {
@@ -1316,7 +1490,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnTestClassAlias",
         {
@@ -1338,7 +1515,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnTestNamedArgsSingleEnum",
         {
@@ -1360,7 +1540,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "GetDataType",
         {
@@ -1382,7 +1565,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "GetOrderInfo",
         {
@@ -1404,7 +1590,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "GetQuery",
         {
@@ -1426,7 +1615,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "InOutEnumMapKey",
         {
@@ -1448,7 +1640,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "InOutLiteralStringUnionMapKey",
         {
@@ -1470,7 +1665,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "InOutSingleLiteralStringMapKey",
         {
@@ -1492,7 +1690,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "JsonTypeAliasCycle",
         {
@@ -1514,7 +1715,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "LLMEcho",
         {
@@ -1536,7 +1740,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "LiteralUnionsTest",
         {
@@ -1558,7 +1765,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MakeBlockConstraint",
         {
@@ -1580,7 +1790,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MakeClassWithBlockDone",
         {
@@ -1602,7 +1815,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MakeClassWithExternalDone",
         {
@@ -1624,7 +1840,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MakeNestedBlockConstraint",
         {
@@ -1646,7 +1865,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MakeSemanticContainer",
         {
@@ -1668,7 +1890,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MapAlias",
         {
@@ -1690,7 +1915,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MergeAliasAttributes",
         {
@@ -1712,7 +1940,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MyFunc",
         {
@@ -1734,7 +1965,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "NestedAlias",
         {
@@ -1756,7 +1990,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "NullLiteralClassHello",
         {
@@ -1778,7 +2015,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "OpenAIWithAnthropicResponseHello",
         {
@@ -1800,7 +2040,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "OptionalTest_Function",
         {
@@ -1822,7 +2065,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PredictAge",
         {
@@ -1844,7 +2090,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PredictAgeBare",
         {
@@ -1866,7 +2115,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PrimitiveAlias",
         {
@@ -1888,7 +2140,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PromptTestClaude",
         {
@@ -1910,7 +2165,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PromptTestClaudeChat",
         {
@@ -1932,7 +2190,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PromptTestClaudeChatNoSystem",
         {
@@ -1954,7 +2215,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PromptTestOpenAI",
         {
@@ -1976,7 +2240,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PromptTestOpenAIChat",
         {
@@ -1998,7 +2265,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PromptTestOpenAIChatNoSystem",
         {
@@ -2020,7 +2290,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PromptTestStreaming",
         {
@@ -2042,7 +2315,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "RecursiveAliasCycle",
         {
@@ -2064,7 +2340,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "RecursiveClassWithAliasIndirection",
         {
@@ -2086,7 +2365,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "RecursiveUnionTest",
         {
@@ -2108,7 +2390,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ReturnAliasWithMergedAttributes",
         {
@@ -2130,7 +2415,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ReturnFailingAssert",
         {
@@ -2152,7 +2440,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ReturnJsonEntry",
         {
@@ -2174,7 +2465,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ReturnMalformedConstraints",
         {
@@ -2196,7 +2490,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "SchemaDescriptions",
         {
@@ -2218,7 +2515,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "SimpleRecursiveListAlias",
         {
@@ -2240,7 +2540,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "SimpleRecursiveMapAlias",
         {
@@ -2262,7 +2565,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "StreamBigNumbers",
         {
@@ -2284,7 +2590,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "StreamFailingAssertion",
         {
@@ -2306,7 +2615,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "StreamFailingCheck",
         {
@@ -2328,7 +2640,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "StreamOneBigNumber",
         {
@@ -2350,7 +2665,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "StreamUnionIntegers",
         {
@@ -2372,7 +2690,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "StreamingCompoundNumbers",
         {
@@ -2394,7 +2715,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "StructureDocument1559",
         {
@@ -2416,7 +2740,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TakeRecAliasDep",
         {
@@ -2438,7 +2765,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TellStory",
         {
@@ -2460,7 +2790,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAnthropic",
         {
@@ -2482,7 +2815,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAnthropicShorthand",
         {
@@ -2504,7 +2840,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAws",
         {
@@ -2526,7 +2865,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAwsClaude37",
         {
@@ -2548,7 +2890,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAwsInferenceProfile",
         {
@@ -2570,7 +2915,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAwsInvalidAccessKey",
         {
@@ -2592,7 +2940,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAwsInvalidProfile",
         {
@@ -2614,7 +2965,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAwsInvalidRegion",
         {
@@ -2636,7 +2990,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAwsInvalidSessionToken",
         {
@@ -2658,7 +3015,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzure",
         {
@@ -2680,7 +3040,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzureFailure",
         {
@@ -2702,7 +3065,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzureO1NoMaxTokens",
         {
@@ -2724,7 +3090,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzureO1WithMaxCompletionTokens",
         {
@@ -2746,7 +3115,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzureO1WithMaxTokens",
         {
@@ -2768,7 +3140,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzureO3NoMaxTokens",
         {
@@ -2790,7 +3165,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzureO3WithMaxCompletionTokens",
         {
@@ -2812,7 +3190,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzureWithMaxTokens",
         {
@@ -2834,7 +3215,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestCaching",
         {
@@ -2856,7 +3240,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFallbackClient",
         {
@@ -2878,7 +3265,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFallbackStrategy",
         {
@@ -2900,7 +3290,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFallbackToShorthand",
         {
@@ -2922,7 +3315,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleBool",
         {
@@ -2944,7 +3340,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleClass",
         {
@@ -2966,7 +3365,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleEnumList",
         {
@@ -2988,7 +3390,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleFloat",
         {
@@ -3010,7 +3415,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleInt",
         {
@@ -3032,7 +3440,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleMapStringToClass",
         {
@@ -3054,7 +3465,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleMapStringToMap",
         {
@@ -3076,7 +3490,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleMapStringToString",
         {
@@ -3098,7 +3515,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleString",
         {
@@ -3120,7 +3540,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleStringArray",
         {
@@ -3142,7 +3565,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleStringList",
         {
@@ -3164,7 +3590,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestGemini",
         {
@@ -3186,7 +3615,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestGeminiOpenAiGeneric",
         {
@@ -3208,7 +3640,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestGeminiSystem",
         {
@@ -3230,7 +3665,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestGeminiSystemAsChat",
         {
@@ -3252,7 +3690,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestGroq",
         {
@@ -3274,7 +3715,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestImageInput",
         {
@@ -3296,7 +3740,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestImageInputAnthropic",
         {
@@ -3318,7 +3765,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestImageListInput",
         {
@@ -3340,7 +3790,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestMemory",
         {
@@ -3362,7 +3815,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestMulticlassNamedArgs",
         {
@@ -3384,7 +3840,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestNamedArgsLiteralBool",
         {
@@ -3406,7 +3865,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestNamedArgsLiteralInt",
         {
@@ -3428,7 +3890,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestNamedArgsLiteralString",
         {
@@ -3450,7 +3915,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOllama",
         {
@@ -3472,7 +3940,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOllamaHaiku",
         {
@@ -3494,7 +3965,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAI",
         {
@@ -3516,7 +3990,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIDummyClient",
         {
@@ -3538,7 +4015,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIGPT4oMini",
         {
@@ -3560,7 +4040,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIGPT4oMini2",
         {
@@ -3582,7 +4065,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIGPT4oMini3",
         {
@@ -3604,7 +4090,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAILegacyProvider",
         {
@@ -3626,7 +4115,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIO1NoMaxTokens",
         {
@@ -3648,7 +4140,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIO1WithMaxCompletionTokens",
         {
@@ -3670,7 +4165,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIO1WithMaxTokens",
         {
@@ -3692,7 +4190,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIShorthand",
         {
@@ -3714,7 +4215,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIWithFinishReasonError",
         {
@@ -3736,7 +4240,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIWithMaxTokens",
         {
@@ -3758,7 +4265,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIWithNullMaxTokens",
         {
@@ -3780,7 +4290,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenRouterMistralSmall3_1_24b",
         {
@@ -3802,7 +4315,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestRetryConstant",
         {
@@ -3824,7 +4340,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestRetryExponential",
         {
@@ -3846,7 +4365,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestRoundRobinStrategy",
         {
@@ -3868,7 +4390,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestSingleFallbackClient",
         {
@@ -3890,7 +4415,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestThinking",
         {
@@ -3912,7 +4440,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestUniverseQuestion",
         {
@@ -3934,7 +4465,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestVertex",
         {
@@ -3956,7 +4490,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestVertexClaude",
         {
@@ -3978,7 +4515,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestVertexWithSystemInstructions",
         {
@@ -4000,7 +4540,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "UnionTest_Function",
         {
@@ -4022,7 +4565,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "UseBlockConstraint",
         {
@@ -4044,7 +4590,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "UseMaintainFieldOrder",
         {
@@ -4066,7 +4615,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "UseMalformedConstraints",
         {
@@ -4088,7 +4640,10 @@ export class HttpRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "UseNestedBlockConstraint",
         {
@@ -4116,7 +4671,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AaaSamOutputFormat",
         {
@@ -4138,7 +4696,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AliasThatPointsToRecursiveType",
         {
@@ -4160,7 +4721,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AliasWithMultipleAttrs",
         {
@@ -4182,7 +4746,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AliasedInputClass",
         {
@@ -4204,7 +4771,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AliasedInputClass2",
         {
@@ -4226,7 +4796,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AliasedInputClassNested",
         {
@@ -4248,7 +4821,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AliasedInputEnum",
         {
@@ -4270,7 +4846,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AliasedInputList",
         {
@@ -4292,7 +4871,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AllowedOptionals",
         {
@@ -4314,7 +4896,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AssertFn",
         {
@@ -4336,7 +4921,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AudioInput",
         {
@@ -4358,7 +4946,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "AudioInputOpenai",
         {
@@ -4380,7 +4971,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "BuildLinkedList",
         {
@@ -4402,7 +4996,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "BuildTree",
         {
@@ -4424,7 +5021,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ClassThatPointsToRecursiveClassThroughAlias",
         {
@@ -4446,7 +5046,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ClassifyDynEnumTwo",
         {
@@ -4468,7 +5071,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ClassifyMessage",
         {
@@ -4490,7 +5096,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ClassifyMessage2",
         {
@@ -4512,7 +5121,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ClassifyMessage3",
         {
@@ -4534,7 +5146,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "Completion",
         {
@@ -4556,7 +5171,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "CustomTask",
         {
@@ -4578,7 +5196,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DescribeImage",
         {
@@ -4600,7 +5221,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DescribeImage2",
         {
@@ -4622,7 +5246,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DescribeImage3",
         {
@@ -4644,7 +5271,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DescribeImage4",
         {
@@ -4666,7 +5296,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DescribeMedia1599",
         {
@@ -4688,7 +5321,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DifferentiateUnions",
         {
@@ -4710,7 +5346,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DummyOutputFunction",
         {
@@ -4732,7 +5371,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DynamicFunc",
         {
@@ -4754,7 +5396,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DynamicInputOutput",
         {
@@ -4776,7 +5421,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "DynamicListInputOutput",
         {
@@ -4798,7 +5446,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExpectFailure",
         {
@@ -4820,7 +5471,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractContactInfo",
         {
@@ -4842,7 +5496,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractEntities",
         {
@@ -4864,7 +5521,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractHobby",
         {
@@ -4886,7 +5546,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractNames",
         {
@@ -4908,7 +5571,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractPeople",
         {
@@ -4930,7 +5596,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractReceiptInfo",
         {
@@ -4952,7 +5621,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractResume",
         {
@@ -4974,7 +5646,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ExtractResume2",
         {
@@ -4996,7 +5671,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnClassOptionalOutput",
         {
@@ -5018,7 +5696,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnClassOptionalOutput2",
         {
@@ -5040,7 +5721,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnEnumListOutput",
         {
@@ -5062,7 +5746,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnEnumOutput",
         {
@@ -5084,7 +5771,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnLiteralClassInputOutput",
         {
@@ -5106,7 +5796,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnLiteralUnionClassInputOutput",
         {
@@ -5128,7 +5821,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnNamedArgsSingleStringOptional",
         {
@@ -5150,7 +5846,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputBool",
         {
@@ -5172,7 +5871,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputClass",
         {
@@ -5194,7 +5896,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputClassList",
         {
@@ -5216,7 +5921,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputClassNested",
         {
@@ -5238,7 +5946,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputClassWithEnum",
         {
@@ -5260,7 +5971,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputInt",
         {
@@ -5282,7 +5996,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputLiteralBool",
         {
@@ -5304,7 +6021,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputLiteralInt",
         {
@@ -5326,7 +6046,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputLiteralString",
         {
@@ -5348,7 +6071,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnOutputStringList",
         {
@@ -5370,7 +6096,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnTestAliasedEnumOutput",
         {
@@ -5392,7 +6121,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnTestClassAlias",
         {
@@ -5414,7 +6146,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "FnTestNamedArgsSingleEnum",
         {
@@ -5436,7 +6171,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "GetDataType",
         {
@@ -5458,7 +6196,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "GetOrderInfo",
         {
@@ -5480,7 +6221,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "GetQuery",
         {
@@ -5502,7 +6246,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "InOutEnumMapKey",
         {
@@ -5524,7 +6271,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "InOutLiteralStringUnionMapKey",
         {
@@ -5546,7 +6296,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "InOutSingleLiteralStringMapKey",
         {
@@ -5568,7 +6321,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "JsonTypeAliasCycle",
         {
@@ -5590,7 +6346,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "LLMEcho",
         {
@@ -5612,7 +6371,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "LiteralUnionsTest",
         {
@@ -5634,7 +6396,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MakeBlockConstraint",
         {
@@ -5656,7 +6421,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MakeClassWithBlockDone",
         {
@@ -5678,7 +6446,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MakeClassWithExternalDone",
         {
@@ -5700,7 +6471,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MakeNestedBlockConstraint",
         {
@@ -5722,7 +6496,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MakeSemanticContainer",
         {
@@ -5744,7 +6521,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MapAlias",
         {
@@ -5766,7 +6546,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MergeAliasAttributes",
         {
@@ -5788,7 +6571,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "MyFunc",
         {
@@ -5810,7 +6596,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "NestedAlias",
         {
@@ -5832,7 +6621,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "NullLiteralClassHello",
         {
@@ -5854,7 +6646,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "OpenAIWithAnthropicResponseHello",
         {
@@ -5876,7 +6671,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "OptionalTest_Function",
         {
@@ -5898,7 +6696,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PredictAge",
         {
@@ -5920,7 +6721,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PredictAgeBare",
         {
@@ -5942,7 +6746,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PrimitiveAlias",
         {
@@ -5964,7 +6771,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PromptTestClaude",
         {
@@ -5986,7 +6796,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PromptTestClaudeChat",
         {
@@ -6008,7 +6821,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PromptTestClaudeChatNoSystem",
         {
@@ -6030,7 +6846,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PromptTestOpenAI",
         {
@@ -6052,7 +6871,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PromptTestOpenAIChat",
         {
@@ -6074,7 +6896,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PromptTestOpenAIChatNoSystem",
         {
@@ -6096,7 +6921,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "PromptTestStreaming",
         {
@@ -6118,7 +6946,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "RecursiveAliasCycle",
         {
@@ -6140,7 +6971,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "RecursiveClassWithAliasIndirection",
         {
@@ -6162,7 +6996,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "RecursiveUnionTest",
         {
@@ -6184,7 +7021,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ReturnAliasWithMergedAttributes",
         {
@@ -6206,7 +7046,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ReturnFailingAssert",
         {
@@ -6228,7 +7071,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ReturnJsonEntry",
         {
@@ -6250,7 +7096,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "ReturnMalformedConstraints",
         {
@@ -6272,7 +7121,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "SchemaDescriptions",
         {
@@ -6294,7 +7146,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "SimpleRecursiveListAlias",
         {
@@ -6316,7 +7171,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "SimpleRecursiveMapAlias",
         {
@@ -6338,7 +7196,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "StreamBigNumbers",
         {
@@ -6360,7 +7221,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "StreamFailingAssertion",
         {
@@ -6382,7 +7246,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "StreamFailingCheck",
         {
@@ -6404,7 +7271,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "StreamOneBigNumber",
         {
@@ -6426,7 +7296,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "StreamUnionIntegers",
         {
@@ -6448,7 +7321,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "StreamingCompoundNumbers",
         {
@@ -6470,7 +7346,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "StructureDocument1559",
         {
@@ -6492,7 +7371,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TakeRecAliasDep",
         {
@@ -6514,7 +7396,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TellStory",
         {
@@ -6536,7 +7421,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAnthropic",
         {
@@ -6558,7 +7446,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAnthropicShorthand",
         {
@@ -6580,7 +7471,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAws",
         {
@@ -6602,7 +7496,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAwsClaude37",
         {
@@ -6624,7 +7521,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAwsInferenceProfile",
         {
@@ -6646,7 +7546,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAwsInvalidAccessKey",
         {
@@ -6668,7 +7571,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAwsInvalidProfile",
         {
@@ -6690,7 +7596,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAwsInvalidRegion",
         {
@@ -6712,7 +7621,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAwsInvalidSessionToken",
         {
@@ -6734,7 +7646,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzure",
         {
@@ -6756,7 +7671,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzureFailure",
         {
@@ -6778,7 +7696,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzureO1NoMaxTokens",
         {
@@ -6800,7 +7721,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzureO1WithMaxCompletionTokens",
         {
@@ -6822,7 +7746,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzureO1WithMaxTokens",
         {
@@ -6844,7 +7771,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzureO3NoMaxTokens",
         {
@@ -6866,7 +7796,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzureO3WithMaxCompletionTokens",
         {
@@ -6888,7 +7821,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestAzureWithMaxTokens",
         {
@@ -6910,7 +7846,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestCaching",
         {
@@ -6932,7 +7871,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFallbackClient",
         {
@@ -6954,7 +7896,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFallbackStrategy",
         {
@@ -6976,7 +7921,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFallbackToShorthand",
         {
@@ -6998,7 +7946,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleBool",
         {
@@ -7020,7 +7971,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleClass",
         {
@@ -7042,7 +7996,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleEnumList",
         {
@@ -7064,7 +8021,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleFloat",
         {
@@ -7086,7 +8046,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleInt",
         {
@@ -7108,7 +8071,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleMapStringToClass",
         {
@@ -7130,7 +8096,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleMapStringToMap",
         {
@@ -7152,7 +8121,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleMapStringToString",
         {
@@ -7174,7 +8146,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleString",
         {
@@ -7196,7 +8171,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleStringArray",
         {
@@ -7218,7 +8196,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestFnNamedArgsSingleStringList",
         {
@@ -7240,7 +8221,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestGemini",
         {
@@ -7262,7 +8246,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestGeminiOpenAiGeneric",
         {
@@ -7284,7 +8271,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestGeminiSystem",
         {
@@ -7306,7 +8296,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestGeminiSystemAsChat",
         {
@@ -7328,7 +8321,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestGroq",
         {
@@ -7350,7 +8346,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestImageInput",
         {
@@ -7372,7 +8371,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestImageInputAnthropic",
         {
@@ -7394,7 +8396,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestImageListInput",
         {
@@ -7416,7 +8421,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestMemory",
         {
@@ -7438,7 +8446,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestMulticlassNamedArgs",
         {
@@ -7460,7 +8471,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestNamedArgsLiteralBool",
         {
@@ -7482,7 +8496,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestNamedArgsLiteralInt",
         {
@@ -7504,7 +8521,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestNamedArgsLiteralString",
         {
@@ -7526,7 +8546,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOllama",
         {
@@ -7548,7 +8571,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOllamaHaiku",
         {
@@ -7570,7 +8596,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAI",
         {
@@ -7592,7 +8621,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIDummyClient",
         {
@@ -7614,7 +8646,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIGPT4oMini",
         {
@@ -7636,7 +8671,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIGPT4oMini2",
         {
@@ -7658,7 +8696,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIGPT4oMini3",
         {
@@ -7680,7 +8721,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAILegacyProvider",
         {
@@ -7702,7 +8746,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIO1NoMaxTokens",
         {
@@ -7724,7 +8771,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIO1WithMaxCompletionTokens",
         {
@@ -7746,7 +8796,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIO1WithMaxTokens",
         {
@@ -7768,7 +8821,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIShorthand",
         {
@@ -7790,7 +8846,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIWithFinishReasonError",
         {
@@ -7812,7 +8871,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIWithMaxTokens",
         {
@@ -7834,7 +8896,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenAIWithNullMaxTokens",
         {
@@ -7856,7 +8921,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestOpenRouterMistralSmall3_1_24b",
         {
@@ -7878,7 +8946,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestRetryConstant",
         {
@@ -7900,7 +8971,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestRetryExponential",
         {
@@ -7922,7 +8996,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestRoundRobinStrategy",
         {
@@ -7944,7 +9021,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestSingleFallbackClient",
         {
@@ -7966,7 +9046,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestThinking",
         {
@@ -7988,7 +9071,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestUniverseQuestion",
         {
@@ -8010,7 +9096,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestVertex",
         {
@@ -8032,7 +9121,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestVertexClaude",
         {
@@ -8054,7 +9146,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "TestVertexWithSystemInstructions",
         {
@@ -8076,7 +9171,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "UnionTest_Function",
         {
@@ -8098,7 +9196,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "UseBlockConstraint",
         {
@@ -8120,7 +9221,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "UseMaintainFieldOrder",
         {
@@ -8142,7 +9246,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "UseMalformedConstraints",
         {
@@ -8164,7 +9271,10 @@ export class HttpStreamRequest {
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
-      const env = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       return this.runtime.buildRequestSync(
         "UseNestedBlockConstraint",
         {

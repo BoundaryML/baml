@@ -163,7 +163,6 @@ describe("Streaming Tests", () => {
     let stream = b.stream.FnOutputClassNested("hi!");
     let msgs: partial_types.TestClassNested[] = [];
     for await (const msg of stream) {
-      console.log("msg", msg);
       if (msg != null) {
         msgs.push(msg);
       }
@@ -198,7 +197,6 @@ describe("Semantic Streaming Tests", () => {
       }
 
       // Test @stream.with_state.
-      console.log("msg", msg);
       if (
         msg?.class_needed.s_20_words?.value &&
         msg?.class_needed.s_20_words.value.split(" ").length < 3 &&
