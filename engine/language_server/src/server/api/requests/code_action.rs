@@ -52,7 +52,8 @@ impl SyncRequestHandler for CodeActionHandler {
             .unwrap()
             .list_functions()
             .unwrap_or_default()
-            .into_iter().find(|f| f.span.file_path == document_key.path().to_string_lossy())
+            .into_iter()
+            .find(|f| f.span.file_path == document_key.path().to_string_lossy())
             .map(|f| f.name);
 
         // Get the playground port from session settings

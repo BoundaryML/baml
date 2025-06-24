@@ -104,7 +104,8 @@ impl SyncRequestHandler for GotoDefinition {
                     if let Some(function) = guard
                         .list_functions()
                         .unwrap_or_default()
-                        .into_iter().find(|f| f.span.file_path == document_key.path().to_string_lossy())
+                        .into_iter()
+                        .find(|f| f.span.file_path == document_key.path().to_string_lossy())
                     {
                         tracing::info!("Broadcasting function change for: {}", function.name);
                         let root_path = guard.root_path().to_string_lossy().to_string();

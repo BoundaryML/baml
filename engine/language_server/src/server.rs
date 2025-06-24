@@ -399,9 +399,8 @@ impl Server {
             rt.spawn(async move {
                 loop {
                     // Check if port is available before attempting to bind
-                    let port_available = {
-                        std::net::TcpListener::bind(("127.0.0.1", playground_port)).is_ok()
-                    };
+                    let port_available =
+                        { std::net::TcpListener::bind(("127.0.0.1", playground_port)).is_ok() };
 
                     if port_available {
                         // Port is available, start the server
