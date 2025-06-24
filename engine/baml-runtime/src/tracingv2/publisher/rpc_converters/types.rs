@@ -48,7 +48,25 @@ impl<'a, T: HasFieldType> IntoRpcEvent<'a, runtime_api::BamlValue<'a>> for BamlV
             BamlValueWithMeta::Null(_) => baml_rpc::runtime_api::ValueContent::Null,
         };
 
-        baml_rpc::runtime_api::BamlValue { type_ref, value }
+        baml_rpc::runtime_api::BamlValue {
+            metadata: runtime_api::ValueMetadata {
+                type_index: match &type_ref {
+                    baml_rpc::TypeReferenceWithMetadata::Union { union_type, .. } => {
+                        match value {
+                            baml_rpc::runtime_api::ValueContent::Null => runtime_api::TypeIndex::Null,
+                            _ => {
+                                baml_log::warn!("Union type index is not set! Please talk to vbv about how to fix this.");
+                                runtime_api::TypeIndex::Index(0)
+                            },
+                        }
+                    }
+                    _ => runtime_api::TypeIndex::NotUnion,
+                },
+                type_ref: type_ref,
+                check_results: None,
+            },
+            value,
+        }
     }
 }
 

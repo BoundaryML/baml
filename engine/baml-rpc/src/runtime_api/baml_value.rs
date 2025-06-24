@@ -5,13 +5,43 @@ use ts_rs::TS;
 
 use crate::ast::type_reference::TypeReference;
 
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub enum TypeIndex {
+    NotUnion,
+    Null,
+    Index(usize),
+}
+
 // Export this to TS since we don't yet decouple this into a DB specific type or anything. What the runtime exports is what the frontend reads as far as BamlValue is concerned. If you want to decouple it, create a UIBamlValue type and do a conversion from this to the UI type.
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
 pub struct BamlValue<'a> {
-    pub type_ref: TypeReference,
+    pub metadata: ValueMetadata,
     pub value: ValueContent<'a>,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+pub enum CheckValue {
+    Bool(bool),
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+#[serde(rename_all = "snake_case")]
+pub struct ValueMetadata {
+    pub type_ref: TypeReference,
+    // if the value is a union, this index indicates which variant of the union it is
+    // None -> Not a union
+    // Some(None) -> Null
+    // Some(Some(i)) -> i
+    pub type_index: TypeIndex,
+
+    // check_name
+    pub check_results: Option<Vec<(String, CheckValue)>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
