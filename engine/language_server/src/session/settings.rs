@@ -13,6 +13,13 @@ pub(crate) type WorkspaceSettingsMap = FxHashMap<Url, ClientSettings>;
 pub struct BamlSettings {
     pub(crate) cli_path: Option<String>,
     pub(crate) generate_code_on_save: Option<String>,
+    #[serde(default = "default_enable_playground")]
+    pub enable_playground: bool,
+    pub playground_port: Option<u16>,
+}
+
+fn default_enable_playground() -> bool {
+    true
 }
 
 /// This is a direct representation of the settings schema sent by the client.

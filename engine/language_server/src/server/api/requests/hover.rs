@@ -1,4 +1,5 @@
 use lsp_types::{self as types, request as req, HoverParams, TextDocumentItem};
+use std::collections::HashMap;
 
 use crate::{
     server::{
@@ -75,6 +76,7 @@ impl SyncRequestHandler for Hover {
                 None
             }
         };
+
         Ok(hover)
     }
 }
