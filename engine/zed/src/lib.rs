@@ -1,4 +1,5 @@
 use std::fs;
+
 use zed_extension_api::{self as zed, LanguageServerId, Result, settings::LspSettings};
 
 // Follows csharp extension as a template:

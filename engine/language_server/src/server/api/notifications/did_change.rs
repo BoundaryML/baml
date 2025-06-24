@@ -1,11 +1,11 @@
-use std::time::Instant;
+use std::{collections::HashMap, time::Instant};
 
 use lsp_types::{
     notification::DidChangeTextDocument, DidChangeTextDocumentParams, PublishDiagnosticsParams,
 };
-use std::collections::HashMap;
 
 use crate::{
+    playground::broadcast_project_update,
     server::{
         api::{
             diagnostics::publish_diagnostics,
@@ -17,7 +17,6 @@ use crate::{
     },
     session::Session,
     DocumentKey,
-    playground::broadcast_project_update,
 };
 
 pub(crate) struct DidChangeTextDocumentHandler;

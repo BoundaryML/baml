@@ -1,11 +1,12 @@
+use std::sync::Arc;
+
+use anyhow::Result;
+use tokio::sync::RwLock;
+
 /// Script that runs the playground server.
 /// On the input port
 use crate::playground::definitions::PlaygroundState;
-use crate::playground::playground_server::create_server_routes;
-use crate::session::Session;
-use anyhow::Result;
-use std::sync::Arc;
-use tokio::sync::RwLock;
+use crate::{playground::playground_server::create_server_routes, session::Session};
 
 #[derive(Debug, Clone)]
 pub struct PlaygroundServer {

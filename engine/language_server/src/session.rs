@@ -31,8 +31,9 @@ mod capabilities;
 pub mod index;
 mod settings;
 
-use crate::playground::{broadcast_project_update, PlaygroundState};
 use tokio::sync::{broadcast, RwLock};
+
+use crate::playground::{broadcast_project_update, PlaygroundState};
 
 /// The global state for the LSP
 #[derive(Debug)]

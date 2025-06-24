@@ -1,14 +1,16 @@
-use crate::playground::definitions::{FrontendMessage, PlaygroundState};
-use crate::session::Session;
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
+
 use anyhow::Result;
 use futures_util::{SinkExt, StreamExt};
 use include_dir::{include_dir, Dir};
 use mime_guess::from_path;
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Arc;
 use tokio::sync::RwLock;
 use warp::{http::Response, ws::Message, Filter};
+
+use crate::{
+    playground::definitions::{FrontendMessage, PlaygroundState},
+    session::Session,
+};
 
 /// Embed at compile time everything in dist/
 // WARNING: this is a relative path, will easily break if file structure changes

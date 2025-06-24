@@ -1,13 +1,21 @@
-use crate::server::api::traits::{RequestHandler, SyncRequestHandler};
-use crate::server::api::ResultExt;
-use crate::server::client::Requester;
-use crate::server::{client::Notifier, Result};
-use crate::{DocumentKey, Session};
+use std::path::PathBuf;
+
 use lsp_types::{
     request, CodeAction, CodeActionKind, CodeActionOrCommand, CodeActionParams, Command,
 };
 use serde_json::Value;
-use std::path::PathBuf;
+
+use crate::{
+    server::{
+        api::{
+            traits::{RequestHandler, SyncRequestHandler},
+            ResultExt,
+        },
+        client::{Notifier, Requester},
+        Result,
+    },
+    DocumentKey, Session,
+};
 
 pub struct CodeActionHandler;
 

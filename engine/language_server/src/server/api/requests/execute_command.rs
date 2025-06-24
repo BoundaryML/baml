@@ -1,14 +1,20 @@
-use crate::server::api::traits::{RequestHandler, SyncRequestHandler};
-// use crate::server::api::DocumentKey;
-use crate::server::api::ResultExt;
-use crate::server::client::Requester;
-use crate::server::{client::Notifier, Result};
-use crate::Session;
+use std::time::Duration;
+
 use lsp_server::ErrorCode;
 use lsp_types::{request, ExecuteCommandParams, MessageType};
-use std::time::Duration;
 use tokio::time::sleep;
 use webbrowser;
+
+// use crate::server::api::DocumentKey;
+use crate::server::api::ResultExt;
+use crate::{
+    server::{
+        api::traits::{RequestHandler, SyncRequestHandler},
+        client::{Notifier, Requester},
+        Result,
+    },
+    Session,
+};
 
 pub struct ExecuteCommand;
 

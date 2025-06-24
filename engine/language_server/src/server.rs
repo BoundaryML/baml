@@ -4,12 +4,11 @@
 #[allow(deprecated)]
 use std::panic::PanicInfo;
 use std::{
-    sync::Arc,
     num::NonZeroUsize,
     path::PathBuf,
+    sync::Arc,
     time::{Duration, Instant},
 };
-use tokio::sync::RwLock;
 
 use log::info;
 use lsp_server::Message;
@@ -21,6 +20,7 @@ use lsp_types::{
     WorkspaceClientCapabilities, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
 use schedule::Task;
+use tokio::sync::RwLock;
 
 use self::{
     connection::{Connection, ConnectionInitializer},
@@ -39,8 +39,10 @@ mod schedule;
 
 pub(crate) use connection::ClientSender;
 
-use crate::message::try_show_message;
-use crate::playground::{PlaygroundServer, PlaygroundState};
+use crate::{
+    message::try_show_message,
+    playground::{PlaygroundServer, PlaygroundState},
+};
 
 pub type Result<T> = std::result::Result<T, api::Error>;
 
