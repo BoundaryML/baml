@@ -1,6 +1,10 @@
 {
   "folders": [
     {
+      "name": "baml",
+      "path": "."
+    },
+    {
       "path": ".github"
     },
     {
@@ -8,6 +12,9 @@
     },
     {
       "path": "engine"
+    },
+    {
+      "path": "engine/baml-schema-wasm"
     },
     {
       "path": "integ-tests"
@@ -53,9 +60,17 @@
     "git.openDiffOnClick": true,
     "python.analysis.typeCheckingMode": "strict",
     "rust-analyzer.cargo.target": "wasm32-unknown-unknown",
+    "rust-analyzer.check.command": "clippy",
     "rust-analyzer.procMacro.ignored": {
       "napi-derive": ["napi"]
     },
+    "rust-analyzer.rustfmt.overrideCommand": [
+      "rustfmt",
+      "--config",
+      "imports_granularity=Crate",
+      "--config",
+      "group_imports=StdExternalCrate"
+    ],
     "sorbet.enabled": true,
     "sorbet.lspConfigs": [
       {

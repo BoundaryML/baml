@@ -75,6 +75,14 @@
     "rust-analyzer.procMacro.ignored": {
       "napi-derive": ["napi"]
     },
+    "rust-analyzer.check.command": "clippy",
+    "rust-analyzer.rustfmt.overrideCommand": [
+      "rustfmt",
+      "--config",
+      "imports_granularity=Crate",
+      "--config",
+      "group_imports=StdExternalCrate"
+    ],
     "sorbet.enabled": true,
     "sorbet.lspConfigs": [
       {
