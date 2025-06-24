@@ -1,0 +1,15 @@
+id = "baml"
+name = "Baml"
+description = "Baml support."
+version = "0.0.1"
+schema_version = 1
+authors = ["Boundary <contact@boundaryml.com>"]
+repository = "https://github.com/BoundaryML/baml/tree/canary/engine/zed"
+
+[language_servers.baml-language-server]
+name = "Baml Language Server"
+language = "Baml"
+
+[grammars.baml]
+repository = "https://github.com/BoundaryML/tree-sitter-baml"
+commit = "3edd0d25e2cf352295ade681f4a2c2f3a9cdc58b"

@@ -108,6 +108,36 @@ impl SyncRequestHandler for CodeLens {
 
         tracing::info!("Function lenses calculated");
 
+        // Uncomment this to broadcast function change using code lens
+        // if let Some(state) = &session.playground_state {
+        //     // Get the first function from the lenses if available
+        //     if let Some(first_function) = function_lenses.first() {
+        //         if let Some(command) = &first_function.command {
+        //             if let Some(args) = &command.arguments {
+        //                 if let Some(function_name) =
+        //                     args[0].get("functionName").and_then(|v| v.as_str())
+        //                 {
+        //                     tracing::info!("Broadcasting function change for: {}", function_name);
+        //                     let root_path = project_lock.root_path().to_string_lossy().to_string();
+        //                     let state = state.clone();
+        //                     let function_name = function_name.to_string();
+        //                     if let Some(runtime) = &session.playground_runtime {
+        //                         runtime.spawn(async move {
+        //                             let _ = crate::playground::broadcast_function_change(
+        //                                 &state,
+        //                                 &root_path,
+        //                                 function_name,
+        //                                 HashMap::new(), // We don't need the files map anymore
+        //                             )
+        //                             .await;
+        //                         });
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+
         let test_case_lenses: Vec<lsp_types::CodeLens> = project_lock
             .list_testcases()
             .unwrap_or_default()

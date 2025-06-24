@@ -1,14 +1,18 @@
+mod code_action;
 mod code_lens;
 mod completion;
 mod diagnostic;
+mod execute_command;
 mod format;
 mod go_to_definition;
 mod hover;
 mod rename;
 
+pub use code_action::CodeActionHandler;
 pub use code_lens::CodeLens;
 pub(super) use completion::Completion;
 pub(super) use diagnostic::DocumentDiagnosticRequestHandler;
+pub use execute_command::ExecuteCommand;
 pub(super) use format::DocumentFormatting;
 pub use go_to_definition::GotoDefinition;
 pub(super) use hover::Hover;

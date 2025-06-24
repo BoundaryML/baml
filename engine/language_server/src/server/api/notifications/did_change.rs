@@ -1,10 +1,11 @@
-use std::time::Instant;
+use std::{collections::HashMap, time::Instant};
 
 use lsp_types::{
     notification::DidChangeTextDocument, DidChangeTextDocumentParams, PublishDiagnosticsParams,
 };
 
 use crate::{
+    playground::broadcast_project_update,
     server::{
         api::{
             diagnostics::publish_diagnostics,
@@ -62,6 +63,36 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
                 Some(notifier.clone()),
             )
             .internal_error()?;
+
+        // Broadcast update to playground clients
+        if let Some(state) = &session.playground_state {
+            let project = project.lock().unwrap();
+            let files_map: std::collections::HashMap<String, String> = project
+                .baml_project
+                .files
+                .iter()
+                .map(|(path, doc)| {
+                    let key = path.path().to_string_lossy().to_string();
+                    // If there's an unsaved version, use it
+                    let contents = project
+                        .baml_project
+                        .unsaved_files
+                        .get(path)
+                        .map(|unsaved| unsaved.contents.clone())
+                        .unwrap_or_else(|| doc.contents.clone());
+                    (key, contents)
+                })
+                .collect();
+            let root_path = project.root_path().to_string_lossy().to_string();
+            let state = state.clone();
+            if let Some(runtime) = &session.playground_runtime {
+                runtime.spawn(async move {
+                    let _ =
+                        crate::playground::broadcast_project_update(&state, &root_path, files_map)
+                            .await;
+                });
+            }
+        }
 
         tracing::info!("publishing diagnostics");
 

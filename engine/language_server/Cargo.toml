@@ -71,6 +71,13 @@ simple-logging = "2.0.2"
 itertools = "0.14.0"
 url.workspace = true
 
+tokio = { version = "1.36", features = ["full"] }
+warp = "0.3"
+futures-util = "0.3"
+include_dir = "0.7"
+mime_guess = "2.0.4"
+
+webbrowser = "0.8"
 
 [dev-dependencies]
 insta = { version = "1.42.1" }
