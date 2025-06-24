@@ -6,7 +6,6 @@ use ts_rs::TS;
 use crate::ast::type_reference::TypeReference;
 
 // Export this to TS since we don't yet decouple this into a DB specific type or anything. What the runtime exports is what the frontend reads as far as BamlValue is concerned. If you want to decouple it, create a UIBamlValue type and do a conversion from this to the UI type.
-// TODO: aaron: seems redudant that we have the 'type' information in both the type_ref and the value.type.
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
