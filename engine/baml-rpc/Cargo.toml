@@ -27,7 +27,7 @@ eventsource-stream = "0.2.3"
 futures.workspace = true
 http.workspace = true
 http-body.workspace = true
-indexmap.workspace = true
+indexmap = { workspace = true, features = ["serde"] }
 indoc.workspace = true
 log.workspace = true
 num = "0.4"
@@ -40,7 +40,7 @@ strsim = "0.11.1"
 strum.workspace = true
 strum_macros.workspace = true
 time.workspace = true
-ts-rs = "10.1"
+ts-rs = { version = "11.0.0", features = ["indexmap-impl"] }
 type-safe-id = "0.3.2"
 uuid = { version = "1.8.0", features = ["v4", "serde"] }
 web-time.workspace = true

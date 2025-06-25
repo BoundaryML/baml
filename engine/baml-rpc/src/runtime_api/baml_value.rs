@@ -1,5 +1,6 @@
 use std::borrow::Cow;
 
+use indexmap::IndexMap;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -41,7 +42,7 @@ pub struct ValueMetadata {
     pub type_index: TypeIndex,
 
     // check_name
-    pub check_results: Option<Vec<(String, CheckValue)>>,
+    pub check_results: Option<IndexMap<String, CheckValue>>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -54,9 +55,12 @@ pub enum ValueContent<'a> {
     Int(i64),
     Boolean(bool),
     List(Vec<BamlValue<'a>>),
-    Map(Vec<(String, BamlValue<'a>)>),
+    Map(IndexMap<String, BamlValue<'a>>),
+    // It's easier to query class with the classname.property1.property2.property3 in the DB
+    // so we use a flattened map here.
     Class {
-        fields: Vec<(String, BamlValue<'a>)>,
+        #[serde(flatten)]
+        fields: IndexMap<String, BamlValue<'a>>,
     },
     Enum {
         value: String,

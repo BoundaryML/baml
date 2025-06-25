@@ -82,8 +82,8 @@ pub enum TypeReferenceWithMetadata<Metadata> {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Hash, TS)]
 pub struct UnionType<Metadata> {
-    types: Vec<TypeReferenceWithMetadata<Metadata>>,
-    is_nullable: bool,
+    pub types: Vec<TypeReferenceWithMetadata<Metadata>>,
+    pub is_nullable: bool,
 }
 
 type CheckedType = NarrowingType<String>;
