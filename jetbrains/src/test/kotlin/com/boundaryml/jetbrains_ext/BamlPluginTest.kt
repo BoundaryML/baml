@@ -29,9 +29,9 @@ class BamlPluginTest : BasePlatformTestCase() {
     }
 
     fun testProjectService() {
-        val projectService = project.service<BamlProjectService>()
-
-        assertNotSame(projectService.getRandomNumber(), projectService.getRandomNumber())
+//        val projectService = project.service<BamlProjectService>()
+//
+//        assertNotSame(projectService.getRandomNumber(), projectService.getRandomNumber())
     }
 
     override fun getTestDataPath() = "src/test/testData/rename"

@@ -67,6 +67,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
         }
         request::Completion::METHOD => local_request_task::<request::Completion>(req),
         request::CodeLens::METHOD => local_request_task::<request::CodeLens>(req),
+        request::CodeLensResolve::METHOD => local_request_task::<request::CodeLensResolve>(req),
         request::GotoDefinition::METHOD => local_request_task::<request::GotoDefinition>(req),
         request::Rename::METHOD => local_request_task::<request::Rename>(req),
         request::DocumentDiagnosticRequestHandler::METHOD => {

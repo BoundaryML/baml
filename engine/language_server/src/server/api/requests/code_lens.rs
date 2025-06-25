@@ -127,7 +127,6 @@ impl SyncRequestHandler for CodeLens {
         //                                 &state,
         //                                 &root_path,
         //                                 function_name,
-        //                                 HashMap::new(), // We don't need the files map anymore
         //                             )
         //                             .await;
         //                         });
@@ -170,5 +169,22 @@ impl SyncRequestHandler for CodeLens {
 
         function_lenses.extend(test_case_lenses);
         Ok(Some(function_lenses))
+    }
+}
+
+pub struct CodeLensResolve;
+
+impl RequestHandler for CodeLensResolve {
+    type RequestType = request::CodeLensResolve;
+}
+
+impl SyncRequestHandler for CodeLensResolve {
+    fn run(
+        session: &mut Session,
+        notifier: Notifier,
+        _requester: &mut Requester,
+        params: lsp_types::CodeLens,
+    ) -> Result<lsp_types::CodeLens> {
+        Ok(params)
     }
 }

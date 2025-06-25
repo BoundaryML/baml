@@ -135,7 +135,42 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
       setOrchestratorIndex(0)
     }
   }, [selectedFunc])
-  console.log('selectedFunc', selectedFunc)
+  // console.log('selectedFunc', selectedFunc)
+
+  useEffect(() => {
+    // Only open websocket if not in VSCode webview
+    if (isVSCodeWebview) {
+      setIsConnected(true)
+      // return
+    }
+
+    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    const ws = new WebSocket(`${scheme}://${window.location.host}/ws`)
+
+    ws.onopen = () => {
+      console.log('WebSocket Opened')
+      setIsConnected(true)
+    }
+    ws.onmessage = (e) => {
+      console.log('Websocket recieved message!')
+      try {
+        const payload = JSON.parse(e.data)
+        window.postMessage(payload, '*')
+      } catch (err) {
+        console.error('invalid WS payload', err)
+      }
+    }
+    ws.onclose = () => {
+      console.log('WebSocket Closed')
+      setIsConnected(false)
+    }
+    ws.onerror = () => {
+      console.error('WebSocket error')
+      setIsConnected(false)
+    }
+
+    return () => ws.close()
+  }, [setIsConnected, isVSCodeWebview])
 
   useEffect(() => {
     // Only open websocket if not in VSCode webview

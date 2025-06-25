@@ -9,7 +9,7 @@ mod hover;
 mod rename;
 
 pub use code_action::CodeActionHandler;
-pub use code_lens::CodeLens;
+pub use code_lens::{CodeLens, CodeLensResolve};
 pub(super) use completion::Completion;
 pub(super) use diagnostic::DocumentDiagnosticRequestHandler;
 pub use execute_command::ExecuteCommand;
