@@ -15,8 +15,9 @@ junit = { group = "junit", name = "junit", version.ref = "junit" }
 opentest4j = { group = "org.opentest4j", name = "opentest4j", version.ref = "opentest4j" }
 
 [plugins]
-changelog = { id = "org.jetbrains.changelog", version.ref = "changelog" }
-intelliJPlatform = { id = "org.jetbrains.intellij.platform", version.ref = "intelliJPlatform" }
-kotlin = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
-kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
-qodana = { id = "org.jetbrains.qodana", version.ref = "qodana" }
+changelog   = { id = "org.jetbrains.changelog",               version.ref = "changelog" }
+intelliJPlatform = { id = "org.jetbrains.intellij.platform",  version.ref = "intelliJPlatform" }
+kotlin      = { id = "org.jetbrains.kotlin.jvm",              version.ref = "kotlin" }
+kotlinSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+kover       = { id = "org.jetbrains.kotlinx.kover",           version.ref = "kover" }
+qodana      = { id = "org.jetbrains.qodana",                  version.ref = "qodana" }

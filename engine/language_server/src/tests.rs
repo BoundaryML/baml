@@ -41,7 +41,7 @@ mod tests {
             let test_server = new_test_server(NonZeroUsize::new(1).unwrap())?;
             eprintln!("about to loop");
             for (file_name, file_content) in self.files {
-                let _resp = test_server.sender.send(lsp_server::Message::Notification(
+                test_server.sender.send(lsp_server::Message::Notification(
                     lsp_server::Notification {
                         method: "textDocument/didOpen".to_string(),
                         params: json!({

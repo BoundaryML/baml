@@ -53,6 +53,9 @@ jobs:
       - name: Check TS Lint
         run: pnpm biome ci . --organize-imports-enabled=false
         working-directory: typescript
+      - name: Build web-panel for language server
+        run: bash ./scripts/build.sh
+        working-directory: engine/language_server
       - name: Check Rust Formatter
         # rustfmt can only run unstable features on stable toolchains if passed
         # through CLI. We don't want to download 2 toolchains just for this.
@@ -82,12 +85,19 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+      - run: rustup target add wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
       - name: Install Node
         run: pnpm install --frozen-lockfile
         working-directory: engine/language_client_typescript
+      # This step is necessary to guarantee that the language server has a frontend to embed.
+      # Is also included in build and integ-tests steps.
+      - name: Build web-panel for language server
+        run: bash ./scripts/build.sh
+        working-directory: engine/language_server
+      # ------------------------------------------------------------
       - name: Build Node
         run: pnpm build:debug
         working-directory: engine/language_client_typescript
@@ -122,6 +132,21 @@ jobs:
       - name: Ensure No Changes (3 of 3)
         run: |
           git diff --exit-code || (echo "::error:: merge canary and run codegen again" && exit 1)
+  build-wasm:
+      runs-on: ubuntu-latest
+      steps:
+        - uses: actions/checkout@v4
+        - uses: jdx/mise-action@v2
+        - uses: dtolnay/rust-toolchain@stable
+          with:
+            toolchain: stable
+        - run: rustup target add wasm32-unknown-unknown
+        - uses: Swatinem/rust-cache@v2
+          with:
+            workspaces: engine
+        - name: Build rust for wasm32
+          run: cargo build --target=wasm32-unknown-unknown
+          working-directory: engine/baml-schema-wasm
   build:
     runs-on: ubuntu-latest
     steps:
@@ -130,6 +155,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+      - run: rustup target add wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
@@ -162,25 +188,13 @@ jobs:
       #   env:
       #     SRB_YES: "1"
       #   run: bundle exec tapioca init
+      - name: Build web-panel for language server
+        run: bash ./scripts/build.sh
+        working-directory: engine/language_server
       - name: Test Rust
         # skip doctests & integration tests (the latter require OPENAI_API_KEY and ANTHROPIC_API_KEY to be set)
         run: cargo test --lib
         working-directory: engine
-  build-wasm:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v2
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          toolchain: stable
-      - run: rustup target add wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          workspaces: engine
-      - name: Build rust for wasm32
-        run: cargo build --target=wasm32-unknown-unknown
-        working-directory: engine/baml-schema-wasm
   integ-tests:
     runs-on: ubuntu-latest
     steps:
@@ -193,9 +207,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
+      - run: rustup target add wasm32-unknown-unknown
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
+      - name: Build web-panel for language server
+        run: bash ./scripts/build.sh
+        working-directory: engine/language_server
       - name: run python tests
         run: |
           cd integ-tests/python

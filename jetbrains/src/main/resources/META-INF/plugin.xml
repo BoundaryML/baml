@@ -6,8 +6,28 @@
 
     <depends>com.intellij.modules.platform</depends>
     <depends>org.jetbrains.plugins.textmate</depends>
+    <depends>com.redhat.devtools.lsp4ij</depends>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
+    <resource-bundle>messages.BamlBundle</resource-bundle>
+
+    <actions>
+        <action
+                id="baml.openBamlPanel"
+                class="com.boundaryml.jetbrains_ext.OpenBamlPlaygroundAction"
+                text="Open BAML Playground"
+                description="Opens an interactive playground for running and testing BAML code."
+                icon="/icons/baml-lamb-light-mode.svg"
+        >
+        </action>
+        <action
+                id="baml.runBamlTest"
+                class="com.boundaryml.jetbrains_ext.RunBamlTestAction"
+                text="Run BAML Test"
+                description="Opens the BAML playground and runs the specified test."
+                icon="/icons/baml-lamb-light-mode.svg"
+                >
+        </action>
+    </actions>
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow
@@ -38,5 +58,8 @@
 
     </extensions>
 
+
+    <xi:include xmlns:xi="http://www.w3.org/2001/XInclude" href="/META-INF/baml-lsp4ij.xml"
+                xpointer="xpointer(/idea-plugin/*)"/>
 
 </idea-plugin>

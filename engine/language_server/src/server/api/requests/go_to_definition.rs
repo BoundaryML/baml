@@ -97,6 +97,33 @@ impl SyncRequestHandler for GotoDefinition {
                     uri: target_uri,
                     range,
                 });
+
+                // Broadcast function change to playground clients
+                if let Some(state) = &session.playground_state {
+                    // Get the first function from the current file if available
+                    if let Some(function) = guard
+                        .list_functions()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .find(|f| f.span.file_path == document_key.path().to_string_lossy())
+                    {
+                        tracing::info!("Broadcasting function change for: {}", function.name);
+                        let root_path = guard.root_path().to_string_lossy().to_string();
+                        let state = state.clone();
+                        let function_name = function.name.clone();
+                        if let Some(runtime) = &session.playground_runtime {
+                            runtime.spawn(async move {
+                                let _ = crate::playground::broadcast_function_change(
+                                    &state,
+                                    &root_path,
+                                    function_name,
+                                )
+                                .await;
+                            });
+                        }
+                    }
+                }
+
                 Ok(Some(goto_definition_response))
             }
         }

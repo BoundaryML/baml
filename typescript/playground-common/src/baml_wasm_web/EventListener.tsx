@@ -4,7 +4,7 @@ import 'react18-json-view/src/style.css'
 
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { atomWithStorage } from 'jotai/utils'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import CustomErrorBoundary from '../utils/ErrorFallback'
 import { vscodeLocalStorageStore } from './JotaiProvider'
 import { vscode } from '@/shared/baml-project-panel/vscode'
@@ -78,12 +78,37 @@ const ErrorCount: React.FC = () => {
   )
 }
 
+export const isConnectedAtom = atom(true)
+
+const ConnectionStatus: React.FC = () => {
+  const isConnected = useAtomValue(isConnectedAtom)
+
+  if (isConnected || vscode.isVscode()) return null
+
+  return (
+    <div className='fixed top-0 left-0 right-0 bg-red-600 text-white p-2 flex items-center justify-between z-50'>
+      <div className='flex items-center gap-2'>
+        <XCircle size={16} />
+        <span>Disconnected from LSP server</span>
+      </div>
+      <button
+        onClick={() => window.location.reload()}
+        className='px-3 py-1 bg-white text-red-600 rounded hover:bg-red-50 transition-colors'
+      >
+        Reconnect
+      </button>
+    </div>
+  )
+}
+
 // We don't use ASTContext.provider because we should the default value of the context
 export const EventListener: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const updateCursor = useSetAtom(updateCursorAtom)
   const setFiles = useSetAtom(filesAtom)
   const debouncedSetFiles = useDebounceCallback(setFiles, 50, true)
   const setFlashRanges = useSetAtom(flashRangesAtom)
+  const setIsConnected = useSetAtom(isConnectedAtom)
+  const isVSCodeWebview = vscode.isVscode()
 
   const [selectedFunc, setSelectedFunction] = useAtom(selectedFunctionAtom)
   const setSelectedTestcase = useSetAtom(selectedTestcaseAtom)
@@ -110,20 +135,84 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
       setOrchestratorIndex(0)
     }
   }, [selectedFunc])
-  console.log('selectedFunc', selectedFunc)
+  // console.log('selectedFunc', selectedFunc)
+
+  useEffect(() => {
+    // Only open websocket if not in VSCode webview
+    if (isVSCodeWebview) {
+      setIsConnected(true)
+      // return
+    }
+
+    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    const ws = new WebSocket(`${scheme}://${window.location.host}/ws`)
+
+    ws.onopen = () => {
+      console.log('WebSocket Opened')
+      setIsConnected(true)
+    }
+    ws.onmessage = (e) => {
+      console.log('Websocket recieved message!')
+      try {
+        const payload = JSON.parse(e.data)
+        window.postMessage(payload, '*')
+      } catch (err) {
+        console.error('invalid WS payload', err)
+      }
+    }
+    ws.onclose = () => {
+      console.log('WebSocket Closed')
+      setIsConnected(false)
+    }
+    ws.onerror = () => {
+      console.error('WebSocket error')
+      setIsConnected(false)
+    }
+
+    return () => ws.close()
+  }, [setIsConnected, isVSCodeWebview])
+
+  useEffect(() => {
+    // Only open websocket if not in VSCode webview
+    if (isVSCodeWebview) {
+      setIsConnected(true)
+      // return
+    }
+
+    const scheme = window.location.protocol === 'https:' ? 'wss' : 'ws'
+    const ws = new WebSocket(`${scheme}://${window.location.host}/ws`)
+
+    ws.onopen = () => {
+      console.log('WebSocket Opened')
+      setIsConnected(true)
+    }
+    ws.onmessage = (e) => {
+      console.log('Websocket recieved message!')
+      try {
+        const payload = JSON.parse(e.data)
+        window.postMessage(payload, '*')
+      } catch (err) {
+        console.error('invalid WS payload', err)
+      }
+    }
+    ws.onclose = () => {
+      console.log('WebSocket Closed')
+      setIsConnected(false)
+    }
+    ws.onerror = () => {
+      console.error('WebSocket error')
+      setIsConnected(false)
+    }
+
+    return () => ws.close()
+  }, [setIsConnected, isVSCodeWebview])
+
+  console.log('Websocket execution finished')
 
   useEffect(() => {
     console.log('adding event listener')
     const fn = (
       event: MessageEvent<
-        | {
-            command: 'modify_file'
-            content: {
-              root_path: string
-              name: string
-              content: string | undefined
-            }
-          }
         | {
             command: 'add_project'
             content: {
@@ -254,6 +343,7 @@ export const EventListener: React.FC<{ children: React.ReactNode }> = ({ childre
 
   return (
     <>
+      <ConnectionStatus />
       <div className='flex absolute right-2 bottom-2 z-50 flex-row gap-2 text-xs bg-transparent'>
         <div className='pr-4 whitespace-nowrap'>{bamlCliVersion && 'baml-cli ' + bamlCliVersion}</div>
         <ErrorCount /> <span className='text-muted-foreground text-[10px]'>VSCode Runtime Version: {version}</span>

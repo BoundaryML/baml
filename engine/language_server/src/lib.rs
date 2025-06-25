@@ -11,8 +11,9 @@ use crate::server::Server;
 #[macro_use]
 mod message;
 
-mod edit;
-mod logging;
+pub mod edit;
+pub mod logging;
+pub mod playground;
 pub mod server;
 pub mod session;
 #[cfg(test)]

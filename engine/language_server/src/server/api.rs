@@ -53,13 +53,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
     let id = req.id.clone();
 
     match req.method.as_str() {
-        // request::CodeActions::METHOD => background_request_task::<request::CodeActions>(
-        //     req,
-        //     BackgroundSchedule::LatencySensitive,
-        // ),
-        // request::CodeActionResolve::METHOD => {
-        //     background_request_task::<request::CodeActionResolve>(req, BackgroundSchedule::Worker)
-        // }
+        request::CodeActionHandler::METHOD => local_request_task::<request::CodeActionHandler>(req),
         "bamlCliVersion" => {
             let version = env!("CARGO_PKG_VERSION");
             return Task::local(move |_, _, _, responder| {
@@ -73,6 +67,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
         }
         request::Completion::METHOD => local_request_task::<request::Completion>(req),
         request::CodeLens::METHOD => local_request_task::<request::CodeLens>(req),
+        request::CodeLensResolve::METHOD => local_request_task::<request::CodeLensResolve>(req),
         request::GotoDefinition::METHOD => local_request_task::<request::GotoDefinition>(req),
         request::Rename::METHOD => local_request_task::<request::Rename>(req),
         request::DocumentDiagnosticRequestHandler::METHOD => {
@@ -164,8 +159,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                 })
             });
         }
-
-        // request::ExecuteCommand::METHOD => local_request_task::<request::ExecuteCommand>(req),
+        request::ExecuteCommand::METHOD => local_request_task::<request::ExecuteCommand>(req),
         // request::Format::METHOD => {
         //     background_request_task::<request::Format>(req, BackgroundSchedule::Fmt)
         // }

@@ -38,7 +38,13 @@ class BamlTextMateBundleProvider : TextMateBundleProvider {
     // and (2) build system shenanigans in jetbrains-plugin-fss for packaging the tmbundle.
     override fun getBundles(): List<PluginBundle> {
         try {
-            val tmpDir: Path = Files.createTempDirectory(Path.of(PathManager.getTempPath()), "textmate-baml")
+            val tempPath = Path.of(PathManager.getTempPath())
+            // Ensure the temp directory exists
+            if (!Files.exists(tempPath)) {
+                Files.createDirectories(tempPath)
+            }
+            
+            val tmpDir: Path = Files.createTempDirectory(tempPath, "textmate-baml")
 
             files.forEach { fileToCopy ->
                 val resource: URL? = javaClass.classLoader.getResource("textmate/$fileToCopy")
