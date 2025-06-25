@@ -55,6 +55,25 @@ pub fn ir_type_alias_to_ts_interface<'a>(
                 pkg,
             })
         }
+        TypeGeneric::Union(union_type, _) => {
+            // Check if this union contains a map that we can extract as an interface
+            for variant in union_type.iter_skip_null() {
+                if let TypeGeneric::Map(_, value_type, _) = variant {
+                    // Found a map in the union - create an interface that extends the union but as an index signature
+                    return Some(TypeAliasInterfaceTS {
+                        name: alias.elem.name.clone(),
+                        value_type: ir_to_ts::type_to_ts(&alias.elem.r#type.elem, pkg.lookup()),
+                        docstring: alias
+                            .elem
+                            .docstring
+                            .clone()
+                            .map(|docstring| docstring.0.clone()),
+                        pkg,
+                    });
+                }
+            }
+            None
+        }
         _ => None,
     }
 }
@@ -79,6 +98,25 @@ pub fn ir_type_alias_to_ts_interface_stream<'a>(
                     .map(|docstring| docstring.0.clone()),
                 pkg,
             })
+        }
+        TypeGeneric::Union(union_type, _) => {
+            // Check if this union contains a map that we can extract as an interface
+            for variant in union_type.iter_skip_null() {
+                if let TypeGeneric::Map(_, value_type, _) = variant {
+                    // Found a map in the union - create an interface that extends the union but as an index signature
+                    return Some(TypeAliasInterfaceTS {
+                        name: alias.elem.name.clone(),
+                        value_type: ir_to_ts::stream_type_to_ts(&partialized, pkg.lookup()),
+                        docstring: alias
+                            .elem
+                            .docstring
+                            .clone()
+                            .map(|docstring| docstring.0.clone()),
+                        pkg,
+                    });
+                }
+            }
+            None
         }
         _ => None,
     }

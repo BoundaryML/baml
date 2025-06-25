@@ -19,17 +19,17 @@ import {
   YamlRenderer,
 } from './format-renderers';
 
-type ResponseCardProps = {
-  hookResult: HookOutput<FunctionNames>;
+type ResponseCardProps<TFunctionName extends FunctionNames = FunctionNames> = {
+  hookResult: HookOutput<TFunctionName>;
   hasStarted: boolean;
   functionName?: FunctionNames; // Keep this optional since we don't use it anymore
 };
 
-export function ResponseCard({
+export function ResponseCard<TFunctionName extends FunctionNames = FunctionNames>({
   hookResult,
   hasStarted,
   functionName,
-}: ResponseCardProps) {
+}: ResponseCardProps<TFunctionName>) {
   const {
     isLoading,
     error,

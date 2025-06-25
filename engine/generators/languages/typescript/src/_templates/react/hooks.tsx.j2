@@ -374,7 +374,9 @@ export function use{{ func.name }}(
   let action: ServerAction = Actions.{{ func.name }};
   if (isStreamingProps(props)) {
     action = StreamingActions.{{ func.name }};
+    return useBamlAction(action, props)
+  } else {
+    return useBamlAction(action, props as HookInput<'{{ func.name }}', { stream: false }>)
   }
-  return useBamlAction(action, props as HookInput)
 }
 {%- endfor %}

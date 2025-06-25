@@ -849,8 +849,6 @@ export type RecAliasTwo = RecAliasThree
 
 export type RecursiveListAlias = RecursiveListAlias[]
 
-export type RecursiveUnion = string | Record<string, RecursiveUnion>
-
 export interface JsonObject {
   [key: string]: JsonValue
 }
@@ -861,4 +859,8 @@ export interface JsonTemplate {
 
 export interface RecursiveMapAlias {
   [key: string]: RecursiveMapAlias
+}
+
+export interface RecursiveUnion {
+  [key: string]: string | Record<string, RecursiveUnion>
 }
