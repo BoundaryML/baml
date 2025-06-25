@@ -1,0 +1,23 @@
+#!/bin/bash
+#
+# Install Git hooks for the BAML project
+#
+
+set -e
+
+# Get the repository root
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+echo "Installing Git hooks..."
+
+# Copy hooks to .git/hooks/
+cp "$REPO_ROOT/tools/hooks/pre-commit" "$REPO_ROOT/.git/hooks/pre-commit"
+
+# Make sure they're executable
+chmod +x "$REPO_ROOT/.git/hooks/pre-commit"
+
+echo "✓ Pre-commit hook installed successfully!"
+echo ""
+echo "This hook will run 'cargo fmt' with import organization before each commit."
+echo "If formatting changes are made, you'll need to review and re-commit."
+ 
