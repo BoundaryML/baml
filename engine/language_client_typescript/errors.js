@@ -1,9 +1,7 @@
 "use strict";
 // NOTE: Don't take a dependency on ./native here, it will break the browser code
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.BamlClientHttpError = exports.BamlValidationError = exports.BamlClientFinishReasonError = void 0;
-exports.isBamlError = isBamlError;
-exports.toBamlError = toBamlError;
+exports.toBamlError = exports.isBamlError = exports.BamlClientHttpError = exports.BamlValidationError = exports.BamlClientFinishReasonError = void 0;
 class BamlClientFinishReasonError extends Error {
     prompt;
     raw_output;
@@ -156,6 +154,7 @@ function isBamlError(error) {
         error instanceof BamlValidationError ||
         error instanceof BamlClientFinishReasonError);
 }
+exports.isBamlError = isBamlError;
 function toBamlError(error) {
     try {
         if (isBamlError(error)) {
@@ -167,4 +166,5 @@ function toBamlError(error) {
         return error;
     }
 }
+exports.toBamlError = toBamlError;
 // No need for a separate throwBamlValidationError function in TypeScript

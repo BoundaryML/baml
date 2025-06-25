@@ -382,11 +382,7 @@ fn add_js_suffix_to_imports(content: &str) -> String {
                !path.ends_with(".json")
             {
                 // Remove existing .ts if present before adding .js
-                let base_path = if path.ends_with(".ts") {
-                    &path[..path.len() - 3]
-                } else {
-                    path
-                };
+                let base_path = path.strip_suffix(".ts").unwrap_or(path);
                 // Append .js
                 format!("{import_export_part}{quote}{base_path}.js{closing_quote}")
             } else {
