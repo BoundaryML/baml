@@ -1,8 +1,6 @@
 use internal_baml_core::ir::Enum;
 
-pub fn ir_enum_to_ts(
-    enum_: &Enum,
-) -> crate::generated_types::EnumTS {
+pub fn ir_enum_to_ts(enum_: &Enum) -> crate::generated_types::EnumTS {
     crate::generated_types::EnumTS {
         name: enum_.elem.name.clone(),
         values: enum_

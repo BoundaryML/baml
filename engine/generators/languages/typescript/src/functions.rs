@@ -129,8 +129,7 @@ pub fn render_globals(_pkg: &CurrentRenderPackage) -> Result<String, askama::Err
 
 #[derive(askama::Template)]
 #[template(path = "config.ts.j2", escape = "none", ext = "txt")]
-struct Config<> {
-}
+struct Config {}
 
 pub fn render_config() -> Result<String, askama::Error> {
     Config {}.render()
@@ -195,11 +194,7 @@ pub fn render_react_hooks(
     functions: &[FunctionTS],
     pkg: &CurrentRenderPackage,
 ) -> Result<String, askama::Error> {
-    ReactHooks {
-        functions,
-        pkg,
-    }
-    .render()
+    ReactHooks { functions, pkg }.render()
 }
 
 #[derive(askama::Template)]
@@ -255,7 +250,7 @@ struct ReactServerStreamingTypes<'a> {
 pub fn render_react_server_streaming_types(
     functions: &[FunctionTS],
     types: &[String],
-    pkg: &CurrentRenderPackage
+    pkg: &CurrentRenderPackage,
 ) -> Result<String, askama::Error> {
     let mut streaming_types: IndexMap<String, String> = functions
         .iter()
@@ -278,4 +273,3 @@ struct ReactMedia;
 pub fn render_react_media() -> Result<String, askama::Error> {
     ReactMedia.render()
 }
-

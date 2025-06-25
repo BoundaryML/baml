@@ -313,4 +313,4 @@ pub(crate) fn render_type_builder(
 pub use class::{ClassTS, FieldTS};
 pub use r#enum::EnumTS;
 // pub use union::{UnionTS, VariantTS};
-pub use type_aliases::{TypeAliasTS, TypeAliasInterfaceTS};
+pub use type_aliases::{TypeAliasInterfaceTS, TypeAliasTS};
