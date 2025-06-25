@@ -1057,23 +1057,26 @@ impl IntermediateRepr {
     fn type_directly_references_self(&self, field_type: &FieldType, alias_name: &str) -> bool {
         use baml_types::ir_type::TypeGeneric;
 
-        match field_type {
-            TypeGeneric::RecursiveTypeAlias { name, .. } => name == alias_name,
+        fn check_type_inner(field_type: &FieldType, alias_name: &str) -> bool {
+            match field_type {
+                TypeGeneric::RecursiveTypeAlias { name, .. } => name == alias_name,
 
-            TypeGeneric::Union(union_type, _) => union_type
-                .iter_skip_null()
-                .into_iter()
-                .any(|t| self.type_directly_references_self(t, alias_name)),
+                TypeGeneric::Union(union_type, _) => union_type
+                    .iter_skip_null()
+                    .into_iter()
+                    .any(|t| check_type_inner(t, alias_name)),
 
-            TypeGeneric::Map(key, value, _) => {
-                self.type_directly_references_self(key, alias_name)
-                    || self.type_directly_references_self(value, alias_name)
+                TypeGeneric::Map(key, value, _) => {
+                    check_type_inner(key, alias_name) || check_type_inner(value, alias_name)
+                }
+
+                TypeGeneric::List(inner, _) => check_type_inner(inner, alias_name),
+
+                _ => false,
             }
-
-            TypeGeneric::List(inner, _) => self.type_directly_references_self(inner, alias_name),
-
-            _ => false,
         }
+
+        check_type_inner(field_type, alias_name)
     }
 
     /// Checks if a type references any members of the given cycle
@@ -1084,27 +1087,28 @@ impl IntermediateRepr {
     ) -> bool {
         use baml_types::ir_type::TypeGeneric;
 
-        match field_type {
-            TypeGeneric::RecursiveTypeAlias { name, .. } => cycle.contains_key(name),
+        fn check_cycle_inner(field_type: &FieldType, cycle: &IndexMap<String, FieldType>) -> bool {
+            match field_type {
+                TypeGeneric::RecursiveTypeAlias { name, .. } => cycle.contains_key(name),
 
-            TypeGeneric::List(inner, _) => self.type_references_cycle_members(inner, cycle),
+                TypeGeneric::List(inner, _) => check_cycle_inner(inner, cycle),
 
-            TypeGeneric::Map(key, value, _) => {
-                self.type_references_cycle_members(key, cycle)
-                    || self.type_references_cycle_members(value, cycle)
+                TypeGeneric::Map(key, value, _) => {
+                    check_cycle_inner(key, cycle) || check_cycle_inner(value, cycle)
+                }
+
+                TypeGeneric::Union(union_type, _) => union_type
+                    .iter_skip_null()
+                    .into_iter()
+                    .any(|t| check_cycle_inner(t, cycle)),
+
+                TypeGeneric::Tuple(types, _) => types.iter().any(|t| check_cycle_inner(t, cycle)),
+
+                _ => false,
             }
-
-            TypeGeneric::Union(union_type, _) => union_type
-                .iter_skip_null()
-                .into_iter()
-                .any(|t| self.type_references_cycle_members(t, cycle)),
-
-            TypeGeneric::Tuple(types, _) => types
-                .iter()
-                .any(|t| self.type_references_cycle_members(t, cycle)),
-
-            _ => false,
         }
+
+        check_cycle_inner(field_type, cycle)
     }
 
     /// Gets a mapping of alias names to whether they should be interfaces in TypeScript
