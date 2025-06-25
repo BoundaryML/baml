@@ -1,9 +1,13 @@
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
-#[derive(Debug, PartialEq, Eq, Hash, Deserialize, Serialize, Clone, TS, strum::Display, strum::EnumString)]
+#[derive(
+    Debug, PartialEq, Eq, Hash, Deserialize, Serialize, Clone, TS, strum::Display, strum::EnumString,
+)]
 #[ts(export)]
 #[serde(rename_all = "snake_case")]
+// To ensure that from_str works correctly, we need to use snake_case for the enum values
+#[strum(serialize_all = "snake_case")]
 pub enum AstNodeIdType {
     Ast,
     Function,
@@ -120,6 +124,8 @@ impl std::str::FromStr for AstNodeId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts = s.split("##").collect::<Vec<_>>();
+        println!("ast node id: {}", s);
+        println!("parts: {:?}", parts);
         if parts.len() != 4 {
             return Err(anyhow::anyhow!("Invalid unique id: {}", s));
         }
