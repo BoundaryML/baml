@@ -1,7 +1,13 @@
 {
   "$schema": "./node_modules/@biomejs/biome/configuration_schema.json",
   "files": {
-    "ignore": ["*/.next/*", "*.json"]
+    "ignoreUnknown": true,
+    "includes": [
+      "**/*.ts",
+      "**/*.tsx",
+      "**/*.js",
+      "**/*.jsx"
+    ]
   },
   "formatter": {
     "enabled": true,
@@ -28,9 +34,6 @@
     "rules": {
       "recommended": false
     }
-  },
-  "organizeImports": {
-    "enabled": true
   },
   "vcs": {
     "enabled": true,

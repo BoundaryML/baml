@@ -53,6 +53,7 @@ func init() {
 type callOption struct {
 	clientRegistry *baml.ClientRegistry
 	env            map[string]string
+	collectors     []baml.Collector
 }
 
 type CallOptionFunc func(*callOption)
@@ -68,5 +69,28 @@ func WithClientRegistry(clientRegistry *baml.ClientRegistry) CallOptionFunc {
 func WithEnv(env map[string]string) CallOptionFunc {
 	return func(o *callOption) {
 		o.env = env
+	}
+}
+
+// Add collector to the specific function call.
+func WithCollector(collector baml.Collector) CallOptionFunc {
+	return func(o *callOption) {
+		if o.collectors == nil {
+			o.collectors = []baml.Collector{}
+		}
+		o.collectors = append(o.collectors, collector)
+	}
+}
+
+// Add multiple collectors to the specific function call.
+func WithCollectors(collectors []baml.Collector) CallOptionFunc {
+	return func(o *callOption) {
+		if collectors == nil {
+			return
+		}
+		if o.collectors == nil {
+			o.collectors = []baml.Collector{}
+		}
+		o.collectors = append(o.collectors, collectors...)
 	}
 }
