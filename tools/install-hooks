@@ -19,4 +19,5 @@ chmod +x "$REPO_ROOT/.git/hooks/pre-commit"
 echo "✓ Pre-commit hook installed successfully!"
 echo ""
 echo "This hook will run 'cargo fmt' with import organization before each commit."
-echo "If formatting changes are made, you'll need to review and re-commit." 
+echo "If formatting changes are made, you'll need to review and re-commit."
+ 

@@ -28,4 +28,4 @@ if ! git diff --quiet --exit-code; then
     exit 1
 fi
 
-echo "Code formatting check passed." 
+echo "Code formatting check passed."
