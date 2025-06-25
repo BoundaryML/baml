@@ -23,29 +23,6 @@ use crate::{
     },
 };
 
-use baml_runtime::{
-    runtime_interface::ExperimentalTracingInterface, BamlRuntime as CoreBamlRuntime,
-};
-use pyo3::{
-    prelude::{pymethods, PyResult},
-    pyclass,
-    types::{PyAnyMethods, PyList},
-    Bound, IntoPyObjectExt, PyObject, PyRef, Python,
-};
-
-use crate::{
-    errors::{BamlError, BamlInvalidArgumentError},
-    parse_py_type::parse_py_type,
-    types::{
-        function_result_stream::{FunctionResultStream, SyncFunctionResultStream},
-        function_results::{pythonize_strict, FunctionResult},
-        runtime_ctx_manager::RuntimeContextManager,
-        trace_stats::TraceStats,
-        type_builder::TypeBuilder,
-        ClientRegistry, Collector, HTTPRequest,
-    },
-};
-
 crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe, root_path: String = String::new(), env_vars: HashMap<String, String> = HashMap::new());
 
 #[derive(Debug, Clone)]
