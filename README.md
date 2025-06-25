@@ -219,6 +219,18 @@ As models get better, we'll continue expecting even more out of them. But what w
 ## Contributing
 Checkout our [guide on getting started](/CONTRIBUTING.md)
 
+## Citation
+
+You can cite the BAML repo as follows:
+```bibtex
+@software{baml,
+  author = {Vaibhav Gupta, Aaron Villalpando and Boundary ML team},
+  title = {BAML},
+  url = {https://github.com/boundaryml/baml},
+  year = {2024}
+}
+```
+
 ---
 
 Made with ❤️ by Boundary
