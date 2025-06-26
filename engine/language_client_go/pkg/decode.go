@@ -168,6 +168,8 @@ func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant) any {
 		panic("decodeUnionValue: valueUnion is nil")
 	}
 
+	fmt.Printf("decodeUnionValue: valueUnion=%+v\n", valueUnion)
+
 	typeName := valueUnion.Name
 	namespace := typeName.Namespace.String()
 	unionName := string(typeName.Name)
@@ -231,6 +233,8 @@ func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant) any {
 		value := valueUnion.Value
 		return Decode(value)
 	}
+
+	fmt.Printf("decodeUnionValue: found=%+v\n", found)
 
 	union := reflect.New(found)
 	as_interface := union.Interface().(BamlUnionDeserializer)
@@ -403,7 +407,7 @@ func convertFieldTypeToGoType(fieldType *cffi.CFFIFieldTypeHolder) reflect.Type 
 
 func Decode(holder *cffi.CFFIValueHolder) any {
 
-	fmt.Printf("Decode: holder=%+v\n", holder)
+	fmt.Printf("Decode: holder=%v\n", holder)
 
 	value := holder.Value
 

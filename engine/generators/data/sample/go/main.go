@@ -17,6 +17,7 @@ func main() {
 		panic(err)
 	}
 	fmt.Println(result)
+	fmt.Println("DONE--------------------------------")
 
 	channel, err := b.Stream.Foo(context.Background(), 8192, b.WithCollector(collector))
 	if err != nil {
@@ -24,19 +25,20 @@ func main() {
 	}
 	for result := range channel {
 		if result.IsFinal {
-			fmt.Println("final-----")
+			fmt.Println("final--------------------------------")
 			str, err := json.Marshal(result.Final())
 			if err != nil {
 				panic(err)
 			}
 			fmt.Println(string(str))
 		} else {
-			fmt.Println("stream-----")
+			fmt.Println("stream--------------------------------")
 			str, err := json.Marshal(result.Stream())
 			if err != nil {
 				panic(err)
 			}
 			fmt.Println(string(str))
+			fmt.Println("stream--------------------------------")
 		}
 	}
 

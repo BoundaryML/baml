@@ -301,7 +301,7 @@ where
 
         let holder = value.maybe_wrap_union(holder, lookup);
         let holder = value.maybe_wrap_stream_state(holder, lookup);
-        println!("encoded: {:?}", holder);
+        println!("encoded {} type ->\n{:#?}\n\n", value.field_type(), holder);
         holder
     }
 }
