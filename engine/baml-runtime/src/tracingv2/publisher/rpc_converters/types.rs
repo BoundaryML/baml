@@ -51,15 +51,13 @@ impl<'a, T: HasFieldType> IntoRpcEvent<'a, runtime_api::BamlValue<'a>> for BamlV
         baml_rpc::runtime_api::BamlValue {
             metadata: runtime_api::ValueMetadata {
                 type_index: match &type_ref {
-                    baml_rpc::TypeReferenceWithMetadata::Union { union_type, .. } => {
-                        match value {
-                            baml_rpc::runtime_api::ValueContent::Null => runtime_api::TypeIndex::Null,
-                            _ => {
-                                baml_log::warn!("Union type index is not set! Please talk to vbv about how to fix this.");
-                                runtime_api::TypeIndex::Index(0)
-                            },
+                    baml_rpc::TypeReferenceWithMetadata::Union { union_type, .. } => match value {
+                        baml_rpc::runtime_api::ValueContent::Null => runtime_api::TypeIndex::Null,
+                        _ => {
+                            baml_log::warn!("Union type index is not set! Please talk to vbv about how to fix this.");
+                            runtime_api::TypeIndex::Index(0)
                         }
-                    }
+                    },
                     _ => runtime_api::TypeIndex::NotUnion,
                 },
                 type_ref: type_ref,
@@ -112,10 +110,11 @@ impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::FieldType
             ),
             baml_types::FieldType::Union(field_types, _) => TypeReference::union(
                 field_types
-                    .iter_include_null()
+                    .iter_skip_null()
                     .into_iter()
                     .map(|t| t.into_rpc_event(lookup))
                     .collect(),
+                field_types.is_optional(),
             ),
             baml_types::FieldType::Tuple(field_types, _) => TypeReference::tuple(
                 field_types

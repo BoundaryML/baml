@@ -48,7 +48,7 @@ pub enum TypeReferenceWithMetadata<Metadata> {
     Bool(Metadata),
     Media(MediaTypeDefinition, Metadata),
     Literal(LiteralTypeDefinition, Metadata),
-    
+
     // User-defined types
     Class {
         type_id: Arc<BamlTypeId>,
@@ -106,11 +106,6 @@ impl<Metadata: Default> TypeReferenceWithMetadata<Metadata> {
         Self::Bool(Metadata::default())
     }
 
-    pub fn null() -> Self {
-        // We shouldn't be using nulls in the AST!
-        Self::Unknown
-    }
-
     pub fn media(media_type: MediaTypeDefinition) -> Self {
         Self::Media(media_type, Metadata::default())
     }
@@ -134,11 +129,17 @@ impl<Metadata: Default> TypeReferenceWithMetadata<Metadata> {
         }
     }
 
-    pub fn union(one_of: Vec<TypeReferenceWithMetadata<Metadata>>) -> Self {
+    pub fn union(mut one_of: Vec<TypeReferenceWithMetadata<Metadata>>, is_nullable: bool) -> Self {
+        if one_of.is_empty() {
+            return Self::Unknown;
+        }
+        if one_of.len() == 1 && !is_nullable {
+            return one_of.pop().unwrap();
+        }
         Self::Union {
             union_type: UnionType {
                 types: one_of,
-                is_nullable: false,
+                is_nullable,
             },
             metadata: Metadata::default(),
         }
