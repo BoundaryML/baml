@@ -82,7 +82,6 @@ const useRunTests = (maxBatchSize = 5) => {
 
         const runTest = async (test: { functionName: string; testName: string }) => {
           console.log('runTest', test)
-          console.log('envVars', envVars)
 
           // TEMPORARY DEBUGGING HELPER:
           // console.log("Try to set flashing regions")
