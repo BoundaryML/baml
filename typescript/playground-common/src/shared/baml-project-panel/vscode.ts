@@ -1,20 +1,20 @@
+import type { WebviewApi } from 'vscode-webview'
 import {
-  decodeBuffer,
   GetPlaygroundPortRequest,
   GetPlaygroundPortResponse,
   GetVSCodeSettingsRequest,
   GetVSCodeSettingsResponse,
   GetWebviewUriRequest,
   GetWebviewUriResponse,
-  InitializedResponse,
   InitializedRequest,
-  SetProxySettingsRequest,
+  InitializedResponse,
   LoadAwsCredsRequest,
   LoadAwsCredsResponse,
-  LoadGcpCredsResponse,
   LoadGcpCredsRequest,
+  LoadGcpCredsResponse,
+  SetProxySettingsRequest,
+  decodeBuffer,
 } from './vscode-rpc'
-import type { WebviewApi } from 'vscode-webview'
 
 const RPC_TIMEOUT_MS = 5000
 

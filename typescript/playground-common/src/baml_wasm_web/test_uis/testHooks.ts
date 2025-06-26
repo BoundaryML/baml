@@ -1,8 +1,8 @@
+// import { selectedFunctionAtom, selectedRuntimeAtom } from '../EventListener'
+import type { WasmFunctionResponse, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import { atom, useAtomValue } from 'jotai'
 import { atomFamily, useAtomCallback } from 'jotai/utils'
 import React, { useCallback, useEffect, useState } from 'react'
-// import { selectedFunctionAtom, selectedRuntimeAtom } from '../EventListener'
-import type { WasmFunctionResponse, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 // import { vscode } from '../../../../../../playground-common/src/shared/baml-project-panel/vscode'
 
 // const isRunningAtom = atom(false)

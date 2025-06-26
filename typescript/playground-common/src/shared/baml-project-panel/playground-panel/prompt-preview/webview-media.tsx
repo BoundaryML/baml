@@ -1,12 +1,12 @@
-/* eslint-disable @typescript-eslint/require-await */
-import { useAtomValue } from 'jotai'
-import { wasmAtom } from '../../atoms'
-import { isDebugModeAtom } from './render-text'
-import { useState } from 'react'
-import useSWR from 'swr'
-import { ExternalLinkIcon, ImageIcon, Music } from 'lucide-react'
 // import Link from "next/link";
 import type { WasmChatMessagePartMedia } from '@gloo-ai/baml-schema-wasm-web'
+/* eslint-disable @typescript-eslint/require-await */
+import { useAtomValue } from 'jotai'
+import { ExternalLinkIcon, ImageIcon, Music } from 'lucide-react'
+import { useState } from 'react'
+import useSWR from 'swr'
+import { wasmAtom } from '../../atoms'
+import { isDebugModeAtom } from './render-text'
 
 interface WebviewMediaProps {
   bamlMediaType: 'image' | 'audio'

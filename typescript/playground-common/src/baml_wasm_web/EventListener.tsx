@@ -2,26 +2,26 @@
 import 'react18-json-view/src/style.css'
 // import * as vscode from 'vscode'
 
-import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
-import { atomWithStorage } from 'jotai/utils'
-import { useEffect, useState } from 'react'
-import CustomErrorBoundary from '../utils/ErrorFallback'
-import { vscodeLocalStorageStore } from './JotaiProvider'
-import { vscode } from '@/shared/baml-project-panel/vscode'
 import { diagnosticsAtom, filesAtom, wasmAtom } from '@/shared/baml-project-panel/atoms'
+import { CodeMirrorDiagnosticsAtom } from '@/shared/baml-project-panel/codemirror-panel/atoms'
 import {
+  flashRangesAtom,
   selectedFunctionAtom,
   selectedTestcaseAtom,
   updateCursorAtom,
-  flashRangesAtom,
 } from '@/shared/baml-project-panel/playground-panel/atoms'
-import { useRunBamlTests } from '@/shared/baml-project-panel/playground-panel/prompt-preview/test-panel/test-runner'
 import { orchIndexAtom } from '@/shared/baml-project-panel/playground-panel/atoms-orch-graph'
-import { CodeMirrorDiagnosticsAtom } from '@/shared/baml-project-panel/codemirror-panel/atoms'
+import { useRunBamlTests } from '@/shared/baml-project-panel/playground-panel/prompt-preview/test-panel/test-runner'
+import { vscode } from '@/shared/baml-project-panel/vscode'
+import { useDebounce, useDebounceCallback } from '@react-hook/debounce'
+import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { atomWithStorage } from 'jotai/utils'
 import { AlertTriangle, XCircle } from 'lucide-react'
 import { CheckCircle } from 'lucide-react'
-import { useDebounce, useDebounceCallback } from '@react-hook/debounce'
-import { bamlConfig, BamlConfigAtom } from './bamlConfig'
+import { useEffect, useState } from 'react'
+import CustomErrorBoundary from '../utils/ErrorFallback'
+import { vscodeLocalStorageStore } from './JotaiProvider'
+import { BamlConfigAtom, bamlConfig } from './bamlConfig'
 
 export const hasClosedEnvVarsDialogAtom = atomWithStorage<boolean>(
   'has-closed-env-vars-dialog',

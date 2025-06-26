@@ -1,8 +1,8 @@
-import { atom, useAtomValue } from 'jotai'
-import { renderModeAtom } from '../preview-toolbar'
-import { useMemo, useState } from 'react'
-import { ChevronDown, ChevronUp } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { atom, useAtomValue } from 'jotai'
+import { ChevronDown, ChevronUp } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { renderModeAtom } from '../preview-toolbar'
 import { TokenEncoderCache } from './render-tokens'
 export const isDebugModeAtom = atom((get) => get(renderModeAtom) === 'tokens')
 

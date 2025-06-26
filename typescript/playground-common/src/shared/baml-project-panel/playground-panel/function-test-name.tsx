@@ -1,8 +1,8 @@
+import { useAtomValue } from 'jotai'
 import { ChevronRight, FlaskConical, FunctionSquare } from 'lucide-react'
+import { useMemo } from 'react'
 import { vscode } from '../vscode'
 import { functionObjectAtom, testcaseObjectAtom } from './atoms'
-import { useAtomValue } from 'jotai'
-import { useMemo } from 'react'
 
 interface FunctionTestNameProps {
   functionName: string

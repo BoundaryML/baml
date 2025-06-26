@@ -1,12 +1,12 @@
 'use client'
 
-import { SheetTrigger, SheetContent, Sheet } from '@/components/ui/sheet'
 import { Button } from '@/components/ui/button'
-import { Compass } from 'lucide-react'
-import { ExploreProjects } from '../[project_id]/_components/ExploreProjects'
-import { isMobile } from 'react-device-detect'
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet'
 import { useAtom } from 'jotai'
+import { Compass } from 'lucide-react'
+import { isMobile } from 'react-device-detect'
 import { exploreProjectsOpenAtom } from '../[project_id]/_atoms/atoms'
+import { ExploreProjects } from '../[project_id]/_components/ExploreProjects'
 export const BrowseSheet = () => {
   const [open, setOpen] = useAtom(exploreProjectsOpenAtom)
 

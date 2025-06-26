@@ -1,6 +1,6 @@
 import { atom } from 'jotai'
-import { type TestState } from '../../atoms'
 import { atomWithStorage } from 'jotai/utils'
+import { type TestState } from '../../atoms'
 
 export interface TestHistoryEntry {
   timestamp: number

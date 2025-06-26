@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { useSetAtom, useAtom } from 'jotai'
+import { useAtom, useSetAtom } from 'jotai'
 import { ChevronDown, ChevronRight, File, Folder } from 'lucide-react'
 import { useEffect } from 'react'
 import type { NodeRendererProps } from 'react-arborist'

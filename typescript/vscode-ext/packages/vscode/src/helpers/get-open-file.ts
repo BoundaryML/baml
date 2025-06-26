@@ -1,5 +1,5 @@
-import { URI } from 'vscode-uri'
 import * as vscode from 'vscode'
+import { URI } from 'vscode-uri'
 
 export const getCurrentOpenedFile = () => {
   // This should be called from the extension host, not the language server

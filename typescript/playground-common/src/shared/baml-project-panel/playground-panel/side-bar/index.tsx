@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import { Input } from '@/components/ui/input'
 import { ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable'
+import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
+import { atomWithStorage } from 'jotai/utils'
 import {
   AlertTriangle,
   CheckCircle2,
@@ -16,7 +18,9 @@ import {
 import { AnimatePresence, motion } from 'motion/react'
 import * as React from 'react'
 import { Button } from '~/components/ui/button'
+import { vscode } from '../../vscode'
 import { runtimeStateAtom, selectedItemAtom } from '../atoms'
+import { Loader } from '../prompt-preview/components'
 import {
   isParallelTestsEnabledAtom,
   selectedHistoryIndexAtom,
@@ -25,10 +29,6 @@ import {
 import { useRunBamlTests } from '../prompt-preview/test-panel/test-runner'
 import { getStatus } from '../prompt-preview/test-panel/testStateUtils'
 import { EnvironmentVariablesDialog, EnvironmentVariablesPanel } from './env-vars'
-import { ScrollArea } from '@/components/ui/scroll-area'
-import { atomWithStorage } from 'jotai/utils'
-import { vscode } from '../../vscode'
-import { Loader } from '../prompt-preview/components'
 
 interface FunctionData {
   name: string

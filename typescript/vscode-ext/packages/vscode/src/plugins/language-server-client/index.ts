@@ -14,17 +14,17 @@ import {
   type ServerOptions,
   TransportKind,
 } from 'vscode-languageclient/node'
+import { URI } from 'vscode-uri'
 import { z } from 'zod'
 import pythonToBamlCodeLens from '../../LanguageToBamlCodeLensProvider'
+import { getCurrentOpenedFile } from '../../helpers/get-open-file'
+import StatusBarPanel from '../../panels/StatusBarPanel'
 import { WebviewPanelHost } from '../../panels/WebviewPanelHost'
 import TelemetryReporter from '../../telemetryReporter'
 import { checkForMinimalColorTheme, createLanguageServer, isDebugOrTestSession } from '../../util'
 import type { BamlVSCodePlugin } from '../types'
-import { URI } from 'vscode-uri'
-import StatusBarPanel from '../../panels/StatusBarPanel'
-import { getCurrentOpenedFile } from '../../helpers/get-open-file'
 import { BAML_CONFIG_SINGLETON, refreshBamlConfigSingleton } from './bamlConfig'
-import { resolveCliPath, getReleaseArchitecture, getReleasePlatform } from './cliDownloader'
+import { getReleaseArchitecture, getReleasePlatform, resolveCliPath } from './cliDownloader'
 
 export { BAML_CONFIG_SINGLETON as bamlConfig }
 const packageJson = require('../../../../package.json') // eslint-disable-line

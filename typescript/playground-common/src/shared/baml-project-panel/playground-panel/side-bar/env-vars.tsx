@@ -1,31 +1,31 @@
 'use client'
 
+import { useToast } from '@/components/hooks/use-toast'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import {
   Dialog,
+  DialogClose,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  DialogFooter,
-  DialogClose,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { useToast } from '@/components/hooks/use-toast'
-import { atom, useAtomValue, useSetAtom } from 'jotai'
-import { AlertTriangle, Check, Circle, CircleDot, Eye, EyeOff, PlusCircle, Settings2, Trash2 } from 'lucide-react'
-import { QuestionMarkCircledIcon } from '@radix-ui/react-icons'
-import { useState, useRef, useEffect } from 'react'
-import { envVarsAtom, requiredEnvVarsAtom, proxyUrlAtom } from '../../atoms'
-import { Textarea } from '@/components/ui/textarea'
-import { Save, FileText } from 'lucide-react'
 import { Label } from '@/components/ui/label'
-import { Checkbox } from '@/components/ui/checkbox'
-import { vscode } from '../../vscode'
-import { sortBy } from 'lodash'
+import { Textarea } from '@/components/ui/textarea'
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
+import { QuestionMarkCircledIcon } from '@radix-ui/react-icons'
 import { parse as parseDotenv } from 'dotenv'
+import { atom, useAtomValue, useSetAtom } from 'jotai'
+import { sortBy } from 'lodash'
+import { AlertTriangle, Check, Circle, CircleDot, Eye, EyeOff, PlusCircle, Settings2, Trash2 } from 'lucide-react'
+import { FileText, Save } from 'lucide-react'
 import { motion } from 'motion/react'
+import { useEffect, useRef, useState } from 'react'
+import { envVarsAtom, proxyUrlAtom, requiredEnvVarsAtom } from '../../atoms'
+import { vscode } from '../../vscode'
 
 const envVarVisibilityAtom = atom<Record<string, boolean>>({})
 

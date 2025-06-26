@@ -1,8 +1,8 @@
+import path from 'path'
 import { CustomErrorBoundary } from '@baml/playground-common'
+import fs from 'fs/promises'
 import dynamic from 'next/dynamic'
 import { Suspense } from 'react'
-import fs from 'fs/promises'
-import path from 'path'
 
 const PromptPreview = dynamic(() => import('./clientwrapper'), {})
 

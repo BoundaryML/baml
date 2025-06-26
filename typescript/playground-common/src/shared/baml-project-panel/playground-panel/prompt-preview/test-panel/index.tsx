@@ -1,15 +1,15 @@
 /* eslint-disable @typescript-eslint/no-floating-promises */
 import { useAtom, useAtomValue } from 'jotai'
+import { ErrorBoundary } from 'react-error-boundary'
 import { ScrollArea } from '~/components/ui/scroll-area'
+import { isClientCallGraphEnabledAtom } from '../../preview-toolbar'
 import { selectedHistoryIndexAtom, testHistoryAtom } from './atoms'
-import { TestPanelViewType, testPanelViewTypeAtom } from './components/atoms'
 import { CardView } from './components/CardView'
+import { ClientGraphView } from './components/ClientGraphView'
 import { SimpleCardView } from './components/SimpleCardView'
 import { TabularView } from './components/TabularView'
 import { TestMenu } from './components/TestMenu'
-import { ClientGraphView } from './components/ClientGraphView'
-import { ErrorBoundary } from 'react-error-boundary'
-import { isClientCallGraphEnabledAtom } from '../../preview-toolbar'
+import { TestPanelViewType, testPanelViewTypeAtom } from './components/atoms'
 
 const TestPanel = () => {
   const [selectedHistoryIndex, setSelectedHistoryIndex] = useAtom(selectedHistoryIndexAtom)

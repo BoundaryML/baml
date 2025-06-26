@@ -1,9 +1,9 @@
 'use client'
 
 import { Provider, createStore } from 'jotai'
+import { DevTools } from 'jotai-devtools'
 import { createJSONStorage } from 'jotai/utils'
 import type { SyncStorage } from 'jotai/vanilla/utils/atomWithStorage'
-import { DevTools } from 'jotai-devtools'
 import 'jotai-devtools/styles.css'
 import { vscode } from '@/shared/baml-project-panel/vscode'
 // import { vscode } from '../../../../../playground-common/src/shared/baml-project-panel/vscode'

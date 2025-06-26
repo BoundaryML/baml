@@ -1,14 +1,14 @@
+import * as crypto from 'crypto' // Added for hash calculation
+import fs from 'fs' // Use synchronous fs methods where appropriate for path checking
+import { createWriteStream } from 'fs'
 import os from 'os'
 import path from 'path'
-import fs from 'fs' // Use synchronous fs methods where appropriate for path checking
-import { pipeline } from 'stream/promises'
-import { createWriteStream } from 'fs'
-import axios from 'axios'
-import * as tar from 'tar'
 import AdmZip from 'adm-zip'
-import * as crypto from 'crypto' // Added for hash calculation
-import { ExtensionContext, OutputChannel, ProgressLocation, window } from 'vscode' // Import ExtensionContext, window, and OutputChannel
+import axios from 'axios'
 import semver from 'semver' // Import semver
+import { pipeline } from 'stream/promises'
+import * as tar from 'tar'
+import { ExtensionContext, OutputChannel, ProgressLocation, window } from 'vscode' // Import ExtensionContext, window, and OutputChannel
 
 // Assuming packageJson is required similarly to index.ts to get the bundled version
 const packageJson = require('../../../../package.json') // Adjust path as needed

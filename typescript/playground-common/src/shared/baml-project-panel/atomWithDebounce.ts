@@ -1,4 +1,4 @@
-import { atom, SetStateAction } from 'jotai'
+import { SetStateAction, atom } from 'jotai'
 
 export default function atomWithDebounce<T>(initialValue: T, delayMilliseconds = 500, shouldDebounceOnReset = false) {
   const prevTimeoutAtom = atom<ReturnType<typeof setTimeout> | undefined>(undefined)

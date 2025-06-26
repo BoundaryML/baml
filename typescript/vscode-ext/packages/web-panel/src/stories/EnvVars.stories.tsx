@@ -2,16 +2,16 @@ import { expect } from '@storybook/test'
 import { DevTools } from 'jotai-devtools'
 import 'jotai-devtools/styles.css'
 import { atom, createStore, useAtomValue, useSetAtom } from 'jotai'
+import { Provider as JotaiProvider } from 'jotai'
+import { ThemeProvider } from 'next-themes'
 import {
   EnvironmentVariablesDialog,
   EnvironmentVariablesPanel,
 } from '../shared/baml-project-panel/playground-panel/side-bar/env-vars'
-import { Provider as JotaiProvider } from 'jotai'
-import { ThemeProvider } from 'next-themes'
 import '../App.css'
-import { envVarsAtom } from '../shared/baml-project-panel/atoms'
-import { useState } from 'react'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { useState } from 'react'
+import { envVarsAtom } from '../shared/baml-project-panel/atoms'
 
 interface JotaiProviderProps {
   envVars: Record<string, string>

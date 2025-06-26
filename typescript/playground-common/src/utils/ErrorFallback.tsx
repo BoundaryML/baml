@@ -1,6 +1,6 @@
-import React from 'react'
 import { Button } from '@/components/ui/button'
 import { RefreshCcw } from 'lucide-react'
+import React from 'react'
 import { ErrorBoundary, type FallbackProps } from 'react-error-boundary'
 
 const ErrorFallback: (message?: string) => React.FC<FallbackProps> = (message) => {

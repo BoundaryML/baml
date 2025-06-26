@@ -1,6 +1,6 @@
-import * as React from 'react'
-import { useAtom } from 'jotai'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { useAtom } from 'jotai'
+import * as React from 'react'
 import { TestPanelViewType, testPanelViewTypeAtom } from './atoms'
 
 export const ViewSelector = () => {

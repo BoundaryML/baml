@@ -1,5 +1,5 @@
-import type { StringSpan } from '@baml/common'
 import { fromIni } from '@aws-sdk/credential-providers' // ES6 import
+import type { StringSpan } from '@baml/common'
 import { type Disposable, Uri, ViewColumn, type Webview, type WebviewPanel, window, workspace } from 'vscode'
 import * as vscode from 'vscode'
 import { getNonce } from '../utils/getNonce'
@@ -7,28 +7,28 @@ import { getUri } from '../utils/getUri'
 import {
   EchoResponse,
   GetBamlSrcResponse,
-  LoadEnvRequest,
   GetPlaygroundPortResponse,
   GetVSCodeSettingsResponse,
   GetWebviewUriResponse,
+  LoadEnvRequest,
+  LoadEnvResponse,
   WebviewToVscodeRpc,
   encodeBuffer,
-  LoadEnvResponse,
 } from '../vscode-rpc'
 
+import { exec, fork } from 'child_process'
+import * as fs from 'fs'
+import { dirname, join } from 'path'
+import { promisify } from 'util'
+import { AwsCredentialIdentity } from '@smithy/types'
+import * as dotenv from 'dotenv'
+import { GoogleAuth } from 'google-auth-library'
 import { type Config, adjectives, animals, colors, uniqueNamesGenerator } from 'unique-names-generator'
 import { URI } from 'vscode-uri'
 import { getCurrentOpenedFile } from '../helpers/get-open-file'
 import { bamlConfig, requestDiagnostics } from '../plugins/language-server-client'
-import TelemetryReporter from '../telemetryReporter'
-import { exec, fork } from 'child_process'
-import { promisify } from 'util'
-import { dirname, join } from 'path'
-import * as dotenv from 'dotenv'
-import * as fs from 'fs'
-import { AwsCredentialIdentity } from '@smithy/types'
 import { refreshBamlConfigSingleton } from '../plugins/language-server-client/bamlConfig'
-import { GoogleAuth } from 'google-auth-library'
+import TelemetryReporter from '../telemetryReporter'
 // import { CredentialsProviderError } from '@aws-sdk/credential-providers'
 const customConfig: Config = {
   dictionaries: [adjectives, colors, animals],

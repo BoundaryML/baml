@@ -1,13 +1,13 @@
 import { atom, useAtomValue } from 'jotai'
 import { atomFamily, atomWithStorage, createJSONStorage } from 'jotai/utils'
 
+import { WasmDiagnosticError, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 import { unwrap } from 'jotai/utils'
-import { type ICodeBlock } from './types'
+import { bamlConfig } from '../../baml_wasm_web/bamlConfig'
 import { vscodeLocalStorageStore } from './Jotai'
 import { orchIndexAtom } from './playground-panel/atoms-orch-graph'
+import { type ICodeBlock } from './types'
 import { vscode } from './vscode'
-import { bamlConfig } from '../../baml_wasm_web/bamlConfig'
-import { WasmDiagnosticError, WasmRuntime } from '@gloo-ai/baml-schema-wasm-web/baml_schema_build'
 
 const wasmAtomAsync = atom(async () => {
   const wasm = await import('@gloo-ai/baml-schema-wasm-web/baml_schema_build')

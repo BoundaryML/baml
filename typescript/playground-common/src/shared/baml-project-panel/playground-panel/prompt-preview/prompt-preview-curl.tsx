@@ -1,13 +1,13 @@
 import { useAtom, useAtomValue } from 'jotai'
+import { atom } from 'jotai'
+import { loadable } from 'jotai/utils'
+import useSWR from 'swr'
 import { ctxAtom, envVarsAtom, runtimeAtom } from '../../atoms'
 import { selectionAtom } from '../atoms'
-import useSWR from 'swr'
 import { Loader } from './components'
 import { ErrorMessage } from './components'
 import { WithCopyButton } from './components'
 import { findMediaFile } from './media-utils'
-import { atom } from 'jotai'
-import { loadable } from 'jotai/utils'
 
 type CurlResult = string | undefined | Error
 

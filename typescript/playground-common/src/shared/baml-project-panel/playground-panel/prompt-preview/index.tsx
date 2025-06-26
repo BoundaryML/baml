@@ -1,19 +1,19 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
-import { ChevronUp } from 'lucide-react'
+import { ResizableHandle, ResizablePanelGroup } from '@/components/ui/resizable'
+import { ResizablePanel } from '@/components/ui/resizable'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { useAtom, useAtomValue } from 'jotai'
+import { ChevronUp } from 'lucide-react'
+import { useEffect, useRef, useState } from 'react'
+import { type ImperativePanelHandle } from 'react-resizable-panels'
+import { ThemeProvider } from '../../theme/ThemeProvider'
+import { areTestsRunningAtom, showEnvDialogAtom } from '../atoms'
 import PreviewToolbar from '../preview-toolbar'
 import SideBar from '../side-bar'
+import { EnvironmentVariablesDialog } from '../side-bar/env-vars'
 import { PromptRenderWrapper } from './prompt-render-wrapper'
 import TestPanel from './test-panel'
-import { ResizableHandle, ResizablePanelGroup } from '@/components/ui/resizable'
-import { type ImperativePanelHandle } from 'react-resizable-panels'
-import { ResizablePanel } from '@/components/ui/resizable'
-import { useAtom, useAtomValue } from 'jotai'
-import { areTestsRunningAtom, showEnvDialogAtom } from '../atoms'
-import { ThemeProvider } from '../../theme/ThemeProvider'
-import { EnvironmentVariablesDialog } from '../side-bar/env-vars'
 
 const PromptPreview = ({ isEmbed = false }: { isEmbed?: boolean }) => {
   const areTestsRunning = useAtomValue(areTestsRunningAtom)

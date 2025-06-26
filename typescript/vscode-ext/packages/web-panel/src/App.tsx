@@ -2,7 +2,7 @@ import { Suspense } from 'react'
 import './App.css'
 import 'allotment/dist/style.css'
 import { DevTools } from 'jotai-devtools'
-import { FlaskConical, FlaskConicalOff, Compass } from 'lucide-react'
+import { Compass, FlaskConical, FlaskConicalOff } from 'lucide-react'
 import { EventListener } from './baml_wasm_web/EventListener'
 import { Button } from './components/ui/button'
 import { Separator } from './components/ui/separator'
@@ -12,12 +12,12 @@ import { Separator } from './components/ui/separator'
 // import IntroToChecksDialog from './shared/IntroToChecksDialog'
 import CustomErrorBoundary from './utils/ErrorFallback'
 import 'jotai-devtools/styles.css'
+import { ThemeProvider } from 'next-themes'
 // import { Snippets } from './shared/Snippets'
-import { Dialog, DialogTrigger, DialogContent } from './components/ui/dialog'
+import { Dialog, DialogContent, DialogTrigger } from './components/ui/dialog'
 // import { AppStateProvider } from './shared/AppStateContext' // Import the AppStateProvider
 import { useFeedbackWidget } from './lib/feedback_widget'
 import PromptPreview from './shared/baml-project-panel/playground-panel/prompt-preview'
-import { ThemeProvider } from 'next-themes'
 
 function App() {
   useFeedbackWidget()

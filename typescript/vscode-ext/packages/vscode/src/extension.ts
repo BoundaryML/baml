@@ -1,13 +1,13 @@
+import axios from 'axios'
+import cors from 'cors'
+import { createProxyMiddleware } from 'http-proxy-middleware'
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import * as vscode from 'vscode'
-import axios from 'axios'
 import glooLens from './LanguageToBamlCodeLensProvider'
 import { WebviewPanelHost, openPlaygroundConfig } from './panels/WebviewPanelHost'
 import plugins from './plugins'
 import { requestBamlCLIVersion, requestDiagnostics } from './plugins/language-server-client'
 import { telemetry } from './plugins/language-server-client'
-import cors from 'cors'
-import { createProxyMiddleware } from 'http-proxy-middleware'
 
 const outputChannel = vscode.window.createOutputChannel('baml')
 const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml-diagnostics')
@@ -20,9 +20,9 @@ let isGlowOn: boolean = true
 let animationTimer: NodeJS.Timeout | null = null
 let highlightRanges: vscode.Range[] = []
 
+import { Socket } from 'net'
 import type { Express } from 'express'
 import StatusBarPanel from './panels/StatusBarPanel'
-import { Socket } from 'net'
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('BAML extension activating')
@@ -65,7 +65,7 @@ export function activate(context: vscode.ExtensionContext) {
       /** Inspect and (maybe) rewrite the path. */
       pathRewrite: (path, req) => {
         console.log('[PROXY] pathRewrite input:', path)
-        
+
         // If the path looks like an image (xyz.png …) and it's a GET → blank it.
         if (/\.[a-z0-9]+$/i.test(path) && req.method === 'GET') {
           console.log('[PROXY] Image request detected, clearing path:', path)

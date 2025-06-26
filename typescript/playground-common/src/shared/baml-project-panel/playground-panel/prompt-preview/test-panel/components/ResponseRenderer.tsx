@@ -1,23 +1,23 @@
 // ResponseRenderer.tsx
-import { WasmFunctionResponse, WasmTestResponse, WasmLLMFailure, WasmLLMResponse } from '@gloo-ai/baml-schema-wasm-web'
-import { DoneTestStatusType } from '../../../atoms'
-import { useState } from 'react'
+import { WasmFunctionResponse, WasmLLMFailure, WasmLLMResponse, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
 import {
   AlertCircle,
   Brain,
   Check,
   CheckCircle,
   ChevronDown,
-  ChevronsLeftRight,
   ChevronUp,
+  ChevronsLeftRight,
   Clock,
   Copy,
 } from 'lucide-react'
-import { Button } from '~/components/ui/button'
+import { useState } from 'react'
 import { Badge } from '~/components/ui/badge'
+import { Button } from '~/components/ui/button'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '~/components/ui/tooltip'
-import { ParsedResponseRenderer } from './ParsedResponseRender'
+import { DoneTestStatusType } from '../../../atoms'
 import { RenderPromptPart } from '../../render-text'
+import { ParsedResponseRenderer } from './ParsedResponseRender'
 
 interface ResponseRendererProps {
   response?: WasmFunctionResponse | WasmTestResponse

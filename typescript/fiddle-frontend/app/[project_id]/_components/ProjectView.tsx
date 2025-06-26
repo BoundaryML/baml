@@ -4,11 +4,11 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/componen
 import { useKeybindingOverrides } from '@/hooks/command-s'
 import type { BAMLProject } from '@/lib/exampleProjects'
 import { CustomErrorBoundary } from '@baml/playground-common'
+import { JotaiProvider } from '@baml/playground-common'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { Suspense, useEffect, useRef, useState } from 'react'
 import { isMobile } from 'react-device-detect'
 import { Editable } from '../../_components/EditableText'
-import { JotaiProvider } from '@baml/playground-common'
 import {
   activeFileNameAtom,
   currentEditorFilesAtom,
@@ -16,14 +16,14 @@ import {
   unsavedChangesAtom,
 } from '../_atoms/atoms'
 
-import FileViewer from './Tree/FileViewer'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { filesAtom } from '@/shared/baml-project-panel/atoms'
 import { runtimeStateAtom, selectedFunctionAtom } from '@/shared/baml-project-panel/playground-panel/atoms'
 import { useFeedbackWidget } from '@baml/playground-common/lib/feedback_widget'
-import { TopNavbar } from './TopNavbar'
-import Image from 'next/image'
 import dynamic from 'next/dynamic'
+import Image from 'next/image'
+import { TopNavbar } from './TopNavbar'
+import FileViewer from './Tree/FileViewer'
 const CodeMirrorViewer = dynamic(() => import('@baml/playground-common').then((mod) => mod.CodeMirrorViewer), {
   ssr: false,
 })

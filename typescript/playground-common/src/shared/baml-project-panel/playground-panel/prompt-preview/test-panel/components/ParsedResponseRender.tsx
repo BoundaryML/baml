@@ -1,10 +1,10 @@
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { type WasmFunctionResponse, type WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
 import JsonView from '@uiw/react-json-view'
 import { githubLightTheme as lightTheme } from '@uiw/react-json-view/githubLight'
 import { vscodeTheme as darkTheme } from '@uiw/react-json-view/vscode'
-import { type WasmFunctionResponse, type WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
 import { useTheme } from 'next-themes'
 import { RenderPromptPart } from '../../render-text'
-import { ScrollArea } from '@/components/ui/scroll-area'
 
 const ErrorText = ({ text }: { text: string }) => {
   return <pre className='text-xs text-red-500 whitespace-pre-wrap'>{text}</pre>

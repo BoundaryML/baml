@@ -2,18 +2,18 @@
 
 import { Button } from '@/components/ui/button'
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { cn } from '@/lib/utils'
 import { atom, useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { Braces, Bug, BugIcon, ChevronDown, Copy, FileJson, PlayCircle, Settings, Workflow } from 'lucide-react'
 import React from 'react'
 import { ThemeToggle } from '../theme/ThemeToggle'
 import { areTestsRunningAtom, selectedItemAtom, showEnvDialogAtom } from './atoms'
-import { FunctionTestName } from './function-test-name'
-import { useRunBamlTests } from './prompt-preview/test-panel/test-runner'
-import { cn } from '@/lib/utils'
 import { areEnvVarsMissingAtom } from './atoms'
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import { TooltipProvider } from '@/components/ui/tooltip'
+import { FunctionTestName } from './function-test-name'
 import { renderedPromptAtom } from './prompt-preview/prompt-preview-content'
+import { useRunBamlTests } from './prompt-preview/test-panel/test-runner'
 export const renderModeAtom = atom<'prompt' | 'curl' | 'tokens'>('prompt')
 
 const RunButton: React.FC = () => {

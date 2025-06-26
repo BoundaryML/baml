@@ -1,7 +1,7 @@
 import { useAtomValue } from 'jotai'
 import { renderModeAtom } from '../preview-toolbar'
-import { PromptPreviewCurl } from './prompt-preview-curl'
 import { PromptPreviewContent } from './prompt-preview-content'
+import { PromptPreviewCurl } from './prompt-preview-curl'
 
 export const PromptRenderWrapper = () => {
   const renderMode = useAtomValue(renderModeAtom)

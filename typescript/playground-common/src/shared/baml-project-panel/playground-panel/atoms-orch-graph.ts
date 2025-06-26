@@ -1,6 +1,6 @@
 import { atom } from 'jotai'
-import { selectedFunctionObjectAtom } from './atoms'
 import { runtimeAtom } from '../atoms'
+import { selectedFunctionObjectAtom } from './atoms'
 
 export interface TypeCount {
   // options are F (Fallback), R (Retry), D (Direct), B (Round Robin)

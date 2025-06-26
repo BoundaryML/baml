@@ -1,19 +1,19 @@
 import type { WasmFunctionResponse, WasmSpan, WasmTestResponse } from '@gloo-ai/baml-schema-wasm-web'
 import { useAtomValue, useSetAtom } from 'jotai'
-import { findMediaFile } from '../media-utils'
-import { ctxAtom, envVarsAtom, runtimeAtom, wasmAtom } from '../../../atoms'
 import { useAtomCallback } from 'jotai/utils'
-import { vscode } from '../../../vscode'
 import { useCallback } from 'react'
+import { ctxAtom, envVarsAtom, runtimeAtom, wasmAtom } from '../../../atoms'
+import { vscode } from '../../../vscode'
 import {
   type TestState,
-  testCaseAtom,
   areTestsRunningAtom,
-  selectedTestcaseAtom,
   selectedFunctionAtom,
+  selectedTestcaseAtom,
+  testCaseAtom,
 } from '../../atoms'
-import { isParallelTestsEnabledAtom, testHistoryAtom, selectedHistoryIndexAtom, type TestHistoryRun } from './atoms'
 import { isClientCallGraphEnabledAtom } from '../../preview-toolbar'
+import { findMediaFile } from '../media-utils'
+import { type TestHistoryRun, isParallelTestsEnabledAtom, selectedHistoryIndexAtom, testHistoryAtom } from './atoms'
 
 // Helper function to clear highlights if in VSCode
 const clearHighlights = () => {

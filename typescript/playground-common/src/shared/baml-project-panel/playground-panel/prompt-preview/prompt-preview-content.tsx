@@ -1,14 +1,14 @@
+import type { WasmError, WasmPrompt } from '@gloo-ai/baml-schema-wasm-web'
 import { atom, useAtomValue, useSetAtom } from 'jotai'
-import { ctxAtom, diagnosticsAtom, runtimeAtom, envVarsAtom } from '../../atoms'
+import { useState } from 'react'
+import { useCallback } from 'react'
+import useSWR from 'swr'
+import { ctxAtom, diagnosticsAtom, envVarsAtom, runtimeAtom } from '../../atoms'
 import { areTestsRunningAtom, functionTestSnippetAtom, selectionAtom } from '../atoms'
-import type { WasmPrompt, WasmError } from '@gloo-ai/baml-schema-wasm-web'
 import { Loader } from './components'
 import { ErrorMessage } from './components'
 import { findMediaFile } from './media-utils'
 import { RenderPrompt } from './render-prompt'
-import useSWR from 'swr'
-import { useState } from 'react'
-import { useCallback } from 'react'
 
 export const renderedPromptAtom = atom<WasmPrompt | undefined>(undefined)
 

@@ -1,7 +1,7 @@
-import { Check, Copy, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useState } from 'react'
 import { cn } from '@/lib/utils'
+import { Check, Copy, Loader2 } from 'lucide-react'
+import { useState } from 'react'
 
 export const Loader: React.FC<{ message?: string; className?: string }> = ({ message, className }) => {
   return (

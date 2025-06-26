@@ -4,9 +4,9 @@ import { useAtom } from 'jotai'
 import { Brain, Clock } from 'lucide-react'
 import * as React from 'react'
 import { type TestHistoryRun } from '../atoms'
-import { tabularViewConfigAtom } from './atoms'
 import { MarkdownRenderer } from './MarkdownRenderer'
 import { ParsedResponseRenderer } from './ParsedResponseRender'
+import { tabularViewConfigAtom } from './atoms'
 
 interface SimpleCardViewProps {
   currentRun: TestHistoryRun

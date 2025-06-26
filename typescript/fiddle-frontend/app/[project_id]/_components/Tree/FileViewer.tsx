@@ -4,12 +4,12 @@ import { useEffect, useRef, useState } from 'react'
 import { MoveHandler, NodeApi, RenameHandler, Tree, type TreeApi } from 'react-arborist'
 
 import { EditorFile } from '@/app/actions'
+import { filesAtom } from '@/shared/baml-project-panel/atoms'
 import { useAtom, useAtomValue, useSetAtom } from 'jotai'
 import { FilePlus, FolderPlus } from 'lucide-react'
 import useResizeObserver from 'use-resize-observer'
 import { PROJECT_ROOT, activeFileNameAtom, currentEditorFilesAtom, emptyDirsAtom } from '../../_atoms/atoms'
 import Node from './Node'
-import { filesAtom } from '@/shared/baml-project-panel/atoms'
 
 export const data = [
   {

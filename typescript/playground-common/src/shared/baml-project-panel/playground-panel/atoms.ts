@@ -1,5 +1,5 @@
 import { Atom, atom } from 'jotai'
-import { requiredEnvVarsAtom, envVarsAtom, runtimeAtom } from '../atoms'
+import { envVarsAtom, requiredEnvVarsAtom, runtimeAtom } from '../atoms'
 
 export const runtimeStateAtom: Atom<{ functions: WasmFunction[]; stale: boolean }> = atom((get) => {
   const { rt, lastValidRt } = get(runtimeAtom)

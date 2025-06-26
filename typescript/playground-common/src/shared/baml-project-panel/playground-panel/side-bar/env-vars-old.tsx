@@ -1,11 +1,14 @@
 'use client'
 
+import { useToast } from '@/components/hooks/use-toast'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { useToast } from '@/components/hooks/use-toast'
-import { motion } from 'motion/react'
+import { cn } from '@/lib/utils'
+import { QuestionMarkCircledIcon, QuestionMarkIcon } from '@radix-ui/react-icons'
+import { Switch } from '@radix-ui/react-switch'
 import { atom, useAtomValue, useSetAtom } from 'jotai'
 import {
   AlertTriangle,
@@ -21,12 +24,9 @@ import {
   Settings2,
   XCircle,
 } from 'lucide-react'
+import { motion } from 'motion/react'
 import { useState } from 'react'
 import { envVarsAtom, proxyUrlAtom, requiredEnvVarsAtom } from '../../atoms'
-import { cn } from '@/lib/utils'
-import { Switch } from '@radix-ui/react-switch'
-import { QuestionMarkCircledIcon, QuestionMarkIcon } from '@radix-ui/react-icons'
-import { Checkbox } from '@/components/ui/checkbox'
 import { vscode } from '../../vscode'
 
 const renderedEnvVarsAtom = atom((get) => {

@@ -1,18 +1,18 @@
-import { useAtom } from 'jotai'
 import {
+  Background,
+  Connection,
+  MarkerType,
+  MiniMap,
   ReactFlow,
   addEdge,
-  Background,
-  useNodesState,
   useEdgesState,
-  MiniMap,
-  MarkerType,
-  Connection,
+  useNodesState,
 } from '@xyflow/react'
+import { useAtom } from 'jotai'
 import { useAtomValue } from 'jotai'
 import { useMemo } from 'react'
-import { currentClientsAtom, orchestrationNodesAtom, orchIndexAtom } from '../../../atoms-orch-graph'
 import { useEffect } from 'react'
+import { currentClientsAtom, orchIndexAtom, orchestrationNodesAtom } from '../../../atoms-orch-graph'
 import '@xyflow/react/dist/style.css'
 
 interface RenderEdge {

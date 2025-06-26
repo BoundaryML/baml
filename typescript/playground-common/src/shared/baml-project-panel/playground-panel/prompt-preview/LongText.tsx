@@ -1,5 +1,5 @@
-import { ChevronDown } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { ChevronDown } from 'lucide-react'
 import { ChevronUp } from 'lucide-react'
 import { useState } from 'react'
 import { useMemo } from 'react'

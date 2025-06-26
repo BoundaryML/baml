@@ -1,6 +1,8 @@
 'use client'
 import { BAML } from '@boundaryml/baml-lezer'
 import { linter } from '@codemirror/lint'
+import { RangeSet, StateEffect, StateField } from '@codemirror/state'
+import { Decoration, DecorationSet, ViewPlugin, ViewUpdate } from '@codemirror/view'
 import { tags as t } from '@lezer/highlight'
 import { vscodeDarkInit, vscodeLightInit } from '@uiw/codemirror-theme-vscode'
 import CodeMirror, {
@@ -13,12 +15,10 @@ import CodeMirror, {
 } from '@uiw/react-codemirror'
 import { inlineCopilot } from 'codemirror-copilot'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Decoration, DecorationSet, ViewPlugin, ViewUpdate } from '@codemirror/view'
-import { StateField, StateEffect, RangeSet } from '@codemirror/state'
 
 import { hyperLink } from '@uiw/codemirror-extensions-hyper-link'
 import { langs } from '@uiw/codemirror-extensions-langs'
-import { useSetAtom, useStore, useAtomValue } from 'jotai'
+import { useAtomValue, useSetAtom, useStore } from 'jotai'
 import { type ICodeBlock } from '../types'
 import { CodeMirrorDiagnosticsAtom } from './atoms'
 

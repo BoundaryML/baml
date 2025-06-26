@@ -1,16 +1,16 @@
 import { FastForward, History, RefreshCw, Rocket } from 'lucide-react'
 
+import { cn } from '@/lib/utils'
 import { useAtomValue, useSetAtom } from 'jotai'
 import { useAtom } from 'jotai'
-import { isParallelTestsEnabledAtom, selectedHistoryIndexAtom, testHistoryAtom, TestHistoryEntry } from '../atoms'
-import { useRunBamlTests } from '../test-runner'
-import { ViewSelector } from './ViewSelector'
+import { Play } from 'lucide-react'
+import { Button } from '~/components/ui/button'
 import { Tooltip, TooltipTrigger } from '~/components/ui/tooltip'
 import { TooltipContent, TooltipProvider } from '~/components/ui/tooltip'
-import { Button } from '~/components/ui/button'
-import { Play } from 'lucide-react'
+import { TestHistoryEntry, isParallelTestsEnabledAtom, selectedHistoryIndexAtom, testHistoryAtom } from '../atoms'
+import { useRunBamlTests } from '../test-runner'
 import { getStatus } from '../testStateUtils'
-import { cn } from '@/lib/utils'
+import { ViewSelector } from './ViewSelector'
 
 const getHistoryButtonColor = (tests: TestHistoryEntry[], isSelected: boolean) => {
   const baseClasses = isSelected

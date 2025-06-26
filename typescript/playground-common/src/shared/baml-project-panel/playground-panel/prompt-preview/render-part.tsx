@@ -1,7 +1,7 @@
 import type { WasmChatMessagePart, WasmParam, WasmTestCase } from '@gloo-ai/baml-schema-wasm-web'
+import he from 'he'
 import { RenderPromptPart } from './render-text'
 import { WebviewMedia } from './webview-media'
-import he from 'he'
 
 export const RenderPart: React.FC<{
   part: WasmChatMessagePart
