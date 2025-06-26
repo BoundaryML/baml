@@ -78,7 +78,9 @@ impl<'a, 'b> IntoRpcEvent<'a, baml_rpc::TypeReference> for baml_types::FieldType
                 baml_types::TypeValue::Int => TypeReference::int(),
                 baml_types::TypeValue::Float => TypeReference::float(),
                 baml_types::TypeValue::Bool => TypeReference::bool(),
-                baml_types::TypeValue::Null => TypeReference::null(),
+                baml_types::TypeValue::Null => {
+                    TypeReference::union(vec![TypeReference::string()], true)
+                }
                 baml_types::TypeValue::Media(baml_media_type) => {
                     TypeReference::media(match baml_media_type {
                         baml_types::BamlMediaType::Image => MediaTypeDefinition::Image,
