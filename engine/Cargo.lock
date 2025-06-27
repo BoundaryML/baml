@@ -2724,8 +2724,10 @@ dependencies = [
  "baml-types",
  "baml_cffi",
  "dir-writer",
+ "indexmap 2.9.0",
  "internal-baml-core",
  "prettydiff",
+ "regex",
  "test-harness",
 ]
 

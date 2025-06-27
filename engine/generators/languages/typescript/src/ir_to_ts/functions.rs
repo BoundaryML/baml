@@ -6,7 +6,6 @@ use crate::{functions::FunctionTS, package::CurrentRenderPackage};
 
 pub fn ir_function_to_ts(function: &FunctionNode, pkg: &CurrentRenderPackage) -> FunctionTS {
     FunctionTS {
-        documentation: None,
         name: function.elem.name().to_string(),
         args: function
             .elem

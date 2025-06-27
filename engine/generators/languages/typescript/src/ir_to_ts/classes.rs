@@ -14,7 +14,6 @@ pub fn ir_class_to_ts<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -> Class
             .clone()
             .map(|docstring| docstring.0.clone()),
         dynamic: class.attributes.dynamic(),
-        pkg,
         fields: class
             .elem
             .static_fields
@@ -33,7 +32,6 @@ pub fn ir_class_to_ts_stream<'a>(class: &Class, pkg: &'a CurrentRenderPackage) -
             .clone()
             .map(|docstring| docstring.0.clone()),
         dynamic: class.attributes.dynamic(),
-        pkg,
         fields: class
             .elem
             .static_fields

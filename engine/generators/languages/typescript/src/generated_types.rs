@@ -38,12 +38,11 @@ mod r#enum {
     /// ```
     #[derive(askama::Template)]
     #[template(in_doc = true, escape = "none", ext = "txt")]
-    pub struct EnumTS<'a> {
+    pub struct EnumTS {
         pub name: String,
         pub docstring: Option<String>,
         pub values: Vec<(String, Option<String>)>,
         pub dynamic: bool,
-        pub pkg: &'a CurrentRenderPackage,
     }
 }
 
@@ -75,7 +74,6 @@ mod class {
         pub docstring: Option<String>,
         pub fields: Vec<FieldTS<'a>>,
         pub dynamic: bool,
-        pub pkg: &'a CurrentRenderPackage,
     }
 
     /// A field in a class.
@@ -142,6 +140,12 @@ mod class {
 ///     {%- endif %}
 ///     }
 ///   {%- endfor %}
+///   {%- for alias in type_aliases %}
+///     {{- alias.render()? }}
+///   {%- endfor %}
+///   {%- for interface_alias in interface_aliases %}
+///     {{- interface_alias.render()? }}
+///   {%- endfor %}
 /// }
 /// ```
 #[derive(askama::Template)]
@@ -149,20 +153,23 @@ mod class {
 struct PartialTypes<'a> {
     classes: &'a [ClassTS<'a>],
     types: &'a [String],
-    pkg: &'a CurrentRenderPackage,
+    type_aliases: &'a [TypeAliasTS<'a>],
+    interface_aliases: &'a [TypeAliasInterfaceTS<'a>],
 }
 
 pub fn render_partial_types(
     classes: &[ClassTS],
     types: &[String],
-    pkg: &CurrentRenderPackage,
+    type_aliases: &[TypeAliasTS],
+    interface_aliases: &[TypeAliasInterfaceTS],
 ) -> Result<String, askama::Error> {
     use askama::Template;
 
     PartialTypes {
         classes,
         types,
-        pkg,
+        type_aliases,
+        interface_aliases,
     }
     .render()
 }
@@ -186,6 +193,28 @@ mod type_aliases {
     pub struct TypeAliasTS<'a> {
         pub name: String,
         pub target_type: TypeTS,
+        pub docstring: Option<String>,
+        pub pkg: &'a CurrentRenderPackage,
+    }
+
+    /// A type alias converted to an interface to break circular references.
+    ///
+    /// ```askama
+    /// {% if let Some(docstring) = docstring -%}
+    /// /**
+    ///  {{crate::utils::prefix_lines(docstring, " * ") }}
+    ///  */
+    /// {%- endif %}
+    /// export interface {{ name }} {
+    ///   [key: string]: {{ value_type.serialize_type(pkg) }}
+    /// }
+    ///
+    /// ```
+    #[derive(askama::Template)]
+    #[template(in_doc = true, escape = "none", ext = "txt")]
+    pub struct TypeAliasInterfaceTS<'a> {
+        pub name: String,
+        pub value_type: TypeTS,
         pub docstring: Option<String>,
         pub pkg: &'a CurrentRenderPackage,
     }
@@ -234,19 +263,24 @@ mod type_aliases {
 /// {%- for alias in type_aliases %}
 /// {{- alias.render()? }}
 /// {%- endfor %}
+/// {%- for interface_alias in interface_aliases %}
+/// {{- interface_alias.render()? }}
+/// {%- endfor %}
 /// ```
 #[derive(askama::Template)]
 #[template(in_doc = true, escape = "none", ext = "txt")]
 struct TsTypes<'ir> {
-    enums: &'ir [EnumTS<'ir>],
+    enums: &'ir [EnumTS],
     classes: &'ir [ClassTS<'ir>],
     type_aliases: &'ir [TypeAliasTS<'ir>],
+    interface_aliases: &'ir [TypeAliasInterfaceTS<'ir>],
 }
 
 pub(crate) fn render_ts_types(
     enums: &[EnumTS],
     classes: &[ClassTS],
     type_aliases: &[TypeAliasTS],
+    interface_aliases: &[TypeAliasInterfaceTS],
     _pkg: &CurrentRenderPackage,
 ) -> Result<String, askama::Error> {
     use askama::Template;
@@ -255,6 +289,7 @@ pub(crate) fn render_ts_types(
         enums,
         classes,
         type_aliases,
+        interface_aliases,
     };
     ts_types.render()
 }
@@ -263,7 +298,7 @@ pub(crate) fn render_ts_types(
 #[template(path = "type_builder.ts.j2", escape = "none")]
 struct TypeBuilder<'a> {
     classes: &'a [ClassTS<'a>],
-    enums: &'a [EnumTS<'a>],
+    enums: &'a [EnumTS],
 }
 
 pub(crate) fn render_type_builder(
@@ -278,4 +313,4 @@ pub(crate) fn render_type_builder(
 pub use class::{ClassTS, FieldTS};
 pub use r#enum::EnumTS;
 // pub use union::{UnionTS, VariantTS};
-pub use type_aliases::TypeAliasTS;
+pub use type_aliases::{TypeAliasInterfaceTS, TypeAliasTS};

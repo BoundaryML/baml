@@ -20,14 +20,14 @@ $ pnpm add @boundaryml/baml
 
 import type { BamlRuntime, FunctionResult, BamlCtxManager, ClientRegistry, Image, Audio, Collector } from "@boundaryml/baml"
 import { toBamlError, BamlStream, type HTTPRequest } from "@boundaryml/baml"
-import type { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types"
-import type { partial_types } from "./partial_types"
-import type * as types from "./types"
-import type {AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, ClientDetails1559, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, Document1559, DummyOutput, DynEnumOne, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, DynamicSchema, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Haiku, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MaintainFieldOrder, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, Note1599, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, RecursiveUnion, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, Tree, TwoStoriesOneTitle, TwoStoriesOneTitleCheck, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types"
-import type TypeBuilder from "./type_builder"
-import { AsyncHttpRequest, AsyncHttpStreamRequest } from "./async_request"
-import { LlmResponseParser, LlmStreamParser } from "./parser"
-import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals"
+import type { Checked, Check, RecursivePartialNull as MovedRecursivePartialNull } from "./types.js"
+import type { partial_types } from "./partial_types.js"
+import type * as types from "./types.js"
+import type {AliasedEnum, AnotherObject, BigNumbers, BinaryNode, Blah, BlockConstraint, BlockConstraintForParam, BookOrder, Category, Category2, Category3, ClassForNullLiteral, ClassOptionalOutput, ClassOptionalOutput2, ClassToRecAlias, ClassWithBlockDone, ClassWithImage, ClassWithoutDone, ClientDetails1559, Color, ComplexMemoryObject, CompoundBigNumbers, ContactInfo, CustomStory, CustomTaskResult, DataType, Document1559, DummyOutput, DynEnumOne, DynEnumTwo, DynInputOutput, DynamicClassOne, DynamicClassTwo, DynamicOutput, DynamicSchema, Earthling, Education, Email, EmailAddress, EnumInClass, EnumOutput, Event, FakeImage, FlightConfirmation, FooAny, Forest, FormatterTest0, FormatterTest1, FormatterTest2, FormatterTest3, GroceryReceipt, Haiku, Hobby, InnerClass, InnerClass2, InputClass, InputClassNested, JsonArray, JsonEntry, JsonObject, JsonTemplate, JsonValue, LinkedList, LinkedListAliasNode, LiteralClassHello, LiteralClassOne, LiteralClassTwo, MaintainFieldOrder, MalformedConstraints, MalformedConstraints2, MapKey, Martian, MemoryObject, MergeAttrs, NamedArgsSingleClass, NamedArgsSingleEnum, NamedArgsSingleEnumList, Nested, Nested2, NestedBlockConstraint, NestedBlockConstraintForParam, Node, NodeWithAliasIndirection, Note1599, OptionalListAndMap, OptionalTest_CategoryType, OptionalTest_Prop1, OptionalTest_ReturnType, OrderInfo, OrderStatus, OriginalA, OriginalB, Person, PhoneNumber, Quantity, RaysData, RecAliasOne, RecAliasThree, RecAliasTwo, ReceiptInfo, ReceiptItem, Recipe, RecursiveAliasDependency, RecursiveListAlias, RecursiveMapAlias, RecursiveUnion, Resume, Schema, SearchParams, SemanticContainer, SimpleTag, SmallThing, SomeClassNestedDynamic, StringToClassEntry, Tag, TestClassAlias, TestClassNested, TestClassWithEnum, TestEnum, TestMemoryOutput, TestOutputClass, Tree, TwoStoriesOneTitle, TwoStoriesOneTitleCheck, UnionTest_ReturnType, UniverseQuestion, UniverseQuestionInput, WithReasoning} from "./types.js"
+import type TypeBuilder from "./type_builder.js"
+import { AsyncHttpRequest, AsyncHttpStreamRequest } from "./async_request.js"
+import { LlmResponseParser, LlmStreamParser } from "./parser.js"
+import { DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_CTX, DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME } from "./globals.js"
 
 /**
  * @deprecated Use RecursivePartialNull from 'baml_client/types' instead.
@@ -94,7 +94,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "AaaSamOutputFormat",
         {
@@ -119,7 +122,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "AliasThatPointsToRecursiveType",
         {
@@ -144,7 +150,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "AliasWithMultipleAttrs",
         {
@@ -169,7 +178,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "AliasedInputClass",
         {
@@ -194,7 +206,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "AliasedInputClass2",
         {
@@ -219,7 +234,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "AliasedInputClassNested",
         {
@@ -244,7 +262,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "AliasedInputEnum",
         {
@@ -269,7 +290,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "AliasedInputList",
         {
@@ -294,7 +318,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "AllowedOptionals",
         {
@@ -319,7 +346,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "AssertFn",
         {
@@ -344,7 +374,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "AudioInput",
         {
@@ -369,7 +402,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "AudioInputOpenai",
         {
@@ -394,7 +430,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "BuildLinkedList",
         {
@@ -419,7 +458,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "BuildTree",
         {
@@ -444,7 +486,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ClassThatPointsToRecursiveClassThroughAlias",
         {
@@ -469,7 +514,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ClassifyDynEnumTwo",
         {
@@ -494,7 +542,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ClassifyMessage",
         {
@@ -519,7 +570,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ClassifyMessage2",
         {
@@ -544,7 +598,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ClassifyMessage3",
         {
@@ -569,7 +626,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "Completion",
         {
@@ -594,7 +654,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "CustomTask",
         {
@@ -619,7 +682,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "DescribeImage",
         {
@@ -644,7 +710,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "DescribeImage2",
         {
@@ -669,7 +738,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "DescribeImage3",
         {
@@ -694,7 +766,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "DescribeImage4",
         {
@@ -719,7 +794,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "DescribeMedia1599",
         {
@@ -744,7 +822,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "DifferentiateUnions",
         {
@@ -769,7 +850,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "DummyOutputFunction",
         {
@@ -794,7 +878,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "DynamicFunc",
         {
@@ -819,7 +906,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "DynamicInputOutput",
         {
@@ -844,7 +934,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "DynamicListInputOutput",
         {
@@ -869,7 +962,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ExpectFailure",
         {
@@ -894,7 +990,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ExtractContactInfo",
         {
@@ -919,7 +1018,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ExtractEntities",
         {
@@ -944,7 +1046,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ExtractHobby",
         {
@@ -969,7 +1074,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ExtractNames",
         {
@@ -994,7 +1102,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ExtractPeople",
         {
@@ -1019,7 +1130,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ExtractReceiptInfo",
         {
@@ -1044,7 +1158,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ExtractResume",
         {
@@ -1069,7 +1186,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ExtractResume2",
         {
@@ -1094,7 +1214,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnClassOptionalOutput",
         {
@@ -1119,7 +1242,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnClassOptionalOutput2",
         {
@@ -1144,7 +1270,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnEnumListOutput",
         {
@@ -1169,7 +1298,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnEnumOutput",
         {
@@ -1194,7 +1326,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnLiteralClassInputOutput",
         {
@@ -1219,7 +1354,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnLiteralUnionClassInputOutput",
         {
@@ -1244,7 +1382,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnNamedArgsSingleStringOptional",
         {
@@ -1269,7 +1410,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnOutputBool",
         {
@@ -1294,7 +1438,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnOutputClass",
         {
@@ -1319,7 +1466,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnOutputClassList",
         {
@@ -1344,7 +1494,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnOutputClassNested",
         {
@@ -1369,7 +1522,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnOutputClassWithEnum",
         {
@@ -1394,7 +1550,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnOutputInt",
         {
@@ -1419,7 +1578,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnOutputLiteralBool",
         {
@@ -1444,7 +1606,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnOutputLiteralInt",
         {
@@ -1469,7 +1634,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnOutputLiteralString",
         {
@@ -1494,7 +1662,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnOutputStringList",
         {
@@ -1519,7 +1690,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnTestAliasedEnumOutput",
         {
@@ -1544,7 +1718,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnTestClassAlias",
         {
@@ -1569,7 +1746,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "FnTestNamedArgsSingleEnum",
         {
@@ -1594,7 +1774,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "GetDataType",
         {
@@ -1619,7 +1802,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "GetOrderInfo",
         {
@@ -1644,7 +1830,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "GetQuery",
         {
@@ -1669,7 +1858,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "InOutEnumMapKey",
         {
@@ -1694,7 +1886,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "InOutLiteralStringUnionMapKey",
         {
@@ -1719,7 +1914,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "InOutSingleLiteralStringMapKey",
         {
@@ -1744,7 +1942,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "JsonTypeAliasCycle",
         {
@@ -1769,7 +1970,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "LLMEcho",
         {
@@ -1794,7 +1998,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "LiteralUnionsTest",
         {
@@ -1819,7 +2026,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "MakeBlockConstraint",
         {
@@ -1844,7 +2054,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "MakeClassWithBlockDone",
         {
@@ -1869,7 +2082,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "MakeClassWithExternalDone",
         {
@@ -1894,7 +2110,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "MakeNestedBlockConstraint",
         {
@@ -1919,7 +2138,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "MakeSemanticContainer",
         {
@@ -1944,7 +2166,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "MapAlias",
         {
@@ -1969,7 +2194,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "MergeAliasAttributes",
         {
@@ -1994,7 +2222,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "MyFunc",
         {
@@ -2019,7 +2250,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "NestedAlias",
         {
@@ -2044,7 +2278,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "NullLiteralClassHello",
         {
@@ -2069,7 +2306,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "OpenAIWithAnthropicResponseHello",
         {
@@ -2094,7 +2334,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "OptionalTest_Function",
         {
@@ -2119,7 +2362,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "PredictAge",
         {
@@ -2144,7 +2390,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "PredictAgeBare",
         {
@@ -2169,7 +2418,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "PrimitiveAlias",
         {
@@ -2194,7 +2446,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "PromptTestClaude",
         {
@@ -2219,7 +2474,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "PromptTestClaudeChat",
         {
@@ -2244,7 +2502,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "PromptTestClaudeChatNoSystem",
         {
@@ -2269,7 +2530,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "PromptTestOpenAI",
         {
@@ -2294,7 +2558,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "PromptTestOpenAIChat",
         {
@@ -2319,7 +2586,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "PromptTestOpenAIChatNoSystem",
         {
@@ -2344,7 +2614,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "PromptTestStreaming",
         {
@@ -2369,7 +2642,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "RecursiveAliasCycle",
         {
@@ -2394,7 +2670,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "RecursiveClassWithAliasIndirection",
         {
@@ -2419,7 +2698,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "RecursiveUnionTest",
         {
@@ -2444,7 +2726,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ReturnAliasWithMergedAttributes",
         {
@@ -2469,7 +2754,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ReturnFailingAssert",
         {
@@ -2494,7 +2782,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ReturnJsonEntry",
         {
@@ -2519,7 +2810,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "ReturnMalformedConstraints",
         {
@@ -2544,7 +2838,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "SchemaDescriptions",
         {
@@ -2569,7 +2866,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "SimpleRecursiveListAlias",
         {
@@ -2594,7 +2894,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "SimpleRecursiveMapAlias",
         {
@@ -2619,7 +2922,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "StreamBigNumbers",
         {
@@ -2644,7 +2950,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "StreamFailingAssertion",
         {
@@ -2669,7 +2978,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "StreamFailingCheck",
         {
@@ -2694,7 +3006,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "StreamOneBigNumber",
         {
@@ -2719,7 +3034,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "StreamUnionIntegers",
         {
@@ -2744,7 +3062,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "StreamingCompoundNumbers",
         {
@@ -2769,7 +3090,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "StructureDocument1559",
         {
@@ -2794,7 +3118,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TakeRecAliasDep",
         {
@@ -2819,7 +3146,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TellStory",
         {
@@ -2844,7 +3174,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAnthropic",
         {
@@ -2869,7 +3202,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAnthropicShorthand",
         {
@@ -2894,7 +3230,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAws",
         {
@@ -2919,7 +3258,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAwsClaude37",
         {
@@ -2944,7 +3286,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAwsInferenceProfile",
         {
@@ -2969,7 +3314,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAwsInvalidAccessKey",
         {
@@ -2994,7 +3342,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAwsInvalidProfile",
         {
@@ -3019,7 +3370,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAwsInvalidRegion",
         {
@@ -3044,7 +3398,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAwsInvalidSessionToken",
         {
@@ -3069,7 +3426,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAzure",
         {
@@ -3094,7 +3454,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAzureFailure",
         {
@@ -3119,7 +3482,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAzureO1NoMaxTokens",
         {
@@ -3144,7 +3510,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAzureO1WithMaxCompletionTokens",
         {
@@ -3169,7 +3538,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAzureO1WithMaxTokens",
         {
@@ -3194,7 +3566,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAzureO3NoMaxTokens",
         {
@@ -3219,7 +3594,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAzureO3WithMaxCompletionTokens",
         {
@@ -3244,7 +3622,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestAzureWithMaxTokens",
         {
@@ -3269,7 +3650,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestCaching",
         {
@@ -3294,7 +3678,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestFallbackClient",
         {
@@ -3319,7 +3706,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestFallbackStrategy",
         {
@@ -3344,7 +3734,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestFallbackToShorthand",
         {
@@ -3369,7 +3762,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleBool",
         {
@@ -3394,7 +3790,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleClass",
         {
@@ -3419,7 +3818,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleEnumList",
         {
@@ -3444,7 +3846,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleFloat",
         {
@@ -3469,7 +3874,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleInt",
         {
@@ -3494,7 +3902,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleMapStringToClass",
         {
@@ -3519,7 +3930,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleMapStringToMap",
         {
@@ -3544,7 +3958,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleMapStringToString",
         {
@@ -3569,7 +3986,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleString",
         {
@@ -3594,7 +4014,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleStringArray",
         {
@@ -3619,7 +4042,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestFnNamedArgsSingleStringList",
         {
@@ -3644,7 +4070,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestGemini",
         {
@@ -3669,7 +4098,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestGeminiOpenAiGeneric",
         {
@@ -3694,7 +4126,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestGeminiSystem",
         {
@@ -3719,7 +4154,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestGeminiSystemAsChat",
         {
@@ -3744,7 +4182,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestGroq",
         {
@@ -3769,7 +4210,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestImageInput",
         {
@@ -3794,7 +4238,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestImageInputAnthropic",
         {
@@ -3819,7 +4266,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestImageListInput",
         {
@@ -3844,7 +4294,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestMemory",
         {
@@ -3869,7 +4322,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestMulticlassNamedArgs",
         {
@@ -3894,7 +4350,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestNamedArgsLiteralBool",
         {
@@ -3919,7 +4378,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestNamedArgsLiteralInt",
         {
@@ -3944,7 +4406,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestNamedArgsLiteralString",
         {
@@ -3969,7 +4434,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOllama",
         {
@@ -3994,7 +4462,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOllamaHaiku",
         {
@@ -4019,7 +4490,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOpenAI",
         {
@@ -4044,7 +4518,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOpenAIDummyClient",
         {
@@ -4069,7 +4546,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOpenAIGPT4oMini",
         {
@@ -4094,7 +4574,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOpenAIGPT4oMini2",
         {
@@ -4119,7 +4602,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOpenAIGPT4oMini3",
         {
@@ -4144,7 +4630,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOpenAILegacyProvider",
         {
@@ -4169,7 +4658,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOpenAIO1NoMaxTokens",
         {
@@ -4194,7 +4686,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOpenAIO1WithMaxCompletionTokens",
         {
@@ -4219,7 +4714,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOpenAIO1WithMaxTokens",
         {
@@ -4244,7 +4742,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOpenAIShorthand",
         {
@@ -4269,7 +4770,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOpenAIWithFinishReasonError",
         {
@@ -4294,7 +4798,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOpenAIWithMaxTokens",
         {
@@ -4319,7 +4826,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOpenAIWithNullMaxTokens",
         {
@@ -4344,7 +4854,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestOpenRouterMistralSmall3_1_24b",
         {
@@ -4369,7 +4882,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestRetryConstant",
         {
@@ -4394,7 +4910,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestRetryExponential",
         {
@@ -4419,7 +4938,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestRoundRobinStrategy",
         {
@@ -4444,7 +4966,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestSingleFallbackClient",
         {
@@ -4469,7 +4994,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestThinking",
         {
@@ -4494,7 +5022,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestUniverseQuestion",
         {
@@ -4519,7 +5050,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestVertex",
         {
@@ -4544,7 +5078,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestVertexClaude",
         {
@@ -4569,7 +5106,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "TestVertexWithSystemInstructions",
         {
@@ -4594,7 +5134,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "UnionTest_Function",
         {
@@ -4619,7 +5162,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "UseBlockConstraint",
         {
@@ -4644,7 +5190,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "UseMaintainFieldOrder",
         {
@@ -4669,7 +5218,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "UseMalformedConstraints",
         {
@@ -4694,7 +5246,10 @@ export class BamlAsyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = await this.runtime.callFunction(
         "UseNestedBlockConstraint",
         {
@@ -4722,7 +5277,7 @@ class BamlStreamClient {
   constructor(runtime: BamlRuntime, ctxManager: BamlCtxManager, bamlOptions?: BamlCallOptions) {
     this.runtime = runtime
     this.ctxManager = ctxManager
-    this.bamlOptions = bamlOptions || { env: { ...process.env } }
+    this.bamlOptions = bamlOptions || {}
   }
 
   
@@ -4733,7 +5288,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "AaaSamOutputFormat",
         {
@@ -4764,7 +5322,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "AliasThatPointsToRecursiveType",
         {
@@ -4795,7 +5356,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "AliasWithMultipleAttrs",
         {
@@ -4826,7 +5390,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "AliasedInputClass",
         {
@@ -4857,7 +5424,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "AliasedInputClass2",
         {
@@ -4888,7 +5458,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "AliasedInputClassNested",
         {
@@ -4919,7 +5492,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "AliasedInputEnum",
         {
@@ -4950,7 +5526,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "AliasedInputList",
         {
@@ -4981,7 +5560,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "AllowedOptionals",
         {
@@ -5012,7 +5594,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "AssertFn",
         {
@@ -5043,7 +5628,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "AudioInput",
         {
@@ -5074,7 +5662,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "AudioInputOpenai",
         {
@@ -5105,7 +5696,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "BuildLinkedList",
         {
@@ -5136,7 +5730,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "BuildTree",
         {
@@ -5167,7 +5764,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ClassThatPointsToRecursiveClassThroughAlias",
         {
@@ -5198,7 +5798,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ClassifyDynEnumTwo",
         {
@@ -5229,7 +5832,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ClassifyMessage",
         {
@@ -5260,7 +5866,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ClassifyMessage2",
         {
@@ -5291,7 +5900,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ClassifyMessage3",
         {
@@ -5322,7 +5934,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "Completion",
         {
@@ -5353,7 +5968,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "CustomTask",
         {
@@ -5384,7 +6002,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "DescribeImage",
         {
@@ -5415,7 +6036,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "DescribeImage2",
         {
@@ -5446,7 +6070,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "DescribeImage3",
         {
@@ -5477,7 +6104,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "DescribeImage4",
         {
@@ -5508,7 +6138,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "DescribeMedia1599",
         {
@@ -5539,7 +6172,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "DifferentiateUnions",
         {
@@ -5570,7 +6206,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "DummyOutputFunction",
         {
@@ -5601,7 +6240,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "DynamicFunc",
         {
@@ -5632,7 +6274,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "DynamicInputOutput",
         {
@@ -5663,7 +6308,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "DynamicListInputOutput",
         {
@@ -5694,7 +6342,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ExpectFailure",
         {
@@ -5725,7 +6376,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ExtractContactInfo",
         {
@@ -5756,7 +6410,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ExtractEntities",
         {
@@ -5787,7 +6444,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ExtractHobby",
         {
@@ -5818,7 +6478,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ExtractNames",
         {
@@ -5849,7 +6512,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ExtractPeople",
         {
@@ -5880,7 +6546,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ExtractReceiptInfo",
         {
@@ -5911,7 +6580,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ExtractResume",
         {
@@ -5942,7 +6614,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ExtractResume2",
         {
@@ -5973,7 +6648,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnClassOptionalOutput",
         {
@@ -6004,7 +6682,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnClassOptionalOutput2",
         {
@@ -6035,7 +6716,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnEnumListOutput",
         {
@@ -6066,7 +6750,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnEnumOutput",
         {
@@ -6097,7 +6784,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnLiteralClassInputOutput",
         {
@@ -6128,7 +6818,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnLiteralUnionClassInputOutput",
         {
@@ -6159,7 +6852,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnNamedArgsSingleStringOptional",
         {
@@ -6190,7 +6886,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnOutputBool",
         {
@@ -6221,7 +6920,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnOutputClass",
         {
@@ -6252,7 +6954,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnOutputClassList",
         {
@@ -6283,7 +6988,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnOutputClassNested",
         {
@@ -6314,7 +7022,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnOutputClassWithEnum",
         {
@@ -6345,7 +7056,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnOutputInt",
         {
@@ -6376,7 +7090,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnOutputLiteralBool",
         {
@@ -6407,7 +7124,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnOutputLiteralInt",
         {
@@ -6438,7 +7158,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnOutputLiteralString",
         {
@@ -6469,7 +7192,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnOutputStringList",
         {
@@ -6500,7 +7226,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnTestAliasedEnumOutput",
         {
@@ -6531,7 +7260,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnTestClassAlias",
         {
@@ -6562,7 +7294,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "FnTestNamedArgsSingleEnum",
         {
@@ -6593,7 +7328,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "GetDataType",
         {
@@ -6624,7 +7362,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "GetOrderInfo",
         {
@@ -6655,7 +7396,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "GetQuery",
         {
@@ -6686,7 +7430,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "InOutEnumMapKey",
         {
@@ -6717,7 +7464,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "InOutLiteralStringUnionMapKey",
         {
@@ -6748,7 +7498,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "InOutSingleLiteralStringMapKey",
         {
@@ -6779,7 +7532,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "JsonTypeAliasCycle",
         {
@@ -6810,7 +7566,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "LLMEcho",
         {
@@ -6841,7 +7600,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "LiteralUnionsTest",
         {
@@ -6872,7 +7634,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "MakeBlockConstraint",
         {
@@ -6903,7 +7668,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "MakeClassWithBlockDone",
         {
@@ -6934,7 +7702,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "MakeClassWithExternalDone",
         {
@@ -6965,7 +7736,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "MakeNestedBlockConstraint",
         {
@@ -6996,7 +7770,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "MakeSemanticContainer",
         {
@@ -7027,7 +7804,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "MapAlias",
         {
@@ -7058,7 +7838,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "MergeAliasAttributes",
         {
@@ -7089,7 +7872,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "MyFunc",
         {
@@ -7120,7 +7906,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "NestedAlias",
         {
@@ -7151,7 +7940,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "NullLiteralClassHello",
         {
@@ -7182,7 +7974,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "OpenAIWithAnthropicResponseHello",
         {
@@ -7213,7 +8008,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "OptionalTest_Function",
         {
@@ -7244,7 +8042,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "PredictAge",
         {
@@ -7275,7 +8076,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "PredictAgeBare",
         {
@@ -7306,7 +8110,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "PrimitiveAlias",
         {
@@ -7337,7 +8144,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "PromptTestClaude",
         {
@@ -7368,7 +8178,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "PromptTestClaudeChat",
         {
@@ -7399,7 +8212,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "PromptTestClaudeChatNoSystem",
         {
@@ -7430,7 +8246,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "PromptTestOpenAI",
         {
@@ -7461,7 +8280,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "PromptTestOpenAIChat",
         {
@@ -7492,7 +8314,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "PromptTestOpenAIChatNoSystem",
         {
@@ -7523,7 +8348,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "PromptTestStreaming",
         {
@@ -7554,7 +8382,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "RecursiveAliasCycle",
         {
@@ -7585,7 +8416,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "RecursiveClassWithAliasIndirection",
         {
@@ -7616,7 +8450,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "RecursiveUnionTest",
         {
@@ -7647,7 +8484,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ReturnAliasWithMergedAttributes",
         {
@@ -7678,7 +8518,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ReturnFailingAssert",
         {
@@ -7709,7 +8552,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ReturnJsonEntry",
         {
@@ -7740,7 +8586,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "ReturnMalformedConstraints",
         {
@@ -7771,7 +8620,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "SchemaDescriptions",
         {
@@ -7802,7 +8654,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "SimpleRecursiveListAlias",
         {
@@ -7833,7 +8688,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "SimpleRecursiveMapAlias",
         {
@@ -7864,7 +8722,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "StreamBigNumbers",
         {
@@ -7895,7 +8756,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "StreamFailingAssertion",
         {
@@ -7926,7 +8790,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "StreamFailingCheck",
         {
@@ -7957,7 +8824,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "StreamOneBigNumber",
         {
@@ -7988,7 +8858,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "StreamUnionIntegers",
         {
@@ -8019,7 +8892,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "StreamingCompoundNumbers",
         {
@@ -8050,7 +8926,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "StructureDocument1559",
         {
@@ -8081,7 +8960,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TakeRecAliasDep",
         {
@@ -8112,7 +8994,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TellStory",
         {
@@ -8143,7 +9028,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAnthropic",
         {
@@ -8174,7 +9062,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAnthropicShorthand",
         {
@@ -8205,7 +9096,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAws",
         {
@@ -8236,7 +9130,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAwsClaude37",
         {
@@ -8267,7 +9164,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAwsInferenceProfile",
         {
@@ -8298,7 +9198,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAwsInvalidAccessKey",
         {
@@ -8329,7 +9232,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAwsInvalidProfile",
         {
@@ -8360,7 +9266,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAwsInvalidRegion",
         {
@@ -8391,7 +9300,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAwsInvalidSessionToken",
         {
@@ -8422,7 +9334,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAzure",
         {
@@ -8453,7 +9368,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAzureFailure",
         {
@@ -8484,7 +9402,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAzureO1NoMaxTokens",
         {
@@ -8515,7 +9436,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAzureO1WithMaxCompletionTokens",
         {
@@ -8546,7 +9470,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAzureO1WithMaxTokens",
         {
@@ -8577,7 +9504,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAzureO3NoMaxTokens",
         {
@@ -8608,7 +9538,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAzureO3WithMaxCompletionTokens",
         {
@@ -8639,7 +9572,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestAzureWithMaxTokens",
         {
@@ -8670,7 +9606,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestCaching",
         {
@@ -8701,7 +9640,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestFallbackClient",
         {
@@ -8732,7 +9674,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestFallbackStrategy",
         {
@@ -8763,7 +9708,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestFallbackToShorthand",
         {
@@ -8794,7 +9742,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleBool",
         {
@@ -8825,7 +9776,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleClass",
         {
@@ -8856,7 +9810,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleEnumList",
         {
@@ -8887,7 +9844,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleFloat",
         {
@@ -8918,7 +9878,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleInt",
         {
@@ -8949,7 +9912,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleMapStringToClass",
         {
@@ -8980,7 +9946,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleMapStringToMap",
         {
@@ -9011,7 +9980,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleMapStringToString",
         {
@@ -9042,7 +10014,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleString",
         {
@@ -9073,7 +10048,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleStringArray",
         {
@@ -9104,7 +10082,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestFnNamedArgsSingleStringList",
         {
@@ -9135,7 +10116,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestGemini",
         {
@@ -9166,7 +10150,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestGeminiOpenAiGeneric",
         {
@@ -9197,7 +10184,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestGeminiSystem",
         {
@@ -9228,7 +10218,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestGeminiSystemAsChat",
         {
@@ -9259,7 +10252,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestGroq",
         {
@@ -9290,7 +10286,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestImageInput",
         {
@@ -9321,7 +10320,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestImageInputAnthropic",
         {
@@ -9352,7 +10354,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestImageListInput",
         {
@@ -9383,7 +10388,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestMemory",
         {
@@ -9414,7 +10422,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestMulticlassNamedArgs",
         {
@@ -9445,7 +10456,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestNamedArgsLiteralBool",
         {
@@ -9476,7 +10490,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestNamedArgsLiteralInt",
         {
@@ -9507,7 +10524,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestNamedArgsLiteralString",
         {
@@ -9538,7 +10558,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOllama",
         {
@@ -9569,7 +10592,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOllamaHaiku",
         {
@@ -9600,7 +10626,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOpenAI",
         {
@@ -9631,7 +10660,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOpenAIDummyClient",
         {
@@ -9662,7 +10694,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOpenAIGPT4oMini",
         {
@@ -9693,7 +10728,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOpenAIGPT4oMini2",
         {
@@ -9724,7 +10762,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOpenAIGPT4oMini3",
         {
@@ -9755,7 +10796,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOpenAILegacyProvider",
         {
@@ -9786,7 +10830,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOpenAIO1NoMaxTokens",
         {
@@ -9817,7 +10864,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOpenAIO1WithMaxCompletionTokens",
         {
@@ -9848,7 +10898,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOpenAIO1WithMaxTokens",
         {
@@ -9879,7 +10932,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOpenAIShorthand",
         {
@@ -9910,7 +10966,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOpenAIWithFinishReasonError",
         {
@@ -9941,7 +11000,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOpenAIWithMaxTokens",
         {
@@ -9972,7 +11034,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOpenAIWithNullMaxTokens",
         {
@@ -10003,7 +11068,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestOpenRouterMistralSmall3_1_24b",
         {
@@ -10034,7 +11102,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestRetryConstant",
         {
@@ -10065,7 +11136,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestRetryExponential",
         {
@@ -10096,7 +11170,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestRoundRobinStrategy",
         {
@@ -10127,7 +11204,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestSingleFallbackClient",
         {
@@ -10158,7 +11238,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestThinking",
         {
@@ -10189,7 +11272,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestUniverseQuestion",
         {
@@ -10220,7 +11306,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestVertex",
         {
@@ -10251,7 +11340,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestVertexClaude",
         {
@@ -10282,7 +11374,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "TestVertexWithSystemInstructions",
         {
@@ -10313,7 +11408,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "UnionTest_Function",
         {
@@ -10344,7 +11442,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "UseBlockConstraint",
         {
@@ -10375,7 +11476,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "UseMaintainFieldOrder",
         {
@@ -10406,7 +11510,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "UseMalformedConstraints",
         {
@@ -10437,7 +11544,10 @@ class BamlStreamClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.streamFunction(
         "UseNestedBlockConstraint",
         {

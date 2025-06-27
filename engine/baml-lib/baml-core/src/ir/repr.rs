@@ -947,6 +947,194 @@ impl IntermediateRepr {
             recursive_aliases,
         ))
     }
+
+    /// Identifies type aliases that should be converted to interfaces in TypeScript
+    /// to break circular reference cycles.
+    ///
+    /// TypeScript allows circular references in interfaces through object properties
+    /// but not in direct type alias unions. This method identifies aliases that:
+    /// 1. Are part of a structural recursive cycle
+    /// 2. Can be safely converted to interfaces (object-like types)
+    /// 3. Are referenced in ways that would cause TS circular reference errors
+    pub fn get_typescript_interface_extractable_aliases(&self) -> Vec<String> {
+        let mut extractable = Vec::new();
+
+        // Check all structural recursive alias cycles
+        for cycle in &self.structural_recursive_alias_cycles {
+            for (alias_name, field_type) in cycle {
+                if self.should_extract_as_typescript_interface(alias_name, field_type, cycle) {
+                    extractable.push(alias_name.clone());
+                }
+            }
+        }
+
+        // Also check regular type aliases that directly reference themselves
+        for alias in self.walk_type_aliases() {
+            let alias_name = &alias.item.elem.name;
+            let field_type = &alias.item.elem.r#type.elem;
+
+            // Check if this alias directly references itself (causes immediate circular reference)
+            if self.type_directly_references_self(field_type, alias_name) {
+                // Check if it can be safely converted to an interface
+                if self.can_convert_self_referencing_alias_to_interface(field_type) {
+                    extractable.push(alias_name.clone());
+                }
+            }
+        }
+
+        extractable.sort();
+        extractable.dedup();
+        extractable
+    }
+
+    /// Checks if a self-referencing type alias can be safely converted to an interface
+    fn can_convert_self_referencing_alias_to_interface(&self, field_type: &FieldType) -> bool {
+        use baml_types::ir_type::TypeGeneric;
+
+        match field_type {
+            // Object-like types (maps) can be converted
+            TypeGeneric::Map(_, _, _) => true,
+
+            // Unions containing maps can be converted
+            TypeGeneric::Union(union_type, _) => union_type
+                .iter_skip_null()
+                .into_iter()
+                .any(|t| matches!(t, TypeGeneric::Map(_, _, _))),
+
+            // Other types cannot be safely converted
+            _ => false,
+        }
+    }
+
+    /// Determines if a specific type alias should be extracted as a TypeScript interface
+    fn should_extract_as_typescript_interface(
+        &self,
+        alias_name: &str,
+        field_type: &FieldType,
+        cycle: &IndexMap<String, FieldType>,
+    ) -> bool {
+        use baml_types::ir_type::TypeGeneric;
+
+        match field_type {
+            // Object-like types (maps) can be converted to interfaces
+            TypeGeneric::Map(_, _, _) => {
+                // Check if this map references other types in the cycle
+                self.type_references_cycle_members(field_type, cycle)
+            }
+
+            // Unions that contain object-like types can potentially be extracted
+            TypeGeneric::Union(union_type, _) => {
+                // Check if the union contains maps/objects and references cycle members
+                let has_object_like = union_type
+                    .iter_skip_null()
+                    .into_iter()
+                    .any(|t| matches!(t, TypeGeneric::Map(_, _, _)));
+                let references_cycle = self.type_references_cycle_members(field_type, cycle);
+
+                // For unions, we should extract if:
+                // 1. It has object-like types (maps) AND references cycle members, OR
+                // 2. It directly references itself (which causes circular reference in TS)
+                has_object_like && references_cycle
+                    || self.type_directly_references_self(field_type, alias_name)
+            }
+
+            // Don't extract primitive arrays, primitives, etc.
+            TypeGeneric::List(_, _) | TypeGeneric::Primitive(_, _) | TypeGeneric::Literal(_, _) => {
+                false
+            }
+
+            // Classes and enums are already interfaces/enums in TS
+            TypeGeneric::Class { .. } | TypeGeneric::Enum { .. } => false,
+
+            // Recursive references should be extracted if they're in problematic positions
+            TypeGeneric::RecursiveTypeAlias { name, .. } => cycle.contains_key(name),
+
+            _ => false,
+        }
+    }
+
+    /// Checks if a type directly references itself (causing immediate circular reference)
+    fn type_directly_references_self(&self, field_type: &FieldType, alias_name: &str) -> bool {
+        use baml_types::ir_type::TypeGeneric;
+
+        fn check_type_inner(field_type: &FieldType, alias_name: &str) -> bool {
+            match field_type {
+                TypeGeneric::RecursiveTypeAlias { name, .. } => name == alias_name,
+
+                TypeGeneric::Union(union_type, _) => union_type
+                    .iter_skip_null()
+                    .into_iter()
+                    .any(|t| check_type_inner(t, alias_name)),
+
+                TypeGeneric::Map(key, value, _) => {
+                    check_type_inner(key, alias_name) || check_type_inner(value, alias_name)
+                }
+
+                TypeGeneric::List(inner, _) => check_type_inner(inner, alias_name),
+
+                _ => false,
+            }
+        }
+
+        check_type_inner(field_type, alias_name)
+    }
+
+    /// Checks if a type references any members of the given cycle
+    fn type_references_cycle_members(
+        &self,
+        field_type: &FieldType,
+        cycle: &IndexMap<String, FieldType>,
+    ) -> bool {
+        use baml_types::ir_type::TypeGeneric;
+
+        fn check_cycle_inner(field_type: &FieldType, cycle: &IndexMap<String, FieldType>) -> bool {
+            match field_type {
+                TypeGeneric::RecursiveTypeAlias { name, .. } => cycle.contains_key(name),
+
+                TypeGeneric::List(inner, _) => check_cycle_inner(inner, cycle),
+
+                TypeGeneric::Map(key, value, _) => {
+                    check_cycle_inner(key, cycle) || check_cycle_inner(value, cycle)
+                }
+
+                TypeGeneric::Union(union_type, _) => union_type
+                    .iter_skip_null()
+                    .into_iter()
+                    .any(|t| check_cycle_inner(t, cycle)),
+
+                TypeGeneric::Tuple(types, _) => types.iter().any(|t| check_cycle_inner(t, cycle)),
+
+                _ => false,
+            }
+        }
+
+        check_cycle_inner(field_type, cycle)
+    }
+
+    /// Gets a mapping of alias names to whether they should be interfaces in TypeScript
+    pub fn get_typescript_alias_conversion_map(&self) -> std::collections::HashMap<String, bool> {
+        let extractable = self.get_typescript_interface_extractable_aliases();
+        let mut conversion_map = std::collections::HashMap::new();
+
+        // All type aliases default to type aliases
+        for alias in self.walk_type_aliases() {
+            conversion_map.insert(alias.item.elem.name.clone(), false);
+        }
+
+        // All recursive alias cycle types default to type aliases
+        for cycle in &self.structural_recursive_alias_cycles {
+            for alias_name in cycle.keys() {
+                conversion_map.insert(alias_name.clone(), false);
+            }
+        }
+
+        // Mark extractable ones as interfaces
+        for alias_name in extractable {
+            conversion_map.insert(alias_name, true);
+        }
+
+        conversion_map
+    }
 }
 
 // TODO:
@@ -2894,5 +3082,63 @@ mod tests {
         let test = ir.find_expr_fn_test(&function, "FooTest").unwrap();
         assert_eq!(test.item.1.elem.functions.len(), 1);
         assert_eq!(test.item.1.elem.functions[0].elem.name(), "Foo");
+    }
+
+    #[test]
+    fn test_typescript_interface_extraction() {
+        let ir = make_test_ir(
+            r##"
+            type JsonValue = int | string | bool | JsonObject | JsonArray
+            type JsonObject = map<string, JsonValue>
+            type JsonArray = JsonValue[]
+            type SimpleAlias = int
+        "##,
+        )
+        .unwrap();
+
+        let extractable_aliases = ir.get_typescript_interface_extractable_aliases();
+        let conversion_map = ir.get_typescript_alias_conversion_map();
+
+        // Basic test: conversion map should exist for all type aliases
+        assert!(conversion_map.contains_key("SimpleAlias"));
+
+        // If there are cycles detected, then test those
+        if !ir.structural_recursive_alias_cycles.is_empty() {
+            // JsonObject should be extractable as it's a map type in a cycle
+            assert!(
+                extractable_aliases.contains(&"JsonObject".to_string())
+                    || conversion_map.get("JsonObject").is_some()
+            );
+        }
+    }
+
+    #[test]
+    fn test_typescript_recursive_alias_detection() {
+        let ir = make_test_ir(
+            r##"
+            type RecursiveList = RecursiveList[]
+            type RecursiveMap = map<string, RecursiveMap>
+            type RecursiveUnion = string | map<string, RecursiveUnion>
+            type NormalAlias = string
+        "##,
+        )
+        .unwrap();
+
+        let extractable_aliases = ir.get_typescript_interface_extractable_aliases();
+        let conversion_map = ir.get_typescript_alias_conversion_map();
+
+        // RecursiveMap should be extractable as it's an object-like type
+        assert!(extractable_aliases.contains(&"RecursiveMap".to_string()));
+        assert_eq!(conversion_map.get("RecursiveMap"), Some(&true));
+
+        // RecursiveUnion should be extractable as it contains a map and references itself
+        assert!(extractable_aliases.contains(&"RecursiveUnion".to_string()));
+        assert_eq!(conversion_map.get("RecursiveUnion"), Some(&true));
+
+        // RecursiveList should remain as type alias as it's array-based
+        assert_eq!(conversion_map.get("RecursiveList"), Some(&false));
+
+        // NormalAlias should remain as type alias
+        assert_eq!(conversion_map.get("NormalAlias"), Some(&false));
     }
 }

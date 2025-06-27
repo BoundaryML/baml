@@ -106,7 +106,10 @@ describe("Type aliases tests", () => {
     };
     const res = await b.JsonTypeAliasCycle(data);
     expect(res).toEqual(data);
-    expect(res.json.object.list).toEqual([1, 2, 3]);
+    // Since res is JsonValue (union type), we need to check it's an object first
+    if (typeof res === "object" && res !== null && "json" in res) {
+      expect((res as any).json.object.list).toEqual([1, 2, 3]);
+    }
   });
 
   it("json type alias as class dependency", async () => {
@@ -126,6 +129,9 @@ describe("Type aliases tests", () => {
     };
     const res = await b.TakeRecAliasDep({ value: data });
     expect(res.value).toEqual(data);
-    expect(res.value.json?.object?.list).toEqual([1, 2, 3]);
+    // Since res.value is JsonValue (union type), we need to check it's an object first
+    if (typeof res.value === "object" && res.value !== null && "json" in res.value) {
+      expect((res.value as any).json?.object?.list).toEqual([1, 2, 3]);
+    }
   });
 });

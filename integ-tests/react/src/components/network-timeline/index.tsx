@@ -3,7 +3,7 @@ import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import {} from 'lucide-react';
 import * as React from 'react';
-import type { HookOutput } from '../../../baml_client/react/hooks';
+import type { FunctionNames, HookOutput } from '../../../baml_client/react/hooks';
 
 type NetworkState =
   | 'idle'
@@ -188,9 +188,9 @@ function DurationDisplay({
   );
 }
 
-function StatusBadge({
+function StatusBadge<TFunctionName extends FunctionNames = FunctionNames>({
   status,
-}: { status: HookOutput<'TestAws', { stream: true }>['status'] }) {
+}: { status: HookOutput<TFunctionName, { stream: true }>['status'] }) {
   const getVariant = () => {
     if (status === 'idle') return 'ghost' as const;
     return 'default' as const;
@@ -241,12 +241,12 @@ function BooleanBadge({ label, value }: { label: string; value: boolean }) {
   );
 }
 
-export function NetworkTimeline({
+export function NetworkTimeline<TFunctionName extends FunctionNames = FunctionNames>({
   hookResult,
   className,
   hasStarted,
 }: {
-  hookResult: HookOutput<'TestAws'>;
+  hookResult: HookOutput<TFunctionName>;
   className?: string;
   hasStarted: boolean;
 }) {
@@ -420,7 +420,7 @@ export function NetworkTimeline({
       <div className="flex items-center justify-between">
         <div className="flex flex-col items-center gap-1">
           <h3 className="font-semibold text-sm">LLM Timeline</h3>
-          <StatusBadge status={hookResult.status} />
+          <StatusBadge<TFunctionName> status={hookResult.status} />
         </div>
         <DurationDisplay
           timeline={timeline}

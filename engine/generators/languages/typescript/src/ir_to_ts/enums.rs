@@ -1,11 +1,6 @@
 use internal_baml_core::ir::Enum;
 
-use crate::package::CurrentRenderPackage;
-
-pub fn ir_enum_to_ts<'a>(
-    enum_: &Enum,
-    pkg: &'a CurrentRenderPackage,
-) -> crate::generated_types::EnumTS<'a> {
+pub fn ir_enum_to_ts(enum_: &Enum) -> crate::generated_types::EnumTS {
     crate::generated_types::EnumTS {
         name: enum_.elem.name.clone(),
         values: enum_
@@ -16,6 +11,5 @@ pub fn ir_enum_to_ts<'a>(
             .collect(),
         docstring: enum_.elem.docstring.as_ref().map(|d| d.0.clone()),
         dynamic: enum_.attributes.dynamic(),
-        pkg,
     }
 }

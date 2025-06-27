@@ -96,7 +96,7 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
                 on_generate: match L::test_name() {
                     "go" => vec!["gofmt -w . && goimports -w . && go build".to_string()],
                     "python" => vec!["ruff check --fix".to_string()],
-                    "typescript" => vec!["npx prettier --write .".to_string()],
+                    "typescript" => vec!["npx biome check --write .".to_string()],
                     // "ruby" => vec!["bundle install".to_string(), "srb init".to_string(), "srb tc --typed=strict".to_string()],
                     _ => vec![],
                 },
@@ -161,7 +161,7 @@ impl<L: TestLanguageFeatures> TestStructure<L> {
             on_generate: match L::test_name() {
                 "go" => vec!["gofmt -w . && goimports -w . && go build".to_string()],
                 "python" => vec!["ruff check --fix".to_string()],
-                "typescript" => vec!["npx prettier --write .".to_string()],
+                "typescript" => vec!["npx biome check --write .".to_string()],
                 // "ruby" => vec!["bundle install".to_string(), "srb init".to_string(), "srb tc --typed=strict".to_string()],
                 _ => vec![],
             },

@@ -58,6 +58,10 @@ func (*stream) Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
@@ -135,6 +139,10 @@ func (*stream) JsonInput(ctx context.Context, x types.JSON, opts ...CallOptionFu
 
 	if callOpts.clientRegistry != nil {
 		args.ClientRegistry = callOpts.clientRegistry
+	}
+
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
 	}
 
 	encoded, err := baml.EncodeRoot(args)

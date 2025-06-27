@@ -1,9 +1,14 @@
+use baml_types::GeneratorOutputType;
 use dir_writer::{FileCollector, GeneratorArgs, IntermediateRepr, LanguageFeatures};
 use functions::{
     render_async_client, render_async_request, render_config, render_globals, render_index,
-    render_inlinedbaml, render_parser, render_sync_client, render_sync_request, render_tracing,
+    render_inlinedbaml, render_parser, render_react_hooks, render_react_media, render_react_server,
+    render_react_server_streaming, render_react_server_streaming_types, render_sync_client,
+    render_sync_request, render_tracing,
 };
 use generated_types::{render_partial_types, render_ts_types, render_type_builder};
+use internal_baml_core::configuration::ModuleFormat;
+use regex::Regex;
 mod functions;
 mod generated_types;
 mod ir_to_ts;
@@ -61,8 +66,10 @@ $ pnpm add @boundaryml/baml
             .iter()
             .map(|f| ir_to_ts::functions::ir_function_to_ts(f, &pkg))
             .collect::<Vec<_>>();
+
+        // Generate base TypeScript files (always generated)
         collector.add_file("inlinedbaml.ts", render_inlinedbaml(&pkg, file_map)?)?;
-        collector.add_file("config.ts", render_config(&pkg)?)?;
+        collector.add_file("config.ts", render_config()?)?;
         collector.add_file("index.ts", render_index(&args.default_client_mode)?)?;
         collector.add_file("globals.ts", render_globals(&pkg)?)?;
         collector.add_file("tracing.ts", render_tracing(&pkg)?)?;
@@ -83,6 +90,8 @@ $ pnpm add @boundaryml/baml
             "sync_request.ts",
             &render_sync_request(&functions, &types, &pkg)?,
         )?;
+
+        // Generate type files
         let classes = ir.walk_classes().collect::<Vec<_>>();
         let ts_classes = classes
             .iter()
@@ -94,24 +103,224 @@ $ pnpm add @boundaryml/baml
             .collect::<Vec<_>>();
         let ts_enums = ir
             .walk_enums()
-            .map(|e| ir_to_ts::enums::ir_enum_to_ts(e.item, &pkg))
+            .map(|e| ir_to_ts::enums::ir_enum_to_ts(e.item))
             .collect::<Vec<_>>();
-        let mut type_aliases = ir
-            .walk_type_aliases()
-            .map(|a| ir_to_ts::type_aliases::ir_type_alias_to_ts(a.item, &pkg))
-            .collect::<Vec<_>>();
-        type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
+        let type_aliases = ir.walk_type_aliases().collect::<Vec<_>>();
+
+        // Get the conversion map to determine which type aliases should become interfaces
+        let conversion_map = ir.get_typescript_alias_conversion_map();
+
+        let mut ts_type_aliases = Vec::new();
+        let mut ts_interface_aliases = Vec::new();
+
+        // Collect all alias names that are part of recursive cycles to avoid duplicates
+        let recursive_alias_names: std::collections::HashSet<String> = ir
+            .structural_recursive_alias_cycles
+            .iter()
+            .flat_map(|cycle| cycle.keys())
+            .cloned()
+            .collect();
+
+        // Process regular type aliases (skip those that are part of recursive cycles)
+        for alias_walker in type_aliases.iter() {
+            let alias_name = &alias_walker.item.elem.name;
+
+            // Skip if this alias is part of a recursive cycle (will be processed separately)
+            if recursive_alias_names.contains(alias_name) {
+                continue;
+            }
+
+            if conversion_map.get(alias_name) == Some(&true) {
+                // Convert to interface
+                if let Some(interface) =
+                    ir_to_ts::type_aliases::ir_type_alias_to_ts_interface(alias_walker.item, &pkg)
+                {
+                    ts_interface_aliases.push(interface);
+                } else {
+                    // Fallback to regular type alias if interface conversion fails
+                    ts_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts(
+                        alias_walker.item,
+                        &pkg,
+                    ));
+                }
+            } else {
+                // Keep as type alias
+                ts_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts(
+                    alias_walker.item,
+                    &pkg,
+                ));
+            }
+        }
+
+        // Process recursive alias cycles
+        for cycle in &ir.structural_recursive_alias_cycles {
+            for (alias_name, field_type) in cycle {
+                if conversion_map.get(alias_name) == Some(&true) {
+                    // Create a synthetic TypeAlias for the interface generation
+                    use internal_baml_core::ir::repr::{Node, NodeAttributes, TypeAlias};
+                    let synthetic_alias = Node {
+                        attributes: NodeAttributes::default(),
+                        elem: TypeAlias {
+                            name: alias_name.clone(),
+                            r#type: Node {
+                                attributes: NodeAttributes::default(),
+                                elem: field_type.clone(),
+                            },
+                            docstring: None,
+                        },
+                    };
+
+                    if let Some(interface) = ir_to_ts::type_aliases::ir_type_alias_to_ts_interface(
+                        &synthetic_alias,
+                        &pkg,
+                    ) {
+                        ts_interface_aliases.push(interface);
+                    } else {
+                        // Fallback to regular type alias
+                        ts_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts(
+                            &synthetic_alias,
+                            &pkg,
+                        ));
+                    }
+                } else {
+                    // Create a synthetic TypeAlias for regular alias generation
+                    use internal_baml_core::ir::repr::{Node, NodeAttributes, TypeAlias};
+                    let synthetic_alias = Node {
+                        attributes: NodeAttributes::default(),
+                        elem: TypeAlias {
+                            name: alias_name.clone(),
+                            r#type: Node {
+                                attributes: NodeAttributes::default(),
+                                elem: field_type.clone(),
+                            },
+                            docstring: None,
+                        },
+                    };
+                    ts_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts(
+                        &synthetic_alias,
+                        &pkg,
+                    ));
+                }
+            }
+        }
+
+        ts_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
+        ts_interface_aliases.sort_by(|a, b| a.name.cmp(&b.name));
 
         pkg.set("baml_client.types");
         collector.add_file(
             "types.ts",
-            render_ts_types(&ts_enums, &ts_classes, &type_aliases, &pkg)?,
+            render_ts_types(
+                &ts_enums,
+                &ts_classes,
+                &ts_type_aliases,
+                &ts_interface_aliases,
+                &pkg,
+            )?,
         )?;
 
         pkg.set("baml_client.partial_types");
+        let mut ts_stream_type_aliases = Vec::new();
+        let mut ts_stream_interface_aliases = Vec::new();
+
+        // Process regular type aliases (skip those that are part of recursive cycles)
+        for alias_walker in type_aliases.iter() {
+            let alias_name = &alias_walker.item.elem.name;
+
+            // Skip if this alias is part of a recursive cycle (will be processed separately)
+            if recursive_alias_names.contains(alias_name) {
+                continue;
+            }
+
+            if conversion_map.get(alias_name) == Some(&true) {
+                // Convert to interface
+                if let Some(interface) =
+                    ir_to_ts::type_aliases::ir_type_alias_to_ts_interface_stream(
+                        alias_walker.item,
+                        &pkg,
+                    )
+                {
+                    ts_stream_interface_aliases.push(interface);
+                } else {
+                    // Fallback to regular type alias if interface conversion fails
+                    ts_stream_type_aliases.push(
+                        ir_to_ts::type_aliases::ir_type_alias_to_ts_stream(alias_walker.item, &pkg),
+                    );
+                }
+            } else {
+                // Keep as type alias
+                ts_stream_type_aliases.push(ir_to_ts::type_aliases::ir_type_alias_to_ts_stream(
+                    alias_walker.item,
+                    &pkg,
+                ));
+            }
+        }
+
+        // Process recursive alias cycles for streaming
+        for cycle in &ir.structural_recursive_alias_cycles {
+            for (alias_name, field_type) in cycle {
+                if conversion_map.get(alias_name) == Some(&true) {
+                    // Create a synthetic TypeAlias for the interface generation
+                    use internal_baml_core::ir::repr::{Node, NodeAttributes, TypeAlias};
+                    let synthetic_alias = Node {
+                        attributes: NodeAttributes::default(),
+                        elem: TypeAlias {
+                            name: alias_name.clone(),
+                            r#type: Node {
+                                attributes: NodeAttributes::default(),
+                                elem: field_type.clone(),
+                            },
+                            docstring: None,
+                        },
+                    };
+
+                    if let Some(interface) =
+                        ir_to_ts::type_aliases::ir_type_alias_to_ts_interface_stream(
+                            &synthetic_alias,
+                            &pkg,
+                        )
+                    {
+                        ts_stream_interface_aliases.push(interface);
+                    } else {
+                        // Fallback to regular type alias
+                        ts_stream_type_aliases.push(
+                            ir_to_ts::type_aliases::ir_type_alias_to_ts_stream(
+                                &synthetic_alias,
+                                &pkg,
+                            ),
+                        );
+                    }
+                } else {
+                    // Create a synthetic TypeAlias for regular alias generation
+                    use internal_baml_core::ir::repr::{Node, NodeAttributes, TypeAlias};
+                    let synthetic_alias = Node {
+                        attributes: NodeAttributes::default(),
+                        elem: TypeAlias {
+                            name: alias_name.clone(),
+                            r#type: Node {
+                                attributes: NodeAttributes::default(),
+                                elem: field_type.clone(),
+                            },
+                            docstring: None,
+                        },
+                    };
+                    ts_stream_type_aliases.push(
+                        ir_to_ts::type_aliases::ir_type_alias_to_ts_stream(&synthetic_alias, &pkg),
+                    );
+                }
+            }
+        }
+
+        ts_stream_type_aliases.sort_by(|a, b| a.name.cmp(&b.name));
+        ts_stream_interface_aliases.sort_by(|a, b| a.name.cmp(&b.name));
         collector.add_file(
             "partial_types.ts",
-            render_partial_types(&ts_classes_stream, &types, &pkg)?,
+            render_partial_types(
+                &ts_classes_stream,
+                &types,
+                &ts_stream_type_aliases,
+                &ts_stream_interface_aliases,
+            )?,
         )?;
 
         collector.add_file(
@@ -119,8 +328,73 @@ $ pnpm add @boundaryml/baml
             render_type_builder(&ts_classes, &ts_enums)?,
         )?;
 
+        // Generate React-specific files if this is a TypescriptReact generator
+        if args.client_type == GeneratorOutputType::TypescriptReact {
+            // Generate React-specific files
+            collector.add_file("react/hooks.tsx", render_react_hooks(&functions, &pkg)?)?;
+            collector.add_file(
+                "react/server.ts",
+                render_react_server(&functions, &types, &pkg)?,
+            )?;
+            collector.add_file(
+                "react/server_streaming.ts",
+                render_react_server_streaming(&functions, &types, &pkg)?,
+            )?;
+            collector.add_file(
+                "react/server_streaming_types.ts",
+                render_react_server_streaming_types(&functions, &types, &pkg)?,
+            )?;
+            collector.add_file("react/media.ts", render_react_media()?)?;
+        }
+
+        // Apply ESM transformations if module format is ESM
+        if args.module_format == Some(ModuleFormat::Esm) {
+            collector.modify_files(|content: &mut String| {
+                *content = add_js_suffix_to_imports(content);
+            });
+        }
+
         Ok(())
     }
+}
+
+fn add_js_suffix_to_imports(content: &str) -> String {
+    // Regex to find import/export statements with module specifiers.
+    // It captures the import/export part, quotes, and the path itself.
+    // Escaped curly braces in the character set just in case.
+    let re = Regex::new(r#"(import(?:["'\s]*(?:[\w\*\{\}\n\r\t, ]+)from\s*)?|export(?:["'\s]*(?:[\w\*\{\}\n\r\t, ]+)from\s*)?)(["'])([^"']+)(["'])"#).unwrap();
+
+    re.replace_all(content, |caps: &regex::Captures| {
+        let import_export_part = &caps[1];
+        let quote = &caps[2];
+        let path = &caps[3];
+        let closing_quote = &caps[4];
+
+        // Check if it's a relative path (starts with ./ or ../)
+        if path.starts_with("./") || path.starts_with("../") {
+            // Check if it already has a common JS/TS/CSS extension
+            if !path.ends_with(".js") &&
+               !path.ends_with(".mjs") &&
+               !path.ends_with(".cjs") &&
+               !path.ends_with(".jsx") && // Consider react specific extensions too
+               !path.ends_with(".tsx") &&
+               !path.ends_with(".css") && // Ignore CSS files
+               !path.ends_with(".json")
+            {
+                // Remove existing .ts if present before adding .js
+                let base_path = path.strip_suffix(".ts").unwrap_or(path);
+                // Append .js
+                format!("{import_export_part}{quote}{base_path}.js{closing_quote}")
+            } else {
+                // Already has a recognized extension, leave it as is.
+                caps[0].to_string()
+            }
+        } else {
+            // Not a relative path (e.g., external package like 'react' or '@boundaryml/baml'), leave it as is.
+            caps[0].to_string()
+        }
+    })
+    .to_string()
 }
 
 #[cfg(test)]
@@ -138,14 +412,96 @@ mod generated_tests {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn test_name() {
-        use std::str::FromStr;
+    fn test_add_js_suffix_to_imports() {
+        // Add .js to relative paths without extension
+        assert_eq!(
+            add_js_suffix_to_imports("import { Foo } from './bar';"),
+            "import { Foo } from './bar.js';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("export * from \"../baz/qux\";"),
+            "export * from \"../baz/qux.js\";"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import type { Bar } from './bar'"),
+            "import type { Bar } from './bar.js'"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import {\n  Thing1,\n  Thing2\n} from \"./things\";"),
+            "import {\n  Thing1,\n  Thing2\n} from \"./things.js\";"
+        );
 
-        use dir_writer::LanguageFeatures;
+        // Replace .ts with .js in relative paths
+        assert_eq!(
+            add_js_suffix_to_imports("import { Foo } from './bar.ts';"),
+            "import { Foo } from './bar.js';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("export * from \"../baz/qux.ts\";"),
+            "export * from \"../baz/qux.js\";"
+        );
 
-        let gen_type = baml_types::GeneratorOutputType::from_str(crate::TsLanguageFeatures::name())
-            .expect("TsLanguageFeatures name should be a valid GeneratorOutputType");
-        assert_eq!(gen_type, baml_types::GeneratorOutputType::Typescript);
+        // Should ignore already correct .js paths
+        assert_eq!(
+            add_js_suffix_to_imports("import { Foo } from './bar.js';"),
+            "import { Foo } from './bar.js';"
+        );
+        // Should ignore other extensions like .css, .mjs, .cjs
+        assert_eq!(
+            add_js_suffix_to_imports("import styles from './styles.css';"),
+            "import styles from './styles.css';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import config from './config.json';"),
+            "import config from './config.json';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import { util } from './util.mjs';"),
+            "import { util } from './util.mjs';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import { main } from '../main.cjs';"),
+            "import { main } from '../main.cjs';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import { Comp } from './Comp.tsx';"),
+            "import { Comp } from './Comp.tsx';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import { Button } from './Button.jsx';"),
+            "import { Button } from './Button.jsx';"
+        );
+
+        // Should ignore absolute paths or URLs
+        assert_eq!(
+            add_js_suffix_to_imports("import React from 'react';"),
+            "import React from 'react';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("import { BamlClient } from '@boundaryml/baml';"),
+            "import { BamlClient } from '@boundaryml/baml';"
+        );
+        assert_eq!(
+            add_js_suffix_to_imports("const path = '/path/to/file.ts';"),
+            "const path = '/path/to/file.ts';" // This is not an import/export statement
+        );
+
+        // Empty string
+        assert_eq!(add_js_suffix_to_imports(""), "");
+        // String with no imports
+        assert_eq!(
+            add_js_suffix_to_imports("const x = 10; function y() {}"),
+            "const x = 10; function y() {}"
+        );
+        // Mixed content
+        assert_eq!(
+            add_js_suffix_to_imports(
+                "console.log('hello');\nimport { a } from './a.ts';\nimport { b } from './b';\nimport { c } from './c.js';\nimport { d } from 'd-lib';\nexport { e } from '../e.ts';\nconsole.log('world');"
+            ),
+            "console.log('hello');\nimport { a } from './a.js';\nimport { b } from './b.js';\nimport { c } from './c.js';\nimport { d } from 'd-lib';\nexport { e } from '../e.js';\nconsole.log('world');"
+        );
     }
 }
