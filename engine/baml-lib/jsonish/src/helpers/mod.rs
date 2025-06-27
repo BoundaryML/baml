@@ -277,7 +277,6 @@ fn relevant_data_models<'a>(
 pub fn parsed_value_to_response(
     ir: &IntermediateRepr,
     baml_value: BamlValueWithFlags,
-    allow_partials: bool,
 ) -> Result<ResponseBamlValue> {
     let meta_flags: BamlValueWithMeta<Vec<Flag>> = baml_value.clone().into();
     let baml_value_with_meta: BamlValueWithMeta<Vec<(String, JinjaExpression, bool)>> =
@@ -298,8 +297,8 @@ pub fn parsed_value_to_response(
                 .collect()
         });
 
-    let baml_value_with_streaming = validate_streaming_state(ir, &baml_value, allow_partials)
-        .map_err(|s| anyhow::anyhow!("{s:?}"))?;
+    let baml_value_with_streaming =
+        validate_streaming_state(ir, &baml_value).map_err(|s| anyhow::anyhow!("{s:?}"))?;
 
     // Combine the baml_value, its types, the parser flags, and the streaming state
     // into a final value.

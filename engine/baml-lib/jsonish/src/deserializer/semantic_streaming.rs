@@ -34,7 +34,6 @@ pub enum StreamingError {
 pub fn validate_streaming_state(
     ir: &impl IRHelperExtended,
     baml_value: &BamlValueWithFlags,
-    allow_partials: bool,
 ) -> Result<BamlValueWithMeta<Completion>, StreamingError> {
     let baml_value_with_meta_flags: BamlValueWithMeta<Vec<Flag>> = baml_value.clone().into();
     let typed_baml_value: BamlValueWithMeta<(Vec<Flag>, TypeIR)> =
@@ -42,12 +41,7 @@ pub fn validate_streaming_state(
     let baml_value_with_streaming_state_and_behavior =
         typed_baml_value.map_meta(|(flags, r#type)| (completion_state(flags), r#type));
 
-    let top_level_node = process_node(
-        ir,
-        baml_value_with_streaming_state_and_behavior,
-        allow_partials,
-        0,
-    )?;
+    let top_level_node = process_node(ir, baml_value_with_streaming_state_and_behavior, 0)?;
     Ok(top_level_node)
 }
 
@@ -65,14 +59,13 @@ pub fn validate_streaming_state(
 fn process_node(
     ir: &impl IRHelperExtended,
     value: BamlValueWithMeta<(CompletionState, &TypeIR)>,
-    allow_partials: bool,
     _depth: usize,
 ) -> Result<BamlValueWithMeta<Completion>, StreamingError> {
     let (completion_state, field_type) = value.meta().clone();
     let metadata = field_type.meta();
 
     let must_be_done = required_done(ir, field_type, &value);
-    let allow_partials_in_sub_nodes = allow_partials && !must_be_done;
+    let allow_partials_in_sub_nodes = !must_be_done;
 
     let new_meta = Completion {
         state: completion_state.clone(),
@@ -80,7 +73,7 @@ fn process_node(
         required_done: must_be_done,
     };
 
-    if must_be_done && allow_partials && !(completion_state == CompletionState::Complete) {
+    if must_be_done && !(completion_state == CompletionState::Complete) {
         return Err(StreamingError::IncompleteDoneValue);
     }
 
@@ -94,9 +87,7 @@ fn process_node(
         BamlValueWithMeta::List(items, _) => Ok(BamlValueWithMeta::List(
             items
                 .into_iter()
-                .filter_map(|item| {
-                    process_node(ir, item, allow_partials_in_sub_nodes, _depth + 1).ok()
-                })
+                .filter_map(|item| process_node(ir, item, _depth + 1).ok())
                 .collect(),
             new_meta,
         )),
@@ -113,7 +104,6 @@ fn process_node(
                 ir,
                 class_name,
                 value_field_names.iter().cloned().collect(),
-                allow_partials,
             )?;
 
             // We might later delete fields from 'value_fields`, (e.g. if they
@@ -149,7 +139,7 @@ fn process_node(
                 .filter_map(|(field_name, field_value)| {
                     let with_state = field_value.meta().1.meta().streaming_behavior.state;
                     let completion_state = field_value.meta().0.clone();
-                    match process_node(ir, field_value, allow_partials_in_sub_nodes, _depth + 1) {
+                    match process_node(ir, field_value, _depth + 1) {
                         Ok(res) => Some((field_name, res)),
                         _ => {
                             let state = Completion {
@@ -234,11 +224,7 @@ fn process_node(
         BamlValueWithMeta::Map(kvs, _) => {
             let new_kvs = kvs
                 .into_iter()
-                .filter_map(|(k, v)| {
-                    process_node(ir, v, allow_partials_in_sub_nodes, _depth + 1)
-                        .ok()
-                        .map(|v| (k, v))
-                })
+                .filter_map(|(k, v)| process_node(ir, v, _depth + 1).ok().map(|v| (k, v)))
                 .collect();
             Ok(BamlValueWithMeta::Map(new_kvs, new_meta))
         }
@@ -266,11 +252,7 @@ fn fields_needing_null_filler<'a>(
     ir: &'a impl IRSemanticStreamingHelper,
     class_name: &'a str,
     value_names: HashSet<String>,
-    allow_partials: bool,
 ) -> Result<HashSet<String>, anyhow::Error> {
-    if !allow_partials {
-        return Ok(HashSet::new());
-    }
     ir.find_class_fields_needing_null_filler(class_name, &value_names)
 }
 
@@ -418,7 +400,7 @@ mod tests {
             mk_list(vec![mk_list(vec![]), mk_list(vec![])]),
         ]);
 
-        let res = validate_streaming_state(&ir, &value, true).unwrap();
+        let res = validate_streaming_state(&ir, &value).unwrap();
 
         assert_eq!(res.into_iter().count(), 6);
     }
@@ -473,7 +455,7 @@ mod tests {
         );
         let field_type = TypeIR::class("Info");
 
-        let res = validate_streaming_state(&ir, &value, true).unwrap();
+        let res = validate_streaming_state(&ir, &value).unwrap();
 
         // The first key should be "Name", matching the order specified in the
         // original value.

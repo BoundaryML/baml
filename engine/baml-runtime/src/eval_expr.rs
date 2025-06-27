@@ -443,9 +443,8 @@ async fn beta_reduce<'a>(
                         &EvaluationContext::default(),
                     )?;
 
-                    let parsed =
-                        jsonish::from_str(&output_format, &arrow.return_type, &body, false)
-                            .context("(jsonish) Failed parsing response of fetch_value call")?;
+                    let parsed = jsonish::from_str(&output_format, &arrow.return_type, &body)
+                        .context("(jsonish) Failed parsing response of fetch_value call")?;
 
                     Ok(Expr::Atom(
                         BamlValueWithMeta::<Vec<Flag>>::from(parsed).map_meta(|_| meta.clone()),

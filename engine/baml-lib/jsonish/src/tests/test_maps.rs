@@ -131,7 +131,7 @@ fn test_union_of_class_and_map() {
     let target =
         crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
 
-    let result = from_str(&target, &target_type, llm_output, false);
+    let result = from_str(&target, &target_type, llm_output);
 
     assert!(result.is_ok(), "Failed to parse: {:?}", result);
 
@@ -164,7 +164,7 @@ fn test_union_of_map_and_class() {
     let target =
         crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
 
-    let result = from_str(&target, &target_type, llm_output, false);
+    let result = from_str(&target, &target_type, llm_output);
 
     assert!(result.is_ok(), "Failed to parse: {:?}", result);
 

@@ -28,7 +28,7 @@ fn test_union_full() {
     let target =
         crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
 
-    let result = from_str(&target, &target_type, r#"{"hi": ["a", "b"]}"#, false);
+    let result = from_str(&target, &target_type, r#"{"hi": ["a", "b"]}"#);
 
     assert!(result.is_ok(), "Failed to parse: {:?}", result);
 

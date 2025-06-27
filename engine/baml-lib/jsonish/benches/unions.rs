@@ -18,7 +18,7 @@ pub fn bench_unions(c: &mut Criterion) {
     // let of = Builder::new(target.clone()).build();
 
     group.bench_function("text_content", |b| {
-        b.iter(|| from_str(&of, &target, r#"{"text": "Hello World"}"#, false))
+        b.iter(|| from_str(&of, &target, r#"{"text": "Hello World"}"#))
     });
 
     group.bench_function("image_content", |b| {
@@ -27,7 +27,6 @@ pub fn bench_unions(c: &mut Criterion) {
                 &of,
                 &target,
                 r#"{"url": "https://example.com/img.jpg", "width": 800, "height": 600}"#,
-                false,
             )
         })
     });
@@ -47,7 +46,6 @@ pub fn bench_unions(c: &mut Criterion) {
                 &of,
                 &target,
                 r#"{"url": "https://example.com/video.mp4", "duration": 120}"#,
-                false,
             )
         })
     });
@@ -65,7 +63,7 @@ pub fn bench_unions(c: &mut Criterion) {
     });
 
     group.bench_function("json_value", |b| {
-        b.iter(|| from_str(&of, &target, jsonish::helpers::common::JSON_STRING, true))
+        b.iter(|| from_str(&of, &target, jsonish::helpers::common::JSON_STRING))
     });
 
     group.finish();

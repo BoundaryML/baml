@@ -43,8 +43,8 @@ pub fn make_test_data1() {
         // let results = (0..2)
         .map(|i| {
             let partial_llm_data = &llm_data[0..i];
-            let parsed_value = from_str(&target, &target_type, partial_llm_data, true);
-            let value = parsed_value_to_response(&ir, parsed_value.unwrap(), true).unwrap();
+            let parsed_value = from_str(&target, &target_type, partial_llm_data);
+            let value = parsed_value_to_response(&ir, parsed_value.unwrap()).unwrap();
 
             serde_json::to_value(&vec![
                 serde_json::to_value(partial_llm_data).unwrap(),

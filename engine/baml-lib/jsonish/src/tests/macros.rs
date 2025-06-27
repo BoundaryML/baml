@@ -9,7 +9,7 @@ macro_rules! test_failing_deserializer {
                 crate::helpers::render_output_format(&ir, &target_type, &Default::default())
                     .unwrap();
 
-            let result = from_str(&target, &target_type, $raw_string, false);
+            let result = from_str(&target, &target_type, $raw_string);
 
             assert!(result.is_err(), "Failed not to parse");
         }
@@ -48,7 +48,6 @@ macro_rules! test_deserializer {
                 &target,
                 &target_type,
                 $raw_string,
-                false,
             );
 
             assert!(result.is_ok(), "Failed to parse: {:?}", result);
@@ -78,7 +77,7 @@ macro_rules! test_deserializer_with_expected_score {
                 crate::helpers::render_output_format(&ir, &target_type, &Default::default())
                     .unwrap();
 
-            let result = from_str(&target, &target_type, $raw_string, false);
+            let result = from_str(&target, &target_type, $raw_string);
 
             assert!(result.is_ok(), "Failed to parse: {:?}", result);
 
@@ -103,7 +102,6 @@ macro_rules! test_partial_deserializer {
                 &target,
                 &target_type,
                 $raw_string,
-                true,
             );
 
             assert!(result.is_ok(), "Failed to parse: {:?}", result);
@@ -134,7 +132,6 @@ macro_rules! test_partial_deserializer_streaming {
                 &target,
                 &target_type,
                 $raw_string,
-                true,
             );
 
             // dbg!(&target);
@@ -143,7 +140,7 @@ macro_rules! test_partial_deserializer_streaming {
 
             assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed);
 
-            let result = crate::helpers::parsed_value_to_response(&ir, parsed.unwrap(), true).unwrap();
+            let result = crate::helpers::parsed_value_to_response(&ir, parsed.unwrap()).unwrap();
 
             // dbg!(&result);
 
@@ -169,11 +166,11 @@ macro_rules! test_partial_deserializer_streaming_failure {
                 crate::helpers::render_output_format(&ir, &target_type, &Default::default())
                     .unwrap();
 
-            let parsed = from_str(&target, &target_type, $raw_string, true);
+            let parsed = from_str(&target, &target_type, $raw_string);
 
             assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed);
 
-            let result = crate::helpers::parsed_value_to_response(&ir, parsed.unwrap(), true);
+            let result = crate::helpers::parsed_value_to_response(&ir, parsed.unwrap());
 
             assert!(
                 result.is_err(),

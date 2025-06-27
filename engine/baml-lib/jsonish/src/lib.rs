@@ -197,7 +197,6 @@ pub fn from_str(
     of: &OutputFormatContent,
     target: &TypeIR,
     raw_string: &str,
-    allow_partials: bool,
 ) -> Result<BamlValueWithFlags> {
     if matches!(target, TypeIR::Primitive(TypeValue::String, _)) {
         return Ok(BamlValueWithFlags::String(
@@ -210,7 +209,7 @@ pub fn from_str(
 
     // Pick the schema that is the most specific.
     log::debug!("Parsed JSONish (step 1 of parsing): {:#?}", value);
-    let ctx = ParsingContext::new(of, allow_partials);
+    let ctx = ParsingContext::new(of);
 
     // Determine the best way to get the desired schema from the parsed schema.
 

@@ -22,7 +22,6 @@ pub struct ParsingContext<'a> {
     pub scope: Vec<String>,
     visited: HashSet<(String, jsonish::Value)>,
     pub of: &'a OutputFormatContent,
-    pub allow_partials: bool,
 }
 
 impl ParsingContext<'_> {
@@ -33,12 +32,11 @@ impl ParsingContext<'_> {
         self.scope.join(".")
     }
 
-    pub(crate) fn new(of: &OutputFormatContent, allow_partials: bool) -> ParsingContext<'_> {
+    pub(crate) fn new(of: &OutputFormatContent) -> ParsingContext<'_> {
         ParsingContext {
             scope: Vec::new(),
             visited: HashSet::new(),
             of,
-            allow_partials,
         }
     }
 
@@ -49,7 +47,6 @@ impl ParsingContext<'_> {
             scope: new_scope,
             visited: self.visited.clone(),
             of: self.of,
-            allow_partials: self.allow_partials,
         }
     }
 
@@ -66,7 +63,6 @@ impl ParsingContext<'_> {
             scope: self.scope.clone(),
             visited: new_visited,
             of: self.of,
-            allow_partials: self.allow_partials,
         }
     }
 

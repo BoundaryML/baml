@@ -222,30 +222,8 @@ impl TypeCoercer for Class {
                 } else if let Some(v) = required_values.get(field_name.real_name()) {
                     let next = match v {
                         Some(Ok(_)) => None,
-                        Some(Err(e)) => t.default_value(Some(e)).or_else(|| {
-                            if ctx.allow_partials {
-                                Some(BamlValueWithFlags::Null(
-                                    t.clone().as_optional(),
-                                    DeserializerConditions::new()
-                                        .with_flag(Flag::OptionalDefaultFromNoValue)
-                                        .with_flag(Flag::Pending),
-                                ))
-                            } else {
-                                None
-                            }
-                        }),
-                        None => t.default_value(None).or_else(|| {
-                            if ctx.allow_partials {
-                                Some(BamlValueWithFlags::Null(
-                                    t.clone().as_optional(),
-                                    DeserializerConditions::new()
-                                        .with_flag(Flag::OptionalDefaultFromNoValue)
-                                        .with_flag(Flag::Pending),
-                                ))
-                            } else {
-                                None
-                            }
-                        }),
+                        Some(Err(e)) => t.default_value(Some(e)),
+                        None => t.default_value(None),
                     };
 
                     if let Some(next) = next {

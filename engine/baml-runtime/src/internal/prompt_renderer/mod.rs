@@ -98,10 +98,13 @@ impl PromptRenderer {
             (&self.non_streaming.defintions, &self.non_streaming.target)
         };
 
-        let parsed = jsonish::from_str(def, target, raw_string, allow_partials)?;
+        let parsed = jsonish::from_str(def, target, raw_string)?;
+
+        // TODO(vbv): We should consider using def here instead of (ir / ctx)
+        // since def has all the context for the mode (streaming / non-streaming)
         let scoped_ir = ScopedIr::new(ir, ctx);
 
-        parsed_value_to_response(&scoped_ir, parsed, allow_partials)
+        parsed_value_to_response(&scoped_ir, parsed)
     }
 
     pub fn render_prompt(

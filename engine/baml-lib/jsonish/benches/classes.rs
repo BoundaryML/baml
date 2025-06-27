@@ -24,7 +24,6 @@ pub fn bench_complex_classes(c: &mut Criterion) {
                 {"score": 4, "reviewer": "Bob", "date": "2024-01-02"}
             ]
         }"#,
-                false,
             )
         })
     });
@@ -35,7 +34,6 @@ pub fn bench_complex_classes(c: &mut Criterion) {
                 &of,
                 &target,
                 r#"{"title": "The Book", "author": "John Doe"}"#,
-                true,
             )
         })
     });
