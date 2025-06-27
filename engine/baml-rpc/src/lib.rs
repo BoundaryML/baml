@@ -1,4 +1,5 @@
 pub mod ast;
+pub mod auth;
 
 mod base;
 mod rpc;
@@ -32,6 +33,8 @@ pub use runtime_api::baml_src_upload::*;
 pub use runtime_api::baml_value::*;
 pub use runtime_api::trace_event::*;
 pub use runtime_api::trace_event_upload::*;
+
+pub use auth::*;
 
 pub use ast::ast_node_id::*;
 pub use ast::evaluation_context::*;
