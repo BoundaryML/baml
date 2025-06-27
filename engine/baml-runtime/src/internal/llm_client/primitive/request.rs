@@ -242,8 +242,7 @@ pub async fn execute_request(
                     {
                         // Note, Wasm can't use :? for some reason (it makes it so the error looks like garbage). But only doing to_string also makes it so that the full error is not shown. E.g. DNS errors only say "error sending request for url".
                         format!(
-                            "{}\n\nIf you haven't yet, try enabling the proxy (See API Keys button)",
-                            e
+                            "{e}\n\nIf you haven't yet, try enabling the proxy (See API Keys button)"
                         )
                     }
                 },

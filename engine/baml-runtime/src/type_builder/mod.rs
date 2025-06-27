@@ -1142,7 +1142,7 @@ mod tests {
         "##;
 
         builder.add_baml(baml, &runtime)?;
-        println!("{}", builder);
+        println!("{builder}");
         builder.to_overrides();
         Ok(())
     }

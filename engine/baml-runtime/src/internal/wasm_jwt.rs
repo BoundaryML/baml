@@ -105,7 +105,6 @@ pub async fn encode_jwt(
     // Create final JWT
     let signature_segment = URL_SAFE_NO_PAD.encode(&signature_vec);
     Ok(format!(
-        "{}.{}.{}",
-        header_segment, claims_segment, signature_segment
+        "{header_segment}.{claims_segment}.{signature_segment}"
     ))
 }

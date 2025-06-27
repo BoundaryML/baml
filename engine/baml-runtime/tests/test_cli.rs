@@ -128,7 +128,7 @@ mod test_cli {
     #[rstest]
     #[tokio::test]
     async fn serve_respects_baml_password() -> Result<()> {
-        let h = Harness::new("serve_password_test".to_string())?;
+        let h = Harness::new("serve_password_test")?;
 
         const PORT: &str = "2025";
 
@@ -238,7 +238,7 @@ mod test_cli {
     #[rstest]
     #[tokio::test]
     async fn call_function_error_codes() -> Result<()> {
-        let h = Harness::new("invalid_arg_test".to_string())?;
+        let h = Harness::new("invalid_arg_test")?;
 
         const PORT: &str = "2035";
 
@@ -304,7 +304,7 @@ mod test_cli {
     #[rstest]
     #[tokio::test]
     async fn call_function_with_baml_options() -> Result<()> {
-        let h = Harness::new("baml_options_test".to_string())?;
+        let h = Harness::new("baml_options_test")?;
 
         const PORT: &str = "2035";
 
@@ -407,7 +407,7 @@ mod test_cli {
     #[rstest]
     #[tokio::test]
     async fn call_function_validation_error() -> Result<()> {
-        let h = Harness::new("invalid_arg_test".to_string())?;
+        let h = Harness::new("invalid_arg_test")?;
 
         const PORT: &str = "2045";
 

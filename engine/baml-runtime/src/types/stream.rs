@@ -136,7 +136,7 @@ impl FunctionResultStream {
         #[cfg(target_arch = "wasm32")]
         match self.tracer.finish_baml_call(call, ctx, &res).await {
             Ok(id) => {}
-            Err(e) => log::debug!("Error during logging: {}", e),
+            Err(e) => log::debug!("Error during logging: {e}"),
         }
 
         let trace_event = TraceEvent::new_function_end(
