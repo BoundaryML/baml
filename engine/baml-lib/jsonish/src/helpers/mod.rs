@@ -11,7 +11,7 @@ use internal_baml_core::{
     ast::Field,
     internal_baml_diagnostics::SourceFile,
     ir::{
-        repr::IntermediateRepr, ClassWalker, EnumWalker, TypeIR, IRHelper, IRHelperExtended,
+        repr::IntermediateRepr, ClassWalker, EnumWalker, IRHelper, IRHelperExtended, TypeIR,
         TypeValue,
     },
     validate,

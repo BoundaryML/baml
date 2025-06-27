@@ -262,10 +262,7 @@ pub trait DefaultValue {
 ///
 /// For a function that traverses a whole `BamlValue` looking for failed asserts,
 /// see `first_failing_assert_nested`.
-pub fn run_user_checks(
-    baml_value: &BamlValue,
-    type_: &TypeIR,
-) -> Result<Vec<(Constraint, bool)>> {
+pub fn run_user_checks(baml_value: &BamlValue, type_: &TypeIR) -> Result<Vec<(Constraint, bool)>> {
     let res = type_
         .meta()
         .constraints

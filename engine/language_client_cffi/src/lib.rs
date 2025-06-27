@@ -8,7 +8,7 @@ use anyhow::Result;
 use baml_runtime::{tracingv2::storage::storage::Collector, BamlRuntime, FunctionResult};
 use once_cell::sync::{Lazy, OnceCell};
 
-use crate::ctypes::{EncodeToBuffer};
+use crate::ctypes::EncodeToBuffer;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -133,23 +133,19 @@ fn safe_trigger_callback(
     match result {
         Ok(result) => match result.parsed() {
             Some(Ok(content)) => {
-                let buf = if is_done{
-                let meta = content.0.map_meta(|f| {
-                    ctypes::EncodeMeta {
+                let buf = if is_done {
+                    let meta = content.0.map_meta(|f| ctypes::EncodeMeta {
                         field_type: f.3.to_non_streaming_type(runtime.inner.ir.as_ref()),
                         checks: &f.1,
-                    }
-                });
-                meta.encode_to_c_buffer(runtime.inner.ir.as_ref())
-            } else {
-                let meta = content.0.map_meta(|f| {
-                    ctypes::EncodeMeta {
+                    });
+                    meta.encode_to_c_buffer(runtime.inner.ir.as_ref())
+                } else {
+                    let meta = content.0.map_meta(|f| ctypes::EncodeMeta {
                         field_type: f.3.to_streaming_type(runtime.inner.ir.as_ref()),
                         checks: &f.1,
-                    }
-                });
-                meta.encode_to_c_buffer(runtime.inner.ir.as_ref())
-            };
+                    });
+                    meta.encode_to_c_buffer(runtime.inner.ir.as_ref())
+                };
 
                 let is_done_int = if is_done { 1 } else { 0 };
                 callback_fn(id, is_done_int, buf.as_ptr() as *const i8, buf.len());

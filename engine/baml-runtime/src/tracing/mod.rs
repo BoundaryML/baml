@@ -557,9 +557,15 @@ impl BamlTracer {
                 log::warn!(
                     "Failed to infer FieldType for BamlValue in tracing. Defaulting to Null."
                 );
-                baml_types::ir_type::TypeNonStreaming::Primitive(baml_types::TypeValue::Null, Default::default())
+                baml_types::ir_type::TypeNonStreaming::Primitive(
+                    baml_types::TypeValue::Null,
+                    Default::default(),
+                )
             }),
-            None => baml_types::ir_type::TypeNonStreaming::Primitive(baml_types::TypeValue::Null, Default::default()),
+            None => baml_types::ir_type::TypeNonStreaming::Primitive(
+                baml_types::TypeValue::Null,
+                Default::default(),
+            ),
         };
         let baml_value_with_meta: BamlValueWithMeta<baml_types::ir_type::TypeNonStreaming> =
             BamlValueWithMeta::with_const_meta(

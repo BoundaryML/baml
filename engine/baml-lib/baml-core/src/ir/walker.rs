@@ -13,8 +13,8 @@ use internal_llm_client::ClientSpec;
 use crate::ir::{
     jinja_helpers::render_expression,
     repr::{self, ExprFunction, FunctionConfig, Node, TypeBuilderEntry, WithRepr},
-    Class, Client, Enum, EnumValue, ExprFunctionNode, Field, TypeIR, Function, FunctionNode,
-    IRHelper, Impl, IntermediateRepr, RetryPolicy, TemplateString, TestCase, TypeAlias, Walker,
+    Class, Client, Enum, EnumValue, ExprFunctionNode, Field, Function, FunctionNode, IRHelper,
+    Impl, IntermediateRepr, RetryPolicy, TemplateString, TestCase, TypeAlias, TypeIR, Walker,
 };
 
 impl<'a> Walker<'a, &'a ExprFunctionNode> {

@@ -25,8 +25,14 @@ use crate::{runtime_context::RuntimeClassOverride, RuntimeContext};
 pub struct PromptRenderer {
     pub function_name: String,
     pub client_spec: ClientSpec,
-    pub output_defs: OutputFormatContent,
-    pub output_type: TypeIR,
+    non_streaming: TypeDefinitionWrapper,
+    streaming: TypeDefinitionWrapper,
+}
+
+#[derive(Debug)]
+struct TypeDefinitionWrapper {
+    defintions: OutputFormatContent,
+    target: TypeIR,
 }
 
 impl PromptRenderer {
@@ -46,8 +52,14 @@ impl PromptRenderer {
                 Some((Some(client), _)) => ClientSpec::Named(client.clone()),
                 _ => config.client.clone(),
             },
-            output_defs: render_output_format(ir, ctx, &func_v2.output)?,
-            output_type: func_v2.output.clone(),
+            non_streaming: TypeDefinitionWrapper {
+                defintions: render_output_format(ir, ctx, &func_v2.output)?,
+                target: func_v2.output.clone(),
+            },
+            streaming: TypeDefinitionWrapper {
+                defintions: render_output_format(ir, ctx, &func_v2.output)?,
+                target: func_v2.output.clone(),
+            },
         })
     }
 
@@ -58,8 +70,14 @@ impl PromptRenderer {
         PromptRenderer {
             function_name: "fake".into(),
             client_spec: ClientSpec::Named("fake".into()),
-            output_defs: OutputFormatContent::mk_fake(),
-            output_type: TypeIR::Primitive(TypeValue::String, Default::default()),
+            non_streaming: TypeDefinitionWrapper {
+                defintions: OutputFormatContent::mk_fake(),
+                target: TypeIR::Primitive(TypeValue::String, Default::default()),
+            },
+            streaming: TypeDefinitionWrapper {
+                defintions: OutputFormatContent::mk_fake(),
+                target: TypeIR::Primitive(TypeValue::String, Default::default()),
+            },
         }
     }
 
@@ -74,12 +92,13 @@ impl PromptRenderer {
         raw_string: &str,
         allow_partials: bool,
     ) -> Result<ResponseBamlValue> {
-        let parsed = jsonish::from_str(
-            &self.output_defs,
-            &self.output_type,
-            raw_string,
-            allow_partials,
-        )?;
+        let (def, target) = if allow_partials {
+            (&self.streaming.defintions, &self.streaming.target)
+        } else {
+            (&self.non_streaming.defintions, &self.non_streaming.target)
+        };
+
+        let parsed = jsonish::from_str(def, target, raw_string, allow_partials)?;
         let scoped_ir = ScopedIr::new(ir, ctx);
 
         parsed_value_to_response(&scoped_ir, parsed, allow_partials)
@@ -106,7 +125,7 @@ impl PromptRenderer {
             RenderContext {
                 client: client_ctx.clone(),
                 tags: ctx.tags.clone(),
-                output_format: self.output_defs.clone(),
+                output_format: self.non_streaming.defintions.clone(),
             },
             &ir.walk_template_strings()
                 .map(|t| TemplateStringMacro {

@@ -171,27 +171,28 @@ fn process_node(
                 .filter_map(|(field_name, field_value)| {
                     // Check if this field is required to be non-null
                     let is_needed_field = needed_fields.contains(field_name);
-                    
+
                     // Helper to check if a field value should be considered "effectively null"
                     // for the purposes of @stream.not_null validation
-                    let is_effectively_null_for_validation = |field_value: &BamlValueWithMeta<Completion>| -> bool {
-                        match field_value {
-                            BamlValueWithMeta::Null(_) if is_needed_field => {
-                                // For fields marked @stream.not_null, any null value (including 
-                                // the null variant of a union) should be considered as missing the requirement
-                                true
+                    let is_effectively_null_for_validation =
+                        |field_value: &BamlValueWithMeta<Completion>| -> bool {
+                            match field_value {
+                                BamlValueWithMeta::Null(_) if is_needed_field => {
+                                    // For fields marked @stream.not_null, any null value (including
+                                    // the null variant of a union) should be considered as missing the requirement
+                                    true
+                                }
+                                BamlValueWithMeta::Class(_, class_fields, _) if is_needed_field => {
+                                    // For needed fields, a class is considered "null" if all its fields are null
+                                    class_fields
+                                        .values()
+                                        .all(|field| matches!(field, BamlValueWithMeta::Null(_)))
+                                }
+                                BamlValueWithMeta::Null(_) => false, // Not a needed field, so null is acceptable
+                                _ => false,
                             }
-                            BamlValueWithMeta::Class(_, class_fields, _) if is_needed_field => {
-                                // For needed fields, a class is considered "null" if all its fields are null
-                                class_fields.values().all(|field| {
-                                    matches!(field, BamlValueWithMeta::Null(_))
-                                })
-                            }
-                            BamlValueWithMeta::Null(_) => false, // Not a needed field, so null is acceptable
-                            _ => false
-                        }
-                    };
-                    
+                        };
+
                     if is_effectively_null_for_validation(field_value) {
                         None
                     } else {
@@ -223,7 +224,7 @@ fn process_node(
                 Ok(res)
             } else {
                 Err(StreamingError::MissingNeededFields {
-                    fields: missing_needed_fields.into_iter().cloned().collect()
+                    fields: missing_needed_fields.into_iter().cloned().collect(),
                 })
             }
         }

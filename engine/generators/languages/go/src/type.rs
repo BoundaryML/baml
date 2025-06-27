@@ -325,7 +325,12 @@ impl TypeGo {
         self.decode_from_any_with_field(param, pkg, None)
     }
 
-    pub fn decode_from_any_with_field(&self, param: &str, pkg: &CurrentRenderPackage, field_name: Option<&str>) -> String {
+    pub fn decode_from_any_with_field(
+        &self,
+        param: &str,
+        pkg: &CurrentRenderPackage,
+        field_name: Option<&str>,
+    ) -> String {
         if self.meta().wrap_stream_state {
             let mut without_stream_state = self.clone();
             without_stream_state.meta_mut().wrap_stream_state = false;
@@ -337,7 +342,9 @@ impl TypeGo {
                 casted = without_stream_state.decode_from_any("inner", pkg)
             )
         } else if self.meta().is_optional() {
-            let field_info = field_name.map(|f| format!("Field: {}\n", f)).unwrap_or_default();
+            let field_info = field_name
+                .map(|f| format!("Field: {}\n", f))
+                .unwrap_or_default();
             format!(
                 r#"
                 func(param *cffi.CFFIValueHolder) {t} {{

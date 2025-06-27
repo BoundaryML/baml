@@ -69,7 +69,7 @@ use internal_baml_core::{
 pub use internal_baml_core::{
     internal_baml_diagnostics,
     internal_baml_diagnostics::Diagnostics as DiagnosticsError,
-    ir::{ir_helpers::infer_type, scope_diagnostics, TypeIR, IRHelper, TypeValue},
+    ir::{ir_helpers::infer_type, scope_diagnostics, IRHelper, TypeIR, TypeValue},
 };
 #[cfg(feature = "internal")]
 pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
@@ -705,7 +705,9 @@ impl BamlRuntime {
                             call_id_stack.clone(),
                             match &result {
                                 Ok(result) => match result.result_with_constraints_content() {
-                                    Ok(value) => Ok(value.0.map_meta(|f| f.3.to_non_streaming_type(self.internal().ir()))),
+                                    Ok(value) => Ok(value.0.map_meta(|f| {
+                                        f.3.to_non_streaming_type(self.internal().ir())
+                                    })),
                                     Err(e) => Err((&e).to_baml_error()), // None => Err(baml_types::tracing::errors::BamlError::Base {
                                                                          //     message: format!(
                                                                          //         "No parsed result found for function: {}",
