@@ -166,3 +166,21 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
     }
     partialize_helper(r#type, lookup)
 }
+
+pub fn to_type_ir(r#type: &TypeStreaming, lookup: &impl TypeLookups) -> TypeIR {
+    r#type.map_meta(
+        |type_meta::stream::TypeMetaStreaming {
+             streaming_behavior,
+             constraints,
+         }| {
+            type_meta::IR {
+                streaming_behavior: type_meta::base::StreamingBehavior {
+                    done: streaming_behavior.done,
+                    state: streaming_behavior.state,
+                    ..Default::default()
+                },
+                constraints: constraints.clone(),
+            }
+        },
+    )
+}
