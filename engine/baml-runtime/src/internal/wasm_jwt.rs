@@ -59,7 +59,7 @@ pub async fn encode_jwt(
     let claims_segment = URL_SAFE_NO_PAD.encode(serde_json::to_string(claims)?);
 
     // Combine header and claims
-    let signing_input = format!("{}.{}", header_segment, claims_segment);
+    let signing_input = format!("{header_segment}.{claims_segment}");
 
     // Convert PEM to importable key format
     let pem = private_key_pem

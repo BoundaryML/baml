@@ -618,7 +618,7 @@ impl BamlTracer {
             } else {
                 baml_log::warn!(
                     "{}{}",
-                    name.map(|s| format!("Function {}:\n", s))
+                    name.map(|s| format!("Function {s}:\n"))
                         .unwrap_or_default()
                         .purple(),
                     response.visualize(self.options.config.max_log_chunk_chars())
