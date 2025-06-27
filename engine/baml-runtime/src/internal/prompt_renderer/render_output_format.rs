@@ -486,7 +486,7 @@ fn relevant_data_models_streaming<'a>(
     let eval_ctx = ctx.eval_ctx(false);
 
     let output_streaming = output.to_streaming_type(ir);
-    let output = output_streaming.to_ir_type(ir);
+    let output = output_streaming.to_ir_type();
 
     while let Some(output) = stack.pop() {
         match &output {

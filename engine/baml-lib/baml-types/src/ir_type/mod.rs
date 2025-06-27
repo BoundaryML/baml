@@ -424,6 +424,71 @@ impl<T> TypeGeneric<T> {
         }
     }
 
+    pub fn map_meta<F, U>(&self, f: F) -> TypeGeneric<U>
+    where
+        F: Fn(&T) -> U + Copy,
+    {
+        match self {
+            TypeGeneric::Class {
+                meta,
+                name,
+                mode,
+                dynamic,
+                ..
+            } => TypeGeneric::Class {
+                meta: f(meta),
+                name: name.clone(),
+                mode: mode.clone(),
+                dynamic: dynamic.clone(),
+            },
+            TypeGeneric::Arrow(arrow, type_metadata_ir) => TypeGeneric::Arrow(
+                Box::new(ArrowGeneric {
+                    param_types: arrow.param_types.iter().map(|t| t.map_meta(f)).collect(),
+                    return_type: arrow.return_type.map_meta(f),
+                }),
+                f(type_metadata_ir),
+            ),
+            TypeGeneric::Primitive(value, type_metadata_ir) => {
+                TypeGeneric::Primitive(value.clone(), f(type_metadata_ir))
+            }
+            TypeGeneric::Enum {
+                meta,
+                name,
+                dynamic,
+            } => TypeGeneric::Enum {
+                meta: f(meta),
+                name: name.clone(),
+                dynamic: dynamic.clone(),
+            },
+            TypeGeneric::Literal(literal_value, type_metadata_ir) => {
+                TypeGeneric::Literal(literal_value.clone(), f(type_metadata_ir))
+            }
+            TypeGeneric::List(inner, type_metadata_ir) => {
+                TypeGeneric::List(Box::new(inner.map_meta(f)), f(type_metadata_ir))
+            }
+            TypeGeneric::Map(field_type, field_type1, type_metadata_ir) => TypeGeneric::Map(
+                Box::new(field_type.map_meta(f)),
+                Box::new(field_type1.map_meta(f)),
+                f(type_metadata_ir),
+            ),
+            TypeGeneric::RecursiveTypeAlias { meta, name } => TypeGeneric::RecursiveTypeAlias {
+                meta: f(meta),
+                name: name.clone(),
+            },
+            TypeGeneric::Tuple(inner, type_metadata_ir) => TypeGeneric::Tuple(
+                inner.iter().map(|t| t.map_meta(f)).collect(),
+                f(type_metadata_ir),
+            ),
+            TypeGeneric::Union(inner, type_metadata_ir) => TypeGeneric::Union(
+                UnionTypeGeneric {
+                    types: inner.types.iter().map(|t| t.map_meta(f)).collect(),
+                    null_type: Box::new(inner.null_type.map_meta(f)),
+                },
+                f(type_metadata_ir),
+            ),
+        }
+    }
+
     pub fn meta_mut(&mut self) -> &mut T {
         match self {
             TypeGeneric::Class { meta, .. } => meta,
@@ -540,8 +605,8 @@ impl TypeIR {
 }
 
 impl TypeStreaming {
-    pub fn to_ir_type(&self, lookup: &impl TypeLookups) -> TypeIR {
-        converters::streaming::to_type_ir(self, lookup)
+    pub fn to_ir_type(&self) -> TypeIR {
+        converters::streaming::to_type_ir(self)
     }
 }
 
