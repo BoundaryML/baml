@@ -180,8 +180,8 @@ fn subst(
 
 /// Perform a single beta reduction. Note that we ignore env.context
 /// here. Only use env for the runtime.
-async fn beta_reduce<'a>(
-    env: &EvalEnv<'a>,
+async fn beta_reduce(
+    env: &EvalEnv<'_>,
     expr: &Expr<ExprMetadata>,
     eval_final_llm_fn: bool,
 ) -> anyhow::Result<Expr<ExprMetadata>> {
@@ -544,8 +544,8 @@ async fn eval_args(
     Ok(evaluated_args)
 }
 
-pub async fn eval_to_value_or_llm_call<'a>(
-    env: &EvalEnv<'a>,
+pub async fn eval_to_value_or_llm_call(
+    env: &EvalEnv<'_>,
     expr: &Expr<ExprMetadata>,
 ) -> anyhow::Result<ExprEvalResult> {
     let mut current_expr = expr.clone();
@@ -727,8 +727,8 @@ pub enum ExprEvalResult {
 }
 
 /// Fully evaluate an expression to a value.
-pub async fn eval_to_value<'a>(
-    env: &EvalEnv<'a>,
+pub async fn eval_to_value(
+    env: &EvalEnv<'_>,
     expr: &Expr<ExprMetadata>,
 ) -> anyhow::Result<Option<BamlValueWithMeta<()>>> {
     let mut current_expr = expr.clone();

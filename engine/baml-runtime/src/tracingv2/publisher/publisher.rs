@@ -104,9 +104,9 @@ impl RuntimeAST {
         }
     }
 
-    async fn api_request<'req, 'resp, TEndpoint>(
+    async fn api_request<'resp, TEndpoint>(
         &self,
-        request: TEndpoint::Request<'req>,
+        request: TEndpoint::Request<'_>,
     ) -> Result<TEndpoint::Response<'resp>, ApiError>
     where
         TEndpoint: ApiEndpoint,
