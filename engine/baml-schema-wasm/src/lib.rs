@@ -15,7 +15,7 @@ pub fn version() -> String {
 
 #[wasm_bindgen]
 pub fn format_document(path: String, text: String) -> Option<String> {
-    log::info!("Trying to format document (rust): {}", path);
+    log::info!("Trying to format document (rust): {path}");
     match format_schema(
         &text,
         FormatOptions {
@@ -24,11 +24,11 @@ pub fn format_document(path: String, text: String) -> Option<String> {
         },
     ) {
         Ok(formatted) => {
-            log::info!("Formatted document: {}", formatted);
+            log::info!("Formatted document: {formatted}");
             Some(formatted)
         }
         Err(e) => {
-            log::error!("Failed to format document: {} {:?}", path, e);
+            log::error!("Failed to format document: {path} {e:?}");
             None
         }
     }

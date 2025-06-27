@@ -34,14 +34,14 @@ impl SyncRequestHandler for ExecuteCommand {
             let port = session.baml_settings.playground_port.unwrap_or(3030);
 
             // Construct the URL
-            let url = format!("http://localhost:{}", port);
+            let url = format!("http://localhost:{port}");
 
             // Open the browser
             if let Err(e) = webbrowser::open(&url) {
                 notifier
                     .notify::<lsp_types::notification::ShowMessage>(lsp_types::ShowMessageParams {
                         typ: MessageType::WARNING,
-                        message: format!("Failed to open browser: {}", e),
+                        message: format!("Failed to open browser: {e}"),
                     })
                     .internal_error()?;
                 return Err(crate::server::api::Error {

@@ -93,7 +93,7 @@ impl VertexAuth {
 
                 // Log all collected errors if no strategy succeeded
                 for err in &errors {
-                    log::error!("{:?}", err);
+                    log::error!("{err:?}");
                 }
                 anyhow::bail!(
                     "Failed to auth - system_default strategy did not resolve successfully. Errors encountered: {:?}",

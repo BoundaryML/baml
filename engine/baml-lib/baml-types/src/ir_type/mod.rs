@@ -808,8 +808,8 @@ impl<Meta: std::hash::Hash + std::cmp::Eq> ToUnionName<Meta> for TypeGeneric<Met
                         .map(|c| if c.is_alphanumeric() { c } else { '_' })
                         .collect::<String>()
                 ),
-                LiteralValue::Int(val) => format!("int_{}", val),
-                LiteralValue::Bool(val) => format!("bool_{}", val),
+                LiteralValue::Int(val) => format!("int_{val}"),
+                LiteralValue::Bool(val) => format!("bool_{val}"),
             },
             T::Class { name, .. } => name.to_string(),
             T::List(field_type, _) => {

@@ -45,10 +45,7 @@ impl ClientRegistry {
         let provider = match ClientProvider::from_str(&provider) {
             Ok(provider) => provider,
             Err(e) => {
-                return Err(invalid_argument_error(&format!(
-                    "Invalid provider: {:?}",
-                    e
-                )));
+                return Err(invalid_argument_error(&format!("Invalid provider: {e:?}")));
             }
         };
 

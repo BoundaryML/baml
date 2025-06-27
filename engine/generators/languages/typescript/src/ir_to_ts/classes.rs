@@ -88,10 +88,10 @@ mod tests {
         let ir = std::sync::Arc::new(ir);
         let class = ir.find_class("SimpleClass").unwrap().item;
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone());
-        let class_go = ir_class_to_ts_stream(&class, &pkg);
+        let class_go = ir_class_to_ts_stream(class, &pkg);
         assert_eq!(class_go.name, "SimpleClass");
         assert_eq!(class_go.fields.len(), 1);
-        assert_eq!(class_go.fields[0].r#type.meta().wrap_stream_state, true);
+        assert!(class_go.fields[0].r#type.meta().wrap_stream_state);
         println!("{}", class_go.fields[0]);
     }
 
@@ -108,9 +108,9 @@ mod tests {
         let ir = std::sync::Arc::new(ir);
         let class = ir.find_class("ChildClass").unwrap().item;
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone());
-        let class_ts = ir_class_to_ts_stream(&class, &pkg);
+        let class_ts = ir_class_to_ts_stream(class, &pkg);
         let digits_field = class_ts.fields.iter().find(|f| f.name == "digits").unwrap();
-        eprintln!("{:?}", digits_field);
+        eprintln!("{digits_field:?}");
         eprintln!("{}", class.elem.static_fields[0].elem.r#type.elem);
         eprintln!(
             "{}",
@@ -140,7 +140,7 @@ mod tests {
         let ir = std::sync::Arc::new(ir);
         let class = ir.find_class("Foo").unwrap().item;
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone());
-        let class_ts = ir_class_to_ts_stream(&class, &pkg);
+        let class_ts = ir_class_to_ts_stream(class, &pkg);
         assert_eq!(class_ts.fields[0].docstring, Some("ds".to_string()));
     }
 }

@@ -9,7 +9,7 @@ pub fn ir_union_to_go<'a>(
     let go_type = crate::ir_to_go::type_to_go(union, pkg.lookup());
     if let TypeGo::Union { name, .. } = go_type {
         let FieldType::Union(union_type_generic, _) = union else {
-            panic!("ir_union_to_go expects a union. Got: {}", union);
+            panic!("ir_union_to_go expects a union. Got: {union}");
         };
         let variants = union_type_generic
             .iter_skip_null()
@@ -26,7 +26,7 @@ pub fn ir_union_to_go<'a>(
         Some(crate::generated_types::UnionGo {
             name,
             cffi_name: union.to_union_name(),
-            docstring: Some(format!("Generated from: {}", union)),
+            docstring: Some(format!("Generated from: {union}")),
             variants,
             pkg,
         })
@@ -43,7 +43,7 @@ pub fn ir_union_to_go_stream<'a>(
     let go_type = crate::ir_to_go::stream_type_to_go(&stream_union, pkg.lookup());
     if let TypeGo::Union { name, .. } = go_type {
         let TypeStreaming::Union(union_type_generic, _) = stream_union else {
-            panic!("ir_union_to_go expects a union. Got: {}", stream_union);
+            panic!("ir_union_to_go expects a union. Got: {stream_union}");
         };
         let variants = union_type_generic
             .iter_skip_null()
@@ -61,7 +61,7 @@ pub fn ir_union_to_go_stream<'a>(
             name,
             // TODO: switch to stream_union.to_union_name()
             cffi_name: union.to_union_name(),
-            docstring: Some(format!("Generated from: {}", union)),
+            docstring: Some(format!("Generated from: {union}")),
             variants,
             pkg,
         })

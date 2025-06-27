@@ -16,7 +16,7 @@ impl Package {
         }
         // ensure the first part is baml_client
         if parts[0] != "BamlClient" && parts[0] != "Baml" {
-            panic!("Package must start with baml_client: {}", package);
+            panic!("Package must start with baml_client: {package}");
         }
         Package {
             package_path: parts,
@@ -120,7 +120,7 @@ impl CurrentRenderPackage {
                 *orig = std::sync::Arc::new(Package::new(package));
             }
             Err(e) => {
-                panic!("Failed to get package: {}", e);
+                panic!("Failed to get package: {e}");
             }
         }
     }

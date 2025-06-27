@@ -296,7 +296,7 @@ impl BamlValueWithFlags {
                 }
                 for (i, value) in values.iter().enumerate() {
                     let mut scope = scope.clone();
-                    scope.push(format!("parsed:{}", i));
+                    scope.push(format!("parsed:{i}"));
                     value.explanation_impl(scope, expls);
                 }
             }
@@ -314,12 +314,12 @@ impl BamlValueWithFlags {
                     if !causes.is_empty() {
                         expls.push(ParsingError {
                             scope: scope.clone(),
-                            reason: format!("error while parsing value for map key '{}'", k),
+                            reason: format!("error while parsing value for map key '{k}'"),
                             causes,
                         });
                     }
                     let mut scope = scope.clone();
-                    scope.push(format!("parsed:{}", k));
+                    scope.push(format!("parsed:{k}"));
                     v.explanation_impl(scope, expls);
                 }
             }
@@ -338,7 +338,7 @@ impl BamlValueWithFlags {
                 if !causes.is_empty() {
                     expls.push(ParsingError {
                         scope: scope.clone(),
-                        reason: format!("error while parsing class {}", class_name),
+                        reason: format!("error while parsing class {class_name}"),
                         causes,
                     });
                 }

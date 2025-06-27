@@ -421,7 +421,7 @@ pub(crate) fn render_rb_types<T: askama::Template>(
             "generators_ruby::generated_types::class::ClassRb" => "classes",
             "generators_ruby::generated_types::enums::EnumRb" => "enums",
             "generators_ruby::generated_types::type_aliases::TypeAliasRb" => "type aliases",
-            other => panic!("Unknown type: {}", other),
+            other => panic!("Unknown type: {other}"),
         },
     }
     .render()

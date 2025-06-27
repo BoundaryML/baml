@@ -60,7 +60,7 @@ impl SyncNotificationHandler for DidOpenTextDocumentHandler {
 
         let file_path = url
             .to_file_path()
-            .internal_error_msg(&format!("Could not convert URL '{}' to file path", url))?;
+            .internal_error_msg(&format!("Could not convert URL '{url}' to file path"))?;
 
         let project = session.get_or_create_project(&file_path);
         if project.is_none() {

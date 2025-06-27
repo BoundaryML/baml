@@ -92,10 +92,8 @@ mod tests {
             .next()
             .unwrap();
 
-        let assignment = super::parse_assignment(pairs, &mut diagnostics);
-
         // (assignment, diagnostics)
-        assignment
+        super::parse_assignment(pairs, &mut diagnostics)
     }
 
     #[test]
@@ -146,7 +144,7 @@ mod tests {
         let [FieldType::Primitive(_, TypeValue::Int, _, _), FieldType::Primitive(_, TypeValue::String, _, _)] =
             elements.as_slice()
         else {
-            panic!("Expected int | string union, got: {:?}", elements);
+            panic!("Expected int | string union, got: {elements:?}");
         };
     }
 }

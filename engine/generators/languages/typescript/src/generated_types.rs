@@ -14,7 +14,6 @@ mod filters {
 }
 
 mod r#enum {
-    use crate::package::CurrentRenderPackage;
 
     /// An enum in TS.
     ///

@@ -158,7 +158,7 @@ impl crate::tracing::Visualize for LLMResponse {
 impl std::fmt::Display for LLMResponse {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Success(response) => write!(f, "{}", response),
+            Self::Success(response) => write!(f, "{response}"),
             Self::LLMFailure(failure) => write!(f, "LLM call failed: {failure:?}"),
             Self::UserFailure(message) => {
                 write!(f, "Failed before LLM call (user error): {message}")

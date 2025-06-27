@@ -154,7 +154,7 @@ fn validate_type_constraints(ctx: &mut Context<'_>, field_type: &FieldType) {
                                 Some(range) => range,
                                 None => {
                                     ctx.push_error(DatamodelError::new_validation_error(
-                                        &format!("Error parsing jinja template: {}", e),
+                                        &format!("Error parsing jinja template: {e}"),
                                         span.clone(),
                                     ));
                                     continue;
@@ -167,7 +167,7 @@ fn validate_type_constraints(ctx: &mut Context<'_>, field_type: &FieldType) {
                             let span = Span::new(span.file.clone(), start_offset, end_offset);
 
                             ctx.push_error(DatamodelError::new_validation_error(
-                                &format!("Error parsing jinja template: {}", e),
+                                &format!("Error parsing jinja template: {e}"),
                                 span,
                             ))
                         } else {
@@ -200,7 +200,7 @@ fn validate_type_constraints(ctx: &mut Context<'_>, field_type: &FieldType) {
                                 Some(range) => range,
                                 None => {
                                     ctx.push_error(DatamodelError::new_validation_error(
-                                        &format!("Error parsing jinja template: {}", e),
+                                        &format!("Error parsing jinja template: {e}"),
                                         span.clone(),
                                     ));
                                     continue;
@@ -213,7 +213,7 @@ fn validate_type_constraints(ctx: &mut Context<'_>, field_type: &FieldType) {
                             let span = Span::new(span.file.clone(), start_offset, end_offset);
 
                             ctx.push_error(DatamodelError::new_validation_error(
-                                &format!("Error parsing jinja template: {}", e),
+                                &format!("Error parsing jinja template: {e}"),
                                 span,
                             ))
                         } else {

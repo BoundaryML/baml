@@ -63,7 +63,7 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                 // TODO: allow other providers
                 let llm_primitive_provider =
                     LLMPrimitiveProvider::try_from((&client_property, ctx))
-                        .context(format!("Failed to parse client: {}/{}", provider, model))?;
+                        .context(format!("Failed to parse client: {provider}/{model}"))?;
 
                 Ok(Arc::new(LLMProvider::Primitive(Arc::new(
                     llm_primitive_provider,
@@ -101,7 +101,7 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                 let walker = self
                     .ir()
                     .find_client(client_name)
-                    .context(format!("Could not find client with name: {}", client_name))?;
+                    .context(format!("Could not find client with name: {client_name}"))?;
                 // Get required env vars from the client walker
                 let new_client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
                 // Only store the required env vars

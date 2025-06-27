@@ -6,12 +6,10 @@
 mod tests {
     use std::collections::HashMap;
 
-    use baml_runtime::{BamlRuntime, RuntimeContext};
-    use baml_schema_build::runtime_wasm::{WasmProject, WasmRuntime};
+    use baml_schema_build::runtime_wasm::WasmProject;
     use serde_wasm_bindgen::to_value;
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::*;
-    use wasm_logger;
 
     // instantiate logger
 
@@ -131,7 +129,7 @@ mod tests {
             .collect::<HashMap<_, _>>();
         let env_vars_js = to_value(&env_vars).unwrap();
 
-        let current_runtime = project.runtime(env_vars_js).map_err(JsValue::from).unwrap();
+        let current_runtime = project.runtime(env_vars_js).unwrap();
         let diagnostics = project.diagnostics(&current_runtime);
 
         assert!(diagnostics.errors().is_empty());
@@ -167,7 +165,7 @@ function PredictAgeBare(inp: string @assert(big_enough, {{this|length > 1}}) ) -
             .collect::<HashMap<_, _>>();
         let env_vars_js = to_value(&env_vars).unwrap();
 
-        let current_runtime = project.runtime(env_vars_js).map_err(JsValue::from).unwrap();
+        let current_runtime = project.runtime(env_vars_js).unwrap();
         let diagnostics = project.diagnostics(&current_runtime);
         current_runtime.list_functions();
 
@@ -214,14 +212,14 @@ test Two {
             .collect::<HashMap<_, _>>();
         let env_vars_js = to_value(&env_vars).unwrap();
 
-        let current_runtime = project.runtime(env_vars_js).map_err(JsValue::from).unwrap();
+        let current_runtime = project.runtime(env_vars_js).unwrap();
 
         let diagnostics = project.diagnostics(&current_runtime);
         let functions = current_runtime.list_functions();
         functions.iter().for_each(|f| {
-            log::info!("function: {:#?}", f);
+            log::info!("function: {f:#?}");
             f.test_cases.iter().for_each(|t| {
-                log::info!("test case: {:#?}", t);
+                log::info!("test case: {t:#?}");
             });
             // f.run_test(&mut current_runtime, "One".to_string(), None, None);
         });

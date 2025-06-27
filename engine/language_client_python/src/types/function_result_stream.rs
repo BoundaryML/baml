@@ -90,7 +90,7 @@ impl FunctionResultStream {
                 let partial = FunctionResult::from(event);
                 let res = Python::with_gil(|py| cb.call1(py, (partial,))).map(|_| ());
                 if let Err(e) = res {
-                    log::error!("Error calling on_event callback: {:?}", e);
+                    log::error!("Error calling on_event callback: {e:?}");
                 }
             }
         });
@@ -140,7 +140,7 @@ impl SyncFunctionResultStream {
                 let partial = FunctionResult::from(event);
                 let res = Python::with_gil(|py| cb.call1(py, (partial,))).map(|_| ());
                 if let Err(e) = res {
-                    log::error!("Error calling on_event callback: {:?}", e);
+                    log::error!("Error calling on_event callback: {e:?}");
                 }
             }
         });

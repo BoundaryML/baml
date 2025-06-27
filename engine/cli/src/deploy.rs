@@ -181,8 +181,7 @@ impl Deployer {
             0 => {
                 let project_shortname = choose_project_shortname()?;
                 Ok(GetOrCreateProjectResult::ToBeCreated(format!(
-                    "{}/{}",
-                    org_slug, project_shortname
+                    "{org_slug}/{project_shortname}"
                 )))
             }
             _ => {
@@ -211,8 +210,7 @@ impl Deployer {
                     let project_shortname = choose_project_shortname()?;
 
                     Ok(GetOrCreateProjectResult::ToBeCreated(format!(
-                        "{}/{}",
-                        org_slug, project_shortname
+                        "{org_slug}/{project_shortname}"
                     )))
                 } else {
                     Ok(GetOrCreateProjectResult::Existing(
@@ -257,7 +255,7 @@ generator cloud {{
                     std::fs::read_to_string(std::path::Path::new(&self.from).join(&path))
                         .context(format!("Failed to read generators in {}", path.display()))?;
 
-                let new_generators = format!("{}{}", current_generators, new_generator_block);
+                let new_generators = format!("{current_generators}{new_generator_block}");
                 (path, current_generators, new_generators)
             }
             None => ("generators.baml".into(), String::new(), new_generator_block),
@@ -289,7 +287,7 @@ generator cloud {{
             .truncate(false) // This is the default. Linter complains if not added.
             .open(&generator_abspath)
             .context(format!("Failed to open {}", generator_abspath.display()))?;
-        writeln!(file, "{}", new_generators).context(format!(
+        writeln!(file, "{new_generators}").context(format!(
             "Failed to write to {}",
             generator_abspath.display()
         ))?;
@@ -307,7 +305,7 @@ generator cloud {{
                     resp
                 }
                 .with_progress_spinner(
-                    format!("Creating project {}", project_fqn),
+                    format!("Creating project {project_fqn}"),
                     |_| "done!".to_string(),
                     "uh-oh, something went wrong.",
                 )
@@ -331,7 +329,7 @@ generator cloud {{
             resp
         }
         .with_progress_spinner(
-            format!("Deploying to {}", project_fqn),
+            format!("Deploying to {project_fqn}"),
             |_| "done!".to_string(),
             "uh-oh, something went wrong.",
         )
@@ -354,7 +352,7 @@ generator cloud {{
             _ => {
                 println!("{} functions deployed at:", function_names.len());
                 for name in function_names.iter().take(2) {
-                    println!("  - {}", name);
+                    println!("  - {name}");
                 }
                 if function_names.len() > 2 {
                     println!("  ... and {} others", function_names.len() - 2);

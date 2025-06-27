@@ -69,7 +69,7 @@ impl ChatMessagePart {
 impl std::fmt::Display for ChatMessagePart {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            ChatMessagePart::Text(t) => write!(f, "{}", t),
+            ChatMessagePart::Text(t) => write!(f, "{t}"),
             ChatMessagePart::Media(media) => match &media.content {
                 BamlMediaContent::Url(url) => {
                     write!(f, "<{}_placeholder: {}>", media.media_type, url.url)
@@ -84,7 +84,7 @@ impl std::fmt::Display for ChatMessagePart {
                     file.relpath.to_string_lossy()
                 ),
             },
-            ChatMessagePart::WithMeta(part, meta) => write!(f, "{:?}::{}", meta, part),
+            ChatMessagePart::WithMeta(part, meta) => write!(f, "{meta:?}::{part}"),
         }
     }
 }

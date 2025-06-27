@@ -103,7 +103,7 @@ impl TestCounts {
     fn short_summary(&self, at_end: bool) -> String {
         let total = self.total();
         if total > 0 {
-            let mut summary = format!("{} tests (", total);
+            let mut summary = format!("{total} tests (");
             if self.needs_eval > 0 {
                 summary.push_str(&format!("{} 🕵️, ", self.needs_eval));
             }
@@ -187,8 +187,8 @@ impl PrettyTestExecutionStatusRenderer {
         indent: usize,
     ) -> Option<String> {
         let file_name_string =
-            file_name.map(|name| write_indented_string(&format!(" {}", name), 4, |s| s.dimmed()));
-        let target = format!("  {}::{}", func, test);
+            file_name.map(|name| write_indented_string(&format!(" {name}"), 4, |s| s.dimmed()));
+        let target = format!("  {func}::{test}");
         let mut output = String::new();
 
         match status {
@@ -326,7 +326,7 @@ impl PrettyTestExecutionStatusRenderer {
             for (test, status) in tests {
                 let file_name = test_file_map.get(&(func.to_string(), test.to_string()));
                 if let Some(output) = self.print_test_result(func, test, status, file_name, 2) {
-                    print!("{}", output); // Use print! instead of println! to avoid extra newline
+                    print!("{output}"); // Use print! instead of println! to avoid extra newline
                 }
             }
         }
@@ -343,7 +343,7 @@ impl PrettyTestExecutionStatusRenderer {
 /// Helper to format a Duration as a string (e.g. "0.32s").
 fn format_duration(duration: &Duration) -> String {
     let secs = duration.as_secs_f64();
-    format!("{:.2}s", secs)
+    format!("{secs:.2}s")
 }
 
 impl RenderTestExecutionStatus for PrettyTestExecutionStatusRenderer {
@@ -394,12 +394,9 @@ impl RenderTestExecutionStatus for PrettyTestExecutionStatusRenderer {
                 let running_count = counts.running - 4;
                 let pending_count = counts.pending;
                 let summary_str = if pending_count > 0 {
-                    format!(
-                        "Running {} more tests... {} pending",
-                        running_count, pending_count
-                    )
+                    format!("Running {running_count} more tests... {pending_count} pending")
                 } else {
-                    format!("Running {} more tests...", running_count)
+                    format!("Running {running_count} more tests...")
                 };
                 if !bars.contains_key(&summary_key) {
                     let pb = self.multi_progress.add(ProgressBar::new_spinner());

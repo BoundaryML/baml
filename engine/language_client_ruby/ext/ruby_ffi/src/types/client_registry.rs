@@ -30,7 +30,7 @@ impl ClientRegistry {
             Err(e) => {
                 return Err(Error::new(
                     ruby.exception_syntax_error(),
-                    format!("error while parsing call_function args:\n{}", e),
+                    format!("error while parsing call_function args:\n{e}"),
                 ));
             }
         };
@@ -40,7 +40,7 @@ impl ClientRegistry {
             Err(e) => {
                 return Err(Error::new(
                     ruby.exception_syntax_error(),
-                    format!("Invalid provider: {:?}", e),
+                    format!("Invalid provider: {e:?}"),
                 ));
             }
         };

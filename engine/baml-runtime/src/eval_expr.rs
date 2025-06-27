@@ -309,7 +309,7 @@ async fn beta_reduce<'a>(
                 let var_lookup = env
                     .context
                     .get(name)
-                    .context(format!("Variable not found: {:?}", name))?;
+                    .context(format!("Variable not found: {name:?}"))?;
                 let new_app = Expr::App {
                     func: Arc::new(var_lookup.clone()),
                     args: args.clone(),
@@ -463,7 +463,7 @@ async fn beta_reduce<'a>(
             let var_lookup = env
                 .context
                 .get(name)
-                .context(format!("Variable not found: {:?}", name))?;
+                .context(format!("Variable not found: {name:?}"))?;
 
             // Evaluate the expression
             let evaluated = Box::pin(beta_reduce(env, var_lookup, eval_final_llm_fn)).await?;
@@ -823,7 +823,7 @@ pub async fn eval_to_value<'a>(
                 let new_expr = Box::pin(beta_reduce(env, &other, true)).await?;
 
                 if new_expr.temporary_same_state(expr) {
-                    eprintln!("Value: {:?}", new_expr);
+                    eprintln!("Value: {new_expr:?}");
                     return Err(anyhow!("Failed to make progress."));
                 }
                 current_expr = new_expr;
@@ -1011,7 +1011,7 @@ test Poems {
         let ctx = rt.create_ctx_manager(BamlValue::String("test".to_string()), None);
 
         let on_event = |res: FunctionResult| {
-            eprintln!("on_event: {:?}", res);
+            eprintln!("on_event: {res:?}");
         };
         let f = rt.inner.ir.find_expr_fn("OuterPyramid").unwrap();
         dbg!(&f.item);
@@ -1137,7 +1137,7 @@ test TestMakePerson() {
         let ctx = rt.create_ctx_manager(BamlValue::String("test".to_string()), None);
 
         let on_event = |res: FunctionResult| {
-            eprintln!("on_event: {:?}", res);
+            eprintln!("on_event: {res:?}");
         };
         let f = rt.inner.ir.find_expr_fn("OuterPyramid").unwrap();
         // dbg!(&f.item);
@@ -1211,7 +1211,7 @@ test UseFunction() {
         let ctx = rt.create_ctx_manager(BamlValue::String("test".to_string()), None);
 
         let on_event = |res: FunctionResult| {
-            eprintln!("on_event: {:?}", res);
+            eprintln!("on_event: {res:?}");
         };
         let f = rt.inner.ir.find_expr_fn("UseFunction").unwrap();
         // dbg!(&f.item);

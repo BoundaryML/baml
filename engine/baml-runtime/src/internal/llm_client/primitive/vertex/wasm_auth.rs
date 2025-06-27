@@ -39,7 +39,7 @@ impl VertexAuth {
                 };
 
                 log::debug!("Attempting to auth using JsonString strategy");
-                Self(Some(serde_json::from_str(str).context(format!("Failed to parse 'credentials' as GCP service account creds (are you using JSON format creds?); credentials={}", debug_str))?))
+                Self(Some(serde_json::from_str(str).context(format!("Failed to parse 'credentials' as GCP service account creds (are you using JSON format creds?); credentials={debug_str}"))?))
             }
             ResolvedGcpAuthStrategy::JsonObject(json) => {
                 // NB: this should never happen in WASM, there's no way to pass a JSON object in

@@ -73,13 +73,13 @@ impl LanguageFeatures for RbLanguageFeatures {
             if let Some(requires) = self.requires.lock().unwrap().get(path) {
                 new_content.push('\n');
                 for require in requires {
-                    new_content.push_str(&format!("require \"{}\"\n", require));
+                    new_content.push_str(&format!("require \"{require}\"\n"));
                 }
             }
             if let Some(requires) = self.requires_relative.lock().unwrap().get(path) {
                 new_content.push('\n');
                 for require in requires {
-                    new_content.push_str(&format!("require_relative \"{}\"\n", require));
+                    new_content.push_str(&format!("require_relative \"{require}\"\n"));
                 }
             }
             new_content.push('\n');
@@ -88,7 +88,7 @@ impl LanguageFeatures for RbLanguageFeatures {
                 if line.trim().is_empty() {
                     new_content.push('\n');
                 } else {
-                    new_content.push_str(&format!("  {}\n", line));
+                    new_content.push_str(&format!("  {line}\n"));
                 }
             }
             new_content.push_str("\nend\n");

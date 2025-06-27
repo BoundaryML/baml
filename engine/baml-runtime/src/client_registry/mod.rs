@@ -43,7 +43,7 @@ impl ClientProperty {
 
     pub fn from_shorthand(provider: &ClientProvider, model: &str) -> Self {
         Self {
-            name: format!("{}/{}", provider, model),
+            name: format!("{provider}/{model}"),
             provider: provider.clone(),
             retry_policy: None,
             options: vec![("model".to_string(), BamlValue::String(model.to_string()))]
@@ -109,7 +109,7 @@ impl ClientRegistry {
         let mut clients = HashMap::new();
         for (name, client) in &self.clients {
             let provider = LLMProvider::try_from((client, ctx))
-                .context(format!("Failed to parse client: {}", name))?;
+                .context(format!("Failed to parse client: {name}"))?;
             clients.insert(name.into(), Arc::new(provider));
         }
         // TODO: Also do validation here
@@ -147,8 +147,7 @@ mod tests {
     fn test_each_provider() {
         for provider in ClientProvider::allowed_providers() {
             let json = format!(
-                r#"{{"name": "dummy_name", "provider": "{}", "retry_policy": null, "options": {{"model": "gpt-3"}}}}"#,
-                provider
+                r#"{{"name": "dummy_name", "provider": "{provider}", "retry_policy": null, "options": {{"model": "gpt-3"}}}}"#
             );
             let client: ClientProperty = serde_json::from_str(&json).unwrap();
             assert_eq!(client.provider, ClientProvider::from_str(provider).unwrap());
