@@ -118,9 +118,35 @@ pub struct UiFunctionCall {
     pub usage_estimate: UiUsageEstimate,
     #[ts(optional)]
     pub details: Option<UiFunctionCallDetails>,
+    #[ts(optional)]
+    pub llm_request: Option<UiLlmRequest>,
+    #[ts(optional)]
+    pub llm_response: Option<UiLlmResponse>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UiLlmRequest {
+    pub client_name: String,
+    pub client_provider: String,
+    // TODO: type this out properly.
+    #[ts(type = "any")]
+    pub params: serde_json::Value,
+    #[ts(type = "any")]
+    pub prompt: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UiLlmResponse {
+    pub client_stack: Vec<String>,
+    pub model: Option<String>,
+    pub finish_reason: Option<String>,
+    pub usage: Option<UiUsageEstimate>,
+    pub raw_text_output: Option<String>,
+}
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct UiUsageEstimate {
     // TODO: these estimates are pulled straight from LLMResponse and
     // does not reflect the cost of failed retries.
@@ -136,11 +162,13 @@ pub struct UiUsageEstimate {
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct UiFunctionCallDetails {
     pub http_calls: Vec<UiHttpCall>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct UiHttpCall {
     pub http_request: UiHttpRequest,
     pub http_response: Option<UiHttpResponse>,
