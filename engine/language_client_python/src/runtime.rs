@@ -82,32 +82,37 @@ impl BamlLogEvent {
 
 #[pymethods]
 impl BamlRuntime {
-    /// Called by pickle to serialize the object.
-    fn __getstate__(
+    /// Called by pickle to serialize the object using __reduce__ protocol
+    fn __reduce__(
         &self,
-    ) -> (
-        String,
-        std::collections::HashMap<String, String>,
-        std::collections::HashMap<String, String>,
-    ) {
-        println!("__getstate__ called to serialize BamlRuntime");
+        py: Python,
+    ) -> PyResult<(
+        PyObject,
         (
-            self.root_path.clone(),
-            self.env_vars.clone(),
-            self.files.clone(),
-        )
-    }
-
-    /// Called by pickle to deserialize the object.
-    #[staticmethod]
-    fn __setstate__(
-        state: (
             String,
             std::collections::HashMap<String, String>,
             std::collections::HashMap<String, String>,
         ),
+    )> {
+        println!("__reduce__ called to serialize BamlRuntime");
+        println!("root_path: {}", self.root_path);
+        let cls = py.get_type_bound::<Self>();
+        let args = (
+            self.root_path.clone(),
+            self.env_vars.clone(),
+            self.files.clone(),
+        );
+        Ok((cls.getattr("_create_from_state")?.into(), args))
+    }
+
+    /// Static method to recreate BamlRuntime from pickle state
+    #[staticmethod]
+    fn _create_from_state(
+        root_path: String,
+        env_vars: std::collections::HashMap<String, String>,
+        files: std::collections::HashMap<String, String>,
     ) -> PyResult<Self> {
-        let (root_path, env_vars, files) = state;
+        println!("_create_from_state called to deserialize BamlRuntime");
         let core = CoreBamlRuntime::from_file_content(&root_path, &files, env_vars.clone())
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{e}")))?;
         Ok(BamlRuntime {

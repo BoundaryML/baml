@@ -11,7 +11,6 @@ enum Something{
   Best
   Again
   Hello
-  None
 }
 
 function ExtractResume(resume: string) -> Resume {

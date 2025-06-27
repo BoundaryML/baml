@@ -1,5 +1,4 @@
-ARG PYTHON_VERSION=3.10
-FROM python:${PYTHON_VERSION}-slim
+FROM python:3.12
 
 WORKDIR /app
 
@@ -10,7 +9,23 @@ RUN apt-get update && \
     curl \
     pkg-config \
     git \
+    bash \
+    bash-completion \
+    readline-common \
+    cmake \
+    vim \
     && rm -rf /var/lib/apt/lists/*
+
+# Configure bash with history and completion
+RUN echo 'export HISTSIZE=1000' >> /root/.bashrc && \
+    echo 'export HISTFILESIZE=2000' >> /root/.bashrc && \
+    echo 'export HISTCONTROL=ignoredups:erasedups' >> /root/.bashrc && \
+    echo 'source /etc/bash_completion' >> /root/.bashrc && \
+    echo 'alias ll="ls -la"' >> /root/.bashrc && \
+    echo 'alias la="ls -A"' >> /root/.bashrc
+
+# Set bash as default shell
+SHELL ["/bin/bash", "-c"]
 
 # Install Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
@@ -25,22 +40,3 @@ ENV PATH="/root/.local/bin/:$PATH"
 
 # Install maturin using uv
 RUN uv pip install --system maturin
-
-# Create and activate virtual environment
-RUN uv venv
-ENV VIRTUAL_ENV=/app/.venv
-ENV PATH="$VIRTUAL_ENV/bin:$PATH"
-
-# Copy the entire BAML repository
-COPY . /app/baml/
-
-# Build and install the Python package
-WORKDIR /app/baml
-RUN uv run maturin develop --manifest-path engine/language_client_python/Cargo.toml
-
-# Create a test script
-COPY integ-tests/python/docker-tests/test.py ./test.py
-COPY integ-tests/python/docker-tests/test-project ./test-project
-
-# Run tests
-CMD ["python", "test-project/main.py"]
