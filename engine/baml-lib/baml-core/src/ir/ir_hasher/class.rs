@@ -16,7 +16,7 @@ struct ClassInterfaceHash<'a> {
     fields: Vec<(&'a str, &'a FieldType)>,
 }
 
-impl<'a> std::hash::Hash for ClassInterfaceHash<'a> {
+impl std::hash::Hash for ClassInterfaceHash<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
         self.is_dynamic.hash(state);
@@ -34,7 +34,7 @@ pub(super) struct NameForLLM<'a> {
     pub description: Option<&'a StringOr>,
 }
 
-impl<'a> std::hash::Hash for NameForLLM<'a> {
+impl std::hash::Hash for NameForLLM<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
         if let Some(alias) = self.alias {
@@ -52,7 +52,7 @@ struct ClassImplementationHash<'a> {
     constraints: Vec<&'a Constraint>,
 }
 
-impl<'a> std::hash::Hash for ClassImplementationHash<'a> {
+impl std::hash::Hash for ClassImplementationHash<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         for (name, field_type) in &self.fields {
             name.hash(state);

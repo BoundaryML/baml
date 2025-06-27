@@ -190,13 +190,13 @@ impl<'db> ArgWalker<'db> {
             })
     }
 }
-impl<'db> WithIdentifier for ClassWalker<'db> {
+impl WithIdentifier for ClassWalker<'_> {
     fn identifier(&self) -> &ast::Identifier {
         self.ast_type_block().identifier()
     }
 }
 
-impl<'db> WithSpan for ClassWalker<'db> {
+impl WithSpan for ClassWalker<'_> {
     fn span(&self) -> &internal_baml_diagnostics::Span {
         self.ast_type_block().span()
     }

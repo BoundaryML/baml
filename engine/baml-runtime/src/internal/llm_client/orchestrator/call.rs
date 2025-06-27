@@ -23,7 +23,7 @@ pub(super) struct CtxWithHttpRequestId<'a> {
     http_request_id: HttpRequestId,
 }
 
-impl<'a> HttpContext for CtxWithHttpRequestId<'a> {
+impl HttpContext for CtxWithHttpRequestId<'_> {
     fn http_request_id(&self) -> &baml_ids::HttpRequestId {
         &self.http_request_id
     }

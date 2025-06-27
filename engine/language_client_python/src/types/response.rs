@@ -30,7 +30,7 @@ impl HTTPResponse {
     }
 
     #[getter]
-    pub fn headers<'py>(&self, py: Python<'py>) -> PyResult<Py<PyDict>> {
+    pub fn headers(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
         if let Some(obj) = self.inner.headers() {
             for (k, v) in obj {

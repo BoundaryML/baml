@@ -178,7 +178,7 @@ impl FunctionLog {
     /// pyi: @property def metadata -> Dict[str, Any]
     /// We expose a (String -> PyObject) map or similar.
     #[getter]
-    pub fn metadata<'py>(&self, py: Python<'py>) -> PyResult<PyObject> {
+    pub fn metadata(&self, py: Python<'_>) -> PyResult<PyObject> {
         // Construct a python dict with relevant metadata
         let meta = self.inner.lock().unwrap().metadata();
         let dict = PyDict::new(py);

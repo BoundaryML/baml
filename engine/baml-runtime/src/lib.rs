@@ -600,18 +600,16 @@ impl BamlRuntime {
     where
         F: Fn(FunctionResult),
     {
-        let res = self
-            .run_test_with_expr_events::<F>(
-                function_name,
-                test_name,
-                ctx,
-                on_event,
-                None,
-                collector,
-                env_vars,
-            )
-            .await;
-        res
+        self.run_test_with_expr_events::<F>(
+            function_name,
+            test_name,
+            ctx,
+            on_event,
+            None,
+            collector,
+            env_vars,
+        )
+        .await
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -639,7 +637,7 @@ impl BamlRuntime {
         collectors: Option<Vec<Arc<Collector>>>,
         env_vars: HashMap<String, String>,
     ) -> (Result<FunctionResult>, FunctionCallId) {
-        let res = Box::pin(self.call_function_with_expr_events(
+        Box::pin(self.call_function_with_expr_events(
             function_name,
             params,
             ctx,
@@ -649,8 +647,7 @@ impl BamlRuntime {
             env_vars,
             None,
         ))
-        .await;
-        res
+        .await
     }
 
     pub async fn call_function_with_expr_events(

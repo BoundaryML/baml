@@ -16,7 +16,7 @@ struct EnumInterfaceHash<'a> {
     is_dynamic: bool,
 }
 
-impl<'a> std::hash::Hash for EnumInterfaceHash<'a> {
+impl std::hash::Hash for EnumInterfaceHash<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
         self.is_dynamic.hash(state);
@@ -32,7 +32,7 @@ pub(super) struct NameForLLM<'a> {
     pub skip: bool,
 }
 
-impl<'a> std::hash::Hash for NameForLLM<'a> {
+impl std::hash::Hash for NameForLLM<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
         if let Some(alias) = self.alias {
@@ -50,7 +50,7 @@ struct EnumImplementationHash<'a> {
     values: Vec<NameForLLM<'a>>,
 }
 
-impl<'a> std::hash::Hash for EnumImplementationHash<'a> {
+impl std::hash::Hash for EnumImplementationHash<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.values.hash(state);
     }

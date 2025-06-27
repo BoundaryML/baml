@@ -22,7 +22,7 @@ pub struct RubyToJson<'rb> {
     ruby: &'rb Ruby,
 }
 
-impl<'rb> RubyToJson<'rb> {
+impl RubyToJson<'_> {
     pub fn roundtrip(from: Value) -> crate::Result<Value> {
         let json = RubyToJson::convert(from)?;
         serde_magnus::serialize(&json)

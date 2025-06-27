@@ -129,7 +129,7 @@ impl<'db> FunctionWalker<'db> {
 //     }
 // }
 
-impl<'db> FunctionWalker<'db> {
+impl FunctionWalker<'_> {
     /// Returns the client spec for the function, if it is well-formed
     pub fn client_spec(self) -> Result<ClientSpec, DatamodelError> {
         assert!(self.id.0, "Only new functions have clients");

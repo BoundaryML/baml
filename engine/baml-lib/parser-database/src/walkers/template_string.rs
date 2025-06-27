@@ -72,7 +72,7 @@ impl WithIdentifier for TemplateStringWalker<'_> {
     }
 }
 
-impl<'a> WithSpan for TemplateStringWalker<'a> {
+impl WithSpan for TemplateStringWalker<'_> {
     fn span(&self) -> &Span {
         self.ast_node().span()
     }

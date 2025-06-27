@@ -326,7 +326,7 @@ struct MapRender<'s> {
     value_type: String,
 }
 
-impl<'s> std::fmt::Display for MapRender<'s> {
+impl std::fmt::Display for MapRender<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.style {
             MapStyle::TypeParameters => write!(f, "map<{}, {}>", self.key_type, self.value_type),

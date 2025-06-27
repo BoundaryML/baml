@@ -35,7 +35,7 @@ pub struct EvalEnv<'a> {
     pub env_vars: HashMap<String, String>,
 }
 
-impl<'a> EvalEnv<'a> {
+impl EvalEnv<'_> {
     pub fn dump_ctx(&self) -> String {
         self.context
             .iter()
@@ -46,11 +46,11 @@ impl<'a> EvalEnv<'a> {
 }
 
 /// Substitute val for var_name in expr.
-fn subst<'a>(
+fn subst(
     expr: &Expr<ExprMetadata>,
     var_name: &VarIndex,
     val: &Expr<ExprMetadata>,
-    _env: &EvalEnv<'a>,
+    _env: &EvalEnv<'_>,
 ) -> anyhow::Result<Expr<ExprMetadata>> {
     let res: anyhow::Result<Expr<ExprMetadata>> = match expr {
         Expr::BoundVar(expr_var_name, _) => {

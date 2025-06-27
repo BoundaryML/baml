@@ -67,7 +67,7 @@ pub struct SerializeResponseBamlValue<'a> {
 impl ResponseBamlValue {
     /// Prepare a `ResponseBamlValue` for "final" serialization (serialization
     /// with no stream-state metadata).
-    pub fn serialize_final<'a>(&'a self) -> SerializeResponseBamlValue<'a> {
+    pub fn serialize_final(&self) -> SerializeResponseBamlValue<'_> {
         SerializeResponseBamlValue {
             value: &self.0,
             serialize_mode: SerializeMode::Final,
@@ -76,7 +76,7 @@ impl ResponseBamlValue {
 
     /// Prepare a `ResponseBamlValue` for "partial" serialization (serialization
     /// with stream-state metadata).
-    pub fn serialize_partial<'a>(&'a self) -> SerializeResponseBamlValue<'a> {
+    pub fn serialize_partial(&self) -> SerializeResponseBamlValue<'_> {
         SerializeResponseBamlValue {
             value: &self.0,
             serialize_mode: SerializeMode::Partial,
@@ -152,7 +152,7 @@ impl serde::Serialize for SerializeResponseBamlValue<'_> {
 /// `Serialize` impl.
 pub struct ResponseChecksMetadata<'a, T: Serialize>(pub (&'a T, &'a Vec<ResponseCheck>));
 
-impl<'a, T: Serialize> serde::Serialize for ResponseChecksMetadata<'a, T> {
+impl<T: Serialize> serde::Serialize for ResponseChecksMetadata<'_, T> {
     fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
         let checks_map: HashMap<_, _> = self
             .0

@@ -7,7 +7,7 @@ use super::{ConfigurationWalker, Walker};
 /// Walker for top level assignments.
 pub type TopLevelAssignmentWalker<'db> = Walker<'db, ast::TopLevelAssignmentId>;
 
-impl<'db> TopLevelAssignmentWalker<'db> {
+impl TopLevelAssignmentWalker<'_> {
     /// Returns the name of the top level assignment.
     pub fn name(&self) -> &str {
         self.db.ast[self.id].stmt.identifier.name()

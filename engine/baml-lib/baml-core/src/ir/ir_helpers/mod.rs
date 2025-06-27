@@ -1396,7 +1396,7 @@ mod tests {
             span_path: None,
             allow_implicit_cast_to_string: true,
         };
-        let res = ir.check_function_params(&function.inputs(), &params, arg_coercer);
+        let res = ir.check_function_params(function.inputs(), &params, arg_coercer);
         eprintln!("res: {:?}", res);
         assert!(res.is_err());
     }
@@ -1490,8 +1490,8 @@ mod tests {
             span_path: None,
             allow_implicit_cast_to_string: true,
         };
-        let res = ir.check_function_params(&function.inputs(), &params, arg_coercer);
-        let err = res.err().expect("Should fail due to block constraint");
+        let res = ir.check_function_params(function.inputs(), &params, arg_coercer);
+        let err = res.expect_err("Should fail due to block constraint");
         let msg = format!("{err}");
         assert!(
             msg.contains("Failed assert: hi"),

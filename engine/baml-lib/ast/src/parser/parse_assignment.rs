@@ -92,10 +92,8 @@ mod tests {
             .next()
             .unwrap();
 
-        let assignment = super::parse_assignment(pairs, &mut diagnostics);
-
         // (assignment, diagnostics)
-        assignment
+        super::parse_assignment(pairs, &mut diagnostics)
     }
 
     #[test]

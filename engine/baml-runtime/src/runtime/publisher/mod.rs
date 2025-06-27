@@ -318,7 +318,7 @@ enum Status {
 "###;
 
         let pattern_size = pattern.len();
-        let repetitions = (size_bytes + pattern_size - 1) / pattern_size; // ceiling division
+        let repetitions = size_bytes.div_ceil(pattern_size); // ceiling division
 
         let mut content = String::with_capacity(size_bytes);
         for i in 0..repetitions {
@@ -569,7 +569,7 @@ enum ProcessingStatus {
 
             // Repeat content to reach target size
             let pattern_size = file_specific_content.len();
-            let repetitions = (BYTES_PER_FILE + pattern_size - 1) / pattern_size;
+            let repetitions = BYTES_PER_FILE.div_ceil(pattern_size);
 
             let mut content = String::with_capacity(BYTES_PER_FILE);
             for _ in 0..repetitions {

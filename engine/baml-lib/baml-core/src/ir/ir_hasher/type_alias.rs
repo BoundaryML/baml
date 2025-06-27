@@ -15,7 +15,7 @@ struct TypeAliasInterfaceHash<'a> {
     expr: &'a FieldType,
 }
 
-impl<'a> std::hash::Hash for TypeAliasInterfaceHash<'a> {
+impl std::hash::Hash for TypeAliasInterfaceHash<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
         let expr_hash = self.expr.shallow_interface_hash();
@@ -28,7 +28,7 @@ struct TypeAliasImplementationHash<'a> {
     expr: &'a FieldType,
 }
 
-impl<'a> std::hash::Hash for TypeAliasImplementationHash<'a> {
+impl std::hash::Hash for TypeAliasImplementationHash<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         let expr_hash = self.expr.shallow_implementation_hash();
         expr_hash.hash(state);

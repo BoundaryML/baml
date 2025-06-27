@@ -17,7 +17,7 @@ struct FunctionInterfaceHash<'a> {
     return_type: &'a FieldType,
 }
 
-impl<'a> std::hash::Hash for FunctionInterfaceHash<'a> {
+impl std::hash::Hash for FunctionInterfaceHash<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
         for (name, field_type) in &self.args {
@@ -36,7 +36,7 @@ struct FunctionImplementationHash<'a> {
     return_type: &'a FieldType,
 }
 
-impl<'a> std::hash::Hash for FunctionImplementationHash<'a> {
+impl std::hash::Hash for FunctionImplementationHash<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.client.hash(state);
         self.prompt.hash(state);

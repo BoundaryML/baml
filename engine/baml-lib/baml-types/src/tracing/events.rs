@@ -147,7 +147,7 @@ pub enum TraceData<'a, T: HasFieldType> {
     // In the future, we can send more metadata, like parsing information.
 }
 
-impl<'a, T: HasFieldType> TraceData<'a, T> {
+impl<T: HasFieldType> TraceData<'_, T> {
     pub fn type_name(&self) -> &'static str {
         match self {
             Self::FunctionStart(_) => "FunctionStart",

@@ -34,7 +34,7 @@ impl WithIdentifier for ConfigurationWalker<'_> {
     }
 }
 
-impl<'db> WithSpan for ConfigurationWalker<'db> {
+impl WithSpan for ConfigurationWalker<'_> {
     fn span(&self) -> &internal_baml_diagnostics::Span {
         self.ast_node().span()
     }

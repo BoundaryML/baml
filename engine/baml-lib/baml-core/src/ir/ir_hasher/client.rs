@@ -15,7 +15,7 @@ struct ClientInterfaceHash<'a> {
     name: &'a str,
 }
 
-impl<'a> std::hash::Hash for ClientInterfaceHash<'a> {
+impl std::hash::Hash for ClientInterfaceHash<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
     }
@@ -29,7 +29,7 @@ struct ClientImplementationHash<'a> {
     options: &'a UnresolvedClientProperty<()>,
 }
 
-impl<'a> std::hash::Hash for ClientImplementationHash<'a> {
+impl std::hash::Hash for ClientImplementationHash<'_> {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.name.hash(state);
         self.provider.hash(state);

@@ -45,7 +45,7 @@ impl<'db, I> Walker<'db, I> {
     }
 }
 
-impl<'db, I> PartialEq for Walker<'db, I>
+impl<I> PartialEq for Walker<'_, I>
 where
     I: PartialEq,
 {

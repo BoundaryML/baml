@@ -55,7 +55,7 @@ impl<'db> WithName for FieldWalker<'db> {
     }
 }
 
-impl<'db> WithSpan for FieldWalker<'db> {
+impl WithSpan for FieldWalker<'_> {
     fn span(&self) -> &internal_baml_diagnostics::Span {
         self.ast_field().span()
     }

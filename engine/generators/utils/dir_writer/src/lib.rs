@@ -264,13 +264,13 @@ fn try_delete_tmp_dir(temp_path: &Path) -> Result<()> {
     Ok(())
 }
 
-impl<'a, L: LanguageFeatures + Default> Default for FileCollector<'a, L> {
+impl<L: LanguageFeatures + Default> Default for FileCollector<'_, L> {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl<'a, L: LanguageFeatures + Default> FileCollector<'a, L> {
+impl<L: LanguageFeatures + Default> FileCollector<'_, L> {
     pub fn new() -> Self {
         Self {
             files: IndexMap::new(),

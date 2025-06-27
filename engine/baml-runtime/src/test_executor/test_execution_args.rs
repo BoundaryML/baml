@@ -44,10 +44,9 @@ impl TestFilter {
             return true;
         }
 
-        let ret = Regex::new(&format!("^{}$", filter_expr.replace("*", ".*")))
+        Regex::new(&format!("^{}$", filter_expr.replace("*", ".*")))
             .unwrap()
-            .is_match(subject);
-        ret
+            .is_match(subject)
     }
     pub fn includes(&self, function_name: &str, test_name: &str) -> bool {
         for (func_pattern, test_pattern) in &self.exclude {

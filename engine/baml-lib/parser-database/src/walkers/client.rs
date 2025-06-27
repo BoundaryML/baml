@@ -90,13 +90,13 @@ impl<'db> ClientWalker<'db> {
 }
 
 // with identifier
-impl<'db> WithIdentifier for ClientWalker<'db> {
+impl WithIdentifier for ClientWalker<'_> {
     fn identifier(&self) -> &ast::Identifier {
         self.ast_client().identifier()
     }
 }
 
-impl<'db> WithSpan for ClientWalker<'db> {
+impl WithSpan for ClientWalker<'_> {
     fn span(&self) -> &internal_baml_diagnostics::Span {
         self.ast_client().span()
     }

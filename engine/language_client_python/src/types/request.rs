@@ -49,7 +49,7 @@ impl HTTPRequest {
     }
 
     #[getter]
-    pub fn headers<'py>(&self, py: Python<'py>) -> PyResult<Py<PyDict>> {
+    pub fn headers(&self, py: Python<'_>) -> PyResult<Py<PyDict>> {
         let dict = PyDict::new(py);
         for (k, v) in self.inner.headers() {
             // serde_json::Value::to_string includes quotes around the
@@ -73,7 +73,7 @@ impl HTTPBody {
             .map_err(BamlError::from_anyhow)
     }
 
-    pub fn json<'py>(&self, py: Python<'py>) -> PyResult<PyObject> {
+    pub fn json(&self, py: Python<'_>) -> PyResult<PyObject> {
         serde_value_to_py(py, &self.inner.json().map_err(BamlError::from_anyhow)?)
     }
 }

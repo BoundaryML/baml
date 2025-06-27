@@ -721,9 +721,9 @@ fn media_type_to_cffi<'a, 'b>(
         },
     }
 }
-fn literal_value_to_cffi<'a, 'b>(
+fn literal_value_to_cffi<'a>(
     literal_value: &'a baml_types::LiteralValue,
-    builder: &'a mut flatbuffers::FlatBufferBuilder<'b>,
+    builder: &'a mut flatbuffers::FlatBufferBuilder<'_>,
 ) -> CFFIFieldTypeLiteralArgs {
     match literal_value {
         baml_types::LiteralValue::String(s) => {
