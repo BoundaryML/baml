@@ -22,7 +22,6 @@ mod tests {
     use serde_wasm_bindgen::to_value;
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::*;
-    
     use wasmtimer::tokio::*;
 
     // instantiate logger
