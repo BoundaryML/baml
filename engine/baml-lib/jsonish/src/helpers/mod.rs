@@ -50,7 +50,7 @@ pub fn render_output_format(
     env_values: &EvaluationContext<'_>,
 ) -> Result<OutputFormatContent> {
     let (enums, classes, recursive_classes, structural_recursive_aliases) =
-        relevant_data_models(ir, output, env_values)?;
+        relevant_data_models(ir, output, env_values, true)?;
 
     Ok(OutputFormatContent::target(output.clone())
         .enums(enums)
@@ -122,12 +122,20 @@ fn relevant_data_models<'a>(
     ir: &'a IntermediateRepr,
     output: &'a TypeIR,
     env_values: &EvaluationContext<'_>,
+    partialize: bool,
 ) -> Result<(
     Vec<Enum>,
     Vec<Class>,
     IndexSet<String>,
     IndexMap<String, TypeIR>,
 )> {
+    let output = if partialize {
+        eprintln!("relevant_data_models is partializing type {output}");
+        output.to_streaming_type(ir).to_ir_type()
+    } else {
+        output.clone()
+    };
+    eprintln!("relevant_data_models for: {output}");
     let mut checked_types: HashSet<String> = HashSet::new();
     let mut enums = Vec::new();
     let mut classes: Vec<Class> = Vec::new();

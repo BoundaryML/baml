@@ -34,6 +34,16 @@ impl Name {
     }
 }
 
+impl std::fmt::Display for Name {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{:?}", self.name)?;
+        if let Some(rendered_name) = &self.rendered_name {
+            write!(f, "({:?})", rendered_name)?;
+        }
+        Ok(())
+    }
+}
+
 #[derive(Debug)]
 pub struct Enum {
     pub name: Name,
@@ -54,6 +64,24 @@ pub struct Class {
     pub streaming_behavior: type_meta::base::StreamingBehavior,
 }
 
+impl std::fmt::Display for Class {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Class {{")?;
+        writeln!(f, "  name: {}", self.name)?;
+        writeln!(f, "  fields:")?;
+        for (name, r#type, description, streaming_needed) in &self.fields {
+            writeln!(
+                f,
+                "    {name}: {type} (description: {:?}, streaming_needed: {streaming_needed})",
+                description
+            )?;
+        }
+        writeln!(f, "  constraints: {:?}", self.constraints)?;
+        writeln!(f, "  streaming_behavior: {:?}", self.streaming_behavior)?;
+        writeln!(f, "  }}")
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct OutputFormatContent {
     pub enums: Arc<IndexMap<String, Enum>>,
@@ -61,6 +89,25 @@ pub struct OutputFormatContent {
     pub recursive_classes: Arc<IndexSet<String>>,
     pub structural_recursive_aliases: Arc<IndexMap<String, TypeIR>>,
     pub target: TypeIR,
+}
+
+impl std::fmt::Display for OutputFormatContent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "OutputFormatContent {{\n")?;
+        write!(f, "enums: {:?}\n", self.enums)?;
+        write!(f, "classes: \n")?;
+        for (name, class) in self.classes.iter() {
+            write!(f, "  {name}: {class}\n")?;
+        }
+        write!(f, "recursive_classes: {:?}\n", self.recursive_classes)?;
+        write!(
+            f,
+            "structural_recursive_aliases: {:?}\n",
+            self.structural_recursive_aliases
+        )?;
+        write!(f, "target: {}\n", self.target)?;
+        write!(f, "\n}}")
+    }
 }
 
 /// Builder for [`OutputFormatContent`].
