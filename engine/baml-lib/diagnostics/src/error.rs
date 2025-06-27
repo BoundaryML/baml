@@ -283,7 +283,7 @@ impl DatamodelError {
                         "one of these: {}",
                         existing_top_types
                             .iter()
-                            .map(|top_type| format!("\"{}\"", top_type))
+                            .map(|top_type| format!("\"{top_type}\""))
                             .collect::<Vec<_>>()
                             .join(", ")
                     ),
