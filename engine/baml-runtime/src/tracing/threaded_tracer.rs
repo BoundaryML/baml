@@ -84,7 +84,7 @@ impl DeliveryThread {
                             );
                         }
                         Err(e) => {
-                            log::warn!("Unable to emit BAML logs: {:#?}", e);
+                            log::warn!("Unable to emit BAML logs: {e:#?}");
                         }
                     }
                 }
@@ -132,7 +132,7 @@ impl DeliveryThread {
                 match self.stop_tx.send(ProcessorStatus::Done(id)) {
                     Ok(_) => {}
                     Err(e) => {
-                        log::error!("Error sending flush signal: {:?}", e);
+                        log::error!("Error sending flush signal: {e:?}");
                     }
                 }
             }

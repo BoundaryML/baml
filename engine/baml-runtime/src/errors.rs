@@ -35,8 +35,7 @@ impl std::fmt::Display for ExposedError {
             } => {
                 write!(
                     f,
-                    "Parsing error: {}\nPrompt: {}\nRaw Response: {}",
-                    message, prompt, raw_output
+                    "Parsing error: {message}\nPrompt: {prompt}\nRaw Response: {raw_output}"
                 )
             }
             ExposedError::FinishReasonError {
@@ -61,8 +60,7 @@ impl std::fmt::Display for ExposedError {
             } => {
                 write!(
                     f,
-                    "LLM client \"{}\" failed with status code: {}\nMessage: {}",
-                    client_name, status_code, message
+                    "LLM client \"{client_name}\" failed with status code: {status_code}\nMessage: {message}"
                 )
             }
         }
@@ -71,7 +69,7 @@ impl std::fmt::Display for ExposedError {
 
 impl std::fmt::Debug for ExposedError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!("{}", self))
+        f.write_fmt(format_args!("{self}"))
     }
 }
 
@@ -122,7 +120,7 @@ impl IntoBamlError for &anyhow::Error {
             return baml_error.clone();
         }
         baml_types::tracing::events::BamlError::External {
-            message: Cow::Owned(format!("into_baml_error: {:?}", self)),
+            message: Cow::Owned(format!("into_baml_error: {self:?}")),
         }
     }
 }

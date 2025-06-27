@@ -157,7 +157,7 @@ impl PropelAuthClient {
             anyhow::bail!("CSRF state mismatch");
         }
 
-        log::debug!("Received authorization callback: {:?}", params);
+        log::debug!("Received authorization callback: {params:?}");
         Ok((params.code, redirect_uri))
     }
 
@@ -221,10 +221,7 @@ impl PropelAuthClient {
 
         let resp_body: serde_json::Value = response.json().await?;
 
-        log::debug!(
-            "Signed in as (full propelauth GetUserInfo): {:#?}",
-            resp_body
-        );
+        log::debug!("Signed in as (full propelauth GetUserInfo): {resp_body:#?}");
 
         let resp_body: GetUserInfoResponse = serde_json::from_value(resp_body)?;
 
@@ -263,7 +260,7 @@ async fn start_redirect_server(
     let listener = TcpListener::bind(PROPELAUTH_CLI_REDIRECT_ADDR).await?;
     let addr = listener.local_addr()?;
     let redirect_uri = format!("http://localhost:{}/api/auth/callback", addr.port());
-    log::debug!("Redirect handler listening at {}", redirect_uri);
+    log::debug!("Redirect handler listening at {redirect_uri}");
 
     let server = axum::serve(listener, app);
 

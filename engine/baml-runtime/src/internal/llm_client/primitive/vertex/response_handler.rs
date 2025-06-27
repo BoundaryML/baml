@@ -38,7 +38,7 @@ pub fn parse_vertex_response<C: WithClient + RequestBuilder>(
             start_time: system_now,
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
-            message: format!("{:?}", e),
+            message: format!("{e:?}"),
             code: ErrorCode::Other(2),
         }) {
         Ok(response) => response,
@@ -140,7 +140,7 @@ pub fn scan_vertex_response_stream(
             start_time: *system_now,
             request_options: request_options.clone(),
             latency: instant_now.elapsed(),
-            message: format!("{:?}", e),
+            message: format!("{e:?}"),
             code: ErrorCode::Other(2),
         })?;
 
@@ -264,7 +264,7 @@ mod tests {
             actual_result.latency = Duration::ZERO;
             assert_eq!(actual_result, expected);
         } else {
-            panic!("Expected LLMResponse::Success, got {:?}", result);
+            panic!("Expected LLMResponse::Success, got {result:?}");
         }
     }
 }

@@ -88,7 +88,7 @@ impl Collector {
     #[napi(js_name = "__printStorage")]
     pub fn print_storage() {
         let tracer = BAML_TRACER.lock().unwrap();
-        println!("Storage: {:#?}", tracer);
+        println!("Storage: {tracer:#?}");
     }
 }
 

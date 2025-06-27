@@ -39,7 +39,7 @@ impl Decode for BamlFunctionArguments {
             })
             .transpose()?;
 
-        println!("collectors: {:?}", collectors);
+        println!("collectors: {collectors:?}");
         Ok(BamlFunctionArguments {
             kwargs,
             client_registry,

@@ -192,7 +192,7 @@ impl AnthropicClient {
         role_selection: RolesSelection,
     ) -> Result<Self> {
         Ok(Self {
-            name: format!("{}:baml-anthropic", name),
+            name: format!("{name}:baml-anthropic"),
             context,
             retry_policy: None,
             features: ModelFeatures {
@@ -232,9 +232,9 @@ impl RequestBuilder for AnthropicClient {
         };
 
         let mut req = self.client.post(if prompt.is_left() {
-            format!("{}/v1/complete", destination_url)
+            format!("{destination_url}/v1/complete")
         } else {
-            format!("{}/v1/messages", destination_url)
+            format!("{destination_url}/v1/messages")
         });
 
         for (key, value) in &self.properties.headers {
@@ -257,7 +257,7 @@ impl RequestBuilder for AnthropicClient {
             }
         }
 
-        log::trace!("request body: {:?}", body_obj);
+        log::trace!("request body: {body_obj:?}");
 
         if stream {
             body_obj.insert("stream".into(), true.into());

@@ -109,11 +109,11 @@ impl BamlError {
                 ),
             }
         } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
-            PyErr::new::<BamlInvalidArgumentError, _>(format!("Invalid argument: {}", er))
+            PyErr::new::<BamlInvalidArgumentError, _>(format!("Invalid argument: {er}"))
         } else if let Some(er) = err.downcast_ref::<LLMResponse>() {
             match er {
                 LLMResponse::Success(_) => {
-                    PyErr::new::<BamlError, _>(format!("Unexpected error from BAML: {}", err))
+                    PyErr::new::<BamlError, _>(format!("Unexpected error from BAML: {err}"))
                 }
                 LLMResponse::LLMFailure(failed) => match &failed.code {
                     baml_runtime::internal::llm_client::ErrorCode::Other(2) => {
@@ -137,15 +137,14 @@ impl BamlError {
                     }
                 },
                 LLMResponse::UserFailure(msg) => {
-                    PyErr::new::<BamlInvalidArgumentError, _>(format!("Invalid argument: {}", msg))
+                    PyErr::new::<BamlInvalidArgumentError, _>(format!("Invalid argument: {msg}"))
                 }
                 LLMResponse::InternalFailure(_) => PyErr::new::<BamlClientError, _>(format!(
-                    "Something went wrong with the LLM client: {}",
-                    err
+                    "Something went wrong with the LLM client: {err}"
                 )),
             }
         } else {
-            PyErr::new::<BamlError, _>(format!("{:?}", err))
+            PyErr::new::<BamlError, _>(format!("{err:?}"))
         }
     }
 }

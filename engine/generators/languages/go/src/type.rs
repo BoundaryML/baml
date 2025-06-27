@@ -136,9 +136,9 @@ impl TypeGo {
         match self {
             TypeGo::String(val, _) => val.as_ref().map_or("String".to_string(), |v| {
                 let safe_name = safe_name(v);
-                format!("K{}", safe_name)
+                format!("K{safe_name}")
             }),
-            TypeGo::Int(val, _) => val.map_or("Int".to_string(), |v| format!("IntK{}", v)),
+            TypeGo::Int(val, _) => val.map_or("Int".to_string(), |v| format!("IntK{v}")),
             TypeGo::Float(_) => "Float".to_string(),
             TypeGo::Bool(val, _) => val.map_or("Bool".to_string(), |v| {
                 format!("BoolK{}", if v { "True" } else { "False" })
@@ -169,7 +169,7 @@ impl TypeGo {
             TypeGo::String(val, _) => val.as_ref().map_or("\"\"".to_string(), |v| {
                 format!("\"{}\"", v.replace("\"", "\\\"")).to_string()
             }),
-            TypeGo::Int(val, _) => val.map_or("0".to_string(), |v| format!("{}", v)),
+            TypeGo::Int(val, _) => val.map_or("0".to_string(), |v| format!("{v}")),
             TypeGo::Float(_) => "0.0".to_string(),
             TypeGo::Bool(val, _) => val.map_or("false".to_string(), |v| {
                 if v { "true" } else { "false" }.to_string()

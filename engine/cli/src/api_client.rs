@@ -64,7 +64,7 @@ impl ApiClient {
             .await?;
 
         let resp_body = resp.into_result().await?;
-        log::debug!("resp_body: {:#}", resp_body);
+        log::debug!("resp_body: {resp_body:#}");
 
         Ok(serde_json::from_value(resp_body)?)
     }
@@ -93,7 +93,7 @@ impl ApiClient {
 
         let resp_body = resp.into_result().await?;
 
-        log::debug!("resp_body: {:#}", resp_body);
+        log::debug!("resp_body: {resp_body:#}");
 
         Ok(serde_json::from_value(resp_body)?)
     }

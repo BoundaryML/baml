@@ -123,9 +123,9 @@ impl RequestBuilder for OpenAIClient {
         };
 
         let mut req = self.client.post(if prompt.is_left() {
-            format!("{}/completions", destination_url)
+            format!("{destination_url}/completions")
         } else {
-            format!("{}/chat/completions", destination_url)
+            format!("{destination_url}/chat/completions")
         });
 
         if !self.properties.query_params.is_empty() {

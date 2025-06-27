@@ -279,7 +279,7 @@ mod tests {
         let graph = HashMap::from_iter(
             graph_data
                 .into_iter()
-                .map(|(node, successors)| (node, HashSet::from_iter(successors.into_iter()))),
+                .map(|(node, successors)| (node, HashSet::from_iter(successors))),
         );
 
         let components = Tarjan::components(&graph);

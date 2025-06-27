@@ -284,6 +284,6 @@ mod tests {
         .expect("Valid IR");
         let file = serde_yaml::to_string(&OpenApiUserData::from_ir(&ir).render())
             .expect("Should serialize");
-        eprintln!("{}", file);
+        eprintln!("{file}");
     }
 }

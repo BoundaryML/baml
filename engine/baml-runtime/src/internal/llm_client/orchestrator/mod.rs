@@ -45,7 +45,7 @@ pub struct OrchestratorNode {
 impl std::fmt::Display for ExecutionScope {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExecutionScope::Direct(s) => write!(f, "{}", s),
+            ExecutionScope::Direct(s) => write!(f, "{s}"),
             ExecutionScope::Retry(policy, count, delay) => {
                 write!(f, "Retry({}, {}, {}ms)", policy, count, delay.as_millis())
             }
@@ -53,7 +53,7 @@ impl std::fmt::Display for ExecutionScope {
                 write!(f, "RoundRobin({}, {})", strategy.name, index)
             }
             ExecutionScope::Fallback(strategy, index) => {
-                write!(f, "Fallback({}, {})", strategy, index)
+                write!(f, "Fallback({strategy}, {index})")
             }
         }
     }
@@ -63,7 +63,7 @@ impl std::fmt::Display for OrchestratorNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "OrchestratorNode: [")?;
         for scope in &self.scope.scope {
-            write!(f, "{} + ", scope)?;
+            write!(f, "{scope} + ")?;
         }
         write!(f, "{}]", self.provider)
     }
@@ -115,7 +115,7 @@ impl OrchestrationScope {
         self.scope
             .iter()
             .filter(|scope| !matches!(scope, ExecutionScope::Retry(..)))
-            .map(|scope| format!("{}", scope))
+            .map(|scope| format!("{scope}"))
             .collect::<Vec<_>>()
             .join(" + ")
     }

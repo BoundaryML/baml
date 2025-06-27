@@ -148,7 +148,7 @@ impl Formatter {
                             doc = doc.append(pair_doc.group());
                         }
                         Err(e) => {
-                            log::debug!("Error formatting type_expression_block: {:#?}", e);
+                            log::debug!("Error formatting type_expression_block: {e:#?}");
                             doc = doc.append(pair.to_doc());
                         }
                     }
@@ -199,7 +199,7 @@ impl Formatter {
         let mut content_docs = vec![];
 
         for pair in &mut pairs {
-            let error_context = format!("type_expression: {:#?}", pair);
+            let error_context = format!("type_expression: {pair:#?}");
             match pair.as_rule() {
                 Rule::type_expression => {
                     content_docs.push(

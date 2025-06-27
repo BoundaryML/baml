@@ -47,9 +47,9 @@ fn main() {
             .write_to_file(out_path.clone());
         if std::env::var("CI").is_ok() && res {
             let new_content = std::fs::read_to_string(&out_path).unwrap();
-            println!("New header content: \n==============\n{}", new_content);
+            println!("New header content: \n==============\n{new_content}");
             println!("\n\n");
-            println!("Old header content: \n==============\n{}", outpath_content);
+            println!("Old header content: \n==============\n{outpath_content}");
             panic!("cbindgen generated a diff");
         }
     }

@@ -78,10 +78,7 @@ impl TraceStorage {
         match self.ref_counts.get_mut(function_id) {
             Some(rc) => {
                 if *rc == 0 {
-                    panic!(
-                        "Attempted to decrement ref below 0 for FunctionID {:?}",
-                        function_id
-                    );
+                    panic!("Attempted to decrement ref below 0 for FunctionID {function_id:?}");
                 }
                 *rc -= 1;
                 // If refcount hits 0, remove from both maps
@@ -95,10 +92,7 @@ impl TraceStorage {
                 }
             }
             None => {
-                panic!(
-                    "Attempted to decrement ref for FunctionID {:?} (not found)",
-                    function_id
-                );
+                panic!("Attempted to decrement ref for FunctionID {function_id:?} (not found)");
             }
         }
     }
@@ -111,7 +105,7 @@ impl TraceStorage {
         //     event.content.type_name()
         // );
         if let Err(e) = crate::tracingv2::publisher::publish_trace_event(event.clone()) {
-            log::warn!("Failed to publish trace event: {:?}", e);
+            log::warn!("Failed to publish trace event: {e:?}");
         }
 
         let Some(&count) = self.ref_counts.get(&event.call_id) else {
@@ -574,7 +568,7 @@ impl Collector {
     }
 
     pub fn track_function(&self, fid: FunctionCallId) {
-        log::debug!("Tracking function: {:?}", fid);
+        log::debug!("Tracking function: {fid:?}");
 
         // Then add to our set (maintaining insertion order)
         let mut guard = self.tracked_ids.lock().unwrap();

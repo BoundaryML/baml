@@ -209,7 +209,7 @@ pub fn from_str(
     let value = jsonish::parse(raw_string, jsonish::ParseOptions::default())?;
 
     // Pick the schema that is the most specific.
-    log::debug!("Parsed JSONish (step 1 of parsing): {:#?}", value);
+    log::debug!("Parsed JSONish (step 1 of parsing): {value:#?}");
     let ctx = ParsingContext::new(of, allow_partials);
 
     // Determine the best way to get the desired schema from the parsed schema.

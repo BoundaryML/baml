@@ -41,7 +41,7 @@ impl BamlSpan {
             .inner
             .start_call(function_name, args_map, &ctx.inner, &env_vars);
 
-        log::trace!("Starting span: {:#?} for {:?}\n", span, function_name);
+        log::trace!("Starting span: {span:#?} for {function_name:?}\n");
         Ok(Self {
             inner: Some(span),
             rt: runtime.inner.clone(),

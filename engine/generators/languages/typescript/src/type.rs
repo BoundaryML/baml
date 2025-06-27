@@ -61,7 +61,7 @@ impl WrapType for TypeWrapper {
                     inner.wrap_type(params),
                     names
                         .iter()
-                        .filter_map(|n| n.as_ref().map(|n| format!("\"{}\"", n)))
+                        .filter_map(|n| n.as_ref().map(|n| format!("\"{n}\"")))
                         .collect::<Vec<_>>()
                         .join(" | ")
                 )
@@ -104,7 +104,7 @@ pub enum LiteralValue {
 impl LiteralValue {
     pub fn serialize_type(&self) -> String {
         match self {
-            LiteralValue::String(s) => format!("\"{}\"", s),
+            LiteralValue::String(s) => format!("\"{s}\""),
             LiteralValue::Int(i) => i.to_string(),
             LiteralValue::Bool(b) => if *b { "true" } else { "false" }.to_string(),
         }
@@ -282,9 +282,9 @@ impl SerializeType for TypeTS {
                 let v = value.serialize_type(pkg);
                 match &**key {
                     TypeTS::Enum { .. } | TypeTS::Union { .. } => {
-                        format!("Partial<Record<{}, {}>>", k, v)
+                        format!("Partial<Record<{k}, {v}>>")
                     }
-                    _ => format!("Record<{}, {}>", k, v),
+                    _ => format!("Record<{k}, {v}>"),
                 }
             }
             TypeTS::Interface { package, name, .. } => {

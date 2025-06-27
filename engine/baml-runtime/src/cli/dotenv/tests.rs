@@ -11,7 +11,7 @@ mod tests {
     // Helper to create temp file with content
     fn create_env_file(content: &str) -> Result<PathBuf> {
         let mut file = NamedTempFile::new()?;
-        write!(file, "{}", content)?;
+        write!(file, "{content}")?;
         Ok(file.into_temp_path().to_path_buf())
     }
 

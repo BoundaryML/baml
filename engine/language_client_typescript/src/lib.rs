@@ -53,7 +53,7 @@ fn module_init() {
     match baml_log::init() {
         Ok(_) => (),
         Err(e) => {
-            eprintln!("Failed to initialize BAML logger: {:#}", e);
+            eprintln!("Failed to initialize BAML logger: {e:#}");
         }
     }
     let _ = env_logger::try_init_from_env(env_logger::Env::new().filter("BAML_INTERNAL_LOG"));

@@ -142,7 +142,7 @@ pub fn derive_baml_hash(input: TokenStream) -> TokenStream {
                     },
                     syn::Fields::Unnamed(fields) => {
                         let binders: Vec<_> = (0..fields.unnamed.len())
-                            .map(|i| syn::Ident::new(&format!("v{}", i), variant.ident.span()))
+                            .map(|i| syn::Ident::new(&format!("v{i}"), variant.ident.span()))
                             .collect();
 
                         let hash_stmts = binders.iter().zip(fields.unnamed.iter()).map(|(ident, field)| {

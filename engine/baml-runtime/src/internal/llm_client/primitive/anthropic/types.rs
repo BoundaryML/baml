@@ -208,7 +208,7 @@ mod tests {
         println!("serialized = {}", serde_json::to_string(&chunk)?);
 
         let deserialized: MessageChunk = serde_json::from_str(r#"{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"Hello"}    }"#).unwrap();
-        println!("deserialized = {:?}", deserialized);
+        println!("deserialized = {deserialized:?}");
 
         Ok(())
     }

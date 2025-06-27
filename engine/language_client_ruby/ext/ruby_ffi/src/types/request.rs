@@ -42,7 +42,7 @@ impl HTTPRequest {
     pub fn headers(ruby: &Ruby, rb_self: &Self) -> Result<magnus::Value> {
         // Convert headers to Ruby hash
         serde_magnus::serialize(&rb_self.inner.headers())
-            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
+            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{e:?}")))
     }
 
     pub fn body(&self) -> HTTPBody {
@@ -81,7 +81,7 @@ impl HTTPBody {
         rb_self.inner.text().map(String::from).map_err(|e| {
             Error::new(
                 ruby.exception_runtime_error(),
-                format!("Failed to get text from HTTP body:\n{:?}", e),
+                format!("Failed to get text from HTTP body:\n{e:?}"),
             )
         })
     }
@@ -90,7 +90,7 @@ impl HTTPBody {
         serde_magnus::serialize(&rb_self.inner.json().map_err(|e| {
             Error::new(
                 ruby.exception_runtime_error(),
-                format!("Failed deserializing HTTP body as JSON:\n{:?}", e),
+                format!("Failed deserializing HTTP body as JSON:\n{e:?}"),
             )
         })?)
     }

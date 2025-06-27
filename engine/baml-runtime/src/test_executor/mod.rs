@@ -159,7 +159,7 @@ impl TestExecutor for BamlRuntime {
         if !func_test_pairs.is_empty() {
             println!("{}", "--------------------------------".dimmed());
             for (function_name, test_name) in func_test_pairs {
-                println!("{}::{}", function_name, test_name);
+                println!("{function_name}::{test_name}");
             }
             println!("{}", "--------------------------------".dimmed());
 

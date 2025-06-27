@@ -68,7 +68,7 @@ pub async fn make_stream_request(
                 std::future::ready(event.as_ref().is_ok_and(|e| e.data != "[DONE]"))
             })
             .map(|event| -> Result<serde_json::Value> { Ok(serde_json::from_str(&event?.data)?) })
-            .inspect(|event| log::trace!("{:#?}", event))
+            .inspect(|event| log::trace!("{event:#?}"))
             .scan(
                 Ok(LLMCompleteResponse {
                     client: client_name.clone(),
@@ -98,7 +98,7 @@ pub async fn make_stream_request(
                                     start_time: start_time_system,
                                     request_options: params.clone(),
                                     latency: start_time_instant.elapsed(),
-                                    message: format!("Failed to parse event: {:#?}", e),
+                                    message: format!("Failed to parse event: {e:#?}"),
                                     code: ErrorCode::UnsupportedResponse(2),
                                 },
                             )));

@@ -543,7 +543,7 @@ class Resume {
             .render(RenderOptions::default())
             .unwrap()
             .unwrap();
-        println!("{}", rendered);
+        println!("{rendered}");
 
         assert_eq!(
             rendered,
@@ -641,7 +641,7 @@ class Resume {
             .render(RenderOptions::default())
             .unwrap()
             .unwrap();
-        println!("{}", rendered);
+        println!("{rendered}");
 
         assert_eq!(
             rendered,

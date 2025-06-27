@@ -373,7 +373,7 @@ type JsonObject = map<string, JsonValue>
         false,
     );
 
-    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+    assert!(result.is_ok(), "Failed to parse: {result:?}");
 
     let value = result.unwrap();
 

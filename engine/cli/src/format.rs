@@ -48,7 +48,7 @@ impl FormatArgs {
             ) {
                 Ok(formatted) => {
                     if self.dry_run {
-                        println!("{}", formatted);
+                        println!("{formatted}");
                     } else {
                         fs::write(path, formatted)?;
                     }

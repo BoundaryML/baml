@@ -78,7 +78,7 @@ impl From<CFFIValueHolder<'_>> for BamlValue {
                 panic!("CFFIFunctionArguments is not supported in BamlValue");
             }
             other => {
-                panic!("Unsupported value type: {:?}", other);
+                panic!("Unsupported value type: {other:?}");
             }
         }
     }
