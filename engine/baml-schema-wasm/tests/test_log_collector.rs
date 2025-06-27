@@ -22,7 +22,7 @@ mod tests {
     use serde_wasm_bindgen::to_value;
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::*;
-    use wasm_logger;
+    
     use wasmtimer::tokio::*;
 
     // instantiate logger
@@ -117,7 +117,7 @@ mod tests {
             .collect::<HashMap<_, _>>();
         let env_vars_js = to_value(&env_vars).unwrap();
 
-        let mut current_runtime = project.runtime(env_vars_js).map_err(JsValue::from).unwrap();
+        let mut current_runtime = project.runtime(env_vars_js.clone()).unwrap();
 
         let diagnostics = project.diagnostics(&current_runtime);
         assert!(diagnostics.errors().is_empty());
@@ -130,13 +130,13 @@ mod tests {
                 "One".to_string(),
                 (js_sys::Function::new_no_args("")),
                 (js_sys::Function::new_no_args("")),
-                // Some(collector),
+                env_vars_js.clone().into(),
             )
             .await;
         }
 
         let events = BAML_TRACER.lock().unwrap().events();
-        log::info!("Events {:#?}", events);
+        log::info!("Events {events:#?}");
         // TODO: this makes the test hang on Node, but not in browser.
         flush().await;
 
