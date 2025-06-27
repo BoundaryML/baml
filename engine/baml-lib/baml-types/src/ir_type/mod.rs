@@ -539,6 +539,12 @@ impl TypeIR {
     }
 }
 
+impl TypeStreaming {
+    pub fn to_ir_type(&self, lookup: &impl TypeLookups) -> TypeIR {
+        converters::streaming::to_type_ir(self, lookup)
+    }
+}
+
 impl TypeGeneric<type_meta::IR> {
     pub fn streaming_behavior(&self) -> &type_meta::base::StreamingBehavior {
         &self.meta().streaming_behavior

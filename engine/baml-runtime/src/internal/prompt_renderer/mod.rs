@@ -15,7 +15,7 @@ use internal_baml_jinja::{
 };
 use internal_llm_client::ClientSpec;
 use jsonish::{BamlValueWithFlags, ResponseBamlValue};
-use render_output_format::render_output_format;
+use render_output_format::{render_output_format, render_output_format_streaming};
 use scoped_ir::ScopedIr;
 
 use super::llm_client::parsed_value_to_response;
@@ -57,7 +57,7 @@ impl PromptRenderer {
                 target: func_v2.output.clone(),
             },
             streaming: TypeDefinitionWrapper {
-                defintions: render_output_format(ir, ctx, &func_v2.output)?,
+                defintions: render_output_format_streaming(ir, ctx, &func_v2.output)?,
                 target: func_v2.output.clone(),
             },
         })
