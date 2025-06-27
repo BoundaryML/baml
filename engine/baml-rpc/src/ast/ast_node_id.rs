@@ -124,8 +124,7 @@ impl std::str::FromStr for AstNodeId {
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let parts = s.split("##").collect::<Vec<_>>();
-        println!("ast node id: {}", s);
-        println!("parts: {:?}", parts);
+
         if parts.len() != 4 {
             return Err(anyhow::anyhow!("Invalid unique id: {}", s));
         }
