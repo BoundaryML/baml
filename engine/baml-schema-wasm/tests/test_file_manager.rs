@@ -6,8 +6,7 @@
 mod tests {
     use std::collections::HashMap;
 
-    use baml_runtime::{BamlRuntime, RuntimeContext};
-    use baml_schema_build::runtime_wasm::{WasmProject, WasmRuntime};
+    use baml_schema_build::runtime_wasm::WasmProject;
     use serde_wasm_bindgen::to_value;
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::*;

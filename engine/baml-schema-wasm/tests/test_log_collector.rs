@@ -8,30 +8,19 @@
 #[cfg(test)]
 mod tests {
 
-    use core::{time, time::Duration};
-    use std::{collections::HashMap, sync::Mutex};
+    use std::collections::HashMap;
 
-    use baml_runtime::{tracingv2::publisher::publisher::flush, BamlRuntime, RuntimeContext};
+    use baml_runtime::tracingv2::publisher::publisher::flush;
     // pub static GLOBAL_TRACE_STORAGE: Lazy<Mutex<u32>> = Lazy::new(|| Mutex::new(0));
-    use baml_runtime::{
-        tracingv2::storage::storage::{Collector, BAML_TRACER},
-        InternalRuntimeInterface,
-    };
-    use baml_schema_build::runtime_wasm::{WasmProject, WasmRuntime};
-    use once_cell::sync::Lazy;
+    use baml_runtime::{tracingv2::storage::storage::BAML_TRACER, InternalRuntimeInterface};
+    use baml_schema_build::runtime_wasm::WasmProject;
     use serde_wasm_bindgen::to_value;
     use wasm_bindgen::JsValue;
     use wasm_bindgen_test::*;
-    use wasmtimer::tokio::*;
 
     // instantiate logger
 
     wasm_bindgen_test_configure!(run_in_browser);
-
-    use futures_timer::Delay;
-    use wasm_bindgen::prelude::*;
-    use wasmtimer::tokio::{interval, sleep, timeout};
-    use web_sys::console::log_1;
 
     fn sample_baml_content() -> String {
         r##"
@@ -127,8 +116,8 @@ mod tests {
             f.run_test(
                 &mut current_runtime,
                 "One".to_string(),
-                (js_sys::Function::new_no_args("")),
-                (js_sys::Function::new_no_args("")),
+                js_sys::Function::new_no_args(""),
+                js_sys::Function::new_no_args(""),
                 env_vars_js.clone().into(),
             )
             .await;
