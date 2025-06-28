@@ -1,0 +1,117 @@
+# Simple enum
+
+enum Status {
+  Active
+  Inactive
+  Pending
+}
+
+==>
+
+Baml(Decl(EnumDecl(
+  IdentifierDecl,
+  "{",
+  EnumValueDecl(IdentifierDecl),
+  EnumValueDecl(IdentifierDecl),
+  EnumValueDecl(IdentifierDecl),
+  "}"
+)))
+
+# Enum with attributes
+
+enum Priority {
+  High @alias("high")
+  Medium @alias("medium")
+  Low @alias("low")
+}
+
+==>
+
+Baml(Decl(EnumDecl(
+  IdentifierDecl,
+  "{",
+  EnumValueDecl(IdentifierDecl, FieldAttribute(IdentifierDecl, AttributeValue(QuotedString))),
+  EnumValueDecl(IdentifierDecl, FieldAttribute(IdentifierDecl, AttributeValue(QuotedString))),
+  EnumValueDecl(IdentifierDecl, FieldAttribute(IdentifierDecl, AttributeValue(QuotedString))),
+  "}"
+)))
+
+# Enum with block attributes
+
+enum ErrorCode {
+  @@description("Standard error codes")
+  NotFound
+  Unauthorized
+  InternalError
+}
+
+==>
+
+Baml(Decl(EnumDecl(
+  IdentifierDecl,
+  "{",
+  BlockAttribute(IdentifierDecl, AttributeValue(QuotedString)),
+  EnumValueDecl(IdentifierDecl),
+  EnumValueDecl(IdentifierDecl),
+  EnumValueDecl(IdentifierDecl),
+  "}"
+)))
+
+# Enum with multiple attributes
+
+enum UserRole {
+  Admin @alias("admin") @description("Full access")
+  User @alias("user") @description("Limited access")
+  Guest @alias("guest") @description("Read only")
+}
+
+==>
+
+Baml(Decl(EnumDecl(
+  IdentifierDecl,
+  "{",
+  EnumValueDecl(
+    IdentifierDecl,
+    FieldAttribute(IdentifierDecl, AttributeValue(QuotedString)),
+    FieldAttribute(IdentifierDecl, AttributeValue(QuotedString))
+  ),
+  EnumValueDecl(
+    IdentifierDecl,
+    FieldAttribute(IdentifierDecl, AttributeValue(QuotedString)),
+    FieldAttribute(IdentifierDecl, AttributeValue(QuotedString))
+  ),
+  EnumValueDecl(
+    IdentifierDecl,
+    FieldAttribute(IdentifierDecl, AttributeValue(QuotedString)),
+    FieldAttribute(IdentifierDecl, AttributeValue(QuotedString))
+  ),
+  "}"
+)))
+
+# Single value enum
+
+enum Boolean {
+  True
+}
+
+==>
+
+Baml(Decl(EnumDecl(
+  IdentifierDecl,
+  "{",
+  EnumValueDecl(IdentifierDecl),
+  "}"
+)))
+
+# Empty enum (edge case)
+
+enum Empty {
+}
+
+==>
+
+Baml(Decl(EnumDecl(
+  IdentifierDecl,
+  "{",
+  "}"
+)))
