@@ -73,6 +73,7 @@ Baml(
     IdentifierDecl,
     "{",
     ClassField(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)))),
+    TrailingComment,
     "}"
   ))
 )

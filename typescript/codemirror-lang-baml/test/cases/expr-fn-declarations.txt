@@ -12,8 +12,8 @@ Baml(Decl(FunctionDecl(
   FunctionArgs(FunctionArg(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))),
   TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
   "{",
-  LetDecl(LetKeyword, IdentifierDecl, "=", FunctionValueExpr(IdentifierDecl), ";"),
-  FunctionValueExpr(IdentifierDecl),
+  LetDecl(LetKeyword, IdentifierDecl, FunctionValueExpr(FunctionValueAtom(IdentifierDecl))),
+  FunctionValueExpr(FunctionValueAtom(IdentifierDecl)),
   "}"
 )))
 
@@ -31,7 +31,7 @@ Baml(Decl(FunctionDecl(
   FunctionArgs(FunctionArg(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))),
   TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
   "{",
-  FunctionValueExpr(IdentifierDecl),
+  FunctionValueExpr(FunctionValueAtom(IdentifierDecl)),
   "}"
 )))
 
@@ -49,8 +49,8 @@ Baml(Decl(FunctionDecl(
   IdentifierDecl,
   FunctionArgs(FunctionArg(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))),
   "{",
-  LetDecl(LetKeyword, IdentifierDecl, "=", FunctionValueExpr(IdentifierDecl), ";"),
-  FunctionValueExpr(IdentifierDecl),
+  LetDecl(LetKeyword, IdentifierDecl, FunctionValueExpr(FunctionValueAtom(IdentifierDecl))),
+  FunctionValueExpr(FunctionValueAtom(IdentifierDecl)),
   "}"
 )))
 
@@ -68,8 +68,8 @@ Baml(Decl(FunctionDecl(
   FunctionArgs,
   TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
   "{",
-  LetDecl(LetKeyword, IdentifierDecl, "=", FunctionValueExpr(IdentifierDecl, "(", FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))), ")"), ";"),
-  FunctionValueExpr(IdentifierDecl),
+  LetDecl(LetKeyword, IdentifierDecl, FunctionValueExpr(IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))))),
+  FunctionValueExpr(FunctionValueAtom(IdentifierDecl)),
   "}"
 )))
 
@@ -82,7 +82,5 @@ let globalValue = 42;
 Baml(Decl(LetDecl(
   LetKeyword,
   IdentifierDecl,
-  "=",
-  FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral))),
-  ";"
+  FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))
 )))

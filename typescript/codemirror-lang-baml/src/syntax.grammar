@@ -56,13 +56,12 @@ FunctionArg {
   IdentifierDecl ":" TypeExpr
 }
 FunctionValueAtom {
-  LiteralDecl | PromptExpr
+  LiteralDecl | PromptExpr | IdentifierDecl
 }
 FunctionValueExpr {
   FunctionValueAtom |
   "{" LetDecl* FunctionValueExpr "}" |
-  IdentifierDecl "(" (FunctionValueExpr ("," FunctionValueExpr)*)? ")" |
-  ClassConstructor
+  IdentifierDecl "(" (FunctionValueExpr ("," FunctionValueExpr)*)? ")"
 }
 
 ClassConstructor {
@@ -74,15 +73,18 @@ ClassConstructorField {
 }
 FunctionTupleValue { (ClientKeyword | PromptKeyword) FunctionValueAtom }
 
-ConfigValueExpr { LiteralDecl | PromptExpr | UnquotedString | "{" ConfigTupleValue* "}" }
+ConfigValueExpr { LiteralDecl | PromptExpr | UnquotedString | ListValue | ConfigMap }
 ConfigTupleValue { IdentifierDecl ConfigValueExpr }
+
+ListValue { "[" (IdentifierDecl ("," IdentifierDecl)*)? "]" }
+ConfigMap { "{" ConfigTupleValue* "}" }
 
 ClientDecl {
   "client<llm>" IdentifierDecl "{" ConfigTupleValue* "}"
 }
 
 TestDecl {
-  "test" IdentifierDecl "{" (BlockAttribute | FunctionTupleValue | TypeBuilderDecl)* "}"
+  "test" IdentifierDecl "{" (BlockAttribute | ConfigTupleValue | TypeBuilderDecl)* "}"
 }
 
 LiteralDecl { NumericLiteral | QuotedString }
