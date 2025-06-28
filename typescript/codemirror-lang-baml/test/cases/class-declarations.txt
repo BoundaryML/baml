@@ -122,7 +122,7 @@ class Result {
 Baml(Decl(ClassDecl(
   IdentifierDecl,
   "{",
-  ClassField(IdentifierDecl, TypeExpr(UnionTypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)), "|", ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))),
-  ClassField(IdentifierDecl, TypeExpr(UnionTypeExpr(ComplexTypeExpr(SimpleTypeExpr(LiteralDecl(QuotedString))), "|", ComplexTypeExpr(SimpleTypeExpr(LiteralDecl(QuotedString)))))),
+  ClassField(IdentifierDecl, TypeExpr(UnionTypeExpr(TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))), TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)))))),
+  ClassField(IdentifierDecl, TypeExpr(UnionTypeExpr(TypeExpr(ComplexTypeExpr(SimpleTypeExpr(LiteralDecl(QuotedString)))), TypeExpr(ComplexTypeExpr(SimpleTypeExpr(LiteralDecl(QuotedString))))))),
   "}"
 )))

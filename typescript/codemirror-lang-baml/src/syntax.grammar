@@ -28,7 +28,7 @@ ComplexTypeExpr {
 MapTypeExpr { MapIdentifier "<" ComplexTypeExpr "," ComplexTypeExpr ">"}
 ListTypeExpr { ComplexTypeExpr"[]" }
 OptionalTypeExpr { ComplexTypeExpr"?" }
-SimpleTypeExpr { ListTypeExpr | OptionalTypeExpr | MapTypeExpr!MapOverIdentifier | IdentifierDecl }
+SimpleTypeExpr { ListTypeExpr | OptionalTypeExpr | MapTypeExpr!MapOverIdentifier | IdentifierDecl | LiteralDecl }
 UnionTypeExpr { TypeExpr!TypeUnion"|"TypeExpr }
 
 @precedence {
