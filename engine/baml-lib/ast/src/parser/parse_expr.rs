@@ -146,6 +146,14 @@ pub fn parse_expr_block(token: Pair<'_>, diagnostics: &mut Diagnostics) -> Optio
             Rule::NEWLINE => {
                 continue;
             }
+            Rule::comment_block => {
+                // Skip comments in function bodies
+                continue;
+            }
+            Rule::empty_lines => {
+                // Skip empty lines in function bodies
+                continue;
+            }
             _ => {
                 diagnostics.push_error(DatamodelError::new_static(
                     "Internal Error: Parser only allows statements and expressions in function body.",

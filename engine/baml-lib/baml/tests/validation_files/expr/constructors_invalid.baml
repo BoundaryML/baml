@@ -18,6 +18,12 @@ fn Foo() -> Bar {
   x
 }
 
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  expr/constructors_invalid.baml:6
+//    | 
+//  5 | 
+//  6 | fn Foo() -> Bar {
+//    | 
 // error: Error validating: Bar.a expected type int, but found string
 //   -->  expr/constructors_invalid.baml:7
 //    | 

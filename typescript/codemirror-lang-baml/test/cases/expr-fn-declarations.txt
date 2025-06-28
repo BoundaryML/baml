@@ -84,3 +84,75 @@ Baml(Decl(LetDecl(
   IdentifierDecl,
   FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))
 )))
+
+# Expression function with comments
+
+function CommentedFunction(x: int) -> int {
+  // This is a comment before let binding
+  let y = x; // This is a trailing comment
+  
+  // This is a comment before the return expression
+  y // Return y with trailing comment
+}
+
+==>
+
+Baml(Decl(FunctionDecl(
+  IdentifierDecl,
+  FunctionArgs(FunctionArg(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))),
+  TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
+  "{",
+  TrailingComment,
+  LetDecl(LetKeyword, IdentifierDecl, FunctionValueExpr(FunctionValueAtom(IdentifierDecl))),
+  TrailingComment,
+  TrailingComment,
+  FunctionValueExpr(FunctionValueAtom(IdentifierDecl, TrailingComment)),
+  "}"
+)))
+
+# Function with multiline comments
+
+fn MultilineComments(x: string) -> string {
+  {// This is a multiline comment
+     that spans multiple lines //}
+  x
+}
+
+==>
+
+Baml(Decl(FunctionDecl(
+  FnKeyword,
+  IdentifierDecl,
+  FunctionArgs(FunctionArg(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))),
+  TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
+  "{",
+  MultilineComment,
+  FunctionValueExpr(FunctionValueAtom(IdentifierDecl)),
+  "}"
+)))
+
+# Function with mixed comments
+
+function MixedComments() -> int {
+  // Single line comment
+  {// Multiline comment //}
+  let value = 42; // Trailing comment
+  // Final comment
+  value
+}
+
+==>
+
+Baml(Decl(FunctionDecl(
+  IdentifierDecl,
+  FunctionArgs,
+  TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
+  "{",
+  TrailingComment,
+  MultilineComment,
+  LetDecl(LetKeyword, IdentifierDecl, FunctionValueExpr(FunctionValueAtom(LiteralDecl(NumericLiteral)))),
+  TrailingComment,
+  TrailingComment,
+  FunctionValueExpr(FunctionValueAtom(IdentifierDecl)),
+  "}"
+)))
