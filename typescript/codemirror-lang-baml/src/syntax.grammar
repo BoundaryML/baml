@@ -48,8 +48,8 @@ BlockAttribute {
 }
 
 FunctionDecl {
-  "function" IdentifierDecl "(" FunctionArgs ")" "->" TypeExpr
-  "{" (FunctionTupleValue | LetDecl | FunctionValueAtom)* "}"
+  ("function" | FnKeyword) IdentifierDecl "(" FunctionArgs ")" ("->" TypeExpr)?
+  "{" (FunctionTupleValue | LetDecl | FunctionValueExpr)* "}"
 }
 FunctionArgs { (FunctionArg ",")* FunctionArg? }
 FunctionArg {
@@ -61,7 +61,16 @@ FunctionValueAtom {
 FunctionValueExpr {
   FunctionValueAtom |
   "{" LetDecl* FunctionValueExpr "}" |
-  IdentifierDecl "(" (FunctionValueExpr ("," FunctionValueExpr)*)? ")"
+  IdentifierDecl "(" (FunctionValueExpr ("," FunctionValueExpr)*)? ")" |
+  ClassConstructor
+}
+
+ClassConstructor {
+  IdentifierDecl "{" (ClassConstructorField ("," ClassConstructorField)*)? "}"
+}
+
+ClassConstructorField {
+  IdentifierDecl ":" FunctionValueExpr
 }
 FunctionTupleValue { (ClientKeyword | PromptKeyword) FunctionValueAtom }
 
@@ -90,10 +99,11 @@ LetDecl { LetKeyword IdentifierDecl "=" FunctionValueExpr ";"}
     NumericLiteral, QuotedString, UnquotedString, UnquotedAttributeValue
   }
   @precedence {
-    MapIdentifier, TypeBuilderKeyword, ClientKeyword, PromptKeyword, LetKeyword, IdentifierDecl, UnquotedAttributeValue
+    MapIdentifier, TypeBuilderKeyword, ClientKeyword, PromptKeyword, LetKeyword, FnKeyword, IdentifierDecl, UnquotedAttributeValue
   }
 
   LetKeyword { "let" }
+  FnKeyword { "fn" }
   ClientKeyword { "client" }
   PromptKeyword { "prompt" }
   TypeBuilderKeyword { "type_builder" }
