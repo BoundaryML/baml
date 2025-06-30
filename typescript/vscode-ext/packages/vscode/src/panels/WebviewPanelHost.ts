@@ -315,6 +315,12 @@ export class WebviewPanelHost {
             const { proxyEnabled } = vscodeMessage
             const config = vscode.workspace.getConfiguration()
             config.update('baml.enablePlaygroundProxy', proxyEnabled, vscode.ConfigurationTarget.Workspace)
+            // Send response back to webview with updated config to prevent timeout and sync state
+            this._panel.webview.postMessage({
+              rpcId: message.rpcId,
+              rpcMethod: vscodeCommand,
+              data: { enablePlaygroundProxy: proxyEnabled },
+            })
             return
           case 'GET_WEBVIEW_URI':
             console.log('GET_WEBVIEW_URI', vscodeMessage)

@@ -26,6 +26,7 @@ import { vscode } from '../../vscode'
 import { sortBy } from 'lodash'
 import { parse as parseDotenv } from 'dotenv'
 import { motion } from 'motion/react'
+import { bamlConfig, type BamlConfigAtom } from '../../../../baml_wasm_web/bamlConfig'
 
 const envVarVisibilityAtom = atom<Record<string, boolean>>({})
 
@@ -134,6 +135,8 @@ export const EnvironmentVariablesPanel: React.FC = () => {
   const setVisibility = useSetAtom(envVarVisibilityAtom)
   const currentUserEnvVars = useAtomValue(userEnvVarsAtom)
   const proxySettings = useAtomValue(proxyUrlAtom)
+  const setBamlConfig = useSetAtom(bamlConfig)
+
   const [newKey, setNewKey] = useState('')
   const [newValue, setNewValue] = useState('')
   const [envFileContent, setEnvFileContent] = useState('')
@@ -242,8 +245,20 @@ export const EnvironmentVariablesPanel: React.FC = () => {
             </p>
             <Checkbox
               checked={proxySettings.proxyEnabled}
-              onCheckedChange={() => {
-                vscode.setProxySettings(!proxySettings.proxyEnabled)
+              onCheckedChange={async (checked) => {
+                try {
+                  const response = await vscode.setProxySettings(!!checked)
+                  // Update local config to reflect the change immediately
+                  setBamlConfig((prev: BamlConfigAtom) => ({
+                    ...prev,
+                    config: {
+                      ...prev.config,
+                      enablePlaygroundProxy: response.enablePlaygroundProxy,
+                    },
+                  }))
+                } catch (error) {
+                  console.error('Failed to update proxy settings:', error)
+                }
               }}
             />
           </div>

@@ -234,9 +234,27 @@ export const envVarsAtom = atom(
       return {}
     }
 
-    if ((window as any).next?.version) {
-      // NextJS environment doesnt have vscode settings, and proxy is always enabled
-      return Object.fromEntries(defaultEnvKeyValues.map(([k, v]) => [k, v]))
+    // Check for Next.js environment
+    const isNextJs = !!(window as any).next?.version
+
+    if (isNextJs) {
+      // NextJS environment - check proxy settings but use Next.js specific proxy URL
+      const { proxyEnabled } = get(proxyUrlAtom)
+      const userEnvVars = get(userEnvVarsAtom)
+
+      if (!proxyEnabled) {
+        return userEnvVars
+      }
+
+      // Proxy enabled - use Next.js specific proxy URL
+      const nextJsProxyUrl = window?.location?.origin?.includes('localhost')
+        ? 'https://fiddle-proxy.fly.dev' // localhost development
+        : 'https://fiddle-proxy.fly.dev' // production
+
+      return {
+        ...userEnvVars,
+        BOUNDARY_PROXY_URL: nextJsProxyUrl,
+      }
     }
 
     const { proxyEnabled, proxyUrl } = get(proxyUrlAtom)

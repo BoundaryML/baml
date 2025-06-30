@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { useState } from 'react'
 import { envVarsAtom, proxyUrlAtom, requiredEnvVarsAtom, userEnvVarsAtom } from '../../atoms'
+import { bamlConfig, type BamlConfigAtom } from '../../../../baml_wasm_web/bamlConfig'
 import { cn } from '@/lib/utils'
 import { Switch } from '@radix-ui/react-switch'
 import { QuestionMarkCircledIcon, QuestionMarkIcon } from '@radix-ui/react-icons'
@@ -63,6 +64,8 @@ export default function EnvVars() {
   const setUserEnvVars = useSetAtom(userEnvVarsAtom)
   const currentUserEnvVars = useAtomValue(userEnvVarsAtom)
   const proxySettings = useAtomValue(proxyUrlAtom)
+  const setBamlConfig = useSetAtom(bamlConfig)
+
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [newKey, setNewKey] = useState('')
@@ -160,8 +163,25 @@ export default function EnvVars() {
               VSCode proxy is <b>{proxySettings.proxyEnabled ? 'enabled' : 'disabled'}</b>
               <Checkbox
                 checked={proxySettings.proxyEnabled}
-                onCheckedChange={() => {
-                  vscode.setProxySettings(!proxySettings.proxyEnabled)
+                onCheckedChange={async (checked) => {
+                  try {
+                    const response = await vscode.setProxySettings(!!checked)
+                    // Update local config to reflect the change immediately
+                    setBamlConfig((prev: BamlConfigAtom) => ({
+                      ...prev,
+                      config: {
+                        ...prev.config,
+                        enablePlaygroundProxy: response.enablePlaygroundProxy,
+                      },
+                    }))
+                  } catch (error) {
+                    console.error('Failed to update proxy settings:', error)
+                    toast({
+                      title: 'Error updating proxy settings',
+                      description: 'Please try again',
+                      variant: 'destructive',
+                    })
+                  }
                 }}
               />
             </p>
