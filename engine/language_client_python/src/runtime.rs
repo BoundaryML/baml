@@ -82,7 +82,7 @@ impl BamlLogEvent {
 
 #[pymethods]
 impl BamlRuntime {
-    /// Called by pickle to serialize the object using __reduce__ protocol
+    // Called by pickle to serialize the object using __reduce__ protocol
     fn __reduce__(
         &self,
         py: Python,
@@ -94,9 +94,7 @@ impl BamlRuntime {
             std::collections::HashMap<String, String>,
         ),
     )> {
-        println!("__reduce__ called to serialize BamlRuntime");
-        println!("root_path: {}", self.root_path);
-        let cls = py.get_type_bound::<Self>();
+        let cls = py.get_type::<Self>();
         let args = (
             self.root_path.clone(),
             self.env_vars.clone(),
@@ -112,7 +110,6 @@ impl BamlRuntime {
         env_vars: std::collections::HashMap<String, String>,
         files: std::collections::HashMap<String, String>,
     ) -> PyResult<Self> {
-        println!("_create_from_state called to deserialize BamlRuntime");
         let core = CoreBamlRuntime::from_file_content(&root_path, &files, env_vars.clone())
             .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{e}")))?;
         Ok(BamlRuntime {
@@ -125,14 +122,9 @@ impl BamlRuntime {
 
     #[staticmethod]
     fn from_directory(directory: PathBuf, env_vars: HashMap<String, String>) -> PyResult<Self> {
-        let core = CoreBamlRuntime::from_directory(&directory, env_vars.clone())
-            .map_err(BamlError::from_anyhow)?;
-        Ok(BamlRuntime {
-            inner: std::sync::Arc::new(core),
-            root_path: directory.to_string_lossy().to_string(),
-            env_vars,
-            files: HashMap::new(), // Empty for directory-based runtimes
-        })
+        Ok(CoreBamlRuntime::from_directory(&directory, env_vars)
+            .map_err(BamlError::from_anyhow)?
+            .into())
     }
 
     #[staticmethod]
@@ -141,14 +133,11 @@ impl BamlRuntime {
         files: HashMap<String, String>,
         env_vars: HashMap<String, String>,
     ) -> PyResult<Self> {
-        let core = CoreBamlRuntime::from_file_content(&root_path, &files, env_vars.clone())
-            .map_err(BamlError::from_anyhow)?;
-        Ok(BamlRuntime {
-            inner: std::sync::Arc::new(core),
-            root_path,
-            env_vars,
-            files,
-        })
+        Ok(
+            CoreBamlRuntime::from_file_content(&root_path, &files, env_vars)
+                .map_err(BamlError::from_anyhow)?
+                .into(),
+        )
     }
 
     #[pyo3()]
@@ -158,13 +147,9 @@ impl BamlRuntime {
         files: HashMap<String, String>,
         env_vars: HashMap<String, String>,
     ) -> PyResult<()> {
-        self.inner = std::sync::Arc::new(
-            CoreBamlRuntime::from_file_content(&root_path, &files, env_vars.clone())
-                .map_err(BamlError::from_anyhow)?,
-        );
-        self.root_path = root_path;
-        self.env_vars = env_vars;
-        self.files = files;
+        self.inner = CoreBamlRuntime::from_file_content(&root_path, &files, env_vars)
+            .map_err(BamlError::from_anyhow)?
+            .into();
         Ok(())
     }
 

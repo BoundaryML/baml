@@ -57,12 +57,10 @@ class DoNotUseDirectlyCallManager:
 
     def __getstate__(self):
         # Return state needed for pickling
-        print("__getstate__ called")
         return {"baml_options": self.__baml_options}
 
     def __setstate__(self, state):
         # Restore state from pickling
-        print("__setstate__ called")
         self.__baml_options = state["baml_options"]
 
     def __resolve(self) -> _ResolvedBamlOptions:
