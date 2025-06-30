@@ -10,6 +10,16 @@ use pyo3::{
     Bound, IntoPyObjectExt, PyObject, PyRef, Python,
 };
 
+// Type alias for pickle reduce return type
+type PickleReduceResult = PyResult<(
+    PyObject,
+    (
+        String,
+        std::collections::HashMap<String, String>,
+        std::collections::HashMap<String, String>,
+    ),
+)>;
+
 use crate::{
     errors::{BamlError, BamlInvalidArgumentError},
     parse_py_type::parse_py_type,
@@ -83,17 +93,7 @@ impl BamlLogEvent {
 #[pymethods]
 impl BamlRuntime {
     // Called by pickle to serialize the object using __reduce__ protocol
-    fn __reduce__(
-        &self,
-        py: Python,
-    ) -> PyResult<(
-        PyObject,
-        (
-            String,
-            std::collections::HashMap<String, String>,
-            std::collections::HashMap<String, String>,
-        ),
-    )> {
+    fn __reduce__(&self, py: Python) -> PickleReduceResult {
         let cls = py.get_type::<Self>();
         let args = (
             self.root_path.clone(),
