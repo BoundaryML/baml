@@ -258,6 +258,11 @@ export const EnvironmentVariablesPanel: React.FC = () => {
                   }))
                 } catch (error) {
                   console.error('Failed to update proxy settings:', error)
+                  toast({
+                    title: 'Error updating proxy settings',
+                    description: 'Please try again',
+                    variant: 'destructive',
+                  })
                 }
               }}
             />
