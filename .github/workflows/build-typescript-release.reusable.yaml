@@ -87,7 +87,7 @@ jobs:
         if: contains(matrix._.target, 'linux')
         run: |
           ldd --version
-          
+
       # Install common toolchain dependencies
       # NOTE: we can't use mise here because it doesn't support Windows
       - uses: pnpm/action-setup@v4
@@ -98,8 +98,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
-          cache-dependency-path: |
-            engine/language_client_typescript/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
@@ -115,20 +114,18 @@ jobs:
 
       - name: PNPM Install
         run: pnpm install --frozen-lockfile
-        working-directory: engine/language_client_typescript
-        
       # per-matrix-entry dependency setup
       - name: Build tools setup
         run: ${{ matrix._.before }}
 
       # Build the NAPI library and bindings
       - name: PNPM Build
-        run: ${{ matrix._.node_build }}
-        working-directory: engine/language_client_typescript
+        run: |
+          cd engine/language_client_typescript
+          ${{ matrix._.node_build }}
 
       - name: Build TS
-        run: pnpm build:ts_build
-        working-directory: engine/language_client_typescript
+        run: pnpm --filter=@baml/language-client-typescript build:ts_build
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4

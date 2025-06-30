@@ -3,11 +3,6 @@
 # be ignored at the root level
 
 !.gitignore
-!.vscode/*.code-snippets
-!.vscode/extensions.json
-!.vscode/launch.json
-!.vscode/settings.json
-!.vscode/tasks.json
 !.yarn/patches
 !.yarn/plugins
 !.yarn/releases
@@ -104,7 +99,6 @@ $RECYCLE.BIN/
 .vercel
 .vscode-test
 .vscode-test/
-.vscode/
 .vuepress/dist
 .yarn-integrity
 .yarn/*
@@ -164,4 +158,4 @@ yarn-error.log*
 yarn.lock
 artifacts
 .direnv
-typescript/vscode-ext/packages/vscode/server/baml-cli
+.rollup.cache

@@ -1,0 +1,38 @@
+{
+  "private": true,
+  "scripts": {
+    "clean": "git clean -xdf .turbo node_modules",
+    "clean:ws": "turbo clean",
+    "build": "turbo run build",
+    "build:playground": "turbo build --force --filter=@baml/playground",
+    "dev": "turbo run dev",
+    "dev:all": "turbo run dev --parallel --filter=@baml/cli --filter=@baml/language-server --filter=baml-extension --filter=@baml/playground",
+    "dev:vscode": "turbo run dev --filter=baml-extension",
+    "dev:vscode-full": "pnpm build:playground && turbo run dev --parallel --filter=@baml/cli --filter=@baml/language-server --filter=baml-extension",
+    "dev:language-server": "turbo run dev --filter=@baml/language-server",
+    "dev:playground": "turbo run dev --filter=@baml/playground",
+    "generate": "turbo run generate",
+    "typecheck": "turbo run typecheck",
+    "lint:ws": "pnpm dlx sherif@latest",
+    "postinstall.skip": "pnpm lint:ws",
+    "format": "biome check",
+    "format:ci": "biome ci",
+    "format:fix": "biome check --write",
+    "docker-build": "bash build-docker.sh",
+    "postinstall": "./scripts/setup-dev.sh"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "1.9.4",
+    "@types/node": "24.0.3",
+    "turbo": "2.5.4",
+    "typescript": "5.8.3",
+    "vitest": "3.2.3"
+  },
+  "pnpm": {
+    "patchedDependencies": {
+      "vite-plugin-wasm@3.3.0": "patches/vscode-inline-wasm-as-base64.patch"
+    }
+  },
+  "packageManager": "pnpm@9.12.0",
+  "name": "@baml/root"
+}

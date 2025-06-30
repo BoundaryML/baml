@@ -7,9 +7,17 @@
     "./*": "./bindings/*.ts"
   },
   "scripts": {
-    "build": "tsc",
-    "typecheck": "tsc --noEmit --emitDeclarationOnly false",
-    "clean": "git clean -fdf dist .turbo node_modules"
+    "dev": "cargo test && tsc --watch",
+    "build": "cargo test && tsc",
+    "release": "cargo test && tsc",
+    "typecheck": "cargo test && tsc --noEmit --emitDeclarationOnly false",
+    "clean": "git clean -fdf .turbo node_modules target",
+    "format": "cargo fmt",
+    "format:check": "cargo fmt --check",
+    "format:fix": "cargo fmt",
+    "lint": "cargo clippy -- -D warnings",
+    "test": "cargo test",
+    "test:watch": "cargo watch -x test"
   },
   "devDependencies": {
     "typescript": "5.8.3"

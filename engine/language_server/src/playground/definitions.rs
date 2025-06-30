@@ -36,6 +36,8 @@ pub struct PlaygroundState {
     /// Buffer for events that occur before the first client connects.
     pub event_buffer: VecDeque<String>,
     pub first_client_connected: bool,
+    /// Track the number of active connections
+    pub active_connections: usize,
 }
 
 impl Default for PlaygroundState {
@@ -52,6 +54,7 @@ impl PlaygroundState {
             _rx: rx,
             event_buffer: VecDeque::new(),
             first_client_connected: false,
+            active_connections: 0,
         }
     }
 
@@ -61,9 +64,9 @@ impl PlaygroundState {
         Ok(())
     }
 
-    /// Push an event to the buffer if the first client hasn't connected yet.
+    /// Push an event to the buffer if no clients are connected.
     pub fn buffer_event(&mut self, event: String) {
-        if !self.first_client_connected {
+        if self.active_connections == 0 {
             self.event_buffer.push_back(event);
         }
     }
@@ -73,8 +76,22 @@ impl PlaygroundState {
         self.event_buffer.drain(..).collect()
     }
 
-    /// Mark that the first client has connected.
-    pub fn mark_first_client_connected(&mut self) {
-        self.first_client_connected = true;
+    /// Mark that a client has connected.
+    pub fn mark_client_connected(&mut self) {
+        self.active_connections += 1;
+        if self.active_connections == 1 {
+            self.first_client_connected = true;
+        }
+    }
+
+    /// Mark that a client has disconnected.
+    pub fn mark_client_disconnected(&mut self) {
+        if self.active_connections > 0 {
+            self.active_connections -= 1;
+            if self.active_connections == 0 {
+                self.first_client_connected = false;
+                tracing::info!("All clients disconnected, resetting connection state");
+            }
+        }
     }
 }

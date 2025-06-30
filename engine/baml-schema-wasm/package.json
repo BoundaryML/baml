@@ -1,0 +1,12 @@
+{
+  "name": "@gloo-ai/baml-schema-wasm",
+  "version": "0.86.1",
+  "description": "The WASM package for baml-fmt",
+  "main": "./src/baml_schema_build.js",
+  "scripts": {
+    "clean": "cargo clean && git clean -fdf .turbo node_modules target web/dist nodejs/dist web/.turbo nodejs/.turbo web/node_modules nodejs/node_modules",
+    "build": "wasm-pack build --dev --target bundler --out-dir ./web/dist & wasm-pack build --dev --target nodejs --out-dir ./nodejs/dist",
+    "release": "wasm-pack build --release --target bundler --out-dir ./web/dist & wasm-pack build --release --target nodejs --out-dir ./nodejs/dist",
+    "typecheck": "pnpm build"
+  }
+}

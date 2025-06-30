@@ -7,4 +7,4 @@ packages:
   - '../../engine/language_client_typescript/npm/linux-x64-gnu'
   - '../../engine/language_client_typescript/npm/linux-x64-musl'
   - '../../engine/language_client_typescript/npm/win32-x64-msvc'
-  - '../../typescript/nextjs-plugin'
+  - '../../typescript/packages/nextjs-plugin'

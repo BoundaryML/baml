@@ -1,0 +1,21 @@
+{
+  "name": "@baml/language-server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "cargo watch -x build",
+    "clean": "cargo clean && git clean -fdf .turbo node_modules target",
+    "typecheck": "cargo check",
+    "build": "cargo build",
+    "release": "cargo build --release",
+    "format": "cargo fmt",
+    "format:check": "cargo fmt --check",
+    "format:fix": "cargo fmt",
+    "lint": "cargo clippy -- -D warnings",
+    "test": "cargo test",
+    "test:watch": "cargo watch -x test"
+  },
+  "dependencies": {
+    "@baml/playground": "workspace:*"
+  }
+}

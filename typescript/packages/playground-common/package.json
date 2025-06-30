@@ -1,0 +1,95 @@
+{
+  "name": "@baml/playground-common",
+  "version": "1.0.12",
+  "description": "",
+  "keywords": [],
+  "packageManager": "pnpm@9.12.0",
+  "author": "",
+  "license": "ISC",
+  "scripts": {
+    "dev": "tsc --watch",
+    "build": "tsc",
+    "release": "tsc",
+    "clean": "git clean -xdf .turbo node_modules dist",
+    "typecheck": "tsc --noEmit --emitDeclarationOnly false"
+  },
+  "sideEffects": false,
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": ["./src/*.ts", "./src/*.tsx", "./src/*/index.ts"]
+  },
+  "files": ["src"],
+  "typesVersions": {
+    "*": {
+      "*": ["src/*", "src/*/index"]
+    }
+  },
+  "engines": {
+    "vscode": ">=1.63.0"
+  },
+  "dependencies": {
+    "@baml/codemirror-lang-baml": "workspace:*",
+    "@baml/common": "workspace:",
+    "@baml/ui": "workspace:*",
+    "@codemirror/autocomplete": "6.18.6",
+    "@codemirror/lang-javascript": "6.2.4",
+    "@codemirror/lint": "6.8.5",
+    "@codemirror/state": "6.5.2",
+    "@codemirror/view": "6.37.2",
+    "@gloo-ai/baml-schema-wasm-web": "workspace:*",
+    "@lezer/highlight": "1.2.1",
+    "@mdx-js/mdx": "3.1.0",
+    "@radix-ui/react-icons": "1.3.2",
+    "@react-hook/debounce": "4.0.0",
+    "@shikijs/rehype": "3.6.0",
+    "@smithy/types": "4.3.1",
+    "@typescript/vfs": "1.6.1",
+    "@uiw/codemirror-extensions-hyper-link": "4.23.13",
+    "@uiw/codemirror-extensions-langs": "4.23.13",
+    "@uiw/codemirror-theme-vscode": "4.23.13",
+    "@uiw/react-codemirror": "4.23.13",
+    "@uiw/react-json-view": "2.0.0-alpha.32",
+    "@valtown/codemirror-ts": "2.3.1",
+    "@xyflow/react": "12.7.0",
+    "anser": "2.3.2",
+    "codemirror-copilot": "0.0.7",
+    "date-fns": "4.1.0",
+    "dotenv": "16.5.0",
+    "hast-util-has-property": "3.0.0",
+    "he": "1.2.0",
+    "js-tiktoken": "1.0.20",
+    "lodash": "4.17.21",
+    "lucide-react": "0.516.0",
+    "motion": "12.18.1",
+    "next-themes": "0.4.6",
+    "react": "19.1.0",
+    "react-arborist": "3.4.3",
+    "react-error-boundary": "6.0.0",
+    "react-icons": "5.5.0",
+    "react-resizable-panels": "3.0.3",
+    "rehype-stringify": "10.0.1",
+    "shiki": "3.6.0",
+    "swr": "2.3.3",
+    "tailwind-merge": "3.3.1",
+    "unist-util-visit": "5.0.0",
+    "vscode-webview": "1.0.1-beta.1",
+    "zod": "3.25.66"
+  },
+  "devDependencies": {
+    "@types/hast": "3.0.4",
+    "@types/he": "1.2.3",
+    "@types/lodash": "4.17.17",
+    "@types/node": "24.0.3",
+    "@types/react": "19.1.8",
+    "@types/react-dom": "19.1.6",
+    "@types/vscode": "1.96.0",
+    "jotai-devtools": "0.12.0",
+    "react-dom": "19.1.0",
+    "ts-node": "10.9.2",
+    "tsup": "8.5.0",
+    "typescript": "5.8.3"
+  },
+  "peerDependencies": {
+    "jotai": "*"
+  }
+}

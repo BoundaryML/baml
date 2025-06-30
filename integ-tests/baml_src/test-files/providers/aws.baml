@@ -31,6 +31,33 @@ function TestUniverseQuestion(question: UniverseQuestionInput) -> UniverseQuesti
 }
 
 
+function LongQuestion(prompt: string) -> UniverseQuestion {
+  client AwsBedrock
+  prompt #"
+    {{ _.role("system")}}
+
+    You are a helpful assistant that answers questions about the universe. Your knowledge is vast and your wisdom is deep. You have been entrusted with the task of enlightening the curious minds of the world. Your answers are not just words, they are the keys to unlocking the mysteries of the universe.
+
+    {{ ctx.output_format }}
+
+    {{ _.role("user")}}
+
+    Question: {{ prompt }}
+    Answer:
+  "#
+}
+
+test TestLongQuestion {
+  functions [LongQuestion]
+  args {
+    prompt #"
+      What is the meaning of life, and how can we find purpose in our existence? This question has puzzled philosophers, theologians, and scientists for centuries, and yet, it remains one of the most profound and elusive questions of our time.
+
+As we navigate the complexities of our lives, we often find ourselves searching for answers to this question. We may turn to religion, spirituality, or personal relationships to find meaning, but the answer remains elusive. Can you provide some insight into this question, and help us understand the human experience?
+    "#
+  }
+}
+
 function TestAwsInvalidRegion(input: string) -> string {
   client AwsBedrockInvalidRegion
   prompt #"
@@ -82,6 +109,7 @@ test TestName {
     "#
   }
 }
+
 
 client<llm> AwsBedrockClaude37Client {
   provider "aws-bedrock"

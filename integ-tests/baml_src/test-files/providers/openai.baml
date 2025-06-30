@@ -137,7 +137,10 @@ test TestOpenAIClients {
     TestOpenAIWithNullMaxTokens
   ]
   args {
-    input "Cherry blossoms"
+    input #"
+    Cherry blossoms
+    adsfasdf
+    "#
   }
 }
 
