@@ -1,4 +1,7 @@
 {
+  "name": "@baml/fern",
+  "version": "0.0.1",
+  "private": true,
   "scripts": {
     "dev": "npx fern docs dev",
     "preview": "npx fern generate --preview --docs"

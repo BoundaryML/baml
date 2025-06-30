@@ -1,0 +1,38 @@
+{
+  "$schema": "https://turbo.build/schema.json",
+  "globalEnv": ["NODE_ENV"],
+  "ui": "tui",
+  "concurrency": "15",
+  "tasks": {
+    "//#clean": {
+      "cache": false
+    },
+    "clean": {
+      "cache": false,
+      "dependsOn": ["^clean"]
+    },
+    "topo": {
+      "dependsOn": ["^topo"]
+    },
+    "dev": {
+      "dependsOn": ["^topo", "^build"],
+      "cache": false,
+      "persistent": true
+    },
+    "typecheck": {
+      "dependsOn": ["^topo"],
+      "inputs": ["**/*.rs", "**/*.toml", "**/*.j2", "**/*.pest"],
+      "outputs": ["node_modules/.cache/tsbuildinfo.json", "target/**"]
+    },
+    "build": {
+      "dependsOn": ["^topo", "^build"],
+      "inputs": ["**/*.rs", "**/*.toml", "**/*.j2", "**/*.pest"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "target/**"]
+    },
+    "release": {
+      "dependsOn": ["^topo", "^release"],
+      "inputs": ["**/*.rs", "**/*.toml", "**/*.j2", "**/*.pest"],
+      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "target/**"]
+    }
+  }
+}

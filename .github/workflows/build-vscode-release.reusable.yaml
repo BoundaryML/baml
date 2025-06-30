@@ -94,8 +94,7 @@ jobs:
         with:
           cache: "pnpm"
           node-version: 20
-          cache-dependency-path: |
-            typescript/**/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
 
       # This step extracts and copies ONLY the single downloaded binary for the current matrix target
       - name: Extract and copy binary for ${{ matrix.code-target }}
@@ -108,8 +107,8 @@ jobs:
           echo "Preparing server directory for target: $TARGET ($CODE_TARGET) version $VERSION"
 
           # Setup server directories (relative to checkout root)
-          rm -rf typescript/vscode-ext/packages/vscode/server
-          mkdir -p typescript/vscode-ext/packages/vscode/server
+          rm -rf typescript/apps/vscode-ext/server
+          mkdir -p typescript/apps/vscode-ext/server
 
           # Determine expected binary name based on Rust target OS part
           binary_name="baml-cli"
@@ -157,7 +156,7 @@ jobs:
           echo "Found binary at: $binary_path"
 
           # Destination uses the Rust target triple convention
-          dest_dir="typescript/vscode-ext/packages/vscode/server/$TARGET"
+          dest_dir="typescript/apps/vscode-ext/server/$TARGET"
           dest_path="$dest_dir/$binary_name"
           mkdir -p "$dest_dir"
 
@@ -176,25 +175,19 @@ jobs:
           ls -l "$dest_path"
 
       - name: Install Dependencies
-        # Install deps in the context of the specific extension package
         run: pnpm install --frozen-lockfile
-        working-directory: typescript/vscode-ext/packages
 
-      - name: Build Typescript Project (Common Code & WASM)
-        # This might be redundant if it doesn't change per target,
-        # but safer to run it. Consider optimizing if slow.
-        # Run from root to build dependencies correctly.
-        run: pnpm run build
-        working-directory: typescript/
+      - name: Build all packages
+        run: pnpm build
 
       # For dev mode we generate a binary in this directory which we should clean out.
       - name: Remove debug CLI builds
         run: |
-          rm -f typescript/vscode-ext/packages/vscode/server/baml-cli
-          rm -f typescript/vscode-ext/packages/vscode/server/baml-cli.exe
+          rm -f typescript/apps/vscode-ext/server/baml-cli
+          rm -f typescript/apps/vscode-ext/server/baml-cli.exe
 
       - name: Create dist directory
-        run: mkdir -p typescript/vscode-ext/packages/dist
+        run: mkdir -p typescript/apps/vscode-ext/dist
 
       - name: Package VSCode Extension for ${{ matrix.code-target }}
         id: package
@@ -208,13 +201,13 @@ jobs:
           # Run vsce from the directory containing the extension's package.json
           npx @vscode/vsce package $PRE_RELEASE_FLAG --target ${{ matrix.code-target }} -o $OUTPUT_FILENAME --no-dependencies
           echo "vsix_path=$OUTPUT_FILENAME" >> $GITHUB_OUTPUT
-        working-directory: typescript/vscode-ext/packages
+        working-directory: typescript/apps/vscode-ext
 
       - name: Upload VSIX artifact for ${{ matrix.code-target }}
         uses: actions/upload-artifact@v4
         with:
           name: baml-vscode-vsix-${{ matrix.code-target }}
-          path: typescript/vscode-ext/packages/${{ steps.package.outputs.vsix_path }}
+          path: typescript/apps/vscode-ext/${{ steps.package.outputs.vsix_path }}
           if-no-files-found: error
 
       # Build/Upload Playground only once
@@ -231,5 +224,5 @@ jobs:
       #   uses: actions/upload-artifact@v4
       #   with:
       #     name: vscode-playground
-      #     path: typescript/vscode-ext/packages/web-panel/dist
+      #     path: typescript/apps/vscode-ext/src/web-panel/dist
       #     if-no-files-found: error

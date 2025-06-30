@@ -63,7 +63,8 @@
   },
   "scripts": {
     "artifacts": "napi artifacts",
-    "build": "pnpm build:napi-release && pnpm build:ts_build",
+    "build": "pnpm build:napi-debug && pnpm build:ts_build",
+    "release": "pnpm build:napi-release && pnpm build:ts_build",
     "build:debug": "pnpm build:napi-debug && pnpm build:ts_build",
     "build:napi-release": "pnpm build:napi-debug --release",
     "build:napi-debug": "napi build --js ./native.js --dts ./native.d.ts --platform",
@@ -76,7 +77,8 @@
     "format:rs": "cargo fmt",
     "prepublishOnly": "napi prepublish --no-gh-release",
     "test": "jest --config jest.config.js",
-    "version": "napi version"
+    "version": "napi version",
+    "typecheck": "cargo check"
   },
   "devDependencies": {
     "@biomejs/biome": "^1.7.3",
@@ -96,7 +98,8 @@
   "homepage": "https://github.com/BoundaryML/baml#readme",
   "author": "",
   "dependencies": {
-    "@scarf/scarf": "^1.3.0"
+    "@scarf/scarf": "^1.3.0",
+    "@baml/language-server": "workspace:*"
   },
   "jest": {
     "preset": "ts-jest",

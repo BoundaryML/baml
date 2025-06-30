@@ -6,6 +6,7 @@ use tokio::sync::RwLock;
 /// Script that runs the playground server.
 /// On the input port
 use crate::playground::definitions::PlaygroundState;
+use crate::playground::proxy::ProxyServer;
 use crate::{playground::playground_server_helpers::create_server_routes, session::Session};
 
 #[derive(Debug, Clone)]

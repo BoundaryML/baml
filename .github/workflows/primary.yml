@@ -42,6 +42,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
           cache-dependency-path: |
             typescript/**/pnpm-lock.yaml
       - uses: actions/setup-go@v5
@@ -54,15 +55,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
-      - name: Install Node
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
-        working-directory: typescript
       - name: Check TS Lint
-        run: pnpm biome ci . --organize-imports-enabled=false
-        working-directory: typescript
-      - name: Build web-panel for language server
-        run: bash ./scripts/build.sh
-        working-directory: engine/language_server
+        run: pnpm format:ci
+      - name: Build playground
+        run: pnpm build:playground
       - name: Check Rust Formatter
         # rustfmt can only run unstable features on stable toolchains if passed
         # through CLI. We don't want to download 2 toolchains just for this.
@@ -88,9 +86,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
-          cache-dependency-path: |
-            engine/language_client_typescript/pnpm-lock.yaml
-            integ-tests/typescript/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
       - uses: dtolnay/rust-toolchain@stable
         with:
           toolchain: stable
@@ -98,18 +94,15 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      - name: Install Node
+      - name: Install dependencies
         run: pnpm install --frozen-lockfile
-        working-directory: engine/language_client_typescript
       # This step is necessary to guarantee that the language server has a frontend to embed.
       # Is also included in build and integ-tests steps.
-      - name: Build web-panel for language server
-        run: bash ./scripts/build.sh
-        working-directory: engine/language_server
+      - name: Build playground
+        run: pnpm build:playground
       # ------------------------------------------------------------
-      - name: Build Node
-        run: pnpm build:debug
-        working-directory: engine/language_client_typescript
+      - name: Build language client
+        run: pnpm --filter=@baml/language-client-typescript build:debug
       - name: Install Node
         run: pnpm install --frozen-lockfile
         working-directory: integ-tests/typescript
@@ -201,9 +194,8 @@ jobs:
       #   env:
       #     SRB_YES: "1"
       #   run: bundle exec tapioca init
-      - name: Build web-panel for language server
-        run: bash ./scripts/build.sh
-        working-directory: engine/language_server
+      - name: Build playground
+        run: pnpm build:playground
       - name: Test Rust
         # skip doctests & integration tests (the latter require OPENAI_API_KEY and ANTHROPIC_API_KEY to be set)
         run: cargo test --lib
@@ -228,9 +220,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: engine
-      - name: Build web-panel for language server
-        run: bash ./scripts/build.sh
-        working-directory: engine/language_server
+      - name: Build playground
+        run: pnpm build:playground
       - name: run python tests
         run: |
           cd integ-tests/python

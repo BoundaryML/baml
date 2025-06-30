@@ -160,7 +160,6 @@ jobs:
         uses: pnpm/action-setup@v4
         with:
           version: 9.12.0
-          package_json_file: engine/language_client_typescript/package.json
           run_install: false
 
       - name: Setup node
@@ -168,7 +167,7 @@ jobs:
         with:
           node-version: 20
           cache: pnpm
-          cache-dependency-path: engine/language_client_typescript/pnpm-lock.yaml
+          cache-dependency-path: pnpm-lock.yaml
           # This is load-bearing: it writes NODE_AUTH_TOKEN to .npmrc, which is what
           # npm publish relies on.
           # See https://github.com/npm/cli/issues/6184#issuecomment-1544496444
@@ -177,8 +176,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       - name: Install dependencies
-        run: pnpm install
-        working-directory: engine/language_client_typescript
+        run: pnpm install --frozen-lockfile
 
       - uses: actions/download-artifact@v4
         with:
@@ -186,18 +184,17 @@ jobs:
           path: engine/language_client_typescript/artifacts
 
       - name: create npm dirs
-        run: pnpm napi create-npm-dirs
-        working-directory: engine/language_client_typescript
+        run: pnpm --filter=@baml/language-client-typescript napi create-npm-dirs
 
       - name: Move artifacts
-        run: pnpm artifacts
-        working-directory: engine/language_client_typescript
+        run: pnpm --filter=@baml/language-client-typescript artifacts
 
       - name: Publish
         # This reads the credential from .npmrc, which is written by the setup-node step.
         # It does not use the NODE_AUTH_TOKEN environment variable.
-        run: npm publish --access public
-        working-directory: engine/language_client_typescript
+        run: |
+          cd engine/language_client_typescript
+          npm publish --access public
 
   # publish-to-rubygems:
   #   environment: release

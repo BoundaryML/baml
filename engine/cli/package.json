@@ -1,0 +1,24 @@
+{
+  "name": "@baml/cli",
+  "version": "0.1.0",
+  "private": true,
+  "files": ["bin"],
+  "scripts": {
+    "dev": "cargo watch -x 'build' -s 'pnpm run copy:debug'",
+    "clean": "cargo clean && git clean -fdf .turbo node_modules target",
+    "typecheck": "cargo build && pnpm run copy:debug",
+    "copy:debug": "mkdir -p bin && cp ../target/debug/baml-cli bin/baml-cli",
+    "copy:release": "mkdir -p bin && cp ../target/release/baml-cli bin/baml-cli",
+    "build": "cargo build && pnpm run copy:debug",
+    "release": "cargo build --release && pnpm run copy:release",
+    "format": "cargo fmt",
+    "format:check": "cargo fmt --check",
+    "format:fix": "cargo fmt",
+    "lint": "cargo clippy -- -D warnings",
+    "test": "cargo test",
+    "test:watch": "cargo watch -x test"
+  },
+  "dependencies": {
+    "@baml/language-server": "workspace:*"
+  }
+}

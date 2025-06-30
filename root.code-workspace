@@ -59,6 +59,9 @@
     "[typescriptreact]": {
       "editor.defaultFormatter": "biomejs.biome"
     },
+    "[json]": {
+      "editor.defaultFormatter": "biomejs.biome"
+    },
     "files.associations": {
       "*.baml.j2": "jinja",
       "*.js.j2": "jinja-js",
@@ -108,7 +111,34 @@
     "biome.lsp.bin": "typescript/node_modules/@biomejs/biome/bin/biome",
 
     "biome.lspBin": "typescript/node_modules/@biomejs/biome/bin/biome",
-    "terminal.integrated.scrollback": 1e6
+    "terminal.integrated.scrollback": 1e6,
+    "tailwindCSS.experimental.configFile": "typescript/packages/ui/src/styles/globals.css",
+    "tailwindCSS.files.exclude": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/public/**",
+      "**/baml/**"
+    ],
+    "tailwindCSS.experimental.classRegex": [
+      ["clsx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+      ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+      ["cn\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+      ["cx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+      "cn\\(.*?,\\s*['\"]([^'\"]*)['\"]",
+      "cn\\.[^`]+`([^`]*)`",
+      "cn\\(.*?\\).*?`([^`]*)",
+      ["cn\\.[^`]+\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+      ["cn\\(.*?\\).*?\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+      "twc\\.[^`]+`([^`]*)`",
+      "twc\\(.*?\\).*?`([^`]*)",
+      ["twc\\.[^`]+\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+      ["twc\\(.*?\\).*?\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+      "twx\\.[^`]+`([^`]*)`",
+      "twx\\(.*?\\).*?`([^`]*)",
+      ["twx\\.[^`]+\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
+      ["twx\\(.*?\\).*?\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
+    ],
   },
   "extensions": {
     "recommendations": [

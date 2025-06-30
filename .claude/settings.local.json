@@ -8,7 +8,26 @@
       "Bash(uv run:*)",
       "Bash(find:*)",
       "Bash(rg:*)",
-      "Bash(cargo check:*)"
+      "Bash(cargo check:*)",
+      "Bash(find:*)",
+      "Bash(ls:*)",
+      "Bash(cargo install:*)",
+      "Bash(*)",
+      "Bash(pnpm build:*)",
+      "Bash(pushd:*)",
+      "Bash(popd:*)",
+      "Bash(grep:*)",
+      "Bash(pnpm:*)",
+      "Bash(rm:*)",
+      "Bash(dist/baml-cli --version)",
+      "Bash(cargo:*)",
+      "Bash(node_modules/.bin/baml-cli:*)",
+      "Bash(node:*)",
+      "Bash(chmod:*)",
+      "Bash(timeout:*)",
+      "Bash(gtimeout:*)",
+      "Bash(mkdir:*)",
+      "Bash(npx vitest run:*)"
     ],
     "deny": []
   }
