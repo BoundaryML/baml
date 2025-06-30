@@ -17,7 +17,7 @@ import { atom, useAtomValue, useSetAtom } from 'jotai'
 import { AlertTriangle, Check, Circle, CircleDot, Eye, EyeOff, PlusCircle, Settings2, Trash2 } from 'lucide-react'
 import { QuestionMarkCircledIcon } from '@radix-ui/react-icons'
 import { useState, useRef, useEffect } from 'react'
-import { envVarsAtom, requiredEnvVarsAtom, proxyUrlAtom } from '../../atoms'
+import { envVarsAtom, requiredEnvVarsAtom, proxyUrlAtom, userEnvVarsAtom } from '../../atoms'
 import { Textarea } from '@/components/ui/textarea'
 import { Save, FileText } from 'lucide-react'
 import { Label } from '@/components/ui/label'
@@ -39,18 +39,18 @@ interface EnvVarEntry {
 }
 
 const renderedEnvVarsAtom = atom<EnvVarEntry[]>((get) => {
-  const envVars = get(envVarsAtom) as Record<string, string>
+  const userEnvVars = get(userEnvVarsAtom) as Record<string, string>
   const requiredEnvVars = get(requiredEnvVarsAtom)
   const visibility = get(envVarVisibilityAtom)
 
-  const vars: EnvVarEntry[] = Object.entries(envVars).map(([key, value]) => ({
+  const vars: EnvVarEntry[] = Object.entries(userEnvVars).map(([key, value]) => ({
     key,
     value,
     required: requiredEnvVars.includes(key),
     hidden: visibility[key] !== false, // hidden by default unless explicitly set to false
   }))
 
-  const missingVars = requiredEnvVars.filter((envVar) => !(envVar in envVars))
+  const missingVars = requiredEnvVars.filter((envVar) => !(envVar in userEnvVars))
 
   vars.push(
     ...missingVars.map((envVar) => ({
@@ -130,9 +130,9 @@ function EnvVarStatus({ value, required }: { value?: string; required: boolean }
 
 export const EnvironmentVariablesPanel: React.FC = () => {
   const envVars = useAtomValue(renderedEnvVarsAtom)
-  const setEnvVars = useSetAtom(envVarsAtom)
+  const setUserEnvVars = useSetAtom(userEnvVarsAtom)
   const setVisibility = useSetAtom(envVarVisibilityAtom)
-  const currentEnvVars = useAtomValue(envVarsAtom)
+  const currentUserEnvVars = useAtomValue(userEnvVarsAtom)
   const proxySettings = useAtomValue(proxyUrlAtom)
   const [newKey, setNewKey] = useState('')
   const [newValue, setNewValue] = useState('')
@@ -149,25 +149,25 @@ export const EnvironmentVariablesPanel: React.FC = () => {
 
   // Update an environment variable immediately
   const updateEnvVar = (key: string, value: string) => {
-    const newVars = { ...currentEnvVars }
+    const newVars = { ...currentUserEnvVars }
     newVars[key] = value
-    setEnvVars(newVars)
+    setUserEnvVars(newVars)
   }
 
   // Delete an environment variable
   const deleteEnvVar = (key: string) => {
-    const newVars = { ...currentEnvVars }
+    const newVars = { ...currentUserEnvVars }
     delete newVars[key]
-    setEnvVars(newVars)
+    setUserEnvVars(newVars)
   }
 
   // Add a new environment variable
   const addEnvVar = () => {
     if (newKey.trim() === '') return
 
-    const newVars = { ...currentEnvVars }
+    const newVars = { ...currentUserEnvVars }
     newVars[newKey] = newValue
-    setEnvVars(newVars)
+    setUserEnvVars(newVars)
 
     // Reset form
     setNewKey('')
@@ -178,11 +178,11 @@ export const EnvironmentVariablesPanel: React.FC = () => {
   const parseAndSaveEnvFile = () => {
     try {
       const parsed = parseDotenv(envFileContent)
-      const newVars = { ...currentEnvVars }
+      const newVars = { ...currentUserEnvVars }
       Object.entries(parsed).forEach(([key, value]) => {
         newVars[key] = value
       })
-      setEnvVars(newVars)
+      setUserEnvVars(newVars)
       setEnvFileContent('')
       toast({
         title: 'Environment variables imported',
@@ -218,7 +218,7 @@ export const EnvironmentVariablesPanel: React.FC = () => {
       </div>
       <div className='text-left text-muted-foreground'>
         <div className='flex gap-2 items-center'>
-          <p className='flex gap-2 items-center'>
+          <div className='flex gap-2 items-center'>
             <TooltipProvider delayDuration={300}>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -246,7 +246,7 @@ export const EnvironmentVariablesPanel: React.FC = () => {
                 vscode.setProxySettings(!proxySettings.proxyEnabled)
               }}
             />
-          </p>
+          </div>
           <p>{proxySettings.proxyUrl}</p>
         </div>
       </div>
@@ -409,6 +409,8 @@ export const EnvironmentVariablesDialog: React.FC<{
   return (
     <Dialog open={showEnvDialog} onOpenChange={setShowEnvDialog}>
       <DialogContent className='mt-12 max-h-[80vh] overflow-y-auto sm:max-w-none w-fit'>
+        {/* DialogContent requires DialogTitle error  */}
+        <DialogTitle className='sr-only'>Environment Variables</DialogTitle>
         <EnvironmentVariablesPanel />
       </DialogContent>
     </Dialog>
