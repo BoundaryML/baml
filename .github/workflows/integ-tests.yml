@@ -88,6 +88,11 @@ jobs:
       - name: setup TS
         run: pnpm install --frozen-lockfile
         working-directory: engine/language_client_typescript
+      
+      # This step is necessary to guarantee that the language server has a frontend to embed.
+      - name: Build web-panel for language server
+        run: bash ./scripts/build.sh
+        working-directory: engine/language_server
 
       - name: Run all integ tests
         run: |
