@@ -1,0 +1,128 @@
+# Simple class
+
+class User {
+  name string
+  age int
+}
+
+==>
+
+Baml(Decl(ClassDecl(
+  IdentifierDecl,
+  "{",
+  ClassField(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)))),
+  ClassField(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)))),
+  "}"
+)))
+
+# Class with optional fields
+
+class Profile {
+  bio string?
+  website string?
+}
+
+==>
+
+Baml(Decl(ClassDecl(
+  IdentifierDecl,
+  "{",
+  ClassField(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(OptionalTypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))))),
+  ClassField(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(OptionalTypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))))),
+  "}"
+)))
+
+# Class with field attributes
+
+class Document {
+  title string @description("Document title")
+  content string @alias("body")
+}
+
+==>
+
+Baml(Decl(ClassDecl(
+  IdentifierDecl,
+  "{",
+  ClassField(
+    IdentifierDecl,
+    TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
+    FieldAttribute(IdentifierDecl, AttributeValue(QuotedString))
+  ),
+  ClassField(
+    IdentifierDecl,
+    TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
+    FieldAttribute(IdentifierDecl, AttributeValue(QuotedString))
+  ),
+  "}"
+)))
+
+# Class with block attributes
+
+class ApiResponse {
+  @@description("Standard API response")
+  data string
+  error string?
+}
+
+==>
+
+Baml(Decl(ClassDecl(
+  IdentifierDecl,
+  "{",
+  BlockAttribute(IdentifierDecl, AttributeValue(QuotedString)),
+  ClassField(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)))),
+  ClassField(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(OptionalTypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))))),
+  "}"
+)))
+
+# Class with array fields
+
+class Team {
+  members User[]
+  tags string[]
+}
+
+==>
+
+Baml(Decl(ClassDecl(
+  IdentifierDecl,
+  "{",
+  ClassField(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(ListTypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))))),
+  ClassField(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(ListTypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))))),
+  "}"
+)))
+
+# Class with map fields
+
+class Config {
+  settings map<string, string>
+  metadata map<string, int>
+}
+
+==>
+
+Baml(Decl(ClassDecl(
+  IdentifierDecl,
+  "{",
+  ClassField(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(MapTypeExpr(MapIdentifier, ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)), ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))))),
+  ClassField(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(MapTypeExpr(MapIdentifier, ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)), ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))))),
+  "}"
+)))
+
+# Class with union types
+
+class Result {
+  value string | int
+  status "success" | "error"
+}
+
+==>
+
+Baml(Decl(ClassDecl(
+  IdentifierDecl,
+  "{",
+  ClassField(IdentifierDecl, TypeExpr(UnionTypeExpr(TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))), TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)))))),
+  ClassField(IdentifierDecl, TypeExpr(UnionTypeExpr(TypeExpr(ComplexTypeExpr(SimpleTypeExpr(LiteralDecl(QuotedString)))), TypeExpr(ComplexTypeExpr(SimpleTypeExpr(LiteralDecl(QuotedString))))))),
+  "}"
+)))

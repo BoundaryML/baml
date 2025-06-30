@@ -67,6 +67,24 @@ For CI environments, use:
 infisical run --env=test -- uv run pytest --no-cov
 ```
 
+### Running tests in a Linux environment(if you're on a Mac)
+
+```shell
+# Run all commands from the root of the repo
+$ docker build -t baml-python-test -f integ-tests/python/docker-tests/test-package.Dockerfile .
+
+# cargo build often fails with out of memory errors, so we need to increase the memory limit
+$ docker run --memory=8g --volume ./:/app -it baml-python-test /bin/sh
+
+$ cd integ-tests/python
+
+# Build the python client
+$ uv run maturin develop --manifest-path ../../engine/language_client_python/Cargo.toml
+
+$ uv run pytest
+
+```
+
 ## Project Structure
 
 - `tests/` - Test files

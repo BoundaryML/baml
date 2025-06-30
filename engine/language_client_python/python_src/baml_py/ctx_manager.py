@@ -31,6 +31,16 @@ prev_ctx_manager: typing.Optional["CtxManager"] = None
 
 
 class CtxManager:
+    def __setstate__(self, state: typing.Dict[str, typing.Any]) -> None:
+        self.rt = state["rt"]
+        self.ctx = contextvars.ContextVar[typing.Dict[int, RuntimeContextManager]](
+            "baml_ctx", default={current_thread_id(): self.rt.create_context_manager()}
+        )
+        atexit.register(self.rt.flush)
+    
+    def __getstate__(self) -> typing.Dict[str, typing.Any]:
+        return {"rt": self.rt}
+
     def __new__(cls, *args, **kwargs):
         if prev_ctx_manager is not None:
             return prev_ctx_manager

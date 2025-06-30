@@ -1,13 +1,13 @@
+import axios from 'axios'
+import cors from 'cors'
+import { createProxyMiddleware } from 'http-proxy-middleware'
 /* eslint-disable @typescript-eslint/no-misused-promises */
 import * as vscode from 'vscode'
-import axios from 'axios'
 import glooLens from './LanguageToBamlCodeLensProvider'
 import { WebviewPanelHost, openPlaygroundConfig } from './panels/WebviewPanelHost'
 import plugins from './plugins'
 import { requestBamlCLIVersion, requestDiagnostics } from './plugins/language-server-client'
 import { telemetry } from './plugins/language-server-client'
-import cors from 'cors'
-import { createProxyMiddleware } from 'http-proxy-middleware'
 
 const outputChannel = vscode.window.createOutputChannel('baml')
 const diagnosticsCollection = vscode.languages.createDiagnosticCollection('baml-diagnostics')
@@ -20,9 +20,9 @@ let isGlowOn: boolean = true
 let animationTimer: NodeJS.Timeout | null = null
 let highlightRanges: vscode.Range[] = []
 
+import { Socket } from 'net'
 import type { Express } from 'express'
 import StatusBarPanel from './panels/StatusBarPanel'
-import { Socket } from 'net'
 
 export function activate(context: vscode.ExtensionContext) {
   console.log('BAML extension activating')
@@ -64,6 +64,8 @@ export function activate(context: vscode.ExtensionContext) {
       changeOrigin: true, // leave prependPath = true (default)
       /** Inspect and (maybe) rewrite the path. */
       pathRewrite: (path, req) => {
+        console.log('[PROXY] pathRewrite input:', path)
+
         // If the path looks like an image (xyz.png …) and it's a GET → blank it.
         if (/\.[a-z0-9]+$/i.test(path) && req.method === 'GET') {
           console.log('[PROXY] Image request detected, clearing path:', path)
@@ -72,6 +74,7 @@ export function activate(context: vscode.ExtensionContext) {
 
         // Remove trailing slash so we don't end up with "//".
         const out = path.endsWith('/') ? path.slice(0, -1) : path
+        console.log('[PROXY] pathRewrite output:', out)
         return out
       },
 
@@ -102,7 +105,15 @@ export function activate(context: vscode.ExtensionContext) {
           req.url = basePath + (req.url.startsWith('/') ? '' : '/') + req.url
         }
 
+        // Append query parameters from the original URL if they exist
+        if (url.search) {
+          req.url = req.url.split('?')[0] + url.search
+        }
+
         console.log('[PROXY]', req.method, req.url, '→', url.origin)
+        if (req.url?.includes('?')) {
+          console.log('[PROXY] Query params detected in request:', req.url)
+        }
 
         // Tell HPM to proxy to the origin only (scheme + host)
         return url.origin // e.g. "https://api.llama.com"

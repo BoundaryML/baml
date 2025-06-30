@@ -28,7 +28,7 @@ ComplexTypeExpr {
 MapTypeExpr { MapIdentifier "<" ComplexTypeExpr "," ComplexTypeExpr ">"}
 ListTypeExpr { ComplexTypeExpr"[]" }
 OptionalTypeExpr { ComplexTypeExpr"?" }
-SimpleTypeExpr { ListTypeExpr | OptionalTypeExpr | MapTypeExpr!MapOverIdentifier | IdentifierDecl }
+SimpleTypeExpr { ListTypeExpr | OptionalTypeExpr | MapTypeExpr!MapOverIdentifier | IdentifierDecl | LiteralDecl }
 UnionTypeExpr { TypeExpr!TypeUnion"|"TypeExpr }
 
 @precedence {
@@ -48,32 +48,43 @@ BlockAttribute {
 }
 
 FunctionDecl {
-  "function" IdentifierDecl "(" FunctionArgs ")" "->" TypeExpr
-  "{" (FunctionTupleValue | LetDecl | FunctionValueAtom)* "}"
+  ("function" | FnKeyword) IdentifierDecl "(" FunctionArgs ")" ("->" TypeExpr)?
+  "{" (FunctionTupleValue | LetDecl | FunctionValueExpr)* "}"
 }
 FunctionArgs { (FunctionArg ",")* FunctionArg? }
 FunctionArg {
   IdentifierDecl ":" TypeExpr
 }
 FunctionValueAtom {
-  LiteralDecl | PromptExpr
+  LiteralDecl | PromptExpr | IdentifierDecl
 }
 FunctionValueExpr {
   FunctionValueAtom |
   "{" LetDecl* FunctionValueExpr "}" |
   IdentifierDecl "(" (FunctionValueExpr ("," FunctionValueExpr)*)? ")"
 }
+
+ClassConstructor {
+  IdentifierDecl "{" (ClassConstructorField ("," ClassConstructorField)*)? "}"
+}
+
+ClassConstructorField {
+  IdentifierDecl ":" FunctionValueExpr
+}
 FunctionTupleValue { (ClientKeyword | PromptKeyword) FunctionValueAtom }
 
-ConfigValueExpr { LiteralDecl | PromptExpr | UnquotedString | "{" ConfigTupleValue* "}" }
+ConfigValueExpr { LiteralDecl | PromptExpr | UnquotedString | ListValue | ConfigMap }
 ConfigTupleValue { IdentifierDecl ConfigValueExpr }
+
+ListValue { "[" (IdentifierDecl ("," IdentifierDecl)*)? "]" }
+ConfigMap { "{" ConfigTupleValue* "}" }
 
 ClientDecl {
   "client<llm>" IdentifierDecl "{" ConfigTupleValue* "}"
 }
 
 TestDecl {
-  "test" IdentifierDecl "{" (BlockAttribute | FunctionTupleValue | TypeBuilderDecl)* "}"
+  "test" IdentifierDecl "{" (BlockAttribute | ConfigTupleValue | TypeBuilderDecl)* "}"
 }
 
 LiteralDecl { NumericLiteral | QuotedString }
@@ -90,10 +101,11 @@ LetDecl { LetKeyword IdentifierDecl "=" FunctionValueExpr ";"}
     NumericLiteral, QuotedString, UnquotedString, UnquotedAttributeValue
   }
   @precedence {
-    MapIdentifier, TypeBuilderKeyword, ClientKeyword, PromptKeyword, LetKeyword, IdentifierDecl, UnquotedAttributeValue
+    MapIdentifier, TypeBuilderKeyword, ClientKeyword, PromptKeyword, LetKeyword, FnKeyword, IdentifierDecl, UnquotedAttributeValue
   }
 
   LetKeyword { "let" }
+  FnKeyword { "fn" }
   ClientKeyword { "client" }
   PromptKeyword { "prompt" }
   TypeBuilderKeyword { "type_builder" }

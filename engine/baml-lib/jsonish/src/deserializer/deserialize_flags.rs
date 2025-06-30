@@ -205,7 +205,7 @@ impl std::fmt::Display for Flag {
             Flag::DefaultButHadUnparseableValue(value) => {
                 write!(f, "Null but had unparseable value")?;
                 writeln!(f, "----RAW----")?;
-                writeln!(f, "{value:#?}")?;
+                writeln!(f, "{value}")?;
                 writeln!(f, "-----------")?;
             }
             Flag::ObjectToString(value) => {

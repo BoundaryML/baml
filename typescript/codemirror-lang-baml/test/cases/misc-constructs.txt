@@ -1,0 +1,98 @@
+# Type alias
+
+type UserId = string
+
+==>
+
+Baml(Decl(TypeAliasDecl(
+  IdentifierDecl,
+  TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)))
+)))
+
+# Client declaration
+
+client<llm> GPT4 {
+  provider openai
+  model gpt-4
+}
+
+==>
+
+Baml(Decl(ClientDecl(
+  IdentifierDecl,
+  "{",
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(UnquotedString)),
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(UnquotedString)),
+  "}"
+)))
+
+# Template string declaration
+
+template_string MyPrompt() #"
+  Hello world
+"#
+
+==>
+
+Baml(Decl(TemplateStringDecl(
+  IdentifierDecl,
+  FunctionArgs,
+  PromptExpr(Document)
+)))
+
+# Retry policy declaration
+
+retry_policy DefaultRetry {
+  max_retries 3
+  delay_ms 1000
+}
+
+==>
+
+Baml(Decl(RetryPolicyDecl(
+  RetryPolicyKeyword,
+  IdentifierDecl,
+  "{",
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(LiteralDecl(NumericLiteral))),
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(LiteralDecl(NumericLiteral))),
+  "}"
+)))
+
+# Comments
+
+// This is a comment
+class User {
+  name string // trailing comment
+}
+
+==>
+
+Baml(
+  TrailingComment,
+  Decl(ClassDecl(
+    IdentifierDecl,
+    "{",
+    ClassField(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)))),
+    TrailingComment,
+    "}"
+  ))
+)
+
+# Multiline comments
+
+{// This is a multiline comment //}
+enum Status {
+  Active
+}
+
+==>
+
+Baml(
+  MultilineComment,
+  Decl(EnumDecl(
+    IdentifierDecl,
+    "{",
+    EnumValueDecl(IdentifierDecl),
+    "}"
+  ))
+)

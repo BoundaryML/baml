@@ -571,7 +571,7 @@ impl BamlRuntime {
                 .finish_call(call, ctx, None)
             {
                 Ok(id) => {}
-                Err(e) => baml_log::error!("Error during logging: {}", e),
+                Err(e) => baml_log::error!("Error during logging: {e}"),
             }
             #[cfg(target_arch = "wasm32")]
             match self
@@ -581,7 +581,7 @@ impl BamlRuntime {
                 .await
             {
                 Ok(id) => {}
-                Err(e) => log::error!("Error during logging: {}", e),
+                Err(e) => log::error!("Error during logging: {e}"),
             }
         }
 
@@ -844,7 +844,7 @@ impl BamlRuntime {
             .await
         {
             Ok(id) => {}
-            Err(e) => log::error!("Error during logging: {}", e),
+            Err(e) => log::error!("Error during logging: {e}"),
         }
 
         (response, curr_call_id)

@@ -4,7 +4,7 @@
   "description": "BAML language support for CodeMirror",
   "packageManager": "pnpm@9.12.0",
   "scripts": {
-    "test": "mocha test/test.js",
+    "test": "mocha test/test.cjs",
     "prepare": "rollup -c"
   },
   "type": "module",
