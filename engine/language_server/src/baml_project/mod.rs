@@ -353,7 +353,7 @@ impl BamlProject {
         .map_err(|e| match e.downcast::<DiagnosticsError>() {
             Ok(e) => e,
             Err(e) => {
-                log::debug!("Error: {:#?}", e);
+                log::debug!("Error: {e:#?}");
                 Diagnostics::new(self.root_dir_name.clone())
             }
         });
@@ -1240,7 +1240,7 @@ impl Project {
             }
             Err(e) => {
                 tracing::error!("Failed to generate BAML client: {:?}", e);
-                on_error(format!("Failed to generate BAML client: {:?}", e));
+                on_error(format!("Failed to generate BAML client: {e:?}"));
             }
         }
     }
@@ -1304,25 +1304,24 @@ impl Project {
         if major_minor_versions.len() > 1 {
             let versions_str = major_minor_versions
                 .keys()
-                .map(|v| format!("'{}'", v))
+                .map(|v| format!("'{v}'"))
                 .collect::<Vec<_>>()
                 .join(", ");
 
             let message = format!(
-                "Multiple generator major.minor versions detected: {}. Major and minor versions must match across all generators.",
-                versions_str
+                "Multiple generator major.minor versions detected: {versions_str}. Major and minor versions must match across all generators."
             );
             Err(message)
         // If there's only one major.minor version, return it with the highest patch
         } else if let Some((version, _)) = major_minor_versions.iter().next() {
             if let Some(highest_patch) = highest_patch_by_major_minor.get(version) {
                 // Parse the version string to create a proper semver::Version
-                if let Ok(mut v) = Version::parse(&format!("{}.0", version)) {
+                if let Ok(mut v) = Version::parse(&format!("{version}.0")) {
                     // Update with the highest patch version
                     v.patch = *highest_patch;
                     Ok(v.to_string())
                 } else {
-                    Ok(format!("{}.{}", version, highest_patch))
+                    Ok(format!("{version}.{highest_patch}"))
                 }
             } else {
                 Ok(version.clone())
@@ -1383,7 +1382,7 @@ fn get_dummy_value(
                             indent1 = "  ".repeat(indent + 1)
                         ))
                     } else {
-                        Some(format!("[{}, {}]", dummy, dummy))
+                        Some(format!("[{dummy}, {dummy}]"))
                     }
                 }
                 _ => None,
@@ -1419,7 +1418,7 @@ fn get_dummy_value(
                 .filter_map(|f| get_dummy_value(0, false, f))
                 .collect::<Vec<_>>()
                 .join(", ");
-            Some(format!("({},)", dummy))
+            Some(format!("({dummy},)"))
         }
         baml_runtime::FieldType::Arrow(_, _) => None,
     }

@@ -498,8 +498,7 @@ mod tests {
             let found_root = project_guard.root_path();
             assert_eq!(
                 found_root, key2,
-                "Expected root: {:?}, Found root: {:?}",
-                key2, found_root
+                "Expected root: {key2:?}, Found root: {found_root:?}"
             );
         }
     }

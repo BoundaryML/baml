@@ -118,7 +118,7 @@ impl super::BackgroundDocumentNotificationHandler for DidSaveTextDocument {
         } else {
             tracing::error!("No project found in snapshot for file {:?}", path);
             notifier
-                .notify_baml_error(&format!("No project found for file {:?}", path))
+                .notify_baml_error(&format!("No project found for file {path:?}"))
                 .unwrap_or(());
         }
 

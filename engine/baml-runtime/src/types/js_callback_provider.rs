@@ -99,23 +99,17 @@ impl JsCallbackProvider {
         let mut resp_rx = self.aws_resp_rx.resubscribe();
 
         if let Err(e) = req_tx.send(profile_name).await {
-            log::error!(
-                "Failed to send AWS cred request across WASM bridge: {:?}",
-                e
-            );
+            log::error!("Failed to send AWS cred request across WASM bridge: {e:?}");
             return Err(RuntimeCallbackError::SendError(e.to_string()));
         };
         let creds = match resp_rx.recv().await {
             Ok(Ok(creds)) => creds,
             Ok(Err(e)) => {
-                log::error!("Error in AWS cred provider: {:?}", e);
+                log::error!("Error in AWS cred provider: {e:?}");
                 return Err(e);
             }
             Err(e) => {
-                log::error!(
-                    "Failed to recv AWS cred response across WASM bridge: {:?}",
-                    e
-                );
+                log::error!("Failed to recv AWS cred response across WASM bridge: {e:?}");
                 return Err(RuntimeCallbackError::RecvError(e.to_string()));
             }
         };
@@ -128,23 +122,17 @@ impl JsCallbackProvider {
         let mut resp_rx = self.gcp_resp_rx.resubscribe();
 
         if let Err(e) = req_tx.send(None).await {
-            log::error!(
-                "Failed to send GCP cred request across WASM bridge: {:?}",
-                e
-            );
+            log::error!("Failed to send GCP cred request across WASM bridge: {e:?}");
             return Err(RuntimeCallbackError::SendError(e.to_string()));
         };
         let creds = match resp_rx.recv().await {
             Ok(Ok(creds)) => creds,
             Ok(Err(e)) => {
-                log::error!("Error in GCP cred provider: {:?}", e);
+                log::error!("Error in GCP cred provider: {e:?}");
                 return Err(e);
             }
             Err(e) => {
-                log::error!(
-                    "Failed to recv GCP cred response across WASM bridge: {:?}",
-                    e
-                );
+                log::error!("Failed to recv GCP cred response across WASM bridge: {e:?}");
                 return Err(RuntimeCallbackError::RecvError(e.to_string()));
             }
         };

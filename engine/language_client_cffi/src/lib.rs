@@ -149,7 +149,7 @@ fn safe_trigger_callback(
             }
         },
         Err(e) => {
-            let message = format!("Error: {}", e);
+            let message = format!("Error: {e}");
             error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
         }
     }
@@ -369,8 +369,8 @@ fn call_collector_function_inner(
                 "usage" => {
                     let logs = collector.function_logs();
                     let usage = collector.usage();
-                    println!("logs: {:?}", logs);
-                    println!("usage: {:?}", usage);
+                    println!("logs: {logs:?}");
+                    println!("usage: {usage:?}");
                     Ok(UsageWrapper::from_object(usage).send())
                 }
                 _ => Err(anyhow::anyhow!(

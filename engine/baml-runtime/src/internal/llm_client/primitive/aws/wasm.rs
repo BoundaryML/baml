@@ -177,7 +177,7 @@ impl WasmAwsCreds {
         let cred_provider = get_js_callback_provider().map_err(CredentialsError::unhandled)?;
         match cred_provider.aws_req(self.profile.clone()).await {
             Err(e) => {
-                log::error!("Error calling AWS cred provider: {:?}", e);
+                log::error!("Error calling AWS cred provider: {e:?}");
                 Err(CredentialsError::unhandled(e))
             }
             Ok(aws_creds) => Ok(Credentials::new(

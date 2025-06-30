@@ -115,13 +115,13 @@ pub fn js_object_to_baml_value(env: Env, kwargs: JsObject) -> napi::Result<BamlV
         let num_keys = keys.get_array_length()?;
         let mut errs = Vec::new();
 
-        log::trace!("Processing object with {} keys", num_keys);
+        log::trace!("Processing object with {num_keys} keys");
         for i in 0..num_keys {
             let key = keys.get_element::<JsString>(i)?;
             let param: JsUnknown = kwargs.get_property(key)?;
             let key_as_string = key.into_utf8()?.as_str()?.to_string();
 
-            log::trace!("Processing key: {}", key_as_string);
+            log::trace!("Processing key: {key_as_string}");
             match jsunknown_to_baml_value(env, param, true) {
                 Ok(Some(v)) => {
                     args.insert(key_as_string, v);
@@ -148,7 +148,7 @@ pub fn jsunknown_to_baml_value(
     skip_unsupported: bool,
 ) -> napi::Result<Option<BamlValue>> {
     let item_type = item.get_type()?;
-    log::trace!("Processing item of type: {:?}", item_type);
+    log::trace!("Processing item of type: {item_type:?}");
     Ok(Some(match item_type {
         ValueType::Boolean => {
             let b: JsBoolean = unsafe { item.cast() };

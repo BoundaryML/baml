@@ -111,7 +111,7 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, _lookup: &impl TypeLookup
                 let name = name.join("Or");
                 TypeGo::Union {
                     package: stream_pkg.clone(),
-                    name: format!("Union{}{}", num_options, name),
+                    name: format!("Union{num_options}{name}"),
                     meta,
                 }
             }
@@ -131,7 +131,7 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, _lookup: &impl TypeLookup
                         true => types_pkg.clone(),
                         false => stream_pkg.clone(),
                     },
-                    name: format!("Union{}{}", num_options, name),
+                    name: format!("Union{num_options}{name}"),
                     meta,
                 }
             }
@@ -214,7 +214,7 @@ pub(crate) fn type_to_go(field: &Type, _lookup: &impl TypeLookups) -> TypeGo {
                 let name = name.join("Or");
                 TypeGo::Union {
                     package: type_pkg.clone(),
-                    name: format!("Union{}{}", num_options, name),
+                    name: format!("Union{num_options}{name}"),
                     meta,
                 }
             }
@@ -233,7 +233,7 @@ pub(crate) fn type_to_go(field: &Type, _lookup: &impl TypeLookups) -> TypeGo {
                 meta.make_optional();
                 TypeGo::Union {
                     package: type_pkg.clone(),
-                    name: format!("Union{}{}", num_options, name),
+                    name: format!("Union{num_options}{name}"),
                     meta,
                 }
             }

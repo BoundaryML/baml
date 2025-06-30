@@ -80,7 +80,7 @@ impl FunctionResultStream {
                 Some(move |event: baml_runtime::FunctionResult| {
                     let res = tsfn.call(Ok(event), ThreadsafeFunctionCallMode::Blocking);
                     if res != napi::Status::Ok {
-                        log::error!("Error calling on_event callback: {:?}", res);
+                        log::error!("Error calling on_event callback: {res:?}");
                     }
                 })
             }

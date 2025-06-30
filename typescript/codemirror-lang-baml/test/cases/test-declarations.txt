@@ -1,0 +1,82 @@
+# Simple test block
+test Test1 {
+  functions [ExtractResume]
+  args {
+    resume_text #"
+      John Doe
+
+      Education
+      - University of California, Berkeley
+        - B.S. in Computer Science
+        - 2020
+
+      Skills
+      - Python
+      - Java
+      - C++
+    "#
+  }
+}
+
+==>
+
+Baml(Decl(TestDecl(
+  IdentifierDecl,
+  "{",
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ListValue("[", IdentifierDecl, "]"))),
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ConfigMap("{", ConfigTupleValue(IdentifierDecl, ConfigValueExpr(PromptExpr(Document))), "}"))),
+  "}"
+)))
+
+# Test with multiple functions
+test MultiTest {
+  functions [Func1, Func2, Func3]
+  args {
+    input "test input"
+    number 42
+  }
+}
+
+==>
+
+Baml(Decl(TestDecl(
+  IdentifierDecl,
+  "{",
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ListValue("[", IdentifierDecl, IdentifierDecl, IdentifierDecl, "]"))),
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ConfigMap("{", ConfigTupleValue(IdentifierDecl, ConfigValueExpr(LiteralDecl(QuotedString))), ConfigTupleValue(IdentifierDecl, ConfigValueExpr(LiteralDecl(NumericLiteral))), "}"))),
+  "}"
+)))
+
+# Test with block attributes
+test AttributeTest {
+  @@description("This test validates extraction")
+  functions [ExtractData]
+  args {
+    data "sample data"
+  }
+}
+
+==>
+
+Baml(Decl(TestDecl(
+  IdentifierDecl,
+  "{",
+  BlockAttribute(IdentifierDecl, AttributeValue(QuotedString)),
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ListValue("[", IdentifierDecl, "]"))),
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ConfigMap("{", ConfigTupleValue(IdentifierDecl, ConfigValueExpr(LiteralDecl(QuotedString))), "}"))),
+  "}"
+)))
+
+# Simple test without args
+test SimpleTest {
+  functions [BasicFunction]
+}
+
+==>
+
+Baml(Decl(TestDecl(
+  IdentifierDecl,
+  "{",
+  ConfigTupleValue(IdentifierDecl, ConfigValueExpr(ListValue("[", IdentifierDecl, "]"))),
+  "}"
+)))

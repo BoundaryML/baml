@@ -45,10 +45,7 @@ impl FunctionResultStream {
             HashMap::new(),
         )) {
             (Ok(res), _) => Ok(FunctionResult::new(res)),
-            (Err(e), _) => Err(Error::new(
-                ruby.exception_runtime_error(),
-                format!("{:?}", e),
-            )),
+            (Err(e), _) => Err(Error::new(ruby.exception_runtime_error(), format!("{e:?}"))),
         }
     }
 

@@ -387,7 +387,7 @@ mod tests {
         let path = "example_file.baml";
         let source = SourceFile::new_static(path.into(), input);
 
-        let (ast, _) = parse(&Path::new(path), &source).unwrap();
+        let (ast, _) = parse(Path::new(path), &source).unwrap();
 
         let [Top::TypeAlias(one), Top::TypeAlias(two)] = ast.tops.as_slice() else {
             panic!(
@@ -421,7 +421,7 @@ mod tests {
         let input = "let x = 1;";
         let path = "example_file.baml";
         let source = SourceFile::new_static(path.into(), input);
-        let (ast, _) = parse(&Path::new(path), &source).unwrap();
+        let (ast, _) = parse(Path::new(path), &source).unwrap();
         match ast.tops.as_slice() {
             [Top::TopLevelAssignment(x)] => {
                 assert_eq!(x.stmt.identifier.name(), "x");
@@ -440,7 +440,7 @@ mod tests {
         "#;
         let path = "example_file.baml";
         let source = SourceFile::new_static(path.into(), input);
-        let (ast, _) = parse(&Path::new(path), &source).unwrap();
+        let (ast, _) = parse(Path::new(path), &source).unwrap();
         match ast.tops.as_slice() {
             [Top::TopLevelAssignment(x)] => {
                 dbg!(&x);

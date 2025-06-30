@@ -39,24 +39,22 @@ fn main() {
     macro_code.push_str("    ($generator_type:ty) => {\n");
 
     for test_dir in &test_dirs {
-        let test_fn_name = format!("test_{}", test_dir);
+        let test_fn_name = format!("test_{test_dir}");
         macro_code.push_str("        #[test]\n");
         macro_code.push_str(&format!(
-            "        fn {}() -> anyhow::Result<()> {{\n",
-            test_fn_name
+            "        fn {test_fn_name}() -> anyhow::Result<()> {{\n"
         ));
-        macro_code.push_str(&format!("            let test_harness = test_harness::TestHarness::load_test(\"{}\", <$generator_type>::default(), true)?;\n", test_dir));
+        macro_code.push_str(&format!("            let test_harness = test_harness::TestHarness::load_test(\"{test_dir}\", <$generator_type>::default(), true)?;\n"));
         macro_code.push_str("            test_harness.run()\n");
         macro_code.push_str("        }\n\n");
 
         // and another test that ensures the files are the same
-        let test_fn_name = format!("test_{}_consistent", test_dir);
+        let test_fn_name = format!("test_{test_dir}_consistent");
         macro_code.push_str("        #[test]\n");
         macro_code.push_str(&format!(
-            "        fn {}() -> anyhow::Result<()> {{\n",
-            test_fn_name
+            "        fn {test_fn_name}() -> anyhow::Result<()> {{\n"
         ));
-        macro_code.push_str(&format!("            let test_harness = test_harness::TestHarness::load_test(\"{}\", <$generator_type>::default(), false)?;\n", test_dir));
+        macro_code.push_str(&format!("            let test_harness = test_harness::TestHarness::load_test(\"{test_dir}\", <$generator_type>::default(), false)?;\n"));
         macro_code.push_str("            test_harness.ensure_consistent_codegen()\n");
         macro_code.push_str("        }\n\n");
     }

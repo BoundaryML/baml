@@ -684,9 +684,9 @@ impl OutputFormatContent {
                 {
                     format!("[\n  {}\n]", inner_str.replace('\n', "\n  "))
                 } else if matches!(inner.as_ref(), FieldType::Union(_, _)) {
-                    format!("({})[]", inner_str)
+                    format!("({inner_str})[]")
                 } else {
-                    format!("{}[]", inner_str)
+                    format!("{inner_str}[]")
                 }
             }
             FieldType::Union(items, _) => items
@@ -794,7 +794,7 @@ impl OutputFormatContent {
                 let Some(enm) = self.enums.get(e) else {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
-                        format!("Enum {} not found", e),
+                        format!("Enum {e} not found"),
                     ));
                 };
 
@@ -3206,8 +3206,7 @@ Answer in JSON using this schema: Ret"#
         let enum_definition_count = rendered.matches("EnumOutput\n----").count();
         assert_eq!(
             enum_definition_count, 1,
-            "Enum definition should only appear once, but found: {}",
-            enum_definition_count
+            "Enum definition should only appear once, but found: {enum_definition_count}"
         );
 
         // Verify the complete expected output (no prefix since it's set to null)
@@ -3256,8 +3255,7 @@ Answer in JSON using this schema: Ret"#
         let enum_definition_count = rendered.matches("VALUE_ENUM\n----").count();
         assert_eq!(
             enum_definition_count, 1,
-            "Enum definition should only appear once, but found: {}",
-            enum_definition_count
+            "Enum definition should only appear once, but found: {enum_definition_count}"
         );
 
         // Verify default prefix appears before enum
@@ -3267,8 +3265,7 @@ Answer in JSON using this schema: Ret"#
 VALUE_ENUM
 ----"
             ),
-            "Default prefix should appear before enum definition, but got: {}",
-            rendered
+            "Default prefix should appear before enum definition, but got: {rendered}"
         );
 
         // Verify the complete expected output

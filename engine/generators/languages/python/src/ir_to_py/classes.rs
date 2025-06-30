@@ -89,7 +89,7 @@ mod tests {
         let ir = std::sync::Arc::new(ir);
         let class = ir.find_class("SimpleClass").unwrap().item;
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), true);
-        let class_py = ir_class_to_py_stream(&class, &pkg);
+        let class_py = ir_class_to_py_stream(class, &pkg);
         assert_eq!(class_py.name, "SimpleClass");
         assert_eq!(class_py.fields.len(), 1);
         assert_eq!(
@@ -115,9 +115,9 @@ mod tests {
         let ir = std::sync::Arc::new(ir);
         let class = ir.find_class("ChildClass").unwrap().item;
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), true);
-        let class_py = ir_class_to_py_stream(&class, &pkg);
+        let class_py = ir_class_to_py_stream(class, &pkg);
         let digits_field = class_py.fields.iter().find(|f| f.name == "digits").unwrap();
-        eprintln!("{:?}", digits_field);
+        eprintln!("{digits_field:?}");
         assert_eq!(
             digits_field.r#type.meta().map(|m| m.wrap_stream_state),
             Some(true)
@@ -141,7 +141,7 @@ mod tests {
         let ir = std::sync::Arc::new(ir);
         let class = ir.find_class("Foo").unwrap().item;
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone(), true);
-        let class_py = ir_class_to_py_stream(&class, &pkg);
+        let class_py = ir_class_to_py_stream(class, &pkg);
         assert_eq!(class_py.fields[0].docstring, Some("ds".to_string()));
     }
 }

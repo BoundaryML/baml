@@ -753,6 +753,9 @@ navigation:
           - page: "Keywords AI (openai-generic)"
             slug: keywordsai
             path: 03-reference/baml/clients/providers/keywordsai.mdx
+          - page: "Llama API (openai-generic)"
+            slug: llama-api
+            path: 03-reference/baml/clients/providers/llama-api.mdx
           - page: "Litellm (openai-generic)"
             slug: litellm
             path: 03-reference/baml/clients/providers/litellm.mdx

@@ -403,9 +403,9 @@ mod tests {
         let parsed: Result<GoogleResponse, Error> = serde_json::from_str(data);
 
         match parsed {
-            Ok(response) => println!("Parsed successfully: {:?}", response),
+            Ok(response) => println!("Parsed successfully: {response:?}"),
             Err(e) => {
-                println!("Failed to parse: {}", e);
+                println!("Failed to parse: {e}");
                 println!("Error line: {}", e.line());
                 println!("Error column: {}", e.column());
                 println!("Error cause: {:?}", e.classify());

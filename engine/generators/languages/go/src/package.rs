@@ -92,7 +92,7 @@ impl CurrentRenderPackage {
                 *orig = std::sync::Arc::new(Package::new(package));
             }
             Err(e) => {
-                panic!("Failed to get package: {}", e);
+                panic!("Failed to get package: {e}");
             }
         }
     }

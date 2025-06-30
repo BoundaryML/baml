@@ -95,13 +95,13 @@ impl EscapedRubyString {
         let has_double_quote = s.contains('"');
         let has_newline = s.contains('\n');
         if has_newline {
-            return Self(format!("\"\"\"{}\"\"\"", s));
+            return Self(format!("\"\"\"{s}\"\"\""));
         }
         match (has_single_quote, has_double_quote) {
-            (true, false) => Self(format!("\"{}\"", s)),
+            (true, false) => Self(format!("\"{s}\"")),
             (true, true) => Self(format!("'{}'", s.replace('\'', "\\'"))),
-            (false, true) => Self(format!("'{}'", s)),
-            (false, false) => Self(format!("'{}'", s)),
+            (false, true) => Self(format!("'{s}'")),
+            (false, false) => Self(format!("'{s}'")),
         }
     }
 }
@@ -247,7 +247,7 @@ impl SerializeType for TypeRb {
             } => {
                 let enm = format!("{}{}", package.relative_from(pkg), name);
                 if *dynamic {
-                    format!("T.any({}, String)", enm)
+                    format!("T.any({enm}, String)")
                 } else {
                     enm
                 }

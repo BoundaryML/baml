@@ -157,7 +157,7 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
             if fields.iter().len()
                 != fields
                     .iter()
-                    .map(|f| format!("{:?}", f))
+                    .map(|f| format!("{f:?}"))
                     .dedup()
                     .collect::<Vec<_>>()
                     .len()

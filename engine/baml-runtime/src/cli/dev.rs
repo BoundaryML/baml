@@ -53,7 +53,7 @@ impl DevArgs {
                             "Reloading - {}",
                             match events.len() {
                                 1 => "1 file changed".to_string(),
-                                n => format!("{} files changed", n),
+                                n => format!("{n} files changed"),
                             }
                         );
                         let start = Instant::now();
@@ -75,12 +75,12 @@ impl DevArgs {
                                     elapsed.as_millis(),
                                     match events.len() {
                                         1 => "1 file changed".to_string(),
-                                        n => format!("{} files changed", n),
+                                        n => format!("{n} files changed"),
                                     }
                                 );
                             }
                             Err(e) => {
-                                log::warn!("Failed to reload runtime: {:?}", e);
+                                log::warn!("Failed to reload runtime: {e:?}");
                             }
                         }
                     }

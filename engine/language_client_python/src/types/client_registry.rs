@@ -50,8 +50,7 @@ impl ClientRegistry {
             Ok(provider) => provider,
             Err(e) => {
                 return Err(BamlInvalidArgumentError::new_err(format!(
-                    "Invalid provider: {:?}",
-                    e
+                    "Invalid provider: {e:?}"
                 )));
             }
         };

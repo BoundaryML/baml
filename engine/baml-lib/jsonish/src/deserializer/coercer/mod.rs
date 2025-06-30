@@ -83,7 +83,7 @@ impl ParsingContext<'_> {
                     if acc.is_empty() {
                         return f.to_string();
                     }
-                    format!("{}, {}", acc, f)
+                    format!("{acc}, {f}")
                 })
             ),
             scope: self.scope.clone(),
@@ -105,7 +105,7 @@ impl ParsingContext<'_> {
 
     pub(crate) fn error_unexpected_empty_array(&self, target: &FieldType) -> ParsingError {
         ParsingError {
-            reason: format!("Expected {}, got empty array", target),
+            reason: format!("Expected {target}, got empty array"),
             scope: self.scope.clone(),
             causes: vec![],
         }
@@ -113,7 +113,7 @@ impl ParsingContext<'_> {
 
     pub(crate) fn error_unexpected_null(&self, target: &FieldType) -> ParsingError {
         ParsingError {
-            reason: format!("Expected {}, got null", target),
+            reason: format!("Expected {target}, got null"),
             scope: self.scope.clone(),
             causes: vec![],
         }
@@ -162,12 +162,12 @@ impl ParsingContext<'_> {
                 .into_iter()
                 .map(|k| ParsingError {
                     scope: self.scope.clone(),
-                    reason: format!("Missing required field: {}", k),
+                    reason: format!("Missing required field: {k}"),
                     causes: vec![],
                 })
                 .chain(unparsed.into_iter().map(|(k, e)| ParsingError {
                     scope: self.scope.clone(),
-                    reason: format!("Failed to parse field {}: {}", k, e),
+                    reason: format!("Failed to parse field {k}: {e}"),
                     causes: vec![e.clone()],
                 }))
                 .collect(),
@@ -183,8 +183,8 @@ impl ParsingContext<'_> {
             reason: format!(
                 "Expected {}, got {:?}.",
                 match target {
-                    FieldType::Enum { .. } => format!("{} enum value", target),
-                    FieldType::Class { .. } => format!("{}", target),
+                    FieldType::Enum { .. } => format!("{target} enum value"),
+                    FieldType::Class { .. } => format!("{target}"),
                     _ => format!("{target}"),
                 },
                 got
@@ -196,7 +196,7 @@ impl ParsingContext<'_> {
 
     pub(crate) fn error_internal<T: std::fmt::Display>(&self, error: T) -> ParsingError {
         ParsingError {
-            reason: format!("Internal error: {}", error),
+            reason: format!("Internal error: {error}"),
             scope: self.scope.clone(),
             causes: vec![],
         }
@@ -235,7 +235,7 @@ impl std::fmt::Display for ParsingError {
             self.reason
         )?;
         for cause in &self.causes {
-            write!(f, "\n  - {}", format!("{}", cause).replace("\n", "\n  "))?;
+            write!(f, "\n  - {}", format!("{cause}").replace("\n", "\n  "))?;
         }
         Ok(())
     }

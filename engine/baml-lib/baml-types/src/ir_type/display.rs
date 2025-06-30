@@ -13,7 +13,7 @@ impl std::fmt::Display for TypeStreaming {
             };
             let constraint_name = match &constraint.label {
                 None => "".to_string(),
-                Some(label) => format!("{}, ", label),
+                Some(label) => format!("{label}, "),
             };
             metadata_display_fmt.push_str(&format!(
                 " @{constraint_level}({constraint_name}, {{{{..}}}} )"
@@ -39,7 +39,7 @@ impl std::fmt::Display for TypeStreaming {
                 let res = match view {
                     UnionTypeViewGeneric::Null => "null".to_string(),
                     UnionTypeViewGeneric::Optional(field_type) => {
-                        format!("{} | null", field_type)
+                        format!("{field_type} | null")
                     }
                     UnionTypeViewGeneric::OneOf(field_types) => field_types
                         .iter()
@@ -52,7 +52,7 @@ impl std::fmt::Display for TypeStreaming {
                             .map(|t| t.to_string())
                             .collect::<Vec<_>>()
                             .join(" | ");
-                        format!("{} | null", not_null_choices_str)
+                        format!("{not_null_choices_str} | null")
                     }
                 };
                 write!(f, "({res})")
@@ -83,7 +83,7 @@ impl std::fmt::Display for TypeStreaming {
             ),
         }?;
 
-        write!(f, "{}", metadata_display_fmt)
+        write!(f, "{metadata_display_fmt}")
     }
 }
 
@@ -99,7 +99,7 @@ impl std::fmt::Display for TypeGeneric<type_meta::Base> {
             };
             let constraint_name = match &constraint.label {
                 None => "".to_string(),
-                Some(label) => format!("{}, ", label),
+                Some(label) => format!("{label}, "),
             };
             metadata_display_fmt.push_str(&format!(
                 " @{constraint_level}({constraint_name}, {{{{..}}}} )"
@@ -131,7 +131,7 @@ impl std::fmt::Display for TypeGeneric<type_meta::Base> {
                 let res = match view {
                     UnionTypeViewGeneric::Null => "null".to_string(),
                     UnionTypeViewGeneric::Optional(field_type) => {
-                        format!("{} | null", field_type)
+                        format!("{field_type} | null")
                     }
                     UnionTypeViewGeneric::OneOf(field_types) => field_types
                         .iter()
@@ -144,7 +144,7 @@ impl std::fmt::Display for TypeGeneric<type_meta::Base> {
                             .map(|t| t.to_string())
                             .collect::<Vec<_>>()
                             .join(" | ");
-                        format!("{} | null", not_null_choices_str)
+                        format!("{not_null_choices_str} | null")
                     }
                 };
                 write!(f, "({res})")
@@ -175,6 +175,6 @@ impl std::fmt::Display for TypeGeneric<type_meta::Base> {
             ),
         }?;
 
-        write!(f, "{}", metadata_display_fmt)
+        write!(f, "{metadata_display_fmt}")
     }
 }

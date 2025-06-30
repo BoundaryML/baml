@@ -133,7 +133,7 @@ impl minijinja::value::Object for MinijinjaBamlMedia {
     ) -> Result<minijinja::value::Value, minijinja::Error> {
         Err(minijinja::Error::new(
             minijinja::ErrorKind::UnknownMethod,
-            format!("BamlImage has no callable attribute '{:#?}'", args),
+            format!("BamlImage has no callable attribute '{args:#?}'"),
         ))
     }
 
@@ -210,7 +210,7 @@ impl std::fmt::Display for MinijinjaBamlClass {
             map.insert(alias.to_string(), value);
         }
         // Use pretty-printed JSON formatting as expected by tests
-        write!(f, "{:#?}", map)
+        write!(f, "{map:#?}")
     }
 }
 

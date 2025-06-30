@@ -178,7 +178,7 @@ where
             .await
             {
                 Ok(messages) => self.chat(ctx, &messages).await,
-                Err(e) => LLMResponse::InternalFailure(format!("Error occurred:\n\n{:?}", e)),
+                Err(e) => LLMResponse::InternalFailure(format!("Error occurred:\n\n{e:?}")),
             },
 
             RenderedPrompt::Completion(p) => self.completion(ctx, p).await,
@@ -196,7 +196,7 @@ fn to_curl_command(
     headers: &reqwest::header::HeaderMap,
     body: Vec<u8>,
 ) -> String {
-    let mut curl_command = format!("curl -X {} '{}'", method, url);
+    let mut curl_command = format!("curl -X {method} '{url}'");
 
     for (key, value) in headers.iter() {
         let header = format!(" -H \"{}: {}\"", key.as_str(), value.to_str().unwrap());
@@ -209,7 +209,7 @@ fn to_curl_command(
         Err(_) => body_json,
     };
     let fully_escaped_body_json = escape_single_quotes(&pretty_body_json);
-    let body_part = format!(" -d {}", fully_escaped_body_json);
+    let body_part = format!(" -d {fully_escaped_body_json}");
     curl_command.push_str(&body_part);
 
     curl_command
@@ -384,8 +384,7 @@ where
                     Ok(messages) => &RenderedPrompt::Chat(messages),
                     Err(e) => {
                         return Err(LLMResponse::InternalFailure(format!(
-                            "Error occurred:\n\n{:?}",
-                            e
+                            "Error occurred:\n\n{e:?}"
                         )))
                     }
                 }
@@ -515,7 +514,7 @@ async fn process_media(
 
             let bytes = baml_src_reader(media_path.as_str())
                 .await
-                .context(format!("Failed to read file {:#}", media_path))?;
+                .context(format!("Failed to read file {media_path:#}"))?;
 
             let mut mime_type = part.mime_type.clone();
 

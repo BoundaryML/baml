@@ -165,7 +165,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                     Expr::FreeVar(name, _) => name.clone(),
                     _ => format!("({})", func.dump_str()),
                 };
-                format!("{}({})", func_str, args_str)
+                format!("{func_str}({args_str})")
             }
             Expr::Builtin(builtin, _) => format!("{builtin:?}"),
             Expr::Let(name, expr, body, _) => {
@@ -180,7 +180,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                     items.iter().map(|item| item.dump_str()).collect::<Vec<_>>(),
                     ", ",
                 );
-                format!("[{}]", items)
+                format!("[{items}]")
             }
             Expr::Map(entries, _) => {
                 let entries = entries
@@ -188,7 +188,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                     .map(|(key, value)| format!("{}: {}", key, value.dump_str()))
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!("{{{}}}", entries)
+                format!("{{{entries}}}")
             }
             Expr::ClassConstructor {
                 name,
@@ -205,7 +205,7 @@ impl<T: Clone + std::fmt::Debug> Expr<T> {
                     Some(expr) => format!("..{}", expr.dump_str()),
                     None => String::new(),
                 };
-                format!("Class({} {{ {}{} }}", name, fields, spread)
+                format!("Class({name} {{ {fields}{spread} }}")
             }
             Expr::If(cond, then, else_, _) => {
                 format!(
@@ -467,7 +467,7 @@ impl Expr<ExprMetadata> {
         let mut i = 0;
         let mut names = Vec::new();
         while names.len() < arity {
-            let candidate = format!("x_{}", i);
+            let candidate = format!("x_{i}");
             if !free_vars.contains(&candidate) {
                 names.push(candidate);
             }

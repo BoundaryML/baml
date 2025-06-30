@@ -447,7 +447,7 @@ pub(crate) fn render_py_types<T: askama::Template>(
             "generators_python::generated_types::class::ClassPy" => "classes",
             "generators_python::generated_types::enums::EnumPy" => "enums",
             "generators_python::generated_types::type_aliases::TypeAliasPy" => "type aliases",
-            other => panic!("Unknown type: {}", other),
+            other => panic!("Unknown type: {other}"),
         },
     }
     .render()

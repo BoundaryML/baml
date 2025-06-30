@@ -133,14 +133,14 @@ fn test_union_of_class_and_map() {
 
     let result = from_str(&target, &target_type, llm_output, false);
 
-    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+    assert!(result.is_ok(), "Failed to parse: {result:?}");
 
     let value = result.unwrap();
     assert!(matches!(value, BamlValueWithFlags::Class(..)));
 
     log::trace!("Score: {}", value.score());
     let value: BamlValue = value.into();
-    log::info!("{}", value);
+    log::info!("{value}");
     let json_value = json!(value);
 
     assert_json_diff::assert_json_eq!(json_value, expected);
@@ -166,14 +166,14 @@ fn test_union_of_map_and_class() {
 
     let result = from_str(&target, &target_type, llm_output, false);
 
-    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+    assert!(result.is_ok(), "Failed to parse: {result:?}");
 
     let value = result.unwrap();
     assert!(matches!(value, BamlValueWithFlags::Class(..)));
 
     log::trace!("Score: {}", value.score());
     let value: BamlValue = value.into();
-    log::info!("{}", value);
+    log::info!("{value}");
     let json_value = json!(value);
 
     assert_json_diff::assert_json_eq!(json_value, expected);

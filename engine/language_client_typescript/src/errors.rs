@@ -9,7 +9,7 @@ use baml_runtime::{
 pub fn invalid_argument_error(message: &str) -> napi::Error {
     napi::Error::new(
         napi::Status::InvalidArg,
-        format!("BamlError: BamlInvalidArgumentError: {}", message),
+        format!("BamlError: BamlInvalidArgumentError: {message}"),
     )
 }
 
@@ -40,12 +40,12 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
             } => throw_baml_client_http_error(client_name, message, status_code),
         }
     } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
-        invalid_argument_error(&format!("{}", er))
+        invalid_argument_error(&format!("{er}"))
     } else if let Some(er) = err.downcast_ref::<LLMResponse>() {
         match er {
             LLMResponse::Success(_) => napi::Error::new(
                 napi::Status::GenericFailure,
-                format!("BamlError: Unexpected error from BAML: {}", err),
+                format!("BamlError: Unexpected error from BAML: {err}"),
             ),
             LLMResponse::LLMFailure(failed) => match &failed.code {
                 baml_runtime::internal::llm_client::ErrorCode::Other(2) => napi::Error::new(
@@ -71,21 +71,17 @@ pub fn from_anyhow_error(err: anyhow::Error) -> napi::Error {
             },
             LLMResponse::UserFailure(msg) => napi::Error::new(
                 napi::Status::GenericFailure,
-                format!("BamlError: BamlInvalidArgumentError: {}", msg),
+                format!("BamlError: BamlInvalidArgumentError: {msg}"),
             ),
             LLMResponse::InternalFailure(_) => napi::Error::new(
                 napi::Status::GenericFailure,
                 format!(
-                    "BamlError: BamlClientError: Something went wrong with the LLM client: {}",
-                    err
+                    "BamlError: BamlClientError: Something went wrong with the LLM client: {err}"
                 ),
             ),
         }
     } else {
-        napi::Error::new(
-            napi::Status::GenericFailure,
-            format!("BamlError: {:?}", err),
-        )
+        napi::Error::new(napi::Status::GenericFailure, format!("BamlError: {err:?}"))
     }
 }
 

@@ -41,7 +41,7 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
                         Ok(json) => json_objects.push(json),
                         Err(e) => {
                             // Ignore errors
-                            log::error!("Failed to parse JSON object: {:?}", e);
+                            log::error!("Failed to parse JSON object: {e:?}");
                         }
                     }
                 }
@@ -65,7 +65,7 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
                     }
                     Err(e) => {
                         // Ignore errors
-                        log::error!("Failed to parse JSON object: {:?}", e);
+                        log::error!("Failed to parse JSON object: {e:?}");
                     }
                 }
             }
@@ -120,7 +120,7 @@ print("Hello, world!")
         {
             let value = &res[0];
             let Value::AnyOf(value, _) = value else {
-                panic!("Expected AnyOf, got {:#?}", value);
+                panic!("Expected AnyOf, got {value:#?}");
             };
             assert!(value.contains(&Value::Object(
                 [(
@@ -135,7 +135,7 @@ print("Hello, world!")
         {
             let value = &res[1];
             let Value::AnyOf(value, _) = value else {
-                panic!("Expected AnyOf, got {:#?}", value);
+                panic!("Expected AnyOf, got {value:#?}");
             };
             assert!(value.contains(&Value::Array(
                 vec![Value::String(

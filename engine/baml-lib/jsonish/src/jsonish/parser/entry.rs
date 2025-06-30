@@ -13,7 +13,7 @@ use crate::jsonish::{
 };
 
 pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
-    log::debug!("Parsing:\n{:?}\n-------\n{}\n-------", options, str);
+    log::debug!("Parsing:\n{options:?}\n-------\n{str}\n-------");
 
     options.depth += 1;
     if options.depth > 100 {
@@ -50,7 +50,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
             return Ok(Value::AnyOf(vec![v], str.to_string()));
         }
         Err(e) => {
-            log::debug!("Invalid JSON: {:?}", e);
+            log::debug!("Invalid JSON: {e:?}");
         }
     };
 
@@ -72,7 +72,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                             ));
                         }
                         _ => {
-                            log::debug!("Unexpected markdown result: {:?}", res);
+                            log::debug!("Unexpected markdown result: {res:?}");
                         }
                     }
                 }
@@ -104,7 +104,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                         .filter_map(|res| match res {
                             Ok(v) => Some(v),
                             Err(e) => {
-                                log::debug!("Error parsing markdown string: {:?}", e);
+                                log::debug!("Error parsing markdown string: {e:?}");
                                 None
                             }
                         })
@@ -134,7 +134,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                 }
             },
             Err(e) => {
-                log::debug!("Markdown parsing error: {:?}", e);
+                log::debug!("Markdown parsing error: {e:?}");
             }
         }
     }
@@ -168,7 +168,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                 }
             },
             Err(e) => {
-                log::debug!("Error parsing multiple JSON objects: {:?}", e);
+                log::debug!("Error parsing multiple JSON objects: {e:?}");
             }
         }
     }
@@ -212,7 +212,7 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                 }
             }
             Err(e) => {
-                log::debug!("Error fixing json: {:?}", e);
+                log::debug!("Error fixing json: {e:?}");
             }
         }
     }

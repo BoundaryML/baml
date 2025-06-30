@@ -18,13 +18,12 @@ pub struct ParameterError {
 impl ParameterError {
     pub(super) fn required_param_missing(&mut self, param_name: &str) {
         self.vec
-            .push(format!("Missing required parameter: {}", param_name));
+            .push(format!("Missing required parameter: {param_name}"));
     }
 
     pub fn invalid_param_type(&mut self, param_name: &str, expected: &str, got: &str) {
         self.vec.push(format!(
-            "Invalid parameter type for {}: expected {}, got {}",
-            param_name, expected, got
+            "Invalid parameter type for {param_name}: expected {expected}, got {got}"
         ));
     }
 }
@@ -74,7 +73,7 @@ impl ArgCoercer {
                         FieldType::string(),
                     )),
                     _ => {
-                        scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
+                        scope.push_error(format!("Expected type {t:?}, got `{value}`"));
                         Err(ArgCoerceError)
                     }
                 },
@@ -114,9 +113,7 @@ impl ArgCoercer {
                         for key in kv.keys() {
                             if !["file", "media_type"].contains(&key.as_str()) {
                                 scope.push_error(format!(
-                                    "Invalid property `{}` on file {}: `media_type` is the only supported property",
-                                    key,
-                                    media_type
+                                    "Invalid property `{key}` on file {media_type}: `media_type` is the only supported property"
                                 ));
                             }
                         }
@@ -142,9 +139,7 @@ impl ArgCoercer {
                         for key in kv.keys() {
                             if !["url", "media_type"].contains(&key.as_str()) {
                                 scope.push_error(format!(
-                                    "Invalid property `{}` on url {}: `media_type` is the only supported property",
-                                    key,
-                                    media_type
+                                    "Invalid property `{key}` on url {media_type}: `media_type` is the only supported property"
                                 ));
                             }
                         }
@@ -156,9 +151,7 @@ impl ArgCoercer {
                         for key in kv.keys() {
                             if !["base64", "media_type"].contains(&key.as_str()) {
                                 scope.push_error(format!(
-                                    "Invalid property `{}` on base64 {}: `media_type` is the only supported property",
-                                    key,
-                                    media_type
+                                    "Invalid property `{key}` on base64 {media_type}: `media_type` is the only supported property"
                                 ));
                             }
                         }
@@ -168,14 +161,13 @@ impl ArgCoercer {
                         ))
                     } else {
                         scope.push_error(format!(
-                            "Invalid media source: expected `file`, `url`, or `base64`, got `{}`",
-                            value
+                            "Invalid media source: expected `file`, `url`, or `base64`, got `{value}`"
                         ));
                         Err(ArgCoerceError)
                     }
                 }
                 (_, _) => {
-                    scope.push_error(format!("Expected type {:?}, got `{}`", t, value));
+                    scope.push_error(format!("Expected type {t:?}, got `{value}`"));
                     Err(ArgCoerceError)
                 }
             },
@@ -203,7 +195,7 @@ impl ArgCoercer {
                             Err(ArgCoerceError)
                         }
                     } else {
-                        scope.push_error(format!("Enum {} not found", name));
+                        scope.push_error(format!("Enum {name} not found"));
                         Err(ArgCoerceError)
                     }
                 }
@@ -213,7 +205,7 @@ impl ArgCoercer {
                     FieldType::r#enum(name),
                 )),
                 _ => {
-                    scope.push_error(format!("Invalid enum {}: Got `{}`", name, value));
+                    scope.push_error(format!("Invalid enum {name}: Got `{value}`"));
                     Err(ArgCoerceError)
                 }
             },
@@ -228,7 +220,7 @@ impl ArgCoercer {
                     Ok(BamlValueWithMeta::Bool(*v, FieldType::literal_bool(*lit)))
                 }
                 _ => {
-                    scope.push_error(format!("Expected literal {:?}, got `{}`", literal, value));
+                    scope.push_error(format!("Expected literal {literal:?}, got `{value}`"));
                     Err(ArgCoerceError)
                 }
             },
@@ -276,12 +268,12 @@ impl ArgCoercer {
                         ))
                     }
                     Err(_) => {
-                        scope.push_error(format!("Class {} not found", name));
+                        scope.push_error(format!("Class {name} not found"));
                         Err(ArgCoerceError)
                     }
                 },
                 _ => {
-                    scope.push_error(format!("Expected class {}, got `{}`", name, value));
+                    scope.push_error(format!("Expected class {name}, got `{value}`"));
                     Err(ArgCoerceError)
                 }
             },
@@ -298,7 +290,7 @@ impl ArgCoercer {
                 match maybe_coerced {
                     Some(coerced) => Ok(coerced),
                     None => {
-                        scope.push_error(format!("Recursive type alias {} not found", name));
+                        scope.push_error(format!("Recursive type alias {name} not found"));
                         Err(ArgCoerceError)
                     }
                 }
@@ -314,7 +306,7 @@ impl ArgCoercer {
                     Ok(BamlValueWithMeta::List(items, item.clone().as_list()))
                 }
                 _ => {
-                    scope.push_error(format!("Expected array, got `{}`", value));
+                    scope.push_error(format!("Expected array, got `{value}`"));
                     Err(ArgCoerceError)
                 }
             },
@@ -341,7 +333,7 @@ impl ArgCoercer {
                     Ok(BamlValueWithMeta::Map(map, (**v).clone()))
                 }
                 _ => {
-                    scope.push_error(format!("Expected map, got `{}`", value));
+                    scope.push_error(format!("Expected map, got `{value}`"));
                     Err(ArgCoerceError)
                 }
             },
@@ -357,7 +349,7 @@ impl ArgCoercer {
                     }
                 }
                 if first_good_result.is_err() {
-                    scope.push_error(format!("Expected one of {:?}, got `{}`", options, value));
+                    scope.push_error(format!("Expected one of {options:?}, got `{value}`"));
                     Err(ArgCoerceError)
                 } else {
                     first_good_result
@@ -373,7 +365,7 @@ impl ArgCoercer {
 
         let search_for_failures_result =
             first_failing_assert_nested(ir, &value.clone().value(), field_type).map_err(|e| {
-                scope.push_error(format!("Failed to evaluate assert: {:?}", e));
+                scope.push_error(format!("Failed to evaluate assert: {e:?}"));
                 ArgCoerceError
             })?;
 

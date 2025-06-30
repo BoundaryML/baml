@@ -1,4 +1,3 @@
-
 function MakePoem(length: int) -> string {
     client GPT4o
     prompt #"Write a poem {{ length }} lines long."#
@@ -69,3 +68,38 @@ test TestMakePoem() {
     functions [MakePoem]
     args { length 4 }
 }
+
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  expr/expr_full.baml:27
+//    | 
+// 26 | 
+// 27 | function Pipeline() -> string {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  expr/expr_full.baml:37
+//    | 
+// 36 | 
+// 37 | function Pyramid() -> string {
+//    | 
+// warning: Workflow functions are experimental, and will break in the future.
+//   -->  expr/expr_full.baml:41
+//    | 
+// 40 | 
+// 41 | function OuterPyramid() -> string {
+//    | 
+// warning: Variable assignment is experimental, and will break in the future.
+//   -->  expr/expr_full.baml:19
+//    | 
+// 18 | 
+// 19 | let poem = MakePoem(10);
+//    | 
+// warning: Variable assignment is experimental, and will break in the future.
+//   -->  expr/expr_full.baml:21
+//    | 
+// 20 | 
+// 21 | let another = {
+// 22 |   let x = MakePoem(10);
+// 23 |   let y = MakePoem(5);
+// 24 |   CombinePoems(x,y)
+// 25 | };
+//    | 

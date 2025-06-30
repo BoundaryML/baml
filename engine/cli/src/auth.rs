@@ -53,7 +53,7 @@ impl TokenArgs {
     pub async fn run_async(&self) -> Result<()> {
         let mut token_data = PersistedTokenData::read_from_storage()?;
         let token = token_data.access_token().await?;
-        println!("{}", token);
+        println!("{token}");
         Ok(())
     }
 }

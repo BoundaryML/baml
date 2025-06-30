@@ -230,10 +230,10 @@ impl baml_log::Loggable for BamlEventLoggable<'_> {
         match self.data.as_ref() {
             Ok(response) => {
                 let response = response.visualize(*max_message_length);
-                format!("{}:\n{}", function_name, response)
+                format!("{function_name}:\n{response}")
             }
             Err(error) => {
-                format!("{}:\n{}", function_name, error)
+                format!("{function_name}:\n{error}")
             }
         }
     }
@@ -610,7 +610,7 @@ impl BamlTracer {
             if is_ok {
                 baml_log::info!(
                     "{}{}",
-                    name.map(|s| format!("Function {}:\n", s))
+                    name.map(|s| format!("Function {s}:\n"))
                         .unwrap_or_default()
                         .purple(),
                     response.visualize(self.options.config.max_log_chunk_chars())
@@ -618,7 +618,7 @@ impl BamlTracer {
             } else {
                 baml_log::warn!(
                     "{}{}",
-                    name.map(|s| format!("Function {}:\n", s))
+                    name.map(|s| format!("Function {s}:\n"))
                         .unwrap_or_default()
                         .purple(),
                     response.visualize(self.options.config.max_log_chunk_chars())
@@ -736,7 +736,7 @@ fn log_simple_event(
     if is_ok {
         baml_log::info!(
             "{}{}",
-            name.map(|s| format!("Function {}:\n", s))
+            name.map(|s| format!("Function {s}:\n"))
                 .unwrap_or_default()
                 .purple(),
             response.visualize(options.config.max_log_chunk_chars())
@@ -744,7 +744,7 @@ fn log_simple_event(
     } else {
         baml_log::warn!(
             "{}{}",
-            name.map(|s| format!("Function {}:\n", s))
+            name.map(|s| format!("Function {s}:\n"))
                 .unwrap_or_default()
                 .purple(),
             response.visualize(options.config.max_log_chunk_chars())
@@ -815,7 +815,7 @@ impl
 
 impl From<&BamlMap<String, BamlValue>> for IOValue {
     fn from(items: &BamlMap<String, BamlValue>) -> Self {
-        log::trace!("Converting IOValue from BamlMap: {:#?}", items);
+        log::trace!("Converting IOValue from BamlMap: {items:#?}");
         IOValue {
             r#type: TypeSchema {
                 name: api_wrapper::core_types::TypeSchemaName::Multi,

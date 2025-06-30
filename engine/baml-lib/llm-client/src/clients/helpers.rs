@@ -338,8 +338,7 @@ impl<Meta: Clone> PropertyHandler<Meta> {
                         other => {
                             self.push_error(
                                 format!(
-                                    "client_response_type must be one of \"openai\", \"anthropic\", \"google\", or \"vertex\". Got: {}",
-                                    other
+                                    "client_response_type must be one of \"openai\", \"anthropic\", \"google\", or \"vertex\". Got: {other}"
                                 ),
                                 key_span,
                             );

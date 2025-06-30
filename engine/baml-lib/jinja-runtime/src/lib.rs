@@ -69,7 +69,7 @@ fn render_minijinja(
 
     // trim
     let template = template.trim();
-    log::debug!("Rendering template: \n{}\n------\n", template);
+    log::debug!("Rendering template: \n{template}\n------\n");
     // let args_dict = minijinja::Value::from_serializable(args);
 
     // inject macros
@@ -112,7 +112,7 @@ fn render_minijinja(
                     // If both are present, we should error
                     return Err(minijinja::Error::new(
                         ErrorKind::TooManyArguments,
-                        format!("role() called with two roles: '{}' and '{}'", a, b),
+                        format!("role() called with two roles: '{a}' and '{b}'"),
                     ));
                 }
                 (Some(role), _) => role,
@@ -221,7 +221,7 @@ fn render_minijinja(
                         Ok(m) => Some(ChatMessagePart::Media(m)),
                         Err(_) => Err(minijinja::Error::new(
                             ErrorKind::CannotUnpack,
-                            format!("Media variable had unrecognizable data: {}", media_data),
+                            format!("Media variable had unrecognizable data: {media_data}"),
                         ))?,
                     }
                 } else if !part.trim().is_empty() {
@@ -296,7 +296,7 @@ pub enum RenderedPrompt {
 impl std::fmt::Display for RenderedPrompt {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            RenderedPrompt::Completion(s) => write!(f, "{}", s),
+            RenderedPrompt::Completion(s) => write!(f, "{s}"),
             RenderedPrompt::Chat(messages) => {
                 for message in messages {
                     writeln!(

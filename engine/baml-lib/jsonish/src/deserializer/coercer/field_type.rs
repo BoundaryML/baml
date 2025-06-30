@@ -156,7 +156,7 @@ pub fn validate_asserts(constraints: &[(Constraint, bool)]) -> Result<(), Parsin
             causes: vec![],
             reason: format!(
                 "Failed: {}{}",
-                label.as_ref().map_or("".to_string(), |l| format!("{} ", l)),
+                label.as_ref().map_or("".to_string(), |l| format!("{l} ")),
                 expr.0
             ),
             scope: vec![],

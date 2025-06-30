@@ -108,7 +108,7 @@ impl Server {
             global_settings.tracing.log_file.as_deref(),
         );
         if let Err(e) = tracing_log::LogTracer::init() {
-            eprintln!("Failed to initialize log tracer: {}", e);
+            eprintln!("Failed to initialize log tracer: {e}");
             // Decide how to handle this error - maybe log it via tracing if possible,
             // or exit if logging is critical.
         }

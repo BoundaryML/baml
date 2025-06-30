@@ -58,7 +58,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                         Some(range) => range,
                         None => {
                             ctx.push_error(DatamodelError::new_validation_error(
-                                &format!("Error parsing jinja template: {}", e),
+                                &format!("Error parsing jinja template: {e}"),
                                 pspan.clone(),
                             ));
                             continue;
@@ -71,7 +71,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                     let span = Span::new(pspan.file.clone(), start_offset, end_offset);
 
                     ctx.push_error(DatamodelError::new_validation_error(
-                        &format!("Error parsing jinja template: {}", e),
+                        &format!("Error parsing jinja template: {e}"),
                         span,
                     ))
                 } else {
@@ -176,7 +176,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                         Some(range) => range,
                         None => {
                             ctx.push_error(DatamodelError::new_validation_error(
-                                &format!("Error parsing jinja template: {}", e),
+                                &format!("Error parsing jinja template: {e}"),
                                 pspan.clone(),
                             ));
                             continue;
@@ -189,7 +189,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                     let span = Span::new(pspan.file.clone(), start_offset, end_offset);
 
                     ctx.push_error(DatamodelError::new_validation_error(
-                        &format!("Error parsing jinja template: {}", e),
+                        &format!("Error parsing jinja template: {e}"),
                         span,
                     ))
                 } else {

@@ -244,8 +244,7 @@ fn try_delete_tmp_dir(temp_path: &Path) -> Result<()> {
                 Err(e) => {
                     // For other errors or if it's the last attempt, fail with an error
                     return Err(anyhow::Error::new(e).context(format!(
-                        "Failed to delete temp directory '{:?}' after {} attempts",
-                        temp_path, attempt
+                        "Failed to delete temp directory '{temp_path:?}' after {attempt} attempts"
                     )));
                 }
             }

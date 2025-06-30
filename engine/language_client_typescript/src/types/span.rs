@@ -24,18 +24,18 @@ impl BamlSpan {
         env_vars: serde_json::Value,
     ) -> napi::Result<Self> {
         let args: BamlValue = serde_json::from_value(args)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{e:?}")))?;
         let Some(args_map) = args.as_map() else {
             return Err(invalid_argument_error("Invalid span args"));
         };
 
         let env_vars: HashMap<String, String> = serde_json::from_value(env_vars)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{e:?}")))?;
 
         let call = runtime
             .inner
             .start_call(&function_name, args_map, &ctx.inner, &env_vars);
-        log::trace!("Starting call: {:#?} for {:?}\n", call, function_name);
+        log::trace!("Starting call: {call:#?} for {function_name:?}\n");
         Ok(Self {
             inner: call.into(),
             rt: runtime.inner.clone(),
@@ -52,7 +52,7 @@ impl BamlSpan {
     ) -> napi::Result<serde_json::Value> {
         log::trace!("Finishing span: {:?}", self.inner);
         let result: BamlValue = serde_json::from_value(result)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{e:?}")))?;
 
         let call = self
             .inner
@@ -60,12 +60,12 @@ impl BamlSpan {
             .ok_or_else(|| napi::Error::new(napi::Status::GenericFailure, "Already used span"))?;
 
         let env_vars: HashMap<String, String> = serde_json::from_value(env_vars)
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))?;
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{e:?}")))?;
 
         self.rt
             .finish_call(call, Some(result), &ctx.inner, &env_vars)
             .map(|u| u.to_string())
             .map(|u| serde_json::json!(u))
-            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{:?}", e)))
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, format!("{e:?}")))
     }
 }

@@ -390,7 +390,7 @@ impl TypeCoercer for Class {
             }
         }
 
-        log::trace!("Completed class: {:#?}", completed_cls);
+        log::trace!("Completed class: {completed_cls:#?}");
 
         array_helper::pick_best(ctx, target, &completed_cls)
     }
@@ -413,7 +413,7 @@ pub fn apply_constraints(
         });
         let constraint_results = run_user_checks(&value.clone().into(), &constrained_class)
             .map_err(|e| ParsingError {
-                reason: format!("Failed to evaluate constraints: {:?}", e),
+                reason: format!("Failed to evaluate constraints: {e:?}"),
                 scope,
                 causes: Vec::new(),
             })?;
@@ -447,13 +447,13 @@ fn update_map<'a>(
     match map.get(key) {
         Some(Some(_)) => {
             // DO NOTHING (keep first value)
-            log::trace!("Duplicate field: {}", key);
+            log::trace!("Duplicate field: {key}");
         }
         Some(None) => {
             map.insert(key.into(), Some(value));
         }
         None => {
-            log::trace!("Field not found: {}", key);
+            log::trace!("Field not found: {key}");
         }
     }
 }

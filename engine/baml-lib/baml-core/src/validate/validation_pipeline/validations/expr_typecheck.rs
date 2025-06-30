@@ -280,7 +280,7 @@ pub fn typecheck_in_context(
                             typecheck_in_context(ir, diagnostics, typing_context, field_value)?;
                         } else {
                             diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Class {} has no field {}", name, field_name),
+                                &format!("Class {name} has no field {field_name}"),
                                 field_value.meta().0.clone(),
                             ));
                         }
@@ -312,7 +312,7 @@ pub fn typecheck_in_context(
                 }
             } else {
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Unknown class: {}", name),
+                    &format!("Unknown class: {name}"),
                     meta.0.clone(),
                 ));
             }
