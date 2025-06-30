@@ -370,7 +370,7 @@ export class BamlSyncClient {
   }
   
   AudioInput(
-      aud: Audio,
+      aud: Image,
       __baml_options__?: BamlCallOptions
   ): string {
     try {
@@ -398,7 +398,7 @@ export class BamlSyncClient {
   }
   
   AudioInputOpenai(
-      aud: Audio,prompt: string,
+      aud: Image,prompt: string,
       __baml_options__?: BamlCallOptions
   ): string {
     try {

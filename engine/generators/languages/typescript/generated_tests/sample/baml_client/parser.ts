@@ -85,7 +85,7 @@ export class LlmStreamParser {
   Bar(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): Example | Example2 | null {
+  ): Example | Example2 {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -99,7 +99,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as Example | Example2 | null
+      ) as Example | Example2
     } catch (error) {
       throw toBamlError(error);
     }
@@ -108,7 +108,7 @@ export class LlmStreamParser {
   Foo(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): Example2 | Example | null {
+  ): Example2 | Example {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -122,7 +122,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as Example2 | Example | null
+      ) as Example2 | Example
     } catch (error) {
       throw toBamlError(error);
     }

@@ -110,7 +110,7 @@ module BamlClient
           varargs: T.untyped,
           item: BamlClient::Types::SimpleClass,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::SimpleClass), BamlClient::Types::SimpleClass])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::SimpleClass, BamlClient::Types::SimpleClass])}
       def ConsumeSimpleClass(
           *varargs,
           item:,
@@ -126,7 +126,7 @@ module BamlClient
               item: item,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::SimpleClass), BamlClient::Types::SimpleClass].new(
+          Baml::BamlStream[BamlClient::StreamTypes::SimpleClass, BamlClient::Types::SimpleClass].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -135,7 +135,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::SimpleClass), BamlClient::Types::SimpleClass])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::SimpleClass, BamlClient::Types::SimpleClass])}
       def MakeSimpleClass(
           *varargs,
 
@@ -151,7 +151,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::SimpleClass), BamlClient::Types::SimpleClass].new(
+          Baml::BamlStream[BamlClient::StreamTypes::SimpleClass, BamlClient::Types::SimpleClass].new(
               ffi_stream: result,
               ctx_manager: ctx
           )

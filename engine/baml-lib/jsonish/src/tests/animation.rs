@@ -31,11 +31,17 @@ pub fn make_test_data1() {
         streaming_behavior: StreamingBehavior {
             done: false,
             state: true,
-            needed: false,
+            needed: true,
         },
     });
 
-    let target = render_output_format(&ir, &target_type, &Default::default()).unwrap();
+    let target = render_output_format(
+        &ir,
+        &target_type,
+        &Default::default(),
+        baml_types::StreamingMode::Streaming,
+    )
+    .unwrap();
 
     let llm_data = r#"{"person": {"name": "Greg", "age": 42}, "assignment": "Write"}"#;
 
@@ -46,16 +52,20 @@ pub fn make_test_data1() {
             let parsed_value = from_str(&target, &target_type, partial_llm_data);
             let value = parsed_value_to_response(&ir, parsed_value.unwrap()).unwrap();
 
-            serde_json::to_value(&vec![
-                serde_json::to_value(partial_llm_data).unwrap(),
-                serde_json::to_value(&value.serialize_partial()).unwrap(),
-            ])
+            serde_json::to_value(
+                vec![
+                    serde_json::to_value(partial_llm_data).unwrap(),
+                    serde_json::to_value(value.serialize_partial()).unwrap(),
+                ]
+                .into_iter()
+                .collect::<Vec<_>>(),
+            )
             .unwrap()
         })
         .collect::<Vec<_>>();
 
     let json = serde_json::to_string(&results).unwrap();
-    eprintln!("{}", json);
+    eprintln!("{json}");
 
     // assert!(false);
 }

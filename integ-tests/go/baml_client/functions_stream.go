@@ -40,7 +40,7 @@ func (s *StreamValue[TStream, TFinal]) Stream() TStream {
 }
 
 // / Streaming version of AaaSamOutputFormat
-func (*stream) AaaSamOutputFormat(ctx context.Context, recipe string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.Recipe, types.Recipe], error) {
+func (*stream) AaaSamOutputFormat(ctx context.Context, recipe string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Recipe, types.Recipe], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -60,7 +60,7 @@ func (*stream) AaaSamOutputFormat(ctx context.Context, recipe string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -74,7 +74,7 @@ func (*stream) AaaSamOutputFormat(ctx context.Context, recipe string, opts ...Ca
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.Recipe, types.Recipe])
+	channel := make(chan StreamValue[stream_types.Recipe, types.Recipe])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -95,13 +95,13 @@ func (*stream) AaaSamOutputFormat(ctx context.Context, recipe string, opts ...Ca
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Recipe)
-					channel <- StreamValue[*stream_types.Recipe, types.Recipe]{
+					channel <- StreamValue[stream_types.Recipe, types.Recipe]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.Recipe)
-					channel <- StreamValue[*stream_types.Recipe, types.Recipe]{
+					data := *(result.StreamData).(*stream_types.Recipe)
+					channel <- StreamValue[stream_types.Recipe, types.Recipe]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -113,7 +113,7 @@ func (*stream) AaaSamOutputFormat(ctx context.Context, recipe string, opts ...Ca
 }
 
 // / Streaming version of AliasThatPointsToRecursiveType
-func (*stream) AliasThatPointsToRecursiveType(ctx context.Context, data types.LinkedListAliasNode, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.LinkedListAliasNode, types.LinkedListAliasNode], error) {
+func (*stream) AliasThatPointsToRecursiveType(ctx context.Context, data types.LinkedListAliasNode, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.LinkedListAliasNode, types.LinkedListAliasNode], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -133,7 +133,7 @@ func (*stream) AliasThatPointsToRecursiveType(ctx context.Context, data types.Li
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -147,7 +147,7 @@ func (*stream) AliasThatPointsToRecursiveType(ctx context.Context, data types.Li
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.LinkedListAliasNode, types.LinkedListAliasNode])
+	channel := make(chan StreamValue[stream_types.LinkedListAliasNode, types.LinkedListAliasNode])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -168,13 +168,13 @@ func (*stream) AliasThatPointsToRecursiveType(ctx context.Context, data types.Li
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.LinkedListAliasNode)
-					channel <- StreamValue[*stream_types.LinkedListAliasNode, types.LinkedListAliasNode]{
+					channel <- StreamValue[stream_types.LinkedListAliasNode, types.LinkedListAliasNode]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.LinkedListAliasNode)
-					channel <- StreamValue[*stream_types.LinkedListAliasNode, types.LinkedListAliasNode]{
+					data := *(result.StreamData).(*stream_types.LinkedListAliasNode)
+					channel <- StreamValue[stream_types.LinkedListAliasNode, types.LinkedListAliasNode]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -186,7 +186,7 @@ func (*stream) AliasThatPointsToRecursiveType(ctx context.Context, data types.Li
 }
 
 // / Streaming version of AliasWithMultipleAttrs
-func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOptionFunc) (<-chan StreamValue[*types.Checked[int64], int64], error) {
+func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...CallOptionFunc) (<-chan StreamValue[types.Checked[int64], int64], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -206,7 +206,7 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -220,7 +220,7 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*types.Checked[int64], int64])
+	channel := make(chan StreamValue[types.Checked[int64], int64])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -241,13 +241,13 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...
 				}
 				if result.HasData {
 					data := *(result.Data).(*int64)
-					channel <- StreamValue[*types.Checked[int64], int64]{
+					channel <- StreamValue[types.Checked[int64], int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*types.Checked[int64])
-					channel <- StreamValue[*types.Checked[int64], int64]{
+					data := *(result.StreamData).(*types.Checked[int64])
+					channel <- StreamValue[types.Checked[int64], int64]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -259,7 +259,7 @@ func (*stream) AliasWithMultipleAttrs(ctx context.Context, money int64, opts ...
 }
 
 // / Streaming version of AliasedInputClass
-func (*stream) AliasedInputClass(ctx context.Context, input types.InputClass, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) AliasedInputClass(ctx context.Context, input types.InputClass, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -279,7 +279,7 @@ func (*stream) AliasedInputClass(ctx context.Context, input types.InputClass, op
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -293,7 +293,7 @@ func (*stream) AliasedInputClass(ctx context.Context, input types.InputClass, op
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -314,13 +314,13 @@ func (*stream) AliasedInputClass(ctx context.Context, input types.InputClass, op
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -332,7 +332,7 @@ func (*stream) AliasedInputClass(ctx context.Context, input types.InputClass, op
 }
 
 // / Streaming version of AliasedInputClass2
-func (*stream) AliasedInputClass2(ctx context.Context, input types.InputClass, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) AliasedInputClass2(ctx context.Context, input types.InputClass, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -352,7 +352,7 @@ func (*stream) AliasedInputClass2(ctx context.Context, input types.InputClass, o
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -366,7 +366,7 @@ func (*stream) AliasedInputClass2(ctx context.Context, input types.InputClass, o
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -387,13 +387,13 @@ func (*stream) AliasedInputClass2(ctx context.Context, input types.InputClass, o
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -405,7 +405,7 @@ func (*stream) AliasedInputClass2(ctx context.Context, input types.InputClass, o
 }
 
 // / Streaming version of AliasedInputClassNested
-func (*stream) AliasedInputClassNested(ctx context.Context, input types.InputClassNested, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) AliasedInputClassNested(ctx context.Context, input types.InputClassNested, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -425,7 +425,7 @@ func (*stream) AliasedInputClassNested(ctx context.Context, input types.InputCla
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -439,7 +439,7 @@ func (*stream) AliasedInputClassNested(ctx context.Context, input types.InputCla
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -460,13 +460,13 @@ func (*stream) AliasedInputClassNested(ctx context.Context, input types.InputCla
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -478,7 +478,7 @@ func (*stream) AliasedInputClassNested(ctx context.Context, input types.InputCla
 }
 
 // / Streaming version of AliasedInputEnum
-func (*stream) AliasedInputEnum(ctx context.Context, input types.AliasedEnum, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) AliasedInputEnum(ctx context.Context, input types.AliasedEnum, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -498,7 +498,7 @@ func (*stream) AliasedInputEnum(ctx context.Context, input types.AliasedEnum, op
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -512,7 +512,7 @@ func (*stream) AliasedInputEnum(ctx context.Context, input types.AliasedEnum, op
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -533,13 +533,13 @@ func (*stream) AliasedInputEnum(ctx context.Context, input types.AliasedEnum, op
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -551,7 +551,7 @@ func (*stream) AliasedInputEnum(ctx context.Context, input types.AliasedEnum, op
 }
 
 // / Streaming version of AliasedInputList
-func (*stream) AliasedInputList(ctx context.Context, input []types.AliasedEnum, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) AliasedInputList(ctx context.Context, input []types.AliasedEnum, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -571,7 +571,7 @@ func (*stream) AliasedInputList(ctx context.Context, input []types.AliasedEnum, 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -585,7 +585,7 @@ func (*stream) AliasedInputList(ctx context.Context, input []types.AliasedEnum, 
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -606,13 +606,13 @@ func (*stream) AliasedInputList(ctx context.Context, input []types.AliasedEnum, 
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -624,7 +624,7 @@ func (*stream) AliasedInputList(ctx context.Context, input []types.AliasedEnum, 
 }
 
 // / Streaming version of AllowedOptionals
-func (*stream) AllowedOptionals(ctx context.Context, optionals types.OptionalListAndMap, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.OptionalListAndMap, types.OptionalListAndMap], error) {
+func (*stream) AllowedOptionals(ctx context.Context, optionals types.OptionalListAndMap, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.OptionalListAndMap, types.OptionalListAndMap], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -644,7 +644,7 @@ func (*stream) AllowedOptionals(ctx context.Context, optionals types.OptionalLis
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -658,7 +658,7 @@ func (*stream) AllowedOptionals(ctx context.Context, optionals types.OptionalLis
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.OptionalListAndMap, types.OptionalListAndMap])
+	channel := make(chan StreamValue[stream_types.OptionalListAndMap, types.OptionalListAndMap])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -679,13 +679,13 @@ func (*stream) AllowedOptionals(ctx context.Context, optionals types.OptionalLis
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.OptionalListAndMap)
-					channel <- StreamValue[*stream_types.OptionalListAndMap, types.OptionalListAndMap]{
+					channel <- StreamValue[stream_types.OptionalListAndMap, types.OptionalListAndMap]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.OptionalListAndMap)
-					channel <- StreamValue[*stream_types.OptionalListAndMap, types.OptionalListAndMap]{
+					data := *(result.StreamData).(*stream_types.OptionalListAndMap)
+					channel <- StreamValue[stream_types.OptionalListAndMap, types.OptionalListAndMap]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -697,7 +697,7 @@ func (*stream) AllowedOptionals(ctx context.Context, optionals types.OptionalLis
 }
 
 // / Streaming version of AssertFn
-func (*stream) AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (<-chan StreamValue[*int64, int64], error) {
+func (*stream) AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (<-chan StreamValue[int64, int64], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -717,7 +717,7 @@ func (*stream) AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (<
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -731,7 +731,7 @@ func (*stream) AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (<
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*int64, int64])
+	channel := make(chan StreamValue[int64, int64])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -752,13 +752,13 @@ func (*stream) AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (<
 				}
 				if result.HasData {
 					data := *(result.Data).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					data := *(result.StreamData).(*int64)
+					channel <- StreamValue[int64, int64]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -770,7 +770,7 @@ func (*stream) AssertFn(ctx context.Context, a int64, opts ...CallOptionFunc) (<
 }
 
 // / Streaming version of AudioInput
-func (*stream) AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -790,7 +790,7 @@ func (*stream) AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -804,7 +804,7 @@ func (*stream) AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) 
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -825,13 +825,13 @@ func (*stream) AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) 
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -843,7 +843,7 @@ func (*stream) AudioInput(ctx context.Context, aud any, opts ...CallOptionFunc) 
 }
 
 // / Streaming version of AudioInputOpenai
-func (*stream) AudioInputOpenai(ctx context.Context, aud any, prompt string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) AudioInputOpenai(ctx context.Context, aud any, prompt string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -863,7 +863,7 @@ func (*stream) AudioInputOpenai(ctx context.Context, aud any, prompt string, opt
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -877,7 +877,7 @@ func (*stream) AudioInputOpenai(ctx context.Context, aud any, prompt string, opt
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -898,13 +898,13 @@ func (*stream) AudioInputOpenai(ctx context.Context, aud any, prompt string, opt
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -916,7 +916,7 @@ func (*stream) AudioInputOpenai(ctx context.Context, aud any, prompt string, opt
 }
 
 // / Streaming version of BuildLinkedList
-func (*stream) BuildLinkedList(ctx context.Context, input []int64, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.LinkedList, types.LinkedList], error) {
+func (*stream) BuildLinkedList(ctx context.Context, input []int64, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.LinkedList, types.LinkedList], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -936,7 +936,7 @@ func (*stream) BuildLinkedList(ctx context.Context, input []int64, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -950,7 +950,7 @@ func (*stream) BuildLinkedList(ctx context.Context, input []int64, opts ...CallO
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.LinkedList, types.LinkedList])
+	channel := make(chan StreamValue[stream_types.LinkedList, types.LinkedList])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -971,13 +971,13 @@ func (*stream) BuildLinkedList(ctx context.Context, input []int64, opts ...CallO
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.LinkedList)
-					channel <- StreamValue[*stream_types.LinkedList, types.LinkedList]{
+					channel <- StreamValue[stream_types.LinkedList, types.LinkedList]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.LinkedList)
-					channel <- StreamValue[*stream_types.LinkedList, types.LinkedList]{
+					data := *(result.StreamData).(*stream_types.LinkedList)
+					channel <- StreamValue[stream_types.LinkedList, types.LinkedList]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -989,7 +989,7 @@ func (*stream) BuildLinkedList(ctx context.Context, input []int64, opts ...CallO
 }
 
 // / Streaming version of BuildTree
-func (*stream) BuildTree(ctx context.Context, input types.BinaryNode, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.Tree, types.Tree], error) {
+func (*stream) BuildTree(ctx context.Context, input types.BinaryNode, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Tree, types.Tree], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1009,7 +1009,7 @@ func (*stream) BuildTree(ctx context.Context, input types.BinaryNode, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1023,7 +1023,7 @@ func (*stream) BuildTree(ctx context.Context, input types.BinaryNode, opts ...Ca
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.Tree, types.Tree])
+	channel := make(chan StreamValue[stream_types.Tree, types.Tree])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -1044,13 +1044,13 @@ func (*stream) BuildTree(ctx context.Context, input types.BinaryNode, opts ...Ca
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Tree)
-					channel <- StreamValue[*stream_types.Tree, types.Tree]{
+					channel <- StreamValue[stream_types.Tree, types.Tree]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.Tree)
-					channel <- StreamValue[*stream_types.Tree, types.Tree]{
+					data := *(result.StreamData).(*stream_types.Tree)
+					channel <- StreamValue[stream_types.Tree, types.Tree]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -1062,7 +1062,7 @@ func (*stream) BuildTree(ctx context.Context, input types.BinaryNode, opts ...Ca
 }
 
 // / Streaming version of ClassThatPointsToRecursiveClassThroughAlias
-func (*stream) ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, cls types.ClassToRecAlias, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.ClassToRecAlias, types.ClassToRecAlias], error) {
+func (*stream) ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, cls types.ClassToRecAlias, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.ClassToRecAlias, types.ClassToRecAlias], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1082,7 +1082,7 @@ func (*stream) ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1096,7 +1096,7 @@ func (*stream) ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, 
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.ClassToRecAlias, types.ClassToRecAlias])
+	channel := make(chan StreamValue[stream_types.ClassToRecAlias, types.ClassToRecAlias])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -1117,13 +1117,13 @@ func (*stream) ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, 
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.ClassToRecAlias)
-					channel <- StreamValue[*stream_types.ClassToRecAlias, types.ClassToRecAlias]{
+					channel <- StreamValue[stream_types.ClassToRecAlias, types.ClassToRecAlias]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.ClassToRecAlias)
-					channel <- StreamValue[*stream_types.ClassToRecAlias, types.ClassToRecAlias]{
+					data := *(result.StreamData).(*stream_types.ClassToRecAlias)
+					channel <- StreamValue[stream_types.ClassToRecAlias, types.ClassToRecAlias]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -1135,7 +1135,7 @@ func (*stream) ClassThatPointsToRecursiveClassThroughAlias(ctx context.Context, 
 }
 
 // / Streaming version of ClassifyDynEnumTwo
-func (*stream) ClassifyDynEnumTwo(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*types.DynEnumTwo, types.DynEnumTwo], error) {
+func (*stream) ClassifyDynEnumTwo(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[types.DynEnumTwo, types.DynEnumTwo], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1155,7 +1155,7 @@ func (*stream) ClassifyDynEnumTwo(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1169,7 +1169,7 @@ func (*stream) ClassifyDynEnumTwo(ctx context.Context, input string, opts ...Cal
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*types.DynEnumTwo, types.DynEnumTwo])
+	channel := make(chan StreamValue[types.DynEnumTwo, types.DynEnumTwo])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -1190,13 +1190,13 @@ func (*stream) ClassifyDynEnumTwo(ctx context.Context, input string, opts ...Cal
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.DynEnumTwo)
-					channel <- StreamValue[*types.DynEnumTwo, types.DynEnumTwo]{
+					channel <- StreamValue[types.DynEnumTwo, types.DynEnumTwo]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*types.DynEnumTwo)
-					channel <- StreamValue[*types.DynEnumTwo, types.DynEnumTwo]{
+					data := *(result.StreamData).(*types.DynEnumTwo)
+					channel <- StreamValue[types.DynEnumTwo, types.DynEnumTwo]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -1208,7 +1208,7 @@ func (*stream) ClassifyDynEnumTwo(ctx context.Context, input string, opts ...Cal
 }
 
 // / Streaming version of ClassifyMessage
-func (*stream) ClassifyMessage(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*types.Category, types.Category], error) {
+func (*stream) ClassifyMessage(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[types.Category, types.Category], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1228,7 +1228,7 @@ func (*stream) ClassifyMessage(ctx context.Context, input string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1242,7 +1242,7 @@ func (*stream) ClassifyMessage(ctx context.Context, input string, opts ...CallOp
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*types.Category, types.Category])
+	channel := make(chan StreamValue[types.Category, types.Category])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -1263,13 +1263,13 @@ func (*stream) ClassifyMessage(ctx context.Context, input string, opts ...CallOp
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Category)
-					channel <- StreamValue[*types.Category, types.Category]{
+					channel <- StreamValue[types.Category, types.Category]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*types.Category)
-					channel <- StreamValue[*types.Category, types.Category]{
+					data := *(result.StreamData).(*types.Category)
+					channel <- StreamValue[types.Category, types.Category]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -1281,7 +1281,7 @@ func (*stream) ClassifyMessage(ctx context.Context, input string, opts ...CallOp
 }
 
 // / Streaming version of ClassifyMessage2
-func (*stream) ClassifyMessage2(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*types.Category, types.Category], error) {
+func (*stream) ClassifyMessage2(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[types.Category, types.Category], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1301,7 +1301,7 @@ func (*stream) ClassifyMessage2(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1315,7 +1315,7 @@ func (*stream) ClassifyMessage2(ctx context.Context, input string, opts ...CallO
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*types.Category, types.Category])
+	channel := make(chan StreamValue[types.Category, types.Category])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -1336,13 +1336,13 @@ func (*stream) ClassifyMessage2(ctx context.Context, input string, opts ...CallO
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Category)
-					channel <- StreamValue[*types.Category, types.Category]{
+					channel <- StreamValue[types.Category, types.Category]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*types.Category)
-					channel <- StreamValue[*types.Category, types.Category]{
+					data := *(result.StreamData).(*types.Category)
+					channel <- StreamValue[types.Category, types.Category]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -1354,7 +1354,7 @@ func (*stream) ClassifyMessage2(ctx context.Context, input string, opts ...CallO
 }
 
 // / Streaming version of ClassifyMessage3
-func (*stream) ClassifyMessage3(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*types.Category, types.Category], error) {
+func (*stream) ClassifyMessage3(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[types.Category, types.Category], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1374,7 +1374,7 @@ func (*stream) ClassifyMessage3(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1388,7 +1388,7 @@ func (*stream) ClassifyMessage3(ctx context.Context, input string, opts ...CallO
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*types.Category, types.Category])
+	channel := make(chan StreamValue[types.Category, types.Category])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -1409,13 +1409,13 @@ func (*stream) ClassifyMessage3(ctx context.Context, input string, opts ...CallO
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Category)
-					channel <- StreamValue[*types.Category, types.Category]{
+					channel <- StreamValue[types.Category, types.Category]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*types.Category)
-					channel <- StreamValue[*types.Category, types.Category]{
+					data := *(result.StreamData).(*types.Category)
+					channel <- StreamValue[types.Category, types.Category]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -1427,7 +1427,7 @@ func (*stream) ClassifyMessage3(ctx context.Context, input string, opts ...CallO
 }
 
 // / Streaming version of Completion
-func (*stream) Completion(ctx context.Context, prefix string, suffix string, language string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) Completion(ctx context.Context, prefix string, suffix string, language string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1447,7 +1447,7 @@ func (*stream) Completion(ctx context.Context, prefix string, suffix string, lan
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1461,7 +1461,7 @@ func (*stream) Completion(ctx context.Context, prefix string, suffix string, lan
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -1482,13 +1482,13 @@ func (*stream) Completion(ctx context.Context, prefix string, suffix string, lan
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -1500,7 +1500,7 @@ func (*stream) Completion(ctx context.Context, prefix string, suffix string, lan
 }
 
 // / Streaming version of CustomTask
-func (*stream) CustomTask(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt, types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt], error) {
+func (*stream) CustomTask(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt, types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1520,7 +1520,7 @@ func (*stream) CustomTask(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1534,7 +1534,7 @@ func (*stream) CustomTask(ctx context.Context, input string, opts ...CallOptionF
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt, types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt])
+	channel := make(chan StreamValue[stream_types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt, types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -1555,13 +1555,13 @@ func (*stream) CustomTask(ctx context.Context, input string, opts ...CallOptionF
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt)
-					channel <- StreamValue[*stream_types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt, types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt]{
+					channel <- StreamValue[stream_types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt, types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt)
-					channel <- StreamValue[*stream_types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt, types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt]{
+					data := *(result.StreamData).(*stream_types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt)
+					channel <- StreamValue[stream_types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt, types.Union3BookOrderOrFlightConfirmationOrGroceryReceipt]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -1573,7 +1573,7 @@ func (*stream) CustomTask(ctx context.Context, input string, opts ...CallOptionF
 }
 
 // / Streaming version of DescribeImage
-func (*stream) DescribeImage(ctx context.Context, img any, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) DescribeImage(ctx context.Context, img any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1593,7 +1593,7 @@ func (*stream) DescribeImage(ctx context.Context, img any, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1607,7 +1607,7 @@ func (*stream) DescribeImage(ctx context.Context, img any, opts ...CallOptionFun
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -1628,13 +1628,13 @@ func (*stream) DescribeImage(ctx context.Context, img any, opts ...CallOptionFun
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -1646,7 +1646,7 @@ func (*stream) DescribeImage(ctx context.Context, img any, opts ...CallOptionFun
 }
 
 // / Streaming version of DescribeImage2
-func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1666,7 +1666,7 @@ func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWit
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1680,7 +1680,7 @@ func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWit
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -1701,13 +1701,13 @@ func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWit
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -1719,7 +1719,7 @@ func (*stream) DescribeImage2(ctx context.Context, classWithImage types.ClassWit
 }
 
 // / Streaming version of DescribeImage3
-func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1739,7 +1739,7 @@ func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWit
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1753,7 +1753,7 @@ func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWit
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -1774,13 +1774,13 @@ func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWit
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -1792,7 +1792,7 @@ func (*stream) DescribeImage3(ctx context.Context, classWithImage types.ClassWit
 }
 
 // / Streaming version of DescribeImage4
-func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWithImage, img2 any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1812,7 +1812,7 @@ func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWit
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1826,7 +1826,7 @@ func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWit
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -1847,13 +1847,13 @@ func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWit
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -1865,7 +1865,7 @@ func (*stream) DescribeImage4(ctx context.Context, classWithImage types.ClassWit
 }
 
 // / Streaming version of DescribeMedia1599
-func (*stream) DescribeMedia1599(ctx context.Context, img any, client_sector string, client_name string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) DescribeMedia1599(ctx context.Context, img any, client_sector string, client_name string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1885,7 +1885,7 @@ func (*stream) DescribeMedia1599(ctx context.Context, img any, client_sector str
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1899,7 +1899,7 @@ func (*stream) DescribeMedia1599(ctx context.Context, img any, client_sector str
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -1920,13 +1920,13 @@ func (*stream) DescribeMedia1599(ctx context.Context, img any, client_sector str
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -1938,7 +1938,7 @@ func (*stream) DescribeMedia1599(ctx context.Context, img any, client_sector str
 }
 
 // / Streaming version of DifferentiateUnions
-func (*stream) DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.Union2OriginalAOrOriginalB, types.Union2OriginalAOrOriginalB], error) {
+func (*stream) DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Union2OriginalAOrOriginalB, types.Union2OriginalAOrOriginalB], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -1958,7 +1958,7 @@ func (*stream) DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -1972,7 +1972,7 @@ func (*stream) DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) 
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.Union2OriginalAOrOriginalB, types.Union2OriginalAOrOriginalB])
+	channel := make(chan StreamValue[stream_types.Union2OriginalAOrOriginalB, types.Union2OriginalAOrOriginalB])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -1993,13 +1993,13 @@ func (*stream) DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) 
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Union2OriginalAOrOriginalB)
-					channel <- StreamValue[*stream_types.Union2OriginalAOrOriginalB, types.Union2OriginalAOrOriginalB]{
+					channel <- StreamValue[stream_types.Union2OriginalAOrOriginalB, types.Union2OriginalAOrOriginalB]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.Union2OriginalAOrOriginalB)
-					channel <- StreamValue[*stream_types.Union2OriginalAOrOriginalB, types.Union2OriginalAOrOriginalB]{
+					data := *(result.StreamData).(*stream_types.Union2OriginalAOrOriginalB)
+					channel <- StreamValue[stream_types.Union2OriginalAOrOriginalB, types.Union2OriginalAOrOriginalB]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -2011,7 +2011,7 @@ func (*stream) DifferentiateUnions(ctx context.Context, opts ...CallOptionFunc) 
 }
 
 // / Streaming version of DummyOutputFunction
-func (*stream) DummyOutputFunction(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.DummyOutput, types.DummyOutput], error) {
+func (*stream) DummyOutputFunction(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.DummyOutput, types.DummyOutput], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2031,7 +2031,7 @@ func (*stream) DummyOutputFunction(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2045,7 +2045,7 @@ func (*stream) DummyOutputFunction(ctx context.Context, input string, opts ...Ca
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.DummyOutput, types.DummyOutput])
+	channel := make(chan StreamValue[stream_types.DummyOutput, types.DummyOutput])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -2066,13 +2066,13 @@ func (*stream) DummyOutputFunction(ctx context.Context, input string, opts ...Ca
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.DummyOutput)
-					channel <- StreamValue[*stream_types.DummyOutput, types.DummyOutput]{
+					channel <- StreamValue[stream_types.DummyOutput, types.DummyOutput]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.DummyOutput)
-					channel <- StreamValue[*stream_types.DummyOutput, types.DummyOutput]{
+					data := *(result.StreamData).(*stream_types.DummyOutput)
+					channel <- StreamValue[stream_types.DummyOutput, types.DummyOutput]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -2084,7 +2084,7 @@ func (*stream) DummyOutputFunction(ctx context.Context, input string, opts ...Ca
 }
 
 // / Streaming version of DynamicFunc
-func (*stream) DynamicFunc(ctx context.Context, input types.DynamicClassOne, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.DynamicClassTwo, types.DynamicClassTwo], error) {
+func (*stream) DynamicFunc(ctx context.Context, input types.DynamicClassOne, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.DynamicClassTwo, types.DynamicClassTwo], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2104,7 +2104,7 @@ func (*stream) DynamicFunc(ctx context.Context, input types.DynamicClassOne, opt
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2118,7 +2118,7 @@ func (*stream) DynamicFunc(ctx context.Context, input types.DynamicClassOne, opt
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.DynamicClassTwo, types.DynamicClassTwo])
+	channel := make(chan StreamValue[stream_types.DynamicClassTwo, types.DynamicClassTwo])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -2139,13 +2139,13 @@ func (*stream) DynamicFunc(ctx context.Context, input types.DynamicClassOne, opt
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.DynamicClassTwo)
-					channel <- StreamValue[*stream_types.DynamicClassTwo, types.DynamicClassTwo]{
+					channel <- StreamValue[stream_types.DynamicClassTwo, types.DynamicClassTwo]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.DynamicClassTwo)
-					channel <- StreamValue[*stream_types.DynamicClassTwo, types.DynamicClassTwo]{
+					data := *(result.StreamData).(*stream_types.DynamicClassTwo)
+					channel <- StreamValue[stream_types.DynamicClassTwo, types.DynamicClassTwo]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -2157,7 +2157,7 @@ func (*stream) DynamicFunc(ctx context.Context, input types.DynamicClassOne, opt
 }
 
 // / Streaming version of DynamicInputOutput
-func (*stream) DynamicInputOutput(ctx context.Context, input types.DynInputOutput, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.DynInputOutput, types.DynInputOutput], error) {
+func (*stream) DynamicInputOutput(ctx context.Context, input types.DynInputOutput, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.DynInputOutput, types.DynInputOutput], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2177,7 +2177,7 @@ func (*stream) DynamicInputOutput(ctx context.Context, input types.DynInputOutpu
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2191,7 +2191,7 @@ func (*stream) DynamicInputOutput(ctx context.Context, input types.DynInputOutpu
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.DynInputOutput, types.DynInputOutput])
+	channel := make(chan StreamValue[stream_types.DynInputOutput, types.DynInputOutput])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -2212,13 +2212,13 @@ func (*stream) DynamicInputOutput(ctx context.Context, input types.DynInputOutpu
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.DynInputOutput)
-					channel <- StreamValue[*stream_types.DynInputOutput, types.DynInputOutput]{
+					channel <- StreamValue[stream_types.DynInputOutput, types.DynInputOutput]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.DynInputOutput)
-					channel <- StreamValue[*stream_types.DynInputOutput, types.DynInputOutput]{
+					data := *(result.StreamData).(*stream_types.DynInputOutput)
+					channel <- StreamValue[stream_types.DynInputOutput, types.DynInputOutput]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -2230,7 +2230,7 @@ func (*stream) DynamicInputOutput(ctx context.Context, input types.DynInputOutpu
 }
 
 // / Streaming version of DynamicListInputOutput
-func (*stream) DynamicListInputOutput(ctx context.Context, input []types.DynInputOutput, opts ...CallOptionFunc) (<-chan StreamValue[*[]*stream_types.DynInputOutput, []types.DynInputOutput], error) {
+func (*stream) DynamicListInputOutput(ctx context.Context, input []types.DynInputOutput, opts ...CallOptionFunc) (<-chan StreamValue[[]stream_types.DynInputOutput, []types.DynInputOutput], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2250,7 +2250,7 @@ func (*stream) DynamicListInputOutput(ctx context.Context, input []types.DynInpu
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2264,7 +2264,7 @@ func (*stream) DynamicListInputOutput(ctx context.Context, input []types.DynInpu
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*[]*stream_types.DynInputOutput, []types.DynInputOutput])
+	channel := make(chan StreamValue[[]stream_types.DynInputOutput, []types.DynInputOutput])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -2285,13 +2285,13 @@ func (*stream) DynamicListInputOutput(ctx context.Context, input []types.DynInpu
 				}
 				if result.HasData {
 					data := (result.Data).([]types.DynInputOutput)
-					channel <- StreamValue[*[]*stream_types.DynInputOutput, []types.DynInputOutput]{
+					channel <- StreamValue[[]stream_types.DynInputOutput, []types.DynInputOutput]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*[]*stream_types.DynInputOutput)
-					channel <- StreamValue[*[]*stream_types.DynInputOutput, []types.DynInputOutput]{
+					data := (result.StreamData).([]stream_types.DynInputOutput)
+					channel <- StreamValue[[]stream_types.DynInputOutput, []types.DynInputOutput]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -2303,7 +2303,7 @@ func (*stream) DynamicListInputOutput(ctx context.Context, input []types.DynInpu
 }
 
 // / Streaming version of ExpectFailure
-func (*stream) ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2323,7 +2323,7 @@ func (*stream) ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (<-cha
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2337,7 +2337,7 @@ func (*stream) ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (<-cha
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -2358,13 +2358,13 @@ func (*stream) ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (<-cha
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -2376,7 +2376,7 @@ func (*stream) ExpectFailure(ctx context.Context, opts ...CallOptionFunc) (<-cha
 }
 
 // / Streaming version of ExtractContactInfo
-func (*stream) ExtractContactInfo(ctx context.Context, document string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.ContactInfo, types.ContactInfo], error) {
+func (*stream) ExtractContactInfo(ctx context.Context, document string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.ContactInfo, types.ContactInfo], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2396,7 +2396,7 @@ func (*stream) ExtractContactInfo(ctx context.Context, document string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2410,7 +2410,7 @@ func (*stream) ExtractContactInfo(ctx context.Context, document string, opts ...
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.ContactInfo, types.ContactInfo])
+	channel := make(chan StreamValue[stream_types.ContactInfo, types.ContactInfo])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -2431,13 +2431,13 @@ func (*stream) ExtractContactInfo(ctx context.Context, document string, opts ...
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.ContactInfo)
-					channel <- StreamValue[*stream_types.ContactInfo, types.ContactInfo]{
+					channel <- StreamValue[stream_types.ContactInfo, types.ContactInfo]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.ContactInfo)
-					channel <- StreamValue[*stream_types.ContactInfo, types.ContactInfo]{
+					data := *(result.StreamData).(*stream_types.ContactInfo)
+					channel <- StreamValue[stream_types.ContactInfo, types.ContactInfo]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -2449,7 +2449,7 @@ func (*stream) ExtractContactInfo(ctx context.Context, document string, opts ...
 }
 
 // / Streaming version of ExtractEntities
-func (*stream) ExtractEntities(ctx context.Context, text string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.DynamicSchema, types.DynamicSchema], error) {
+func (*stream) ExtractEntities(ctx context.Context, text string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.DynamicSchema, types.DynamicSchema], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2469,7 +2469,7 @@ func (*stream) ExtractEntities(ctx context.Context, text string, opts ...CallOpt
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2483,7 +2483,7 @@ func (*stream) ExtractEntities(ctx context.Context, text string, opts ...CallOpt
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.DynamicSchema, types.DynamicSchema])
+	channel := make(chan StreamValue[stream_types.DynamicSchema, types.DynamicSchema])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -2504,13 +2504,13 @@ func (*stream) ExtractEntities(ctx context.Context, text string, opts ...CallOpt
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.DynamicSchema)
-					channel <- StreamValue[*stream_types.DynamicSchema, types.DynamicSchema]{
+					channel <- StreamValue[stream_types.DynamicSchema, types.DynamicSchema]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.DynamicSchema)
-					channel <- StreamValue[*stream_types.DynamicSchema, types.DynamicSchema]{
+					data := *(result.StreamData).(*stream_types.DynamicSchema)
+					channel <- StreamValue[stream_types.DynamicSchema, types.DynamicSchema]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -2522,7 +2522,7 @@ func (*stream) ExtractEntities(ctx context.Context, text string, opts ...CallOpt
 }
 
 // / Streaming version of ExtractHobby
-func (*stream) ExtractHobby(ctx context.Context, text string, opts ...CallOptionFunc) (<-chan StreamValue[*[]*types.Hobby, []types.Hobby], error) {
+func (*stream) ExtractHobby(ctx context.Context, text string, opts ...CallOptionFunc) (<-chan StreamValue[[]types.Hobby, []types.Hobby], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2542,7 +2542,7 @@ func (*stream) ExtractHobby(ctx context.Context, text string, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2556,7 +2556,7 @@ func (*stream) ExtractHobby(ctx context.Context, text string, opts ...CallOption
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*[]*types.Hobby, []types.Hobby])
+	channel := make(chan StreamValue[[]types.Hobby, []types.Hobby])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -2577,13 +2577,13 @@ func (*stream) ExtractHobby(ctx context.Context, text string, opts ...CallOption
 				}
 				if result.HasData {
 					data := (result.Data).([]types.Hobby)
-					channel <- StreamValue[*[]*types.Hobby, []types.Hobby]{
+					channel <- StreamValue[[]types.Hobby, []types.Hobby]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*[]*types.Hobby)
-					channel <- StreamValue[*[]*types.Hobby, []types.Hobby]{
+					data := (result.StreamData).([]types.Hobby)
+					channel <- StreamValue[[]types.Hobby, []types.Hobby]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -2595,7 +2595,7 @@ func (*stream) ExtractHobby(ctx context.Context, text string, opts ...CallOption
 }
 
 // / Streaming version of ExtractNames
-func (*stream) ExtractNames(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*[]*string, []string], error) {
+func (*stream) ExtractNames(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]string, []string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2615,7 +2615,7 @@ func (*stream) ExtractNames(ctx context.Context, input string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2629,7 +2629,7 @@ func (*stream) ExtractNames(ctx context.Context, input string, opts ...CallOptio
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*[]*string, []string])
+	channel := make(chan StreamValue[[]string, []string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -2650,13 +2650,13 @@ func (*stream) ExtractNames(ctx context.Context, input string, opts ...CallOptio
 				}
 				if result.HasData {
 					data := (result.Data).([]string)
-					channel <- StreamValue[*[]*string, []string]{
+					channel <- StreamValue[[]string, []string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*[]*string)
-					channel <- StreamValue[*[]*string, []string]{
+					data := (result.StreamData).([]string)
+					channel <- StreamValue[[]string, []string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -2668,7 +2668,7 @@ func (*stream) ExtractNames(ctx context.Context, input string, opts ...CallOptio
 }
 
 // / Streaming version of ExtractPeople
-func (*stream) ExtractPeople(ctx context.Context, text string, opts ...CallOptionFunc) (<-chan StreamValue[*[]*stream_types.Person, []types.Person], error) {
+func (*stream) ExtractPeople(ctx context.Context, text string, opts ...CallOptionFunc) (<-chan StreamValue[[]stream_types.Person, []types.Person], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2688,7 +2688,7 @@ func (*stream) ExtractPeople(ctx context.Context, text string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2702,7 +2702,7 @@ func (*stream) ExtractPeople(ctx context.Context, text string, opts ...CallOptio
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*[]*stream_types.Person, []types.Person])
+	channel := make(chan StreamValue[[]stream_types.Person, []types.Person])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -2723,13 +2723,13 @@ func (*stream) ExtractPeople(ctx context.Context, text string, opts ...CallOptio
 				}
 				if result.HasData {
 					data := (result.Data).([]types.Person)
-					channel <- StreamValue[*[]*stream_types.Person, []types.Person]{
+					channel <- StreamValue[[]stream_types.Person, []types.Person]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*[]*stream_types.Person)
-					channel <- StreamValue[*[]*stream_types.Person, []types.Person]{
+					data := (result.StreamData).([]stream_types.Person)
+					channel <- StreamValue[[]stream_types.Person, []types.Person]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -2741,7 +2741,7 @@ func (*stream) ExtractPeople(ctx context.Context, text string, opts ...CallOptio
 }
 
 // / Streaming version of ExtractReceiptInfo
-func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason types.Union2KcuriosityOrKpersonal_finance, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.ReceiptInfo, types.ReceiptInfo], error) {
+func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason types.Union2KcuriosityOrKpersonal_finance, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.ReceiptInfo, types.ReceiptInfo], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2761,7 +2761,7 @@ func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason type
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2775,7 +2775,7 @@ func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason type
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.ReceiptInfo, types.ReceiptInfo])
+	channel := make(chan StreamValue[stream_types.ReceiptInfo, types.ReceiptInfo])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -2796,13 +2796,13 @@ func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason type
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.ReceiptInfo)
-					channel <- StreamValue[*stream_types.ReceiptInfo, types.ReceiptInfo]{
+					channel <- StreamValue[stream_types.ReceiptInfo, types.ReceiptInfo]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.ReceiptInfo)
-					channel <- StreamValue[*stream_types.ReceiptInfo, types.ReceiptInfo]{
+					data := *(result.StreamData).(*stream_types.ReceiptInfo)
+					channel <- StreamValue[stream_types.ReceiptInfo, types.ReceiptInfo]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -2814,7 +2814,7 @@ func (*stream) ExtractReceiptInfo(ctx context.Context, email string, reason type
 }
 
 // / Streaming version of ExtractResume
-func (*stream) ExtractResume(ctx context.Context, resume string, img *any, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.Resume, types.Resume], error) {
+func (*stream) ExtractResume(ctx context.Context, resume string, img *any, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Resume, types.Resume], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2834,7 +2834,7 @@ func (*stream) ExtractResume(ctx context.Context, resume string, img *any, opts 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2848,7 +2848,7 @@ func (*stream) ExtractResume(ctx context.Context, resume string, img *any, opts 
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.Resume, types.Resume])
+	channel := make(chan StreamValue[stream_types.Resume, types.Resume])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -2869,13 +2869,13 @@ func (*stream) ExtractResume(ctx context.Context, resume string, img *any, opts 
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Resume)
-					channel <- StreamValue[*stream_types.Resume, types.Resume]{
+					channel <- StreamValue[stream_types.Resume, types.Resume]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.Resume)
-					channel <- StreamValue[*stream_types.Resume, types.Resume]{
+					data := *(result.StreamData).(*stream_types.Resume)
+					channel <- StreamValue[stream_types.Resume, types.Resume]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -2887,7 +2887,7 @@ func (*stream) ExtractResume(ctx context.Context, resume string, img *any, opts 
 }
 
 // / Streaming version of ExtractResume2
-func (*stream) ExtractResume2(ctx context.Context, resume string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.Resume, types.Resume], error) {
+func (*stream) ExtractResume2(ctx context.Context, resume string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Resume, types.Resume], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -2907,7 +2907,7 @@ func (*stream) ExtractResume2(ctx context.Context, resume string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -2921,7 +2921,7 @@ func (*stream) ExtractResume2(ctx context.Context, resume string, opts ...CallOp
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.Resume, types.Resume])
+	channel := make(chan StreamValue[stream_types.Resume, types.Resume])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -2942,13 +2942,13 @@ func (*stream) ExtractResume2(ctx context.Context, resume string, opts ...CallOp
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Resume)
-					channel <- StreamValue[*stream_types.Resume, types.Resume]{
+					channel <- StreamValue[stream_types.Resume, types.Resume]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.Resume)
-					channel <- StreamValue[*stream_types.Resume, types.Resume]{
+					data := *(result.StreamData).(*stream_types.Resume)
+					channel <- StreamValue[stream_types.Resume, types.Resume]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -2980,7 +2980,7 @@ func (*stream) FnClassOptionalOutput(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3053,7 +3053,7 @@ func (*stream) FnClassOptionalOutput2(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3106,7 +3106,7 @@ func (*stream) FnClassOptionalOutput2(ctx context.Context, input string, opts ..
 }
 
 // / Streaming version of FnEnumListOutput
-func (*stream) FnEnumListOutput(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*[]*types.EnumOutput, []types.EnumOutput], error) {
+func (*stream) FnEnumListOutput(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]types.EnumOutput, []types.EnumOutput], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -3126,7 +3126,7 @@ func (*stream) FnEnumListOutput(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3140,7 +3140,7 @@ func (*stream) FnEnumListOutput(ctx context.Context, input string, opts ...CallO
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*[]*types.EnumOutput, []types.EnumOutput])
+	channel := make(chan StreamValue[[]types.EnumOutput, []types.EnumOutput])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -3161,13 +3161,13 @@ func (*stream) FnEnumListOutput(ctx context.Context, input string, opts ...CallO
 				}
 				if result.HasData {
 					data := (result.Data).([]types.EnumOutput)
-					channel <- StreamValue[*[]*types.EnumOutput, []types.EnumOutput]{
+					channel <- StreamValue[[]types.EnumOutput, []types.EnumOutput]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*[]*types.EnumOutput)
-					channel <- StreamValue[*[]*types.EnumOutput, []types.EnumOutput]{
+					data := (result.StreamData).([]types.EnumOutput)
+					channel <- StreamValue[[]types.EnumOutput, []types.EnumOutput]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -3179,7 +3179,7 @@ func (*stream) FnEnumListOutput(ctx context.Context, input string, opts ...CallO
 }
 
 // / Streaming version of FnEnumOutput
-func (*stream) FnEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*types.EnumOutput, types.EnumOutput], error) {
+func (*stream) FnEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[types.EnumOutput, types.EnumOutput], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -3199,7 +3199,7 @@ func (*stream) FnEnumOutput(ctx context.Context, input string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3213,7 +3213,7 @@ func (*stream) FnEnumOutput(ctx context.Context, input string, opts ...CallOptio
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*types.EnumOutput, types.EnumOutput])
+	channel := make(chan StreamValue[types.EnumOutput, types.EnumOutput])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -3234,13 +3234,13 @@ func (*stream) FnEnumOutput(ctx context.Context, input string, opts ...CallOptio
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.EnumOutput)
-					channel <- StreamValue[*types.EnumOutput, types.EnumOutput]{
+					channel <- StreamValue[types.EnumOutput, types.EnumOutput]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*types.EnumOutput)
-					channel <- StreamValue[*types.EnumOutput, types.EnumOutput]{
+					data := *(result.StreamData).(*types.EnumOutput)
+					channel <- StreamValue[types.EnumOutput, types.EnumOutput]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -3252,7 +3252,7 @@ func (*stream) FnEnumOutput(ctx context.Context, input string, opts ...CallOptio
 }
 
 // / Streaming version of FnLiteralClassInputOutput
-func (*stream) FnLiteralClassInputOutput(ctx context.Context, input types.LiteralClassHello, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.LiteralClassHello, types.LiteralClassHello], error) {
+func (*stream) FnLiteralClassInputOutput(ctx context.Context, input types.LiteralClassHello, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.LiteralClassHello, types.LiteralClassHello], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -3272,7 +3272,7 @@ func (*stream) FnLiteralClassInputOutput(ctx context.Context, input types.Litera
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3286,7 +3286,7 @@ func (*stream) FnLiteralClassInputOutput(ctx context.Context, input types.Litera
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.LiteralClassHello, types.LiteralClassHello])
+	channel := make(chan StreamValue[stream_types.LiteralClassHello, types.LiteralClassHello])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -3307,13 +3307,13 @@ func (*stream) FnLiteralClassInputOutput(ctx context.Context, input types.Litera
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.LiteralClassHello)
-					channel <- StreamValue[*stream_types.LiteralClassHello, types.LiteralClassHello]{
+					channel <- StreamValue[stream_types.LiteralClassHello, types.LiteralClassHello]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.LiteralClassHello)
-					channel <- StreamValue[*stream_types.LiteralClassHello, types.LiteralClassHello]{
+					data := *(result.StreamData).(*stream_types.LiteralClassHello)
+					channel <- StreamValue[stream_types.LiteralClassHello, types.LiteralClassHello]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -3325,7 +3325,7 @@ func (*stream) FnLiteralClassInputOutput(ctx context.Context, input types.Litera
 }
 
 // / Streaming version of FnLiteralUnionClassInputOutput
-func (*stream) FnLiteralUnionClassInputOutput(ctx context.Context, input types.Union2LiteralClassOneOrLiteralClassTwo, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.Union2LiteralClassOneOrLiteralClassTwo, types.Union2LiteralClassOneOrLiteralClassTwo], error) {
+func (*stream) FnLiteralUnionClassInputOutput(ctx context.Context, input types.Union2LiteralClassOneOrLiteralClassTwo, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Union2LiteralClassOneOrLiteralClassTwo, types.Union2LiteralClassOneOrLiteralClassTwo], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -3345,7 +3345,7 @@ func (*stream) FnLiteralUnionClassInputOutput(ctx context.Context, input types.U
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3359,7 +3359,7 @@ func (*stream) FnLiteralUnionClassInputOutput(ctx context.Context, input types.U
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.Union2LiteralClassOneOrLiteralClassTwo, types.Union2LiteralClassOneOrLiteralClassTwo])
+	channel := make(chan StreamValue[stream_types.Union2LiteralClassOneOrLiteralClassTwo, types.Union2LiteralClassOneOrLiteralClassTwo])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -3380,13 +3380,13 @@ func (*stream) FnLiteralUnionClassInputOutput(ctx context.Context, input types.U
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Union2LiteralClassOneOrLiteralClassTwo)
-					channel <- StreamValue[*stream_types.Union2LiteralClassOneOrLiteralClassTwo, types.Union2LiteralClassOneOrLiteralClassTwo]{
+					channel <- StreamValue[stream_types.Union2LiteralClassOneOrLiteralClassTwo, types.Union2LiteralClassOneOrLiteralClassTwo]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.Union2LiteralClassOneOrLiteralClassTwo)
-					channel <- StreamValue[*stream_types.Union2LiteralClassOneOrLiteralClassTwo, types.Union2LiteralClassOneOrLiteralClassTwo]{
+					data := *(result.StreamData).(*stream_types.Union2LiteralClassOneOrLiteralClassTwo)
+					channel <- StreamValue[stream_types.Union2LiteralClassOneOrLiteralClassTwo, types.Union2LiteralClassOneOrLiteralClassTwo]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -3398,7 +3398,7 @@ func (*stream) FnLiteralUnionClassInputOutput(ctx context.Context, input types.U
 }
 
 // / Streaming version of FnNamedArgsSingleStringOptional
-func (*stream) FnNamedArgsSingleStringOptional(ctx context.Context, myString *string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) FnNamedArgsSingleStringOptional(ctx context.Context, myString *string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -3418,7 +3418,7 @@ func (*stream) FnNamedArgsSingleStringOptional(ctx context.Context, myString *st
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3432,7 +3432,7 @@ func (*stream) FnNamedArgsSingleStringOptional(ctx context.Context, myString *st
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -3453,13 +3453,13 @@ func (*stream) FnNamedArgsSingleStringOptional(ctx context.Context, myString *st
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -3471,7 +3471,7 @@ func (*stream) FnNamedArgsSingleStringOptional(ctx context.Context, myString *st
 }
 
 // / Streaming version of FnOutputBool
-func (*stream) FnOutputBool(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*bool, bool], error) {
+func (*stream) FnOutputBool(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[bool, bool], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -3491,7 +3491,7 @@ func (*stream) FnOutputBool(ctx context.Context, input string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3505,7 +3505,7 @@ func (*stream) FnOutputBool(ctx context.Context, input string, opts ...CallOptio
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*bool, bool])
+	channel := make(chan StreamValue[bool, bool])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -3526,13 +3526,13 @@ func (*stream) FnOutputBool(ctx context.Context, input string, opts ...CallOptio
 				}
 				if result.HasData {
 					data := *(result.Data).(*bool)
-					channel <- StreamValue[*bool, bool]{
+					channel <- StreamValue[bool, bool]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*bool)
-					channel <- StreamValue[*bool, bool]{
+					data := *(result.StreamData).(*bool)
+					channel <- StreamValue[bool, bool]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -3544,7 +3544,7 @@ func (*stream) FnOutputBool(ctx context.Context, input string, opts ...CallOptio
 }
 
 // / Streaming version of FnOutputClass
-func (*stream) FnOutputClass(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.TestOutputClass, types.TestOutputClass], error) {
+func (*stream) FnOutputClass(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.TestOutputClass, types.TestOutputClass], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -3564,7 +3564,7 @@ func (*stream) FnOutputClass(ctx context.Context, input string, opts ...CallOpti
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3578,7 +3578,7 @@ func (*stream) FnOutputClass(ctx context.Context, input string, opts ...CallOpti
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.TestOutputClass, types.TestOutputClass])
+	channel := make(chan StreamValue[stream_types.TestOutputClass, types.TestOutputClass])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -3599,13 +3599,13 @@ func (*stream) FnOutputClass(ctx context.Context, input string, opts ...CallOpti
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.TestOutputClass)
-					channel <- StreamValue[*stream_types.TestOutputClass, types.TestOutputClass]{
+					channel <- StreamValue[stream_types.TestOutputClass, types.TestOutputClass]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.TestOutputClass)
-					channel <- StreamValue[*stream_types.TestOutputClass, types.TestOutputClass]{
+					data := *(result.StreamData).(*stream_types.TestOutputClass)
+					channel <- StreamValue[stream_types.TestOutputClass, types.TestOutputClass]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -3617,7 +3617,7 @@ func (*stream) FnOutputClass(ctx context.Context, input string, opts ...CallOpti
 }
 
 // / Streaming version of FnOutputClassList
-func (*stream) FnOutputClassList(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*[]*stream_types.TestOutputClass, []types.TestOutputClass], error) {
+func (*stream) FnOutputClassList(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]stream_types.TestOutputClass, []types.TestOutputClass], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -3637,7 +3637,7 @@ func (*stream) FnOutputClassList(ctx context.Context, input string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3651,7 +3651,7 @@ func (*stream) FnOutputClassList(ctx context.Context, input string, opts ...Call
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*[]*stream_types.TestOutputClass, []types.TestOutputClass])
+	channel := make(chan StreamValue[[]stream_types.TestOutputClass, []types.TestOutputClass])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -3672,13 +3672,13 @@ func (*stream) FnOutputClassList(ctx context.Context, input string, opts ...Call
 				}
 				if result.HasData {
 					data := (result.Data).([]types.TestOutputClass)
-					channel <- StreamValue[*[]*stream_types.TestOutputClass, []types.TestOutputClass]{
+					channel <- StreamValue[[]stream_types.TestOutputClass, []types.TestOutputClass]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*[]*stream_types.TestOutputClass)
-					channel <- StreamValue[*[]*stream_types.TestOutputClass, []types.TestOutputClass]{
+					data := (result.StreamData).([]stream_types.TestOutputClass)
+					channel <- StreamValue[[]stream_types.TestOutputClass, []types.TestOutputClass]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -3690,7 +3690,7 @@ func (*stream) FnOutputClassList(ctx context.Context, input string, opts ...Call
 }
 
 // / Streaming version of FnOutputClassNested
-func (*stream) FnOutputClassNested(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.TestClassNested, types.TestClassNested], error) {
+func (*stream) FnOutputClassNested(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.TestClassNested, types.TestClassNested], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -3710,7 +3710,7 @@ func (*stream) FnOutputClassNested(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3724,7 +3724,7 @@ func (*stream) FnOutputClassNested(ctx context.Context, input string, opts ...Ca
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.TestClassNested, types.TestClassNested])
+	channel := make(chan StreamValue[stream_types.TestClassNested, types.TestClassNested])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -3745,13 +3745,13 @@ func (*stream) FnOutputClassNested(ctx context.Context, input string, opts ...Ca
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.TestClassNested)
-					channel <- StreamValue[*stream_types.TestClassNested, types.TestClassNested]{
+					channel <- StreamValue[stream_types.TestClassNested, types.TestClassNested]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.TestClassNested)
-					channel <- StreamValue[*stream_types.TestClassNested, types.TestClassNested]{
+					data := *(result.StreamData).(*stream_types.TestClassNested)
+					channel <- StreamValue[stream_types.TestClassNested, types.TestClassNested]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -3763,7 +3763,7 @@ func (*stream) FnOutputClassNested(ctx context.Context, input string, opts ...Ca
 }
 
 // / Streaming version of FnOutputClassWithEnum
-func (*stream) FnOutputClassWithEnum(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.TestClassWithEnum, types.TestClassWithEnum], error) {
+func (*stream) FnOutputClassWithEnum(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.TestClassWithEnum, types.TestClassWithEnum], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -3783,7 +3783,7 @@ func (*stream) FnOutputClassWithEnum(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3797,7 +3797,7 @@ func (*stream) FnOutputClassWithEnum(ctx context.Context, input string, opts ...
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.TestClassWithEnum, types.TestClassWithEnum])
+	channel := make(chan StreamValue[stream_types.TestClassWithEnum, types.TestClassWithEnum])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -3818,13 +3818,13 @@ func (*stream) FnOutputClassWithEnum(ctx context.Context, input string, opts ...
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.TestClassWithEnum)
-					channel <- StreamValue[*stream_types.TestClassWithEnum, types.TestClassWithEnum]{
+					channel <- StreamValue[stream_types.TestClassWithEnum, types.TestClassWithEnum]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.TestClassWithEnum)
-					channel <- StreamValue[*stream_types.TestClassWithEnum, types.TestClassWithEnum]{
+					data := *(result.StreamData).(*stream_types.TestClassWithEnum)
+					channel <- StreamValue[stream_types.TestClassWithEnum, types.TestClassWithEnum]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -3836,7 +3836,7 @@ func (*stream) FnOutputClassWithEnum(ctx context.Context, input string, opts ...
 }
 
 // / Streaming version of FnOutputInt
-func (*stream) FnOutputInt(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*int64, int64], error) {
+func (*stream) FnOutputInt(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[int64, int64], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -3856,7 +3856,7 @@ func (*stream) FnOutputInt(ctx context.Context, input string, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3870,7 +3870,7 @@ func (*stream) FnOutputInt(ctx context.Context, input string, opts ...CallOption
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*int64, int64])
+	channel := make(chan StreamValue[int64, int64])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -3891,13 +3891,13 @@ func (*stream) FnOutputInt(ctx context.Context, input string, opts ...CallOption
 				}
 				if result.HasData {
 					data := *(result.Data).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					data := *(result.StreamData).(*int64)
+					channel <- StreamValue[int64, int64]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -3909,7 +3909,7 @@ func (*stream) FnOutputInt(ctx context.Context, input string, opts ...CallOption
 }
 
 // / Streaming version of FnOutputLiteralBool
-func (*stream) FnOutputLiteralBool(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*bool, bool], error) {
+func (*stream) FnOutputLiteralBool(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[bool, bool], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -3929,7 +3929,7 @@ func (*stream) FnOutputLiteralBool(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -3943,7 +3943,7 @@ func (*stream) FnOutputLiteralBool(ctx context.Context, input string, opts ...Ca
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*bool, bool])
+	channel := make(chan StreamValue[bool, bool])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -3964,13 +3964,13 @@ func (*stream) FnOutputLiteralBool(ctx context.Context, input string, opts ...Ca
 				}
 				if result.HasData {
 					data := *(result.Data).(*bool)
-					channel <- StreamValue[*bool, bool]{
+					channel <- StreamValue[bool, bool]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*bool)
-					channel <- StreamValue[*bool, bool]{
+					data := *(result.StreamData).(*bool)
+					channel <- StreamValue[bool, bool]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -3982,7 +3982,7 @@ func (*stream) FnOutputLiteralBool(ctx context.Context, input string, opts ...Ca
 }
 
 // / Streaming version of FnOutputLiteralInt
-func (*stream) FnOutputLiteralInt(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*int64, int64], error) {
+func (*stream) FnOutputLiteralInt(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[int64, int64], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4002,7 +4002,7 @@ func (*stream) FnOutputLiteralInt(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4016,7 +4016,7 @@ func (*stream) FnOutputLiteralInt(ctx context.Context, input string, opts ...Cal
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*int64, int64])
+	channel := make(chan StreamValue[int64, int64])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -4037,13 +4037,13 @@ func (*stream) FnOutputLiteralInt(ctx context.Context, input string, opts ...Cal
 				}
 				if result.HasData {
 					data := *(result.Data).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					data := *(result.StreamData).(*int64)
+					channel <- StreamValue[int64, int64]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -4055,7 +4055,7 @@ func (*stream) FnOutputLiteralInt(ctx context.Context, input string, opts ...Cal
 }
 
 // / Streaming version of FnOutputLiteralString
-func (*stream) FnOutputLiteralString(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) FnOutputLiteralString(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4075,7 +4075,7 @@ func (*stream) FnOutputLiteralString(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4089,7 +4089,7 @@ func (*stream) FnOutputLiteralString(ctx context.Context, input string, opts ...
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -4110,13 +4110,13 @@ func (*stream) FnOutputLiteralString(ctx context.Context, input string, opts ...
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -4128,7 +4128,7 @@ func (*stream) FnOutputLiteralString(ctx context.Context, input string, opts ...
 }
 
 // / Streaming version of FnOutputStringList
-func (*stream) FnOutputStringList(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*[]*string, []string], error) {
+func (*stream) FnOutputStringList(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]string, []string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4148,7 +4148,7 @@ func (*stream) FnOutputStringList(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4162,7 +4162,7 @@ func (*stream) FnOutputStringList(ctx context.Context, input string, opts ...Cal
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*[]*string, []string])
+	channel := make(chan StreamValue[[]string, []string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -4183,13 +4183,13 @@ func (*stream) FnOutputStringList(ctx context.Context, input string, opts ...Cal
 				}
 				if result.HasData {
 					data := (result.Data).([]string)
-					channel <- StreamValue[*[]*string, []string]{
+					channel <- StreamValue[[]string, []string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*[]*string)
-					channel <- StreamValue[*[]*string, []string]{
+					data := (result.StreamData).([]string)
+					channel <- StreamValue[[]string, []string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -4201,7 +4201,7 @@ func (*stream) FnOutputStringList(ctx context.Context, input string, opts ...Cal
 }
 
 // / Streaming version of FnTestAliasedEnumOutput
-func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*types.TestEnum, types.TestEnum], error) {
+func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[types.TestEnum, types.TestEnum], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4221,7 +4221,7 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4235,7 +4235,7 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts .
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*types.TestEnum, types.TestEnum])
+	channel := make(chan StreamValue[types.TestEnum, types.TestEnum])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -4256,13 +4256,13 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts .
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.TestEnum)
-					channel <- StreamValue[*types.TestEnum, types.TestEnum]{
+					channel <- StreamValue[types.TestEnum, types.TestEnum]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*types.TestEnum)
-					channel <- StreamValue[*types.TestEnum, types.TestEnum]{
+					data := *(result.StreamData).(*types.TestEnum)
+					channel <- StreamValue[types.TestEnum, types.TestEnum]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -4274,7 +4274,7 @@ func (*stream) FnTestAliasedEnumOutput(ctx context.Context, input string, opts .
 }
 
 // / Streaming version of FnTestClassAlias
-func (*stream) FnTestClassAlias(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.TestClassAlias, types.TestClassAlias], error) {
+func (*stream) FnTestClassAlias(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.TestClassAlias, types.TestClassAlias], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4294,7 +4294,7 @@ func (*stream) FnTestClassAlias(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4308,7 +4308,7 @@ func (*stream) FnTestClassAlias(ctx context.Context, input string, opts ...CallO
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.TestClassAlias, types.TestClassAlias])
+	channel := make(chan StreamValue[stream_types.TestClassAlias, types.TestClassAlias])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -4329,13 +4329,13 @@ func (*stream) FnTestClassAlias(ctx context.Context, input string, opts ...CallO
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.TestClassAlias)
-					channel <- StreamValue[*stream_types.TestClassAlias, types.TestClassAlias]{
+					channel <- StreamValue[stream_types.TestClassAlias, types.TestClassAlias]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.TestClassAlias)
-					channel <- StreamValue[*stream_types.TestClassAlias, types.TestClassAlias]{
+					data := *(result.StreamData).(*stream_types.TestClassAlias)
+					channel <- StreamValue[stream_types.TestClassAlias, types.TestClassAlias]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -4347,7 +4347,7 @@ func (*stream) FnTestClassAlias(ctx context.Context, input string, opts ...CallO
 }
 
 // / Streaming version of FnTestNamedArgsSingleEnum
-func (*stream) FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedArgsSingleEnum, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedArgsSingleEnum, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4367,7 +4367,7 @@ func (*stream) FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedA
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4381,7 +4381,7 @@ func (*stream) FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedA
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -4402,13 +4402,13 @@ func (*stream) FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedA
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -4420,7 +4420,7 @@ func (*stream) FnTestNamedArgsSingleEnum(ctx context.Context, myArg types.NamedA
 }
 
 // / Streaming version of GetDataType
-func (*stream) GetDataType(ctx context.Context, text string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.RaysData, types.RaysData], error) {
+func (*stream) GetDataType(ctx context.Context, text string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.RaysData, types.RaysData], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4440,7 +4440,7 @@ func (*stream) GetDataType(ctx context.Context, text string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4454,7 +4454,7 @@ func (*stream) GetDataType(ctx context.Context, text string, opts ...CallOptionF
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.RaysData, types.RaysData])
+	channel := make(chan StreamValue[stream_types.RaysData, types.RaysData])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -4475,13 +4475,13 @@ func (*stream) GetDataType(ctx context.Context, text string, opts ...CallOptionF
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.RaysData)
-					channel <- StreamValue[*stream_types.RaysData, types.RaysData]{
+					channel <- StreamValue[stream_types.RaysData, types.RaysData]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.RaysData)
-					channel <- StreamValue[*stream_types.RaysData, types.RaysData]{
+					data := *(result.StreamData).(*stream_types.RaysData)
+					channel <- StreamValue[stream_types.RaysData, types.RaysData]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -4493,7 +4493,7 @@ func (*stream) GetDataType(ctx context.Context, text string, opts ...CallOptionF
 }
 
 // / Streaming version of GetOrderInfo
-func (*stream) GetOrderInfo(ctx context.Context, email types.Email, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.OrderInfo, types.OrderInfo], error) {
+func (*stream) GetOrderInfo(ctx context.Context, email types.Email, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.OrderInfo, types.OrderInfo], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4513,7 +4513,7 @@ func (*stream) GetOrderInfo(ctx context.Context, email types.Email, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4527,7 +4527,7 @@ func (*stream) GetOrderInfo(ctx context.Context, email types.Email, opts ...Call
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.OrderInfo, types.OrderInfo])
+	channel := make(chan StreamValue[stream_types.OrderInfo, types.OrderInfo])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -4548,13 +4548,13 @@ func (*stream) GetOrderInfo(ctx context.Context, email types.Email, opts ...Call
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.OrderInfo)
-					channel <- StreamValue[*stream_types.OrderInfo, types.OrderInfo]{
+					channel <- StreamValue[stream_types.OrderInfo, types.OrderInfo]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.OrderInfo)
-					channel <- StreamValue[*stream_types.OrderInfo, types.OrderInfo]{
+					data := *(result.StreamData).(*stream_types.OrderInfo)
+					channel <- StreamValue[stream_types.OrderInfo, types.OrderInfo]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -4566,7 +4566,7 @@ func (*stream) GetOrderInfo(ctx context.Context, email types.Email, opts ...Call
 }
 
 // / Streaming version of GetQuery
-func (*stream) GetQuery(ctx context.Context, query string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.SearchParams, types.SearchParams], error) {
+func (*stream) GetQuery(ctx context.Context, query string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.SearchParams, types.SearchParams], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4586,7 +4586,7 @@ func (*stream) GetQuery(ctx context.Context, query string, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4600,7 +4600,7 @@ func (*stream) GetQuery(ctx context.Context, query string, opts ...CallOptionFun
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.SearchParams, types.SearchParams])
+	channel := make(chan StreamValue[stream_types.SearchParams, types.SearchParams])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -4621,13 +4621,13 @@ func (*stream) GetQuery(ctx context.Context, query string, opts ...CallOptionFun
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.SearchParams)
-					channel <- StreamValue[*stream_types.SearchParams, types.SearchParams]{
+					channel <- StreamValue[stream_types.SearchParams, types.SearchParams]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.SearchParams)
-					channel <- StreamValue[*stream_types.SearchParams, types.SearchParams]{
+					data := *(result.StreamData).(*stream_types.SearchParams)
+					channel <- StreamValue[stream_types.SearchParams, types.SearchParams]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -4639,7 +4639,7 @@ func (*stream) GetQuery(ctx context.Context, query string, opts ...CallOptionFun
 }
 
 // / Streaming version of InOutEnumMapKey
-func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, i2 map[types.MapKey]string, opts ...CallOptionFunc) (<-chan StreamValue[*map[types.MapKey]*string, map[types.MapKey]string], error) {
+func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, i2 map[types.MapKey]string, opts ...CallOptionFunc) (<-chan StreamValue[map[types.MapKey]string, map[types.MapKey]string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4659,7 +4659,7 @@ func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4673,7 +4673,7 @@ func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, 
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*map[types.MapKey]*string, map[types.MapKey]string])
+	channel := make(chan StreamValue[map[types.MapKey]string, map[types.MapKey]string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -4694,13 +4694,13 @@ func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, 
 				}
 				if result.HasData {
 					data := (result.Data).(map[types.MapKey]string)
-					channel <- StreamValue[*map[types.MapKey]*string, map[types.MapKey]string]{
+					channel <- StreamValue[map[types.MapKey]string, map[types.MapKey]string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*map[types.MapKey]*string)
-					channel <- StreamValue[*map[types.MapKey]*string, map[types.MapKey]string]{
+					data := (result.StreamData).(map[types.MapKey]string)
+					channel <- StreamValue[map[types.MapKey]string, map[types.MapKey]string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -4712,7 +4712,7 @@ func (*stream) InOutEnumMapKey(ctx context.Context, i1 map[types.MapKey]string, 
 }
 
 // / Streaming version of InOutLiteralStringUnionMapKey
-func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, i2 map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, opts ...CallOptionFunc) (<-chan StreamValue[*map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]*string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string], error) {
+func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, i2 map[types.Union4KfourOrKoneOrKthreeOrKtwo]string, opts ...CallOptionFunc) (<-chan StreamValue[map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4732,7 +4732,7 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4746,7 +4746,7 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]*string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string])
+	channel := make(chan StreamValue[map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -4767,13 +4767,13 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 				}
 				if result.HasData {
 					data := (result.Data).(map[types.Union4KfourOrKoneOrKthreeOrKtwo]string)
-					channel <- StreamValue[*map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]*string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string]{
+					channel <- StreamValue[map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]*string)
-					channel <- StreamValue[*map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]*string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string]{
+					data := (result.StreamData).(map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]string)
+					channel <- StreamValue[map[stream_types.Union4KfourOrKoneOrKthreeOrKtwo]string, map[types.Union4KfourOrKoneOrKthreeOrKtwo]string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -4785,7 +4785,7 @@ func (*stream) InOutLiteralStringUnionMapKey(ctx context.Context, i1 map[types.U
 }
 
 // / Streaming version of InOutSingleLiteralStringMapKey
-func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]string, opts ...CallOptionFunc) (<-chan StreamValue[*map[string]*string, map[string]string], error) {
+func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]string, opts ...CallOptionFunc) (<-chan StreamValue[map[string]string, map[string]string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4805,7 +4805,7 @@ func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4819,7 +4819,7 @@ func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*map[string]*string, map[string]string])
+	channel := make(chan StreamValue[map[string]string, map[string]string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -4840,13 +4840,13 @@ func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]
 				}
 				if result.HasData {
 					data := (result.Data).(map[string]string)
-					channel <- StreamValue[*map[string]*string, map[string]string]{
+					channel <- StreamValue[map[string]string, map[string]string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*map[string]*string)
-					channel <- StreamValue[*map[string]*string, map[string]string]{
+					data := (result.StreamData).(map[string]string)
+					channel <- StreamValue[map[string]string, map[string]string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -4858,7 +4858,7 @@ func (*stream) InOutSingleLiteralStringMapKey(ctx context.Context, m map[string]
 }
 
 // / Streaming version of JsonTypeAliasCycle
-func (*stream) JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.JsonValue, types.JsonValue], error) {
+func (*stream) JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.JsonValue, types.JsonValue], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4878,7 +4878,7 @@ func (*stream) JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, op
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4892,7 +4892,7 @@ func (*stream) JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, op
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.JsonValue, types.JsonValue])
+	channel := make(chan StreamValue[stream_types.JsonValue, types.JsonValue])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -4913,13 +4913,13 @@ func (*stream) JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, op
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.JsonValue)
-					channel <- StreamValue[*stream_types.JsonValue, types.JsonValue]{
+					channel <- StreamValue[stream_types.JsonValue, types.JsonValue]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(**stream_types.JsonValue)
-					channel <- StreamValue[*stream_types.JsonValue, types.JsonValue]{
+					data := *(result.StreamData).(*stream_types.JsonValue)
+					channel <- StreamValue[stream_types.JsonValue, types.JsonValue]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -4931,7 +4931,7 @@ func (*stream) JsonTypeAliasCycle(ctx context.Context, input types.JsonValue, op
 }
 
 // / Streaming version of LLMEcho
-func (*stream) LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -4951,7 +4951,7 @@ func (*stream) LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -4965,7 +4965,7 @@ func (*stream) LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -4986,13 +4986,13 @@ func (*stream) LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -5004,7 +5004,7 @@ func (*stream) LLMEcho(ctx context.Context, input string, opts ...CallOptionFunc
 }
 
 // / Streaming version of LiteralUnionsTest
-func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output], error) {
+func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5024,7 +5024,7 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5038,7 +5038,7 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...Call
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output])
+	channel := make(chan StreamValue[stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -5059,13 +5059,13 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...Call
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Union3BoolKTrueOrIntK1OrKstring_output)
-					channel <- StreamValue[*stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output]{
+					channel <- StreamValue[stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.Union3BoolKTrueOrIntK1OrKstring_output)
-					channel <- StreamValue[*stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output]{
+					data := *(result.StreamData).(*stream_types.Union3BoolKTrueOrIntK1OrKstring_output)
+					channel <- StreamValue[stream_types.Union3BoolKTrueOrIntK1OrKstring_output, types.Union3BoolKTrueOrIntK1OrKstring_output]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -5077,7 +5077,7 @@ func (*stream) LiteralUnionsTest(ctx context.Context, input string, opts ...Call
 }
 
 // / Streaming version of MakeBlockConstraint
-func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[*types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]], error) {
+func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5097,7 +5097,7 @@ func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5111,7 +5111,7 @@ func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) 
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]])
+	channel := make(chan StreamValue[types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -5132,13 +5132,13 @@ func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) 
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Checked[types.BlockConstraint])
-					channel <- StreamValue[*types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]]{
+					channel <- StreamValue[types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*types.Checked[stream_types.BlockConstraint])
-					channel <- StreamValue[*types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]]{
+					data := *(result.StreamData).(*types.Checked[stream_types.BlockConstraint])
+					channel <- StreamValue[types.Checked[stream_types.BlockConstraint], types.Checked[types.BlockConstraint]]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -5150,7 +5150,7 @@ func (*stream) MakeBlockConstraint(ctx context.Context, opts ...CallOptionFunc) 
 }
 
 // / Streaming version of MakeClassWithBlockDone
-func (*stream) MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.ClassWithBlockDone, types.ClassWithBlockDone], error) {
+func (*stream) MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[types.ClassWithBlockDone, types.ClassWithBlockDone], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5170,7 +5170,7 @@ func (*stream) MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5184,7 +5184,7 @@ func (*stream) MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFun
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.ClassWithBlockDone, types.ClassWithBlockDone])
+	channel := make(chan StreamValue[types.ClassWithBlockDone, types.ClassWithBlockDone])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -5205,13 +5205,13 @@ func (*stream) MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFun
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.ClassWithBlockDone)
-					channel <- StreamValue[*stream_types.ClassWithBlockDone, types.ClassWithBlockDone]{
+					channel <- StreamValue[types.ClassWithBlockDone, types.ClassWithBlockDone]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.ClassWithBlockDone)
-					channel <- StreamValue[*stream_types.ClassWithBlockDone, types.ClassWithBlockDone]{
+					data := *(result.StreamData).(*types.ClassWithBlockDone)
+					channel <- StreamValue[types.ClassWithBlockDone, types.ClassWithBlockDone]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -5223,7 +5223,7 @@ func (*stream) MakeClassWithBlockDone(ctx context.Context, opts ...CallOptionFun
 }
 
 // / Streaming version of MakeClassWithExternalDone
-func (*stream) MakeClassWithExternalDone(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.ClassWithoutDone, types.ClassWithoutDone], error) {
+func (*stream) MakeClassWithExternalDone(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[types.ClassWithoutDone, types.ClassWithoutDone], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5243,7 +5243,7 @@ func (*stream) MakeClassWithExternalDone(ctx context.Context, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5257,7 +5257,7 @@ func (*stream) MakeClassWithExternalDone(ctx context.Context, opts ...CallOption
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.ClassWithoutDone, types.ClassWithoutDone])
+	channel := make(chan StreamValue[types.ClassWithoutDone, types.ClassWithoutDone])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -5278,13 +5278,13 @@ func (*stream) MakeClassWithExternalDone(ctx context.Context, opts ...CallOption
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.ClassWithoutDone)
-					channel <- StreamValue[*stream_types.ClassWithoutDone, types.ClassWithoutDone]{
+					channel <- StreamValue[types.ClassWithoutDone, types.ClassWithoutDone]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.ClassWithoutDone)
-					channel <- StreamValue[*stream_types.ClassWithoutDone, types.ClassWithoutDone]{
+					data := *(result.StreamData).(*types.ClassWithoutDone)
+					channel <- StreamValue[types.ClassWithoutDone, types.ClassWithoutDone]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -5296,7 +5296,7 @@ func (*stream) MakeClassWithExternalDone(ctx context.Context, opts ...CallOption
 }
 
 // / Streaming version of MakeNestedBlockConstraint
-func (*stream) MakeNestedBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.NestedBlockConstraint, types.NestedBlockConstraint], error) {
+func (*stream) MakeNestedBlockConstraint(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.NestedBlockConstraint, types.NestedBlockConstraint], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5316,7 +5316,7 @@ func (*stream) MakeNestedBlockConstraint(ctx context.Context, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5330,7 +5330,7 @@ func (*stream) MakeNestedBlockConstraint(ctx context.Context, opts ...CallOption
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.NestedBlockConstraint, types.NestedBlockConstraint])
+	channel := make(chan StreamValue[stream_types.NestedBlockConstraint, types.NestedBlockConstraint])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -5351,13 +5351,13 @@ func (*stream) MakeNestedBlockConstraint(ctx context.Context, opts ...CallOption
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.NestedBlockConstraint)
-					channel <- StreamValue[*stream_types.NestedBlockConstraint, types.NestedBlockConstraint]{
+					channel <- StreamValue[stream_types.NestedBlockConstraint, types.NestedBlockConstraint]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.NestedBlockConstraint)
-					channel <- StreamValue[*stream_types.NestedBlockConstraint, types.NestedBlockConstraint]{
+					data := *(result.StreamData).(*stream_types.NestedBlockConstraint)
+					channel <- StreamValue[stream_types.NestedBlockConstraint, types.NestedBlockConstraint]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -5369,7 +5369,7 @@ func (*stream) MakeNestedBlockConstraint(ctx context.Context, opts ...CallOption
 }
 
 // / Streaming version of MakeSemanticContainer
-func (*stream) MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.SemanticContainer, types.SemanticContainer], error) {
+func (*stream) MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.SemanticContainer, types.SemanticContainer], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5389,7 +5389,7 @@ func (*stream) MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5403,7 +5403,7 @@ func (*stream) MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.SemanticContainer, types.SemanticContainer])
+	channel := make(chan StreamValue[stream_types.SemanticContainer, types.SemanticContainer])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -5424,13 +5424,13 @@ func (*stream) MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.SemanticContainer)
-					channel <- StreamValue[*stream_types.SemanticContainer, types.SemanticContainer]{
+					channel <- StreamValue[stream_types.SemanticContainer, types.SemanticContainer]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.SemanticContainer)
-					channel <- StreamValue[*stream_types.SemanticContainer, types.SemanticContainer]{
+					data := *(result.StreamData).(*stream_types.SemanticContainer)
+					channel <- StreamValue[stream_types.SemanticContainer, types.SemanticContainer]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -5442,7 +5442,7 @@ func (*stream) MakeSemanticContainer(ctx context.Context, opts ...CallOptionFunc
 }
 
 // / Streaming version of MapAlias
-func (*stream) MapAlias(ctx context.Context, m map[string][]string, opts ...CallOptionFunc) (<-chan StreamValue[*map[string]*[]*string, map[string][]string], error) {
+func (*stream) MapAlias(ctx context.Context, m map[string][]string, opts ...CallOptionFunc) (<-chan StreamValue[map[string][]string, map[string][]string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5462,7 +5462,7 @@ func (*stream) MapAlias(ctx context.Context, m map[string][]string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5476,7 +5476,7 @@ func (*stream) MapAlias(ctx context.Context, m map[string][]string, opts ...Call
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*map[string]*[]*string, map[string][]string])
+	channel := make(chan StreamValue[map[string][]string, map[string][]string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -5497,13 +5497,13 @@ func (*stream) MapAlias(ctx context.Context, m map[string][]string, opts ...Call
 				}
 				if result.HasData {
 					data := (result.Data).(map[string][]string)
-					channel <- StreamValue[*map[string]*[]*string, map[string][]string]{
+					channel <- StreamValue[map[string][]string, map[string][]string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*map[string]*[]*string)
-					channel <- StreamValue[*map[string]*[]*string, map[string][]string]{
+					data := (result.StreamData).(map[string][]string)
+					channel <- StreamValue[map[string][]string, map[string][]string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -5515,7 +5515,7 @@ func (*stream) MapAlias(ctx context.Context, m map[string][]string, opts ...Call
 }
 
 // / Streaming version of MergeAliasAttributes
-func (*stream) MergeAliasAttributes(ctx context.Context, money int64, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.MergeAttrs, types.MergeAttrs], error) {
+func (*stream) MergeAliasAttributes(ctx context.Context, money int64, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.MergeAttrs, types.MergeAttrs], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5535,7 +5535,7 @@ func (*stream) MergeAliasAttributes(ctx context.Context, money int64, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5549,7 +5549,7 @@ func (*stream) MergeAliasAttributes(ctx context.Context, money int64, opts ...Ca
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.MergeAttrs, types.MergeAttrs])
+	channel := make(chan StreamValue[stream_types.MergeAttrs, types.MergeAttrs])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -5570,13 +5570,13 @@ func (*stream) MergeAliasAttributes(ctx context.Context, money int64, opts ...Ca
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.MergeAttrs)
-					channel <- StreamValue[*stream_types.MergeAttrs, types.MergeAttrs]{
+					channel <- StreamValue[stream_types.MergeAttrs, types.MergeAttrs]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.MergeAttrs)
-					channel <- StreamValue[*stream_types.MergeAttrs, types.MergeAttrs]{
+					data := *(result.StreamData).(*stream_types.MergeAttrs)
+					channel <- StreamValue[stream_types.MergeAttrs, types.MergeAttrs]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -5588,7 +5588,7 @@ func (*stream) MergeAliasAttributes(ctx context.Context, money int64, opts ...Ca
 }
 
 // / Streaming version of MyFunc
-func (*stream) MyFunc(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.DynamicOutput, types.DynamicOutput], error) {
+func (*stream) MyFunc(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.DynamicOutput, types.DynamicOutput], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5608,7 +5608,7 @@ func (*stream) MyFunc(ctx context.Context, input string, opts ...CallOptionFunc)
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5622,7 +5622,7 @@ func (*stream) MyFunc(ctx context.Context, input string, opts ...CallOptionFunc)
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.DynamicOutput, types.DynamicOutput])
+	channel := make(chan StreamValue[stream_types.DynamicOutput, types.DynamicOutput])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -5643,13 +5643,13 @@ func (*stream) MyFunc(ctx context.Context, input string, opts ...CallOptionFunc)
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.DynamicOutput)
-					channel <- StreamValue[*stream_types.DynamicOutput, types.DynamicOutput]{
+					channel <- StreamValue[stream_types.DynamicOutput, types.DynamicOutput]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.DynamicOutput)
-					channel <- StreamValue[*stream_types.DynamicOutput, types.DynamicOutput]{
+					data := *(result.StreamData).(*stream_types.DynamicOutput)
+					channel <- StreamValue[stream_types.DynamicOutput, types.DynamicOutput]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -5661,7 +5661,7 @@ func (*stream) MyFunc(ctx context.Context, input string, opts ...CallOptionFunc)
 }
 
 // / Streaming version of NestedAlias
-func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString], error) {
+func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5681,7 +5681,7 @@ func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOr
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5695,7 +5695,7 @@ func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOr
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString])
+	channel := make(chan StreamValue[stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -5716,13 +5716,13 @@ func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOr
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
-					channel <- StreamValue[*stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString]{
+					channel <- StreamValue[stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
-					channel <- StreamValue[*stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString]{
+					data := *(result.StreamData).(*stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString)
+					channel <- StreamValue[stream_types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString, types.Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -5734,7 +5734,7 @@ func (*stream) NestedAlias(ctx context.Context, c types.Union6BoolOrFloatOrIntOr
 }
 
 // / Streaming version of NullLiteralClassHello
-func (*stream) NullLiteralClassHello(ctx context.Context, s string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.ClassForNullLiteral, types.ClassForNullLiteral], error) {
+func (*stream) NullLiteralClassHello(ctx context.Context, s string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.ClassForNullLiteral, types.ClassForNullLiteral], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5754,7 +5754,7 @@ func (*stream) NullLiteralClassHello(ctx context.Context, s string, opts ...Call
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5768,7 +5768,7 @@ func (*stream) NullLiteralClassHello(ctx context.Context, s string, opts ...Call
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.ClassForNullLiteral, types.ClassForNullLiteral])
+	channel := make(chan StreamValue[stream_types.ClassForNullLiteral, types.ClassForNullLiteral])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -5789,13 +5789,13 @@ func (*stream) NullLiteralClassHello(ctx context.Context, s string, opts ...Call
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.ClassForNullLiteral)
-					channel <- StreamValue[*stream_types.ClassForNullLiteral, types.ClassForNullLiteral]{
+					channel <- StreamValue[stream_types.ClassForNullLiteral, types.ClassForNullLiteral]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.ClassForNullLiteral)
-					channel <- StreamValue[*stream_types.ClassForNullLiteral, types.ClassForNullLiteral]{
+					data := *(result.StreamData).(*stream_types.ClassForNullLiteral)
+					channel <- StreamValue[stream_types.ClassForNullLiteral, types.ClassForNullLiteral]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -5807,7 +5807,7 @@ func (*stream) NullLiteralClassHello(ctx context.Context, s string, opts ...Call
 }
 
 // / Streaming version of OpenAIWithAnthropicResponseHello
-func (*stream) OpenAIWithAnthropicResponseHello(ctx context.Context, s string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) OpenAIWithAnthropicResponseHello(ctx context.Context, s string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5827,7 +5827,7 @@ func (*stream) OpenAIWithAnthropicResponseHello(ctx context.Context, s string, o
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5841,7 +5841,7 @@ func (*stream) OpenAIWithAnthropicResponseHello(ctx context.Context, s string, o
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -5862,13 +5862,13 @@ func (*stream) OpenAIWithAnthropicResponseHello(ctx context.Context, s string, o
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -5880,7 +5880,7 @@ func (*stream) OpenAIWithAnthropicResponseHello(ctx context.Context, s string, o
 }
 
 // / Streaming version of OptionalTest_Function
-func (*stream) OptionalTest_Function(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*[]*stream_types.OptionalTest_ReturnType, []*types.OptionalTest_ReturnType], error) {
+func (*stream) OptionalTest_Function(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[[]*stream_types.OptionalTest_ReturnType, []*types.OptionalTest_ReturnType], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5900,7 +5900,7 @@ func (*stream) OptionalTest_Function(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5914,7 +5914,7 @@ func (*stream) OptionalTest_Function(ctx context.Context, input string, opts ...
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*[]*stream_types.OptionalTest_ReturnType, []*types.OptionalTest_ReturnType])
+	channel := make(chan StreamValue[[]*stream_types.OptionalTest_ReturnType, []*types.OptionalTest_ReturnType])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -5935,13 +5935,13 @@ func (*stream) OptionalTest_Function(ctx context.Context, input string, opts ...
 				}
 				if result.HasData {
 					data := (result.Data).([]*types.OptionalTest_ReturnType)
-					channel <- StreamValue[*[]*stream_types.OptionalTest_ReturnType, []*types.OptionalTest_ReturnType]{
+					channel <- StreamValue[[]*stream_types.OptionalTest_ReturnType, []*types.OptionalTest_ReturnType]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*[]*stream_types.OptionalTest_ReturnType)
-					channel <- StreamValue[*[]*stream_types.OptionalTest_ReturnType, []*types.OptionalTest_ReturnType]{
+					data := (result.StreamData).([]*stream_types.OptionalTest_ReturnType)
+					channel <- StreamValue[[]*stream_types.OptionalTest_ReturnType, []*types.OptionalTest_ReturnType]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -5953,7 +5953,7 @@ func (*stream) OptionalTest_Function(ctx context.Context, input string, opts ...
 }
 
 // / Streaming version of PredictAge
-func (*stream) PredictAge(ctx context.Context, name string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.FooAny, types.FooAny], error) {
+func (*stream) PredictAge(ctx context.Context, name string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.FooAny, types.FooAny], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -5973,7 +5973,7 @@ func (*stream) PredictAge(ctx context.Context, name string, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -5987,7 +5987,7 @@ func (*stream) PredictAge(ctx context.Context, name string, opts ...CallOptionFu
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.FooAny, types.FooAny])
+	channel := make(chan StreamValue[stream_types.FooAny, types.FooAny])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6008,13 +6008,13 @@ func (*stream) PredictAge(ctx context.Context, name string, opts ...CallOptionFu
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.FooAny)
-					channel <- StreamValue[*stream_types.FooAny, types.FooAny]{
+					channel <- StreamValue[stream_types.FooAny, types.FooAny]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.FooAny)
-					channel <- StreamValue[*stream_types.FooAny, types.FooAny]{
+					data := *(result.StreamData).(*stream_types.FooAny)
+					channel <- StreamValue[stream_types.FooAny, types.FooAny]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6026,7 +6026,7 @@ func (*stream) PredictAge(ctx context.Context, name string, opts ...CallOptionFu
 }
 
 // / Streaming version of PredictAgeBare
-func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (<-chan StreamValue[*types.Checked[int64], int64], error) {
+func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptionFunc) (<-chan StreamValue[types.Checked[int64], int64], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6046,7 +6046,7 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6060,7 +6060,7 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptio
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*types.Checked[int64], int64])
+	channel := make(chan StreamValue[types.Checked[int64], int64])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6081,13 +6081,13 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptio
 				}
 				if result.HasData {
 					data := *(result.Data).(*int64)
-					channel <- StreamValue[*types.Checked[int64], int64]{
+					channel <- StreamValue[types.Checked[int64], int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*types.Checked[int64])
-					channel <- StreamValue[*types.Checked[int64], int64]{
+					data := *(result.StreamData).(*types.Checked[int64])
+					channel <- StreamValue[types.Checked[int64], int64]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6099,7 +6099,7 @@ func (*stream) PredictAgeBare(ctx context.Context, inp string, opts ...CallOptio
 }
 
 // / Streaming version of PrimitiveAlias
-func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIntOrString, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString], error) {
+func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIntOrString, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6119,7 +6119,7 @@ func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIn
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6133,7 +6133,7 @@ func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIn
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString])
+	channel := make(chan StreamValue[stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6154,13 +6154,13 @@ func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIn
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Union4BoolOrFloatOrIntOrString)
-					channel <- StreamValue[*stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString]{
+					channel <- StreamValue[stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.Union4BoolOrFloatOrIntOrString)
-					channel <- StreamValue[*stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString]{
+					data := *(result.StreamData).(*stream_types.Union4BoolOrFloatOrIntOrString)
+					channel <- StreamValue[stream_types.Union4BoolOrFloatOrIntOrString, types.Union4BoolOrFloatOrIntOrString]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6172,7 +6172,7 @@ func (*stream) PrimitiveAlias(ctx context.Context, p types.Union4BoolOrFloatOrIn
 }
 
 // / Streaming version of PromptTestClaude
-func (*stream) PromptTestClaude(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) PromptTestClaude(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6192,7 +6192,7 @@ func (*stream) PromptTestClaude(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6206,7 +6206,7 @@ func (*stream) PromptTestClaude(ctx context.Context, input string, opts ...CallO
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6227,13 +6227,13 @@ func (*stream) PromptTestClaude(ctx context.Context, input string, opts ...CallO
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6245,7 +6245,7 @@ func (*stream) PromptTestClaude(ctx context.Context, input string, opts ...CallO
 }
 
 // / Streaming version of PromptTestClaudeChat
-func (*stream) PromptTestClaudeChat(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) PromptTestClaudeChat(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6265,7 +6265,7 @@ func (*stream) PromptTestClaudeChat(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6279,7 +6279,7 @@ func (*stream) PromptTestClaudeChat(ctx context.Context, input string, opts ...C
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6300,13 +6300,13 @@ func (*stream) PromptTestClaudeChat(ctx context.Context, input string, opts ...C
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6318,7 +6318,7 @@ func (*stream) PromptTestClaudeChat(ctx context.Context, input string, opts ...C
 }
 
 // / Streaming version of PromptTestClaudeChatNoSystem
-func (*stream) PromptTestClaudeChatNoSystem(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) PromptTestClaudeChatNoSystem(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6338,7 +6338,7 @@ func (*stream) PromptTestClaudeChatNoSystem(ctx context.Context, input string, o
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6352,7 +6352,7 @@ func (*stream) PromptTestClaudeChatNoSystem(ctx context.Context, input string, o
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6373,13 +6373,13 @@ func (*stream) PromptTestClaudeChatNoSystem(ctx context.Context, input string, o
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6391,7 +6391,7 @@ func (*stream) PromptTestClaudeChatNoSystem(ctx context.Context, input string, o
 }
 
 // / Streaming version of PromptTestOpenAI
-func (*stream) PromptTestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) PromptTestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6411,7 +6411,7 @@ func (*stream) PromptTestOpenAI(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6425,7 +6425,7 @@ func (*stream) PromptTestOpenAI(ctx context.Context, input string, opts ...CallO
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6446,13 +6446,13 @@ func (*stream) PromptTestOpenAI(ctx context.Context, input string, opts ...CallO
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6464,7 +6464,7 @@ func (*stream) PromptTestOpenAI(ctx context.Context, input string, opts ...CallO
 }
 
 // / Streaming version of PromptTestOpenAIChat
-func (*stream) PromptTestOpenAIChat(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) PromptTestOpenAIChat(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6484,7 +6484,7 @@ func (*stream) PromptTestOpenAIChat(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6498,7 +6498,7 @@ func (*stream) PromptTestOpenAIChat(ctx context.Context, input string, opts ...C
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6519,13 +6519,13 @@ func (*stream) PromptTestOpenAIChat(ctx context.Context, input string, opts ...C
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6537,7 +6537,7 @@ func (*stream) PromptTestOpenAIChat(ctx context.Context, input string, opts ...C
 }
 
 // / Streaming version of PromptTestOpenAIChatNoSystem
-func (*stream) PromptTestOpenAIChatNoSystem(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) PromptTestOpenAIChatNoSystem(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6557,7 +6557,7 @@ func (*stream) PromptTestOpenAIChatNoSystem(ctx context.Context, input string, o
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6571,7 +6571,7 @@ func (*stream) PromptTestOpenAIChatNoSystem(ctx context.Context, input string, o
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6592,13 +6592,13 @@ func (*stream) PromptTestOpenAIChatNoSystem(ctx context.Context, input string, o
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6610,7 +6610,7 @@ func (*stream) PromptTestOpenAIChatNoSystem(ctx context.Context, input string, o
 }
 
 // / Streaming version of PromptTestStreaming
-func (*stream) PromptTestStreaming(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) PromptTestStreaming(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6630,7 +6630,7 @@ func (*stream) PromptTestStreaming(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6644,7 +6644,7 @@ func (*stream) PromptTestStreaming(ctx context.Context, input string, opts ...Ca
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6665,13 +6665,13 @@ func (*stream) PromptTestStreaming(ctx context.Context, input string, opts ...Ca
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6683,7 +6683,7 @@ func (*stream) PromptTestStreaming(ctx context.Context, input string, opts ...Ca
 }
 
 // / Streaming version of RecursiveAliasCycle
-func (*stream) RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.RecAliasOne, types.RecAliasOne], error) {
+func (*stream) RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.RecAliasOne, types.RecAliasOne], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6703,7 +6703,7 @@ func (*stream) RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne,
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6717,7 +6717,7 @@ func (*stream) RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne,
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.RecAliasOne, types.RecAliasOne])
+	channel := make(chan StreamValue[stream_types.RecAliasOne, types.RecAliasOne])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6738,13 +6738,13 @@ func (*stream) RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne,
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.RecAliasOne)
-					channel <- StreamValue[*stream_types.RecAliasOne, types.RecAliasOne]{
+					channel <- StreamValue[stream_types.RecAliasOne, types.RecAliasOne]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(**stream_types.RecAliasOne)
-					channel <- StreamValue[*stream_types.RecAliasOne, types.RecAliasOne]{
+					data := *(result.StreamData).(*stream_types.RecAliasOne)
+					channel <- StreamValue[stream_types.RecAliasOne, types.RecAliasOne]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6756,7 +6756,7 @@ func (*stream) RecursiveAliasCycle(ctx context.Context, input types.RecAliasOne,
 }
 
 // / Streaming version of RecursiveClassWithAliasIndirection
-func (*stream) RecursiveClassWithAliasIndirection(ctx context.Context, cls types.NodeWithAliasIndirection, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection], error) {
+func (*stream) RecursiveClassWithAliasIndirection(ctx context.Context, cls types.NodeWithAliasIndirection, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6776,7 +6776,7 @@ func (*stream) RecursiveClassWithAliasIndirection(ctx context.Context, cls types
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6790,7 +6790,7 @@ func (*stream) RecursiveClassWithAliasIndirection(ctx context.Context, cls types
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection])
+	channel := make(chan StreamValue[stream_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6811,13 +6811,13 @@ func (*stream) RecursiveClassWithAliasIndirection(ctx context.Context, cls types
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.NodeWithAliasIndirection)
-					channel <- StreamValue[*stream_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection]{
+					channel <- StreamValue[stream_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.NodeWithAliasIndirection)
-					channel <- StreamValue[*stream_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection]{
+					data := *(result.StreamData).(*stream_types.NodeWithAliasIndirection)
+					channel <- StreamValue[stream_types.NodeWithAliasIndirection, types.NodeWithAliasIndirection]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6829,7 +6829,7 @@ func (*stream) RecursiveClassWithAliasIndirection(ctx context.Context, cls types
 }
 
 // / Streaming version of RecursiveUnionTest
-func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.RecursiveUnion, types.RecursiveUnion], error) {
+func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnion, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.RecursiveUnion, types.RecursiveUnion], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6849,7 +6849,7 @@ func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnio
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6863,7 +6863,7 @@ func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnio
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.RecursiveUnion, types.RecursiveUnion])
+	channel := make(chan StreamValue[stream_types.RecursiveUnion, types.RecursiveUnion])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6884,13 +6884,13 @@ func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnio
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.RecursiveUnion)
-					channel <- StreamValue[*stream_types.RecursiveUnion, types.RecursiveUnion]{
+					channel <- StreamValue[stream_types.RecursiveUnion, types.RecursiveUnion]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(**stream_types.RecursiveUnion)
-					channel <- StreamValue[*stream_types.RecursiveUnion, types.RecursiveUnion]{
+					data := *(result.StreamData).(*stream_types.RecursiveUnion)
+					channel <- StreamValue[stream_types.RecursiveUnion, types.RecursiveUnion]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6902,7 +6902,7 @@ func (*stream) RecursiveUnionTest(ctx context.Context, input types.RecursiveUnio
 }
 
 // / Streaming version of ReturnAliasWithMergedAttributes
-func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...CallOptionFunc) (<-chan StreamValue[*types.Checked[int64], int64], error) {
+func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64, opts ...CallOptionFunc) (<-chan StreamValue[types.Checked[int64], int64], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6922,7 +6922,7 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64,
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -6936,7 +6936,7 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64,
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*types.Checked[int64], int64])
+	channel := make(chan StreamValue[types.Checked[int64], int64])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -6957,13 +6957,13 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64,
 				}
 				if result.HasData {
 					data := *(result.Data).(*int64)
-					channel <- StreamValue[*types.Checked[int64], int64]{
+					channel <- StreamValue[types.Checked[int64], int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*types.Checked[int64])
-					channel <- StreamValue[*types.Checked[int64], int64]{
+					data := *(result.StreamData).(*types.Checked[int64])
+					channel <- StreamValue[types.Checked[int64], int64]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -6975,7 +6975,7 @@ func (*stream) ReturnAliasWithMergedAttributes(ctx context.Context, money int64,
 }
 
 // / Streaming version of ReturnFailingAssert
-func (*stream) ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallOptionFunc) (<-chan StreamValue[*int64, int64], error) {
+func (*stream) ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallOptionFunc) (<-chan StreamValue[int64, int64], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -6995,7 +6995,7 @@ func (*stream) ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7009,7 +7009,7 @@ func (*stream) ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallO
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*int64, int64])
+	channel := make(chan StreamValue[int64, int64])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7030,13 +7030,13 @@ func (*stream) ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallO
 				}
 				if result.HasData {
 					data := *(result.Data).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					data := *(result.StreamData).(*int64)
+					channel <- StreamValue[int64, int64]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7048,7 +7048,7 @@ func (*stream) ReturnFailingAssert(ctx context.Context, inp int64, opts ...CallO
 }
 
 // / Streaming version of ReturnJsonEntry
-func (*stream) ReturnJsonEntry(ctx context.Context, s string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.JsonTemplate, types.JsonTemplate], error) {
+func (*stream) ReturnJsonEntry(ctx context.Context, s string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.JsonTemplate, types.JsonTemplate], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -7068,7 +7068,7 @@ func (*stream) ReturnJsonEntry(ctx context.Context, s string, opts ...CallOption
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7082,7 +7082,7 @@ func (*stream) ReturnJsonEntry(ctx context.Context, s string, opts ...CallOption
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.JsonTemplate, types.JsonTemplate])
+	channel := make(chan StreamValue[stream_types.JsonTemplate, types.JsonTemplate])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7103,13 +7103,13 @@ func (*stream) ReturnJsonEntry(ctx context.Context, s string, opts ...CallOption
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.JsonTemplate)
-					channel <- StreamValue[*stream_types.JsonTemplate, types.JsonTemplate]{
+					channel <- StreamValue[stream_types.JsonTemplate, types.JsonTemplate]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(**stream_types.JsonTemplate)
-					channel <- StreamValue[*stream_types.JsonTemplate, types.JsonTemplate]{
+					data := *(result.StreamData).(*stream_types.JsonTemplate)
+					channel <- StreamValue[stream_types.JsonTemplate, types.JsonTemplate]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7121,7 +7121,7 @@ func (*stream) ReturnJsonEntry(ctx context.Context, s string, opts ...CallOption
 }
 
 // / Streaming version of ReturnMalformedConstraints
-func (*stream) ReturnMalformedConstraints(ctx context.Context, a int64, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.MalformedConstraints, types.MalformedConstraints], error) {
+func (*stream) ReturnMalformedConstraints(ctx context.Context, a int64, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.MalformedConstraints, types.MalformedConstraints], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -7141,7 +7141,7 @@ func (*stream) ReturnMalformedConstraints(ctx context.Context, a int64, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7155,7 +7155,7 @@ func (*stream) ReturnMalformedConstraints(ctx context.Context, a int64, opts ...
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.MalformedConstraints, types.MalformedConstraints])
+	channel := make(chan StreamValue[stream_types.MalformedConstraints, types.MalformedConstraints])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7176,13 +7176,13 @@ func (*stream) ReturnMalformedConstraints(ctx context.Context, a int64, opts ...
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.MalformedConstraints)
-					channel <- StreamValue[*stream_types.MalformedConstraints, types.MalformedConstraints]{
+					channel <- StreamValue[stream_types.MalformedConstraints, types.MalformedConstraints]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.MalformedConstraints)
-					channel <- StreamValue[*stream_types.MalformedConstraints, types.MalformedConstraints]{
+					data := *(result.StreamData).(*stream_types.MalformedConstraints)
+					channel <- StreamValue[stream_types.MalformedConstraints, types.MalformedConstraints]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7194,7 +7194,7 @@ func (*stream) ReturnMalformedConstraints(ctx context.Context, a int64, opts ...
 }
 
 // / Streaming version of SchemaDescriptions
-func (*stream) SchemaDescriptions(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.Schema, types.Schema], error) {
+func (*stream) SchemaDescriptions(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Schema, types.Schema], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -7214,7 +7214,7 @@ func (*stream) SchemaDescriptions(ctx context.Context, input string, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7228,7 +7228,7 @@ func (*stream) SchemaDescriptions(ctx context.Context, input string, opts ...Cal
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.Schema, types.Schema])
+	channel := make(chan StreamValue[stream_types.Schema, types.Schema])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7249,13 +7249,13 @@ func (*stream) SchemaDescriptions(ctx context.Context, input string, opts ...Cal
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Schema)
-					channel <- StreamValue[*stream_types.Schema, types.Schema]{
+					channel <- StreamValue[stream_types.Schema, types.Schema]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.Schema)
-					channel <- StreamValue[*stream_types.Schema, types.Schema]{
+					data := *(result.StreamData).(*stream_types.Schema)
+					channel <- StreamValue[stream_types.Schema, types.Schema]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7267,7 +7267,7 @@ func (*stream) SchemaDescriptions(ctx context.Context, input string, opts ...Cal
 }
 
 // / Streaming version of SimpleRecursiveListAlias
-func (*stream) SimpleRecursiveListAlias(ctx context.Context, input types.RecursiveListAlias, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.RecursiveListAlias, types.RecursiveListAlias], error) {
+func (*stream) SimpleRecursiveListAlias(ctx context.Context, input types.RecursiveListAlias, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.RecursiveListAlias, types.RecursiveListAlias], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -7287,7 +7287,7 @@ func (*stream) SimpleRecursiveListAlias(ctx context.Context, input types.Recursi
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7301,7 +7301,7 @@ func (*stream) SimpleRecursiveListAlias(ctx context.Context, input types.Recursi
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.RecursiveListAlias, types.RecursiveListAlias])
+	channel := make(chan StreamValue[stream_types.RecursiveListAlias, types.RecursiveListAlias])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7322,13 +7322,13 @@ func (*stream) SimpleRecursiveListAlias(ctx context.Context, input types.Recursi
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.RecursiveListAlias)
-					channel <- StreamValue[*stream_types.RecursiveListAlias, types.RecursiveListAlias]{
+					channel <- StreamValue[stream_types.RecursiveListAlias, types.RecursiveListAlias]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(**stream_types.RecursiveListAlias)
-					channel <- StreamValue[*stream_types.RecursiveListAlias, types.RecursiveListAlias]{
+					data := *(result.StreamData).(*stream_types.RecursiveListAlias)
+					channel <- StreamValue[stream_types.RecursiveListAlias, types.RecursiveListAlias]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7340,7 +7340,7 @@ func (*stream) SimpleRecursiveListAlias(ctx context.Context, input types.Recursi
 }
 
 // / Streaming version of SimpleRecursiveMapAlias
-func (*stream) SimpleRecursiveMapAlias(ctx context.Context, input types.RecursiveMapAlias, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.RecursiveMapAlias, types.RecursiveMapAlias], error) {
+func (*stream) SimpleRecursiveMapAlias(ctx context.Context, input types.RecursiveMapAlias, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.RecursiveMapAlias, types.RecursiveMapAlias], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -7360,7 +7360,7 @@ func (*stream) SimpleRecursiveMapAlias(ctx context.Context, input types.Recursiv
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7374,7 +7374,7 @@ func (*stream) SimpleRecursiveMapAlias(ctx context.Context, input types.Recursiv
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.RecursiveMapAlias, types.RecursiveMapAlias])
+	channel := make(chan StreamValue[stream_types.RecursiveMapAlias, types.RecursiveMapAlias])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7395,13 +7395,13 @@ func (*stream) SimpleRecursiveMapAlias(ctx context.Context, input types.Recursiv
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.RecursiveMapAlias)
-					channel <- StreamValue[*stream_types.RecursiveMapAlias, types.RecursiveMapAlias]{
+					channel <- StreamValue[stream_types.RecursiveMapAlias, types.RecursiveMapAlias]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := *(result.StreamData).(**stream_types.RecursiveMapAlias)
-					channel <- StreamValue[*stream_types.RecursiveMapAlias, types.RecursiveMapAlias]{
+					data := *(result.StreamData).(*stream_types.RecursiveMapAlias)
+					channel <- StreamValue[stream_types.RecursiveMapAlias, types.RecursiveMapAlias]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7413,7 +7413,7 @@ func (*stream) SimpleRecursiveMapAlias(ctx context.Context, input types.Recursiv
 }
 
 // / Streaming version of StreamBigNumbers
-func (*stream) StreamBigNumbers(ctx context.Context, digits int64, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.BigNumbers, types.BigNumbers], error) {
+func (*stream) StreamBigNumbers(ctx context.Context, digits int64, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.BigNumbers, types.BigNumbers], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -7433,7 +7433,7 @@ func (*stream) StreamBigNumbers(ctx context.Context, digits int64, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7447,7 +7447,7 @@ func (*stream) StreamBigNumbers(ctx context.Context, digits int64, opts ...CallO
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.BigNumbers, types.BigNumbers])
+	channel := make(chan StreamValue[stream_types.BigNumbers, types.BigNumbers])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7468,13 +7468,13 @@ func (*stream) StreamBigNumbers(ctx context.Context, digits int64, opts ...CallO
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.BigNumbers)
-					channel <- StreamValue[*stream_types.BigNumbers, types.BigNumbers]{
+					channel <- StreamValue[stream_types.BigNumbers, types.BigNumbers]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.BigNumbers)
-					channel <- StreamValue[*stream_types.BigNumbers, types.BigNumbers]{
+					data := *(result.StreamData).(*stream_types.BigNumbers)
+					channel <- StreamValue[stream_types.BigNumbers, types.BigNumbers]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7486,7 +7486,7 @@ func (*stream) StreamBigNumbers(ctx context.Context, digits int64, opts ...CallO
 }
 
 // / Streaming version of StreamFailingAssertion
-func (*stream) StreamFailingAssertion(ctx context.Context, theme string, length int64, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle], error) {
+func (*stream) StreamFailingAssertion(ctx context.Context, theme string, length int64, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -7506,7 +7506,7 @@ func (*stream) StreamFailingAssertion(ctx context.Context, theme string, length 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7520,7 +7520,7 @@ func (*stream) StreamFailingAssertion(ctx context.Context, theme string, length 
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle])
+	channel := make(chan StreamValue[stream_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7541,13 +7541,13 @@ func (*stream) StreamFailingAssertion(ctx context.Context, theme string, length 
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.TwoStoriesOneTitle)
-					channel <- StreamValue[*stream_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle]{
+					channel <- StreamValue[stream_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.TwoStoriesOneTitle)
-					channel <- StreamValue[*stream_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle]{
+					data := *(result.StreamData).(*stream_types.TwoStoriesOneTitle)
+					channel <- StreamValue[stream_types.TwoStoriesOneTitle, types.TwoStoriesOneTitle]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7559,7 +7559,7 @@ func (*stream) StreamFailingAssertion(ctx context.Context, theme string, length 
 }
 
 // / Streaming version of StreamFailingCheck
-func (*stream) StreamFailingCheck(ctx context.Context, theme string, length int64, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck], error) {
+func (*stream) StreamFailingCheck(ctx context.Context, theme string, length int64, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -7579,7 +7579,7 @@ func (*stream) StreamFailingCheck(ctx context.Context, theme string, length int6
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7593,7 +7593,7 @@ func (*stream) StreamFailingCheck(ctx context.Context, theme string, length int6
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck])
+	channel := make(chan StreamValue[stream_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7614,13 +7614,13 @@ func (*stream) StreamFailingCheck(ctx context.Context, theme string, length int6
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.TwoStoriesOneTitleCheck)
-					channel <- StreamValue[*stream_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck]{
+					channel <- StreamValue[stream_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.TwoStoriesOneTitleCheck)
-					channel <- StreamValue[*stream_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck]{
+					data := *(result.StreamData).(*stream_types.TwoStoriesOneTitleCheck)
+					channel <- StreamValue[stream_types.TwoStoriesOneTitleCheck, types.TwoStoriesOneTitleCheck]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7632,7 +7632,7 @@ func (*stream) StreamFailingCheck(ctx context.Context, theme string, length int6
 }
 
 // / Streaming version of StreamOneBigNumber
-func (*stream) StreamOneBigNumber(ctx context.Context, digits int64, opts ...CallOptionFunc) (<-chan StreamValue[*int64, int64], error) {
+func (*stream) StreamOneBigNumber(ctx context.Context, digits int64, opts ...CallOptionFunc) (<-chan StreamValue[int64, int64], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -7652,7 +7652,7 @@ func (*stream) StreamOneBigNumber(ctx context.Context, digits int64, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7666,7 +7666,7 @@ func (*stream) StreamOneBigNumber(ctx context.Context, digits int64, opts ...Cal
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*int64, int64])
+	channel := make(chan StreamValue[int64, int64])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7687,13 +7687,13 @@ func (*stream) StreamOneBigNumber(ctx context.Context, digits int64, opts ...Cal
 				}
 				if result.HasData {
 					data := *(result.Data).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					data := *(result.StreamData).(*int64)
+					channel <- StreamValue[int64, int64]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7705,7 +7705,7 @@ func (*stream) StreamOneBigNumber(ctx context.Context, digits int64, opts ...Cal
 }
 
 // / Streaming version of StreamUnionIntegers
-func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...CallOptionFunc) (<-chan StreamValue[*[]*stream_types.Union2IntOrString, []types.Union2IntOrString], error) {
+func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...CallOptionFunc) (<-chan StreamValue[[]stream_types.Union2IntOrString, []types.Union2IntOrString], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -7725,7 +7725,7 @@ func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7739,7 +7739,7 @@ func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...Ca
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*[]*stream_types.Union2IntOrString, []types.Union2IntOrString])
+	channel := make(chan StreamValue[[]stream_types.Union2IntOrString, []types.Union2IntOrString])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7760,13 +7760,13 @@ func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...Ca
 				}
 				if result.HasData {
 					data := (result.Data).([]types.Union2IntOrString)
-					channel <- StreamValue[*[]*stream_types.Union2IntOrString, []types.Union2IntOrString]{
+					channel <- StreamValue[[]stream_types.Union2IntOrString, []types.Union2IntOrString]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*[]*stream_types.Union2IntOrString)
-					channel <- StreamValue[*[]*stream_types.Union2IntOrString, []types.Union2IntOrString]{
+					data := (result.StreamData).([]stream_types.Union2IntOrString)
+					channel <- StreamValue[[]stream_types.Union2IntOrString, []types.Union2IntOrString]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7778,7 +7778,7 @@ func (*stream) StreamUnionIntegers(ctx context.Context, digits int64, opts ...Ca
 }
 
 // / Streaming version of StreamingCompoundNumbers
-func (*stream) StreamingCompoundNumbers(ctx context.Context, digits int64, yapping bool, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.CompoundBigNumbers, types.CompoundBigNumbers], error) {
+func (*stream) StreamingCompoundNumbers(ctx context.Context, digits int64, yapping bool, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.CompoundBigNumbers, types.CompoundBigNumbers], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -7798,7 +7798,7 @@ func (*stream) StreamingCompoundNumbers(ctx context.Context, digits int64, yappi
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7812,7 +7812,7 @@ func (*stream) StreamingCompoundNumbers(ctx context.Context, digits int64, yappi
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.CompoundBigNumbers, types.CompoundBigNumbers])
+	channel := make(chan StreamValue[stream_types.CompoundBigNumbers, types.CompoundBigNumbers])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7833,13 +7833,13 @@ func (*stream) StreamingCompoundNumbers(ctx context.Context, digits int64, yappi
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.CompoundBigNumbers)
-					channel <- StreamValue[*stream_types.CompoundBigNumbers, types.CompoundBigNumbers]{
+					channel <- StreamValue[stream_types.CompoundBigNumbers, types.CompoundBigNumbers]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.CompoundBigNumbers)
-					channel <- StreamValue[*stream_types.CompoundBigNumbers, types.CompoundBigNumbers]{
+					data := *(result.StreamData).(*stream_types.CompoundBigNumbers)
+					channel <- StreamValue[stream_types.CompoundBigNumbers, types.CompoundBigNumbers]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7851,7 +7851,7 @@ func (*stream) StreamingCompoundNumbers(ctx context.Context, digits int64, yappi
 }
 
 // / Streaming version of StructureDocument1559
-func (*stream) StructureDocument1559(ctx context.Context, document_txt string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.Document1559, types.Document1559], error) {
+func (*stream) StructureDocument1559(ctx context.Context, document_txt string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Document1559, types.Document1559], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -7871,7 +7871,7 @@ func (*stream) StructureDocument1559(ctx context.Context, document_txt string, o
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7885,7 +7885,7 @@ func (*stream) StructureDocument1559(ctx context.Context, document_txt string, o
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.Document1559, types.Document1559])
+	channel := make(chan StreamValue[stream_types.Document1559, types.Document1559])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7906,13 +7906,13 @@ func (*stream) StructureDocument1559(ctx context.Context, document_txt string, o
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Document1559)
-					channel <- StreamValue[*stream_types.Document1559, types.Document1559]{
+					channel <- StreamValue[stream_types.Document1559, types.Document1559]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.Document1559)
-					channel <- StreamValue[*stream_types.Document1559, types.Document1559]{
+					data := *(result.StreamData).(*stream_types.Document1559)
+					channel <- StreamValue[stream_types.Document1559, types.Document1559]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7924,7 +7924,7 @@ func (*stream) StructureDocument1559(ctx context.Context, document_txt string, o
 }
 
 // / Streaming version of TakeRecAliasDep
-func (*stream) TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDependency, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.RecursiveAliasDependency, types.RecursiveAliasDependency], error) {
+func (*stream) TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDependency, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.RecursiveAliasDependency, types.RecursiveAliasDependency], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -7944,7 +7944,7 @@ func (*stream) TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDe
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -7958,7 +7958,7 @@ func (*stream) TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDe
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.RecursiveAliasDependency, types.RecursiveAliasDependency])
+	channel := make(chan StreamValue[stream_types.RecursiveAliasDependency, types.RecursiveAliasDependency])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -7979,13 +7979,13 @@ func (*stream) TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDe
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.RecursiveAliasDependency)
-					channel <- StreamValue[*stream_types.RecursiveAliasDependency, types.RecursiveAliasDependency]{
+					channel <- StreamValue[stream_types.RecursiveAliasDependency, types.RecursiveAliasDependency]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.RecursiveAliasDependency)
-					channel <- StreamValue[*stream_types.RecursiveAliasDependency, types.RecursiveAliasDependency]{
+					data := *(result.StreamData).(*stream_types.RecursiveAliasDependency)
+					channel <- StreamValue[stream_types.RecursiveAliasDependency, types.RecursiveAliasDependency]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -7997,7 +7997,7 @@ func (*stream) TakeRecAliasDep(ctx context.Context, input types.RecursiveAliasDe
 }
 
 // / Streaming version of TellStory
-func (*stream) TellStory(ctx context.Context, story string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TellStory(ctx context.Context, story string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8017,7 +8017,7 @@ func (*stream) TellStory(ctx context.Context, story string, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8031,7 +8031,7 @@ func (*stream) TellStory(ctx context.Context, story string, opts ...CallOptionFu
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -8052,13 +8052,13 @@ func (*stream) TellStory(ctx context.Context, story string, opts ...CallOptionFu
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -8070,7 +8070,7 @@ func (*stream) TellStory(ctx context.Context, story string, opts ...CallOptionFu
 }
 
 // / Streaming version of TestAnthropic
-func (*stream) TestAnthropic(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAnthropic(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8090,7 +8090,7 @@ func (*stream) TestAnthropic(ctx context.Context, input string, opts ...CallOpti
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8104,7 +8104,7 @@ func (*stream) TestAnthropic(ctx context.Context, input string, opts ...CallOpti
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -8125,13 +8125,13 @@ func (*stream) TestAnthropic(ctx context.Context, input string, opts ...CallOpti
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -8143,7 +8143,7 @@ func (*stream) TestAnthropic(ctx context.Context, input string, opts ...CallOpti
 }
 
 // / Streaming version of TestAnthropicShorthand
-func (*stream) TestAnthropicShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAnthropicShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8163,7 +8163,7 @@ func (*stream) TestAnthropicShorthand(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8177,7 +8177,7 @@ func (*stream) TestAnthropicShorthand(ctx context.Context, input string, opts ..
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -8198,13 +8198,13 @@ func (*stream) TestAnthropicShorthand(ctx context.Context, input string, opts ..
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -8216,7 +8216,7 @@ func (*stream) TestAnthropicShorthand(ctx context.Context, input string, opts ..
 }
 
 // / Streaming version of TestAws
-func (*stream) TestAws(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAws(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8236,7 +8236,7 @@ func (*stream) TestAws(ctx context.Context, input string, opts ...CallOptionFunc
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8250,7 +8250,7 @@ func (*stream) TestAws(ctx context.Context, input string, opts ...CallOptionFunc
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -8271,13 +8271,13 @@ func (*stream) TestAws(ctx context.Context, input string, opts ...CallOptionFunc
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -8289,7 +8289,7 @@ func (*stream) TestAws(ctx context.Context, input string, opts ...CallOptionFunc
 }
 
 // / Streaming version of TestAwsClaude37
-func (*stream) TestAwsClaude37(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAwsClaude37(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8309,7 +8309,7 @@ func (*stream) TestAwsClaude37(ctx context.Context, input string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8323,7 +8323,7 @@ func (*stream) TestAwsClaude37(ctx context.Context, input string, opts ...CallOp
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -8344,13 +8344,13 @@ func (*stream) TestAwsClaude37(ctx context.Context, input string, opts ...CallOp
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -8362,7 +8362,7 @@ func (*stream) TestAwsClaude37(ctx context.Context, input string, opts ...CallOp
 }
 
 // / Streaming version of TestAwsInferenceProfile
-func (*stream) TestAwsInferenceProfile(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAwsInferenceProfile(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8382,7 +8382,7 @@ func (*stream) TestAwsInferenceProfile(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8396,7 +8396,7 @@ func (*stream) TestAwsInferenceProfile(ctx context.Context, input string, opts .
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -8417,13 +8417,13 @@ func (*stream) TestAwsInferenceProfile(ctx context.Context, input string, opts .
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -8435,7 +8435,7 @@ func (*stream) TestAwsInferenceProfile(ctx context.Context, input string, opts .
 }
 
 // / Streaming version of TestAwsInvalidAccessKey
-func (*stream) TestAwsInvalidAccessKey(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAwsInvalidAccessKey(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8455,7 +8455,7 @@ func (*stream) TestAwsInvalidAccessKey(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8469,7 +8469,7 @@ func (*stream) TestAwsInvalidAccessKey(ctx context.Context, input string, opts .
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -8490,13 +8490,13 @@ func (*stream) TestAwsInvalidAccessKey(ctx context.Context, input string, opts .
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -8508,7 +8508,7 @@ func (*stream) TestAwsInvalidAccessKey(ctx context.Context, input string, opts .
 }
 
 // / Streaming version of TestAwsInvalidProfile
-func (*stream) TestAwsInvalidProfile(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAwsInvalidProfile(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8528,7 +8528,7 @@ func (*stream) TestAwsInvalidProfile(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8542,7 +8542,7 @@ func (*stream) TestAwsInvalidProfile(ctx context.Context, input string, opts ...
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -8563,13 +8563,13 @@ func (*stream) TestAwsInvalidProfile(ctx context.Context, input string, opts ...
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -8581,7 +8581,7 @@ func (*stream) TestAwsInvalidProfile(ctx context.Context, input string, opts ...
 }
 
 // / Streaming version of TestAwsInvalidRegion
-func (*stream) TestAwsInvalidRegion(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAwsInvalidRegion(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8601,7 +8601,7 @@ func (*stream) TestAwsInvalidRegion(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8615,7 +8615,7 @@ func (*stream) TestAwsInvalidRegion(ctx context.Context, input string, opts ...C
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -8636,13 +8636,13 @@ func (*stream) TestAwsInvalidRegion(ctx context.Context, input string, opts ...C
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -8654,7 +8654,7 @@ func (*stream) TestAwsInvalidRegion(ctx context.Context, input string, opts ...C
 }
 
 // / Streaming version of TestAwsInvalidSessionToken
-func (*stream) TestAwsInvalidSessionToken(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAwsInvalidSessionToken(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8674,7 +8674,7 @@ func (*stream) TestAwsInvalidSessionToken(ctx context.Context, input string, opt
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8688,7 +8688,7 @@ func (*stream) TestAwsInvalidSessionToken(ctx context.Context, input string, opt
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -8709,13 +8709,13 @@ func (*stream) TestAwsInvalidSessionToken(ctx context.Context, input string, opt
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -8727,7 +8727,7 @@ func (*stream) TestAwsInvalidSessionToken(ctx context.Context, input string, opt
 }
 
 // / Streaming version of TestAzure
-func (*stream) TestAzure(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAzure(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8747,7 +8747,7 @@ func (*stream) TestAzure(ctx context.Context, input string, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8761,7 +8761,7 @@ func (*stream) TestAzure(ctx context.Context, input string, opts ...CallOptionFu
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -8782,13 +8782,13 @@ func (*stream) TestAzure(ctx context.Context, input string, opts ...CallOptionFu
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -8800,7 +8800,7 @@ func (*stream) TestAzure(ctx context.Context, input string, opts ...CallOptionFu
 }
 
 // / Streaming version of TestAzureFailure
-func (*stream) TestAzureFailure(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAzureFailure(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8820,7 +8820,7 @@ func (*stream) TestAzureFailure(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8834,7 +8834,7 @@ func (*stream) TestAzureFailure(ctx context.Context, input string, opts ...CallO
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -8855,13 +8855,13 @@ func (*stream) TestAzureFailure(ctx context.Context, input string, opts ...CallO
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -8873,7 +8873,7 @@ func (*stream) TestAzureFailure(ctx context.Context, input string, opts ...CallO
 }
 
 // / Streaming version of TestAzureO1NoMaxTokens
-func (*stream) TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8893,7 +8893,7 @@ func (*stream) TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8907,7 +8907,7 @@ func (*stream) TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ..
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -8928,13 +8928,13 @@ func (*stream) TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ..
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -8946,7 +8946,7 @@ func (*stream) TestAzureO1NoMaxTokens(ctx context.Context, input string, opts ..
 }
 
 // / Streaming version of TestAzureO1WithMaxCompletionTokens
-func (*stream) TestAzureO1WithMaxCompletionTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAzureO1WithMaxCompletionTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -8966,7 +8966,7 @@ func (*stream) TestAzureO1WithMaxCompletionTokens(ctx context.Context, input str
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -8980,7 +8980,7 @@ func (*stream) TestAzureO1WithMaxCompletionTokens(ctx context.Context, input str
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -9001,13 +9001,13 @@ func (*stream) TestAzureO1WithMaxCompletionTokens(ctx context.Context, input str
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -9019,7 +9019,7 @@ func (*stream) TestAzureO1WithMaxCompletionTokens(ctx context.Context, input str
 }
 
 // / Streaming version of TestAzureO1WithMaxTokens
-func (*stream) TestAzureO1WithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAzureO1WithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9039,7 +9039,7 @@ func (*stream) TestAzureO1WithMaxTokens(ctx context.Context, input string, opts 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9053,7 +9053,7 @@ func (*stream) TestAzureO1WithMaxTokens(ctx context.Context, input string, opts 
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -9074,13 +9074,13 @@ func (*stream) TestAzureO1WithMaxTokens(ctx context.Context, input string, opts 
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -9092,7 +9092,7 @@ func (*stream) TestAzureO1WithMaxTokens(ctx context.Context, input string, opts 
 }
 
 // / Streaming version of TestAzureO3NoMaxTokens
-func (*stream) TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9112,7 +9112,7 @@ func (*stream) TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9126,7 +9126,7 @@ func (*stream) TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ..
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -9147,13 +9147,13 @@ func (*stream) TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ..
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -9165,7 +9165,7 @@ func (*stream) TestAzureO3NoMaxTokens(ctx context.Context, input string, opts ..
 }
 
 // / Streaming version of TestAzureO3WithMaxCompletionTokens
-func (*stream) TestAzureO3WithMaxCompletionTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAzureO3WithMaxCompletionTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9185,7 +9185,7 @@ func (*stream) TestAzureO3WithMaxCompletionTokens(ctx context.Context, input str
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9199,7 +9199,7 @@ func (*stream) TestAzureO3WithMaxCompletionTokens(ctx context.Context, input str
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -9220,13 +9220,13 @@ func (*stream) TestAzureO3WithMaxCompletionTokens(ctx context.Context, input str
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -9238,7 +9238,7 @@ func (*stream) TestAzureO3WithMaxCompletionTokens(ctx context.Context, input str
 }
 
 // / Streaming version of TestAzureWithMaxTokens
-func (*stream) TestAzureWithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestAzureWithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9258,7 +9258,7 @@ func (*stream) TestAzureWithMaxTokens(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9272,7 +9272,7 @@ func (*stream) TestAzureWithMaxTokens(ctx context.Context, input string, opts ..
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -9293,13 +9293,13 @@ func (*stream) TestAzureWithMaxTokens(ctx context.Context, input string, opts ..
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -9311,7 +9311,7 @@ func (*stream) TestAzureWithMaxTokens(ctx context.Context, input string, opts ..
 }
 
 // / Streaming version of TestCaching
-func (*stream) TestCaching(ctx context.Context, input string, not_cached string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestCaching(ctx context.Context, input string, not_cached string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9331,7 +9331,7 @@ func (*stream) TestCaching(ctx context.Context, input string, not_cached string,
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9345,7 +9345,7 @@ func (*stream) TestCaching(ctx context.Context, input string, not_cached string,
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -9366,13 +9366,13 @@ func (*stream) TestCaching(ctx context.Context, input string, not_cached string,
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -9384,7 +9384,7 @@ func (*stream) TestCaching(ctx context.Context, input string, not_cached string,
 }
 
 // / Streaming version of TestFallbackClient
-func (*stream) TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9404,7 +9404,7 @@ func (*stream) TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9418,7 +9418,7 @@ func (*stream) TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -9439,13 +9439,13 @@ func (*stream) TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -9457,7 +9457,7 @@ func (*stream) TestFallbackClient(ctx context.Context, opts ...CallOptionFunc) (
 }
 
 // / Streaming version of TestFallbackStrategy
-func (*stream) TestFallbackStrategy(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestFallbackStrategy(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9477,7 +9477,7 @@ func (*stream) TestFallbackStrategy(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9491,7 +9491,7 @@ func (*stream) TestFallbackStrategy(ctx context.Context, input string, opts ...C
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -9512,13 +9512,13 @@ func (*stream) TestFallbackStrategy(ctx context.Context, input string, opts ...C
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -9530,7 +9530,7 @@ func (*stream) TestFallbackStrategy(ctx context.Context, input string, opts ...C
 }
 
 // / Streaming version of TestFallbackToShorthand
-func (*stream) TestFallbackToShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestFallbackToShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9550,7 +9550,7 @@ func (*stream) TestFallbackToShorthand(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9564,7 +9564,7 @@ func (*stream) TestFallbackToShorthand(ctx context.Context, input string, opts .
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -9585,13 +9585,13 @@ func (*stream) TestFallbackToShorthand(ctx context.Context, input string, opts .
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -9603,7 +9603,7 @@ func (*stream) TestFallbackToShorthand(ctx context.Context, input string, opts .
 }
 
 // / Streaming version of TestFnNamedArgsSingleBool
-func (*stream) TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9623,7 +9623,7 @@ func (*stream) TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9637,7 +9637,7 @@ func (*stream) TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts 
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -9658,13 +9658,13 @@ func (*stream) TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts 
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -9676,7 +9676,7 @@ func (*stream) TestFnNamedArgsSingleBool(ctx context.Context, myBool bool, opts 
 }
 
 // / Streaming version of TestFnNamedArgsSingleClass
-func (*stream) TestFnNamedArgsSingleClass(ctx context.Context, myArg types.NamedArgsSingleClass, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestFnNamedArgsSingleClass(ctx context.Context, myArg types.NamedArgsSingleClass, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9696,7 +9696,7 @@ func (*stream) TestFnNamedArgsSingleClass(ctx context.Context, myArg types.Named
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9710,7 +9710,7 @@ func (*stream) TestFnNamedArgsSingleClass(ctx context.Context, myArg types.Named
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -9731,13 +9731,13 @@ func (*stream) TestFnNamedArgsSingleClass(ctx context.Context, myArg types.Named
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -9749,7 +9749,7 @@ func (*stream) TestFnNamedArgsSingleClass(ctx context.Context, myArg types.Named
 }
 
 // / Streaming version of TestFnNamedArgsSingleEnumList
-func (*stream) TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.NamedArgsSingleEnumList, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.NamedArgsSingleEnumList, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9769,7 +9769,7 @@ func (*stream) TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9783,7 +9783,7 @@ func (*stream) TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -9804,13 +9804,13 @@ func (*stream) TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -9822,7 +9822,7 @@ func (*stream) TestFnNamedArgsSingleEnumList(ctx context.Context, myArg []types.
 }
 
 // / Streaming version of TestFnNamedArgsSingleFloat
-func (*stream) TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9842,7 +9842,7 @@ func (*stream) TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9856,7 +9856,7 @@ func (*stream) TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, 
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -9877,13 +9877,13 @@ func (*stream) TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, 
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -9895,7 +9895,7 @@ func (*stream) TestFnNamedArgsSingleFloat(ctx context.Context, myFloat float64, 
 }
 
 // / Streaming version of TestFnNamedArgsSingleInt
-func (*stream) TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9915,7 +9915,7 @@ func (*stream) TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -9929,7 +9929,7 @@ func (*stream) TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts .
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -9950,13 +9950,13 @@ func (*stream) TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts .
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -9968,7 +9968,7 @@ func (*stream) TestFnNamedArgsSingleInt(ctx context.Context, myInt int64, opts .
 }
 
 // / Streaming version of TestFnNamedArgsSingleMapStringToClass
-func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap map[string]types.StringToClassEntry, opts ...CallOptionFunc) (<-chan StreamValue[*map[string]*stream_types.StringToClassEntry, map[string]types.StringToClassEntry], error) {
+func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap map[string]types.StringToClassEntry, opts ...CallOptionFunc) (<-chan StreamValue[map[string]stream_types.StringToClassEntry, map[string]types.StringToClassEntry], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -9988,7 +9988,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10002,7 +10002,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap 
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*map[string]*stream_types.StringToClassEntry, map[string]types.StringToClassEntry])
+	channel := make(chan StreamValue[map[string]stream_types.StringToClassEntry, map[string]types.StringToClassEntry])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -10023,13 +10023,13 @@ func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap 
 				}
 				if result.HasData {
 					data := (result.Data).(map[string]types.StringToClassEntry)
-					channel <- StreamValue[*map[string]*stream_types.StringToClassEntry, map[string]types.StringToClassEntry]{
+					channel <- StreamValue[map[string]stream_types.StringToClassEntry, map[string]types.StringToClassEntry]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*map[string]*stream_types.StringToClassEntry)
-					channel <- StreamValue[*map[string]*stream_types.StringToClassEntry, map[string]types.StringToClassEntry]{
+					data := (result.StreamData).(map[string]stream_types.StringToClassEntry)
+					channel <- StreamValue[map[string]stream_types.StringToClassEntry, map[string]types.StringToClassEntry]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -10041,7 +10041,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToClass(ctx context.Context, myMap 
 }
 
 // / Streaming version of TestFnNamedArgsSingleMapStringToMap
-func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap map[string]map[string]string, opts ...CallOptionFunc) (<-chan StreamValue[*map[string]*map[string]*string, map[string]map[string]string], error) {
+func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap map[string]map[string]string, opts ...CallOptionFunc) (<-chan StreamValue[map[string]map[string]string, map[string]map[string]string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -10061,7 +10061,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap ma
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10075,7 +10075,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap ma
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*map[string]*map[string]*string, map[string]map[string]string])
+	channel := make(chan StreamValue[map[string]map[string]string, map[string]map[string]string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -10096,13 +10096,13 @@ func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap ma
 				}
 				if result.HasData {
 					data := (result.Data).(map[string]map[string]string)
-					channel <- StreamValue[*map[string]*map[string]*string, map[string]map[string]string]{
+					channel <- StreamValue[map[string]map[string]string, map[string]map[string]string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*map[string]*map[string]*string)
-					channel <- StreamValue[*map[string]*map[string]*string, map[string]map[string]string]{
+					data := (result.StreamData).(map[string]map[string]string)
+					channel <- StreamValue[map[string]map[string]string, map[string]map[string]string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -10114,7 +10114,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToMap(ctx context.Context, myMap ma
 }
 
 // / Streaming version of TestFnNamedArgsSingleMapStringToString
-func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[string]string, opts ...CallOptionFunc) (<-chan StreamValue[*map[string]*string, map[string]string], error) {
+func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap map[string]string, opts ...CallOptionFunc) (<-chan StreamValue[map[string]string, map[string]string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -10134,7 +10134,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10148,7 +10148,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*map[string]*string, map[string]string])
+	channel := make(chan StreamValue[map[string]string, map[string]string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -10169,13 +10169,13 @@ func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap
 				}
 				if result.HasData {
 					data := (result.Data).(map[string]string)
-					channel <- StreamValue[*map[string]*string, map[string]string]{
+					channel <- StreamValue[map[string]string, map[string]string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*map[string]*string)
-					channel <- StreamValue[*map[string]*string, map[string]string]{
+					data := (result.StreamData).(map[string]string)
+					channel <- StreamValue[map[string]string, map[string]string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -10187,7 +10187,7 @@ func (*stream) TestFnNamedArgsSingleMapStringToString(ctx context.Context, myMap
 }
 
 // / Streaming version of TestFnNamedArgsSingleString
-func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -10207,7 +10207,7 @@ func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string,
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10221,7 +10221,7 @@ func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string,
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -10242,13 +10242,13 @@ func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string,
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -10260,7 +10260,7 @@ func (*stream) TestFnNamedArgsSingleString(ctx context.Context, myString string,
 }
 
 // / Streaming version of TestFnNamedArgsSingleStringArray
-func (*stream) TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArray []string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArray []string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -10280,7 +10280,7 @@ func (*stream) TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArr
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10294,7 +10294,7 @@ func (*stream) TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArr
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -10315,13 +10315,13 @@ func (*stream) TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArr
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -10333,7 +10333,7 @@ func (*stream) TestFnNamedArgsSingleStringArray(ctx context.Context, myStringArr
 }
 
 // / Streaming version of TestFnNamedArgsSingleStringList
-func (*stream) TestFnNamedArgsSingleStringList(ctx context.Context, myArg []string, opts ...CallOptionFunc) (<-chan StreamValue[*[]*string, []string], error) {
+func (*stream) TestFnNamedArgsSingleStringList(ctx context.Context, myArg []string, opts ...CallOptionFunc) (<-chan StreamValue[[]string, []string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -10353,7 +10353,7 @@ func (*stream) TestFnNamedArgsSingleStringList(ctx context.Context, myArg []stri
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10367,7 +10367,7 @@ func (*stream) TestFnNamedArgsSingleStringList(ctx context.Context, myArg []stri
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*[]*string, []string])
+	channel := make(chan StreamValue[[]string, []string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -10388,13 +10388,13 @@ func (*stream) TestFnNamedArgsSingleStringList(ctx context.Context, myArg []stri
 				}
 				if result.HasData {
 					data := (result.Data).([]string)
-					channel <- StreamValue[*[]*string, []string]{
+					channel <- StreamValue[[]string, []string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*[]*string)
-					channel <- StreamValue[*[]*string, []string]{
+					data := (result.StreamData).([]string)
+					channel <- StreamValue[[]string, []string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -10406,7 +10406,7 @@ func (*stream) TestFnNamedArgsSingleStringList(ctx context.Context, myArg []stri
 }
 
 // / Streaming version of TestGemini
-func (*stream) TestGemini(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestGemini(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -10426,7 +10426,7 @@ func (*stream) TestGemini(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10440,7 +10440,7 @@ func (*stream) TestGemini(ctx context.Context, input string, opts ...CallOptionF
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -10461,13 +10461,13 @@ func (*stream) TestGemini(ctx context.Context, input string, opts ...CallOptionF
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -10479,7 +10479,7 @@ func (*stream) TestGemini(ctx context.Context, input string, opts ...CallOptionF
 }
 
 // / Streaming version of TestGeminiOpenAiGeneric
-func (*stream) TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -10499,7 +10499,7 @@ func (*stream) TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10513,7 +10513,7 @@ func (*stream) TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFu
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -10534,13 +10534,13 @@ func (*stream) TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFu
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -10552,7 +10552,7 @@ func (*stream) TestGeminiOpenAiGeneric(ctx context.Context, opts ...CallOptionFu
 }
 
 // / Streaming version of TestGeminiSystem
-func (*stream) TestGeminiSystem(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestGeminiSystem(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -10572,7 +10572,7 @@ func (*stream) TestGeminiSystem(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10586,7 +10586,7 @@ func (*stream) TestGeminiSystem(ctx context.Context, input string, opts ...CallO
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -10607,13 +10607,13 @@ func (*stream) TestGeminiSystem(ctx context.Context, input string, opts ...CallO
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -10625,7 +10625,7 @@ func (*stream) TestGeminiSystem(ctx context.Context, input string, opts ...CallO
 }
 
 // / Streaming version of TestGeminiSystemAsChat
-func (*stream) TestGeminiSystemAsChat(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestGeminiSystemAsChat(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -10645,7 +10645,7 @@ func (*stream) TestGeminiSystemAsChat(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10659,7 +10659,7 @@ func (*stream) TestGeminiSystemAsChat(ctx context.Context, input string, opts ..
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -10680,13 +10680,13 @@ func (*stream) TestGeminiSystemAsChat(ctx context.Context, input string, opts ..
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -10698,7 +10698,7 @@ func (*stream) TestGeminiSystemAsChat(ctx context.Context, input string, opts ..
 }
 
 // / Streaming version of TestGroq
-func (*stream) TestGroq(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestGroq(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -10718,7 +10718,7 @@ func (*stream) TestGroq(ctx context.Context, input string, opts ...CallOptionFun
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10732,7 +10732,7 @@ func (*stream) TestGroq(ctx context.Context, input string, opts ...CallOptionFun
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -10753,13 +10753,13 @@ func (*stream) TestGroq(ctx context.Context, input string, opts ...CallOptionFun
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -10771,7 +10771,7 @@ func (*stream) TestGroq(ctx context.Context, input string, opts ...CallOptionFun
 }
 
 // / Streaming version of TestImageInput
-func (*stream) TestImageInput(ctx context.Context, img any, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestImageInput(ctx context.Context, img any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -10791,7 +10791,7 @@ func (*stream) TestImageInput(ctx context.Context, img any, opts ...CallOptionFu
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10805,7 +10805,7 @@ func (*stream) TestImageInput(ctx context.Context, img any, opts ...CallOptionFu
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -10826,13 +10826,13 @@ func (*stream) TestImageInput(ctx context.Context, img any, opts ...CallOptionFu
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -10844,7 +10844,7 @@ func (*stream) TestImageInput(ctx context.Context, img any, opts ...CallOptionFu
 }
 
 // / Streaming version of TestImageInputAnthropic
-func (*stream) TestImageInputAnthropic(ctx context.Context, img any, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestImageInputAnthropic(ctx context.Context, img any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -10864,7 +10864,7 @@ func (*stream) TestImageInputAnthropic(ctx context.Context, img any, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10878,7 +10878,7 @@ func (*stream) TestImageInputAnthropic(ctx context.Context, img any, opts ...Cal
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -10899,13 +10899,13 @@ func (*stream) TestImageInputAnthropic(ctx context.Context, img any, opts ...Cal
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -10917,7 +10917,7 @@ func (*stream) TestImageInputAnthropic(ctx context.Context, img any, opts ...Cal
 }
 
 // / Streaming version of TestImageListInput
-func (*stream) TestImageListInput(ctx context.Context, imgs []any, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestImageListInput(ctx context.Context, imgs []any, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -10937,7 +10937,7 @@ func (*stream) TestImageListInput(ctx context.Context, imgs []any, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -10951,7 +10951,7 @@ func (*stream) TestImageListInput(ctx context.Context, imgs []any, opts ...CallO
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -10972,13 +10972,13 @@ func (*stream) TestImageListInput(ctx context.Context, imgs []any, opts ...CallO
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -10990,7 +10990,7 @@ func (*stream) TestImageListInput(ctx context.Context, imgs []any, opts ...CallO
 }
 
 // / Streaming version of TestMemory
-func (*stream) TestMemory(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.TestMemoryOutput, types.TestMemoryOutput], error) {
+func (*stream) TestMemory(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.TestMemoryOutput, types.TestMemoryOutput], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -11010,7 +11010,7 @@ func (*stream) TestMemory(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11024,7 +11024,7 @@ func (*stream) TestMemory(ctx context.Context, input string, opts ...CallOptionF
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.TestMemoryOutput, types.TestMemoryOutput])
+	channel := make(chan StreamValue[stream_types.TestMemoryOutput, types.TestMemoryOutput])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -11045,13 +11045,13 @@ func (*stream) TestMemory(ctx context.Context, input string, opts ...CallOptionF
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.TestMemoryOutput)
-					channel <- StreamValue[*stream_types.TestMemoryOutput, types.TestMemoryOutput]{
+					channel <- StreamValue[stream_types.TestMemoryOutput, types.TestMemoryOutput]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.TestMemoryOutput)
-					channel <- StreamValue[*stream_types.TestMemoryOutput, types.TestMemoryOutput]{
+					data := *(result.StreamData).(*stream_types.TestMemoryOutput)
+					channel <- StreamValue[stream_types.TestMemoryOutput, types.TestMemoryOutput]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -11063,7 +11063,7 @@ func (*stream) TestMemory(ctx context.Context, input string, opts ...CallOptionF
 }
 
 // / Streaming version of TestMulticlassNamedArgs
-func (*stream) TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArgsSingleClass, myArg2 types.NamedArgsSingleClass, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArgsSingleClass, myArg2 types.NamedArgsSingleClass, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -11083,7 +11083,7 @@ func (*stream) TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArg
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11097,7 +11097,7 @@ func (*stream) TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArg
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -11118,13 +11118,13 @@ func (*stream) TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArg
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -11136,7 +11136,7 @@ func (*stream) TestMulticlassNamedArgs(ctx context.Context, myArg types.NamedArg
 }
 
 // / Streaming version of TestNamedArgsLiteralBool
-func (*stream) TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -11156,7 +11156,7 @@ func (*stream) TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11170,7 +11170,7 @@ func (*stream) TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts .
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -11191,13 +11191,13 @@ func (*stream) TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts .
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -11209,7 +11209,7 @@ func (*stream) TestNamedArgsLiteralBool(ctx context.Context, myBool bool, opts .
 }
 
 // / Streaming version of TestNamedArgsLiteralInt
-func (*stream) TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -11229,7 +11229,7 @@ func (*stream) TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11243,7 +11243,7 @@ func (*stream) TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ..
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -11264,13 +11264,13 @@ func (*stream) TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ..
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -11282,7 +11282,7 @@ func (*stream) TestNamedArgsLiteralInt(ctx context.Context, myInt int64, opts ..
 }
 
 // / Streaming version of TestNamedArgsLiteralString
-func (*stream) TestNamedArgsLiteralString(ctx context.Context, myString string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestNamedArgsLiteralString(ctx context.Context, myString string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -11302,7 +11302,7 @@ func (*stream) TestNamedArgsLiteralString(ctx context.Context, myString string, 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11316,7 +11316,7 @@ func (*stream) TestNamedArgsLiteralString(ctx context.Context, myString string, 
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -11337,13 +11337,13 @@ func (*stream) TestNamedArgsLiteralString(ctx context.Context, myString string, 
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -11375,7 +11375,7 @@ func (*stream) TestOllama(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11428,7 +11428,7 @@ func (*stream) TestOllama(ctx context.Context, input string, opts ...CallOptionF
 }
 
 // / Streaming version of TestOllamaHaiku
-func (*stream) TestOllamaHaiku(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.Haiku, types.Haiku], error) {
+func (*stream) TestOllamaHaiku(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Haiku, types.Haiku], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -11448,7 +11448,7 @@ func (*stream) TestOllamaHaiku(ctx context.Context, input string, opts ...CallOp
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11462,7 +11462,7 @@ func (*stream) TestOllamaHaiku(ctx context.Context, input string, opts ...CallOp
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.Haiku, types.Haiku])
+	channel := make(chan StreamValue[stream_types.Haiku, types.Haiku])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -11483,13 +11483,13 @@ func (*stream) TestOllamaHaiku(ctx context.Context, input string, opts ...CallOp
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Haiku)
-					channel <- StreamValue[*stream_types.Haiku, types.Haiku]{
+					channel <- StreamValue[stream_types.Haiku, types.Haiku]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.Haiku)
-					channel <- StreamValue[*stream_types.Haiku, types.Haiku]{
+					data := *(result.StreamData).(*stream_types.Haiku)
+					channel <- StreamValue[stream_types.Haiku, types.Haiku]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -11501,7 +11501,7 @@ func (*stream) TestOllamaHaiku(ctx context.Context, input string, opts ...CallOp
 }
 
 // / Streaming version of TestOpenAI
-func (*stream) TestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestOpenAI(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -11521,7 +11521,7 @@ func (*stream) TestOpenAI(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11535,7 +11535,7 @@ func (*stream) TestOpenAI(ctx context.Context, input string, opts ...CallOptionF
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -11556,13 +11556,13 @@ func (*stream) TestOpenAI(ctx context.Context, input string, opts ...CallOptionF
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -11574,7 +11574,7 @@ func (*stream) TestOpenAI(ctx context.Context, input string, opts ...CallOptionF
 }
 
 // / Streaming version of TestOpenAIDummyClient
-func (*stream) TestOpenAIDummyClient(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestOpenAIDummyClient(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -11594,7 +11594,7 @@ func (*stream) TestOpenAIDummyClient(ctx context.Context, input string, opts ...
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11608,7 +11608,7 @@ func (*stream) TestOpenAIDummyClient(ctx context.Context, input string, opts ...
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -11629,13 +11629,13 @@ func (*stream) TestOpenAIDummyClient(ctx context.Context, input string, opts ...
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -11647,7 +11647,7 @@ func (*stream) TestOpenAIDummyClient(ctx context.Context, input string, opts ...
 }
 
 // / Streaming version of TestOpenAIGPT4oMini
-func (*stream) TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -11667,7 +11667,7 @@ func (*stream) TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11681,7 +11681,7 @@ func (*stream) TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...Ca
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -11702,13 +11702,13 @@ func (*stream) TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...Ca
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -11720,7 +11720,7 @@ func (*stream) TestOpenAIGPT4oMini(ctx context.Context, input string, opts ...Ca
 }
 
 // / Streaming version of TestOpenAIGPT4oMini2
-func (*stream) TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -11740,7 +11740,7 @@ func (*stream) TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11754,7 +11754,7 @@ func (*stream) TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...C
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -11775,13 +11775,13 @@ func (*stream) TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...C
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -11793,7 +11793,7 @@ func (*stream) TestOpenAIGPT4oMini2(ctx context.Context, input string, opts ...C
 }
 
 // / Streaming version of TestOpenAIGPT4oMini3
-func (*stream) TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -11813,7 +11813,7 @@ func (*stream) TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...C
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11827,7 +11827,7 @@ func (*stream) TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...C
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -11848,13 +11848,13 @@ func (*stream) TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...C
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -11866,7 +11866,7 @@ func (*stream) TestOpenAIGPT4oMini3(ctx context.Context, input string, opts ...C
 }
 
 // / Streaming version of TestOpenAILegacyProvider
-func (*stream) TestOpenAILegacyProvider(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestOpenAILegacyProvider(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -11886,7 +11886,7 @@ func (*stream) TestOpenAILegacyProvider(ctx context.Context, input string, opts 
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11900,7 +11900,7 @@ func (*stream) TestOpenAILegacyProvider(ctx context.Context, input string, opts 
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -11921,13 +11921,13 @@ func (*stream) TestOpenAILegacyProvider(ctx context.Context, input string, opts 
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -11939,7 +11939,7 @@ func (*stream) TestOpenAILegacyProvider(ctx context.Context, input string, opts 
 }
 
 // / Streaming version of TestOpenAIO1NoMaxTokens
-func (*stream) TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -11959,7 +11959,7 @@ func (*stream) TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -11973,7 +11973,7 @@ func (*stream) TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts .
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -11994,13 +11994,13 @@ func (*stream) TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts .
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -12012,7 +12012,7 @@ func (*stream) TestOpenAIO1NoMaxTokens(ctx context.Context, input string, opts .
 }
 
 // / Streaming version of TestOpenAIO1WithMaxCompletionTokens
-func (*stream) TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12032,7 +12032,7 @@ func (*stream) TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input st
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12046,7 +12046,7 @@ func (*stream) TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input st
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -12067,13 +12067,13 @@ func (*stream) TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input st
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -12085,7 +12085,7 @@ func (*stream) TestOpenAIO1WithMaxCompletionTokens(ctx context.Context, input st
 }
 
 // / Streaming version of TestOpenAIO1WithMaxTokens
-func (*stream) TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12105,7 +12105,7 @@ func (*stream) TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12119,7 +12119,7 @@ func (*stream) TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -12140,13 +12140,13 @@ func (*stream) TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -12158,7 +12158,7 @@ func (*stream) TestOpenAIO1WithMaxTokens(ctx context.Context, input string, opts
 }
 
 // / Streaming version of TestOpenAIShorthand
-func (*stream) TestOpenAIShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestOpenAIShorthand(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12178,7 +12178,7 @@ func (*stream) TestOpenAIShorthand(ctx context.Context, input string, opts ...Ca
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12192,7 +12192,7 @@ func (*stream) TestOpenAIShorthand(ctx context.Context, input string, opts ...Ca
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -12213,13 +12213,13 @@ func (*stream) TestOpenAIShorthand(ctx context.Context, input string, opts ...Ca
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -12231,7 +12231,7 @@ func (*stream) TestOpenAIShorthand(ctx context.Context, input string, opts ...Ca
 }
 
 // / Streaming version of TestOpenAIWithFinishReasonError
-func (*stream) TestOpenAIWithFinishReasonError(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestOpenAIWithFinishReasonError(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12251,7 +12251,7 @@ func (*stream) TestOpenAIWithFinishReasonError(ctx context.Context, input string
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12265,7 +12265,7 @@ func (*stream) TestOpenAIWithFinishReasonError(ctx context.Context, input string
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -12286,13 +12286,13 @@ func (*stream) TestOpenAIWithFinishReasonError(ctx context.Context, input string
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -12304,7 +12304,7 @@ func (*stream) TestOpenAIWithFinishReasonError(ctx context.Context, input string
 }
 
 // / Streaming version of TestOpenAIWithMaxTokens
-func (*stream) TestOpenAIWithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestOpenAIWithMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12324,7 +12324,7 @@ func (*stream) TestOpenAIWithMaxTokens(ctx context.Context, input string, opts .
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12338,7 +12338,7 @@ func (*stream) TestOpenAIWithMaxTokens(ctx context.Context, input string, opts .
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -12359,13 +12359,13 @@ func (*stream) TestOpenAIWithMaxTokens(ctx context.Context, input string, opts .
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -12377,7 +12377,7 @@ func (*stream) TestOpenAIWithMaxTokens(ctx context.Context, input string, opts .
 }
 
 // / Streaming version of TestOpenAIWithNullMaxTokens
-func (*stream) TestOpenAIWithNullMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestOpenAIWithNullMaxTokens(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12397,7 +12397,7 @@ func (*stream) TestOpenAIWithNullMaxTokens(ctx context.Context, input string, op
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12411,7 +12411,7 @@ func (*stream) TestOpenAIWithNullMaxTokens(ctx context.Context, input string, op
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -12432,13 +12432,13 @@ func (*stream) TestOpenAIWithNullMaxTokens(ctx context.Context, input string, op
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -12450,7 +12450,7 @@ func (*stream) TestOpenAIWithNullMaxTokens(ctx context.Context, input string, op
 }
 
 // / Streaming version of TestOpenRouterMistralSmall3_1_24b
-func (*stream) TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12470,7 +12470,7 @@ func (*stream) TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input stri
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12484,7 +12484,7 @@ func (*stream) TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input stri
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -12505,13 +12505,13 @@ func (*stream) TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input stri
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -12523,7 +12523,7 @@ func (*stream) TestOpenRouterMistralSmall3_1_24b(ctx context.Context, input stri
 }
 
 // / Streaming version of TestRetryConstant
-func (*stream) TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12543,7 +12543,7 @@ func (*stream) TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (<
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12557,7 +12557,7 @@ func (*stream) TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (<
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -12578,13 +12578,13 @@ func (*stream) TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (<
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -12596,7 +12596,7 @@ func (*stream) TestRetryConstant(ctx context.Context, opts ...CallOptionFunc) (<
 }
 
 // / Streaming version of TestRetryExponential
-func (*stream) TestRetryExponential(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestRetryExponential(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12616,7 +12616,7 @@ func (*stream) TestRetryExponential(ctx context.Context, opts ...CallOptionFunc)
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12630,7 +12630,7 @@ func (*stream) TestRetryExponential(ctx context.Context, opts ...CallOptionFunc)
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -12651,13 +12651,13 @@ func (*stream) TestRetryExponential(ctx context.Context, opts ...CallOptionFunc)
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -12669,7 +12669,7 @@ func (*stream) TestRetryExponential(ctx context.Context, opts ...CallOptionFunc)
 }
 
 // / Streaming version of TestRoundRobinStrategy
-func (*stream) TestRoundRobinStrategy(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestRoundRobinStrategy(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12689,7 +12689,7 @@ func (*stream) TestRoundRobinStrategy(ctx context.Context, input string, opts ..
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12703,7 +12703,7 @@ func (*stream) TestRoundRobinStrategy(ctx context.Context, input string, opts ..
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -12724,13 +12724,13 @@ func (*stream) TestRoundRobinStrategy(ctx context.Context, input string, opts ..
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -12742,7 +12742,7 @@ func (*stream) TestRoundRobinStrategy(ctx context.Context, input string, opts ..
 }
 
 // / Streaming version of TestSingleFallbackClient
-func (*stream) TestSingleFallbackClient(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestSingleFallbackClient(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12762,7 +12762,7 @@ func (*stream) TestSingleFallbackClient(ctx context.Context, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12776,7 +12776,7 @@ func (*stream) TestSingleFallbackClient(ctx context.Context, opts ...CallOptionF
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -12797,13 +12797,13 @@ func (*stream) TestSingleFallbackClient(ctx context.Context, opts ...CallOptionF
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -12815,7 +12815,7 @@ func (*stream) TestSingleFallbackClient(ctx context.Context, opts ...CallOptionF
 }
 
 // / Streaming version of TestThinking
-func (*stream) TestThinking(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.CustomStory, types.CustomStory], error) {
+func (*stream) TestThinking(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.CustomStory, types.CustomStory], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12835,7 +12835,7 @@ func (*stream) TestThinking(ctx context.Context, input string, opts ...CallOptio
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12849,7 +12849,7 @@ func (*stream) TestThinking(ctx context.Context, input string, opts ...CallOptio
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.CustomStory, types.CustomStory])
+	channel := make(chan StreamValue[stream_types.CustomStory, types.CustomStory])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -12870,13 +12870,13 @@ func (*stream) TestThinking(ctx context.Context, input string, opts ...CallOptio
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.CustomStory)
-					channel <- StreamValue[*stream_types.CustomStory, types.CustomStory]{
+					channel <- StreamValue[stream_types.CustomStory, types.CustomStory]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.CustomStory)
-					channel <- StreamValue[*stream_types.CustomStory, types.CustomStory]{
+					data := *(result.StreamData).(*stream_types.CustomStory)
+					channel <- StreamValue[stream_types.CustomStory, types.CustomStory]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -12888,7 +12888,7 @@ func (*stream) TestThinking(ctx context.Context, input string, opts ...CallOptio
 }
 
 // / Streaming version of TestUniverseQuestion
-func (*stream) TestUniverseQuestion(ctx context.Context, question types.UniverseQuestionInput, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.UniverseQuestion, types.UniverseQuestion], error) {
+func (*stream) TestUniverseQuestion(ctx context.Context, question types.UniverseQuestionInput, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.UniverseQuestion, types.UniverseQuestion], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12908,7 +12908,7 @@ func (*stream) TestUniverseQuestion(ctx context.Context, question types.Universe
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12922,7 +12922,7 @@ func (*stream) TestUniverseQuestion(ctx context.Context, question types.Universe
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.UniverseQuestion, types.UniverseQuestion])
+	channel := make(chan StreamValue[stream_types.UniverseQuestion, types.UniverseQuestion])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -12943,13 +12943,13 @@ func (*stream) TestUniverseQuestion(ctx context.Context, question types.Universe
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.UniverseQuestion)
-					channel <- StreamValue[*stream_types.UniverseQuestion, types.UniverseQuestion]{
+					channel <- StreamValue[stream_types.UniverseQuestion, types.UniverseQuestion]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.UniverseQuestion)
-					channel <- StreamValue[*stream_types.UniverseQuestion, types.UniverseQuestion]{
+					data := *(result.StreamData).(*stream_types.UniverseQuestion)
+					channel <- StreamValue[stream_types.UniverseQuestion, types.UniverseQuestion]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -12961,7 +12961,7 @@ func (*stream) TestUniverseQuestion(ctx context.Context, question types.Universe
 }
 
 // / Streaming version of TestVertex
-func (*stream) TestVertex(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestVertex(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -12981,7 +12981,7 @@ func (*stream) TestVertex(ctx context.Context, input string, opts ...CallOptionF
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -12995,7 +12995,7 @@ func (*stream) TestVertex(ctx context.Context, input string, opts ...CallOptionF
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -13016,13 +13016,13 @@ func (*stream) TestVertex(ctx context.Context, input string, opts ...CallOptionF
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -13034,7 +13034,7 @@ func (*stream) TestVertex(ctx context.Context, input string, opts ...CallOptionF
 }
 
 // / Streaming version of TestVertexClaude
-func (*stream) TestVertexClaude(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestVertexClaude(ctx context.Context, input string, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -13054,7 +13054,7 @@ func (*stream) TestVertexClaude(ctx context.Context, input string, opts ...CallO
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13068,7 +13068,7 @@ func (*stream) TestVertexClaude(ctx context.Context, input string, opts ...CallO
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -13089,13 +13089,13 @@ func (*stream) TestVertexClaude(ctx context.Context, input string, opts ...CallO
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -13107,7 +13107,7 @@ func (*stream) TestVertexClaude(ctx context.Context, input string, opts ...CallO
 }
 
 // / Streaming version of TestVertexWithSystemInstructions
-func (*stream) TestVertexWithSystemInstructions(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[*string, string], error) {
+func (*stream) TestVertexWithSystemInstructions(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[string, string], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -13127,7 +13127,7 @@ func (*stream) TestVertexWithSystemInstructions(ctx context.Context, opts ...Cal
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13141,7 +13141,7 @@ func (*stream) TestVertexWithSystemInstructions(ctx context.Context, opts ...Cal
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*string, string])
+	channel := make(chan StreamValue[string, string])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -13162,13 +13162,13 @@ func (*stream) TestVertexWithSystemInstructions(ctx context.Context, opts ...Cal
 				}
 				if result.HasData {
 					data := *(result.Data).(*string)
-					channel <- StreamValue[*string, string]{
+					channel <- StreamValue[string, string]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*string)
-					channel <- StreamValue[*string, string]{
+					data := *(result.StreamData).(*string)
+					channel <- StreamValue[string, string]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -13180,7 +13180,7 @@ func (*stream) TestVertexWithSystemInstructions(ctx context.Context, opts ...Cal
 }
 
 // / Streaming version of UnionTest_Function
-func (*stream) UnionTest_Function(ctx context.Context, input types.Union2BoolOrString, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.UnionTest_ReturnType, types.UnionTest_ReturnType], error) {
+func (*stream) UnionTest_Function(ctx context.Context, input types.Union2BoolOrString, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.UnionTest_ReturnType, types.UnionTest_ReturnType], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -13200,7 +13200,7 @@ func (*stream) UnionTest_Function(ctx context.Context, input types.Union2BoolOrS
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13214,7 +13214,7 @@ func (*stream) UnionTest_Function(ctx context.Context, input types.Union2BoolOrS
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.UnionTest_ReturnType, types.UnionTest_ReturnType])
+	channel := make(chan StreamValue[stream_types.UnionTest_ReturnType, types.UnionTest_ReturnType])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -13235,13 +13235,13 @@ func (*stream) UnionTest_Function(ctx context.Context, input types.Union2BoolOrS
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.UnionTest_ReturnType)
-					channel <- StreamValue[*stream_types.UnionTest_ReturnType, types.UnionTest_ReturnType]{
+					channel <- StreamValue[stream_types.UnionTest_ReturnType, types.UnionTest_ReturnType]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.UnionTest_ReturnType)
-					channel <- StreamValue[*stream_types.UnionTest_ReturnType, types.UnionTest_ReturnType]{
+					data := *(result.StreamData).(*stream_types.UnionTest_ReturnType)
+					channel <- StreamValue[stream_types.UnionTest_ReturnType, types.UnionTest_ReturnType]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -13253,7 +13253,7 @@ func (*stream) UnionTest_Function(ctx context.Context, input types.Union2BoolOrS
 }
 
 // / Streaming version of UseBlockConstraint
-func (*stream) UseBlockConstraint(ctx context.Context, inp types.BlockConstraintForParam, opts ...CallOptionFunc) (<-chan StreamValue[*int64, int64], error) {
+func (*stream) UseBlockConstraint(ctx context.Context, inp types.BlockConstraintForParam, opts ...CallOptionFunc) (<-chan StreamValue[int64, int64], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -13273,7 +13273,7 @@ func (*stream) UseBlockConstraint(ctx context.Context, inp types.BlockConstraint
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13287,7 +13287,7 @@ func (*stream) UseBlockConstraint(ctx context.Context, inp types.BlockConstraint
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*int64, int64])
+	channel := make(chan StreamValue[int64, int64])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -13308,13 +13308,13 @@ func (*stream) UseBlockConstraint(ctx context.Context, inp types.BlockConstraint
 				}
 				if result.HasData {
 					data := *(result.Data).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					data := *(result.StreamData).(*int64)
+					channel <- StreamValue[int64, int64]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -13326,7 +13326,7 @@ func (*stream) UseBlockConstraint(ctx context.Context, inp types.BlockConstraint
 }
 
 // / Streaming version of UseMaintainFieldOrder
-func (*stream) UseMaintainFieldOrder(ctx context.Context, input types.MaintainFieldOrder, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.MaintainFieldOrder, types.MaintainFieldOrder], error) {
+func (*stream) UseMaintainFieldOrder(ctx context.Context, input types.MaintainFieldOrder, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.MaintainFieldOrder, types.MaintainFieldOrder], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -13346,7 +13346,7 @@ func (*stream) UseMaintainFieldOrder(ctx context.Context, input types.MaintainFi
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13360,7 +13360,7 @@ func (*stream) UseMaintainFieldOrder(ctx context.Context, input types.MaintainFi
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.MaintainFieldOrder, types.MaintainFieldOrder])
+	channel := make(chan StreamValue[stream_types.MaintainFieldOrder, types.MaintainFieldOrder])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -13381,13 +13381,13 @@ func (*stream) UseMaintainFieldOrder(ctx context.Context, input types.MaintainFi
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.MaintainFieldOrder)
-					channel <- StreamValue[*stream_types.MaintainFieldOrder, types.MaintainFieldOrder]{
+					channel <- StreamValue[stream_types.MaintainFieldOrder, types.MaintainFieldOrder]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.MaintainFieldOrder)
-					channel <- StreamValue[*stream_types.MaintainFieldOrder, types.MaintainFieldOrder]{
+					data := *(result.StreamData).(*stream_types.MaintainFieldOrder)
+					channel <- StreamValue[stream_types.MaintainFieldOrder, types.MaintainFieldOrder]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -13399,7 +13399,7 @@ func (*stream) UseMaintainFieldOrder(ctx context.Context, input types.MaintainFi
 }
 
 // / Streaming version of UseMalformedConstraints
-func (*stream) UseMalformedConstraints(ctx context.Context, a types.MalformedConstraints2, opts ...CallOptionFunc) (<-chan StreamValue[*int64, int64], error) {
+func (*stream) UseMalformedConstraints(ctx context.Context, a types.MalformedConstraints2, opts ...CallOptionFunc) (<-chan StreamValue[int64, int64], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -13419,7 +13419,7 @@ func (*stream) UseMalformedConstraints(ctx context.Context, a types.MalformedCon
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13433,7 +13433,7 @@ func (*stream) UseMalformedConstraints(ctx context.Context, a types.MalformedCon
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*int64, int64])
+	channel := make(chan StreamValue[int64, int64])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -13454,13 +13454,13 @@ func (*stream) UseMalformedConstraints(ctx context.Context, a types.MalformedCon
 				}
 				if result.HasData {
 					data := *(result.Data).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					data := *(result.StreamData).(*int64)
+					channel <- StreamValue[int64, int64]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -13472,7 +13472,7 @@ func (*stream) UseMalformedConstraints(ctx context.Context, a types.MalformedCon
 }
 
 // / Streaming version of UseNestedBlockConstraint
-func (*stream) UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlockConstraintForParam, opts ...CallOptionFunc) (<-chan StreamValue[*int64, int64], error) {
+func (*stream) UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlockConstraintForParam, opts ...CallOptionFunc) (<-chan StreamValue[int64, int64], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -13492,7 +13492,7 @@ func (*stream) UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlo
 		args.Collectors = callOpts.collectors
 	}
 
-	encoded, err := baml.EncodeRoot(args)
+	encoded, err := baml.EncodeArgs(args)
 	if err != nil {
 		// This should never happen. if it does, please file an issue at https://github.com/boundaryml/baml/issues
 		// and include the type of the args you're passing in.
@@ -13506,7 +13506,7 @@ func (*stream) UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlo
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*int64, int64])
+	channel := make(chan StreamValue[int64, int64])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -13527,13 +13527,13 @@ func (*stream) UseNestedBlockConstraint(ctx context.Context, inp types.NestedBlo
 				}
 				if result.HasData {
 					data := *(result.Data).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					channel <- StreamValue[int64, int64]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*int64)
-					channel <- StreamValue[*int64, int64]{
+					data := *(result.StreamData).(*int64)
+					channel <- StreamValue[int64, int64]{
 						IsFinal:   false,
 						as_stream: &data,
 					}

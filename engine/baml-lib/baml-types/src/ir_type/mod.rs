@@ -439,7 +439,7 @@ impl<T> TypeGeneric<T> {
                 meta: f(meta),
                 name: name.clone(),
                 mode: mode.clone(),
-                dynamic: dynamic.clone(),
+                dynamic: *dynamic,
             },
             TypeGeneric::Arrow(arrow, type_metadata_ir) => TypeGeneric::Arrow(
                 Box::new(ArrowGeneric {
@@ -449,7 +449,7 @@ impl<T> TypeGeneric<T> {
                 f(type_metadata_ir),
             ),
             TypeGeneric::Primitive(value, type_metadata_ir) => {
-                TypeGeneric::Primitive(value.clone(), f(type_metadata_ir))
+                TypeGeneric::Primitive(*value, f(type_metadata_ir))
             }
             TypeGeneric::Enum {
                 meta,
@@ -458,7 +458,7 @@ impl<T> TypeGeneric<T> {
             } => TypeGeneric::Enum {
                 meta: f(meta),
                 name: name.clone(),
-                dynamic: dynamic.clone(),
+                dynamic: *dynamic,
             },
             TypeGeneric::Literal(literal_value, type_metadata_ir) => {
                 TypeGeneric::Literal(literal_value.clone(), f(type_metadata_ir))
@@ -657,8 +657,8 @@ impl<Meta: std::hash::Hash + std::cmp::Eq> ToUnionName<Meta> for TypeGeneric<Met
                         .map(|c| if c.is_alphanumeric() { c } else { '_' })
                         .collect::<String>()
                 ),
-                LiteralValue::Int(val) => format!("int_{}", val),
-                LiteralValue::Bool(val) => format!("bool_{}", val),
+                LiteralValue::Int(val) => format!("int_{val}"),
+                LiteralValue::Bool(val) => format!("bool_{val}"),
             },
             T::Class { name, .. } => name.to_string(),
             T::List(field_type, _) => {
@@ -722,7 +722,9 @@ pub struct TypeMetaIR {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{ir_type::union_type::UnionConstructor, Constraint};
+    use crate::{
+        ir_type::union_type::UnionConstructor, type_meta::stream::TypeMetaStreaming, Constraint,
+    };
 
     fn make_optional(inner: TypeStreaming) -> TypeStreaming {
         if let TypeStreaming::Union(items, meta) = inner {
@@ -1190,7 +1192,13 @@ mod tests {
                 UnionTypeGeneric::new_unsafe(vec![
                     TypeStreaming::Primitive(
                         TypeValue::Int,
-                        type_meta::stream::TypeMetaStreaming::default(),
+                        type_meta::stream::TypeMetaStreaming {
+                            streaming_behavior: type_meta::stream::StreamingBehavior {
+                                state: false,
+                                done: true,
+                            },
+                            ..Default::default()
+                        },
                     ),
                     TypeStreaming::null(),
                 ])
@@ -1198,12 +1206,13 @@ mod tests {
             type_meta::stream::TypeMetaStreaming {
                 streaming_behavior: type_meta::stream::StreamingBehavior {
                     state: true,
-                    done: true,
+                    ..Default::default()
                 },
                 ..Default::default()
             },
         );
-        assert_eq!(int.to_streaming_type(&TestLookup), expected);
+        let actual = int.to_streaming_type(&TestLookup);
+        assert_eq!(actual, expected, "{actual} != {expected}");
     }
 
     #[test]
@@ -1248,17 +1257,23 @@ mod tests {
     // Foo @stream.done => Foo
     fn partialize_class_with_done() {
         let mut class = TypeIR::class("MyClass");
-        let mut expected = make_optional(TypeStreaming::Class {
+        let expected = make_optional(TypeStreaming::Class {
             name: "MyClass".to_string(),
             mode: StreamingMode::NonStreaming,
             dynamic: false,
-            meta: Default::default(),
+            meta: TypeMetaStreaming {
+                streaming_behavior: type_meta::stream::StreamingBehavior {
+                    done: true,
+                    ..Default::default()
+                },
+                ..Default::default()
+            },
         });
-        expected.meta_mut().streaming_behavior.done = true;
         class.meta_mut().streaming_behavior.done = true;
         assert_eq!(
             converters::streaming::from_type_ir(&class, &TestLookup),
-            expected
+            expected,
+            "{class} != {expected}"
         );
     }
 
@@ -1291,15 +1306,21 @@ mod tests {
         let float = TypeIR::float();
         let expected = TypeStreaming::Union(
             unsafe {
-                UnionTypeGeneric::new_unsafe(vec![TypeStreaming::float(), TypeStreaming::null()])
+                UnionTypeGeneric::new_unsafe(vec![
+                    TypeStreaming::Primitive(
+                        TypeValue::Float,
+                        type_meta::stream::TypeMetaStreaming {
+                            streaming_behavior: type_meta::stream::StreamingBehavior {
+                                done: true,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        },
+                    ),
+                    TypeStreaming::null(),
+                ])
             },
-            type_meta::stream::TypeMetaStreaming {
-                streaming_behavior: type_meta::stream::StreamingBehavior {
-                    done: true,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
+            Default::default(),
         );
         assert_eq!(float.to_streaming_type(&TestLookup), expected);
 
@@ -1307,15 +1328,15 @@ mod tests {
         let bool_type = TypeIR::bool();
         let expected = TypeStreaming::Union(
             unsafe {
-                UnionTypeGeneric::new_unsafe(vec![TypeStreaming::bool(), TypeStreaming::null()])
+                UnionTypeGeneric::new_unsafe(vec![
+                    TypeStreaming::Primitive(
+                        TypeValue::Bool,
+                        type_meta::stream::TypeMetaStreaming::default().done(),
+                    ),
+                    TypeStreaming::null(),
+                ])
             },
-            type_meta::stream::TypeMetaStreaming {
-                streaming_behavior: type_meta::stream::StreamingBehavior {
-                    done: true,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
+            Default::default(),
         );
         assert_eq!(bool_type.to_streaming_type(&TestLookup), expected);
     }
@@ -1329,18 +1350,18 @@ mod tests {
                     TypeStreaming::Enum {
                         name: "MyEnum".to_string(),
                         dynamic: false,
-                        meta: Default::default(),
+                        meta: type_meta::stream::TypeMetaStreaming {
+                            streaming_behavior: type_meta::stream::StreamingBehavior {
+                                done: true,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        },
                     },
                     TypeStreaming::null(),
                 ])
             },
-            type_meta::stream::TypeMetaStreaming {
-                streaming_behavior: type_meta::stream::StreamingBehavior {
-                    done: true,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
+            Default::default(),
         );
         assert_eq!(enum_type.to_streaming_type(&TestLookup), expected);
     }
@@ -1353,20 +1374,21 @@ mod tests {
                 UnionTypeGeneric::new_unsafe(vec![
                     TypeStreaming::Literal(
                         LiteralValue::String("test".to_string()),
-                        Default::default(),
+                        type_meta::stream::TypeMetaStreaming {
+                            streaming_behavior: type_meta::stream::StreamingBehavior {
+                                done: true,
+                                ..Default::default()
+                            },
+                            ..Default::default()
+                        },
                     ),
                     TypeStreaming::null(),
                 ])
             },
-            type_meta::stream::TypeMetaStreaming {
-                streaming_behavior: type_meta::stream::StreamingBehavior {
-                    done: true,
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
+            Default::default(),
         );
-        assert_eq!(literal.to_streaming_type(&TestLookup), expected);
+        let streaming_type = literal.to_streaming_type(&TestLookup);
+        assert_eq!(streaming_type, expected, "{streaming_type} != {expected}");
     }
 
     #[test]

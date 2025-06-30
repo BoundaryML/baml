@@ -49,10 +49,10 @@ module BamlClient
       const :sixteen_digit_number, T.nilable(Integer)
       const :string_with_twenty_words, T.nilable(String)
       const :class_1, T.nilable(ClassWithoutDone)
-      const :class_2, T.nilable(ClassWithBlockDone)
+      const :class_2, T.nilable(BamlClient::Types::ClassWithBlockDone)
       const :class_done_needed, BamlClient::Types::ClassWithBlockDone
       const :class_needed, ClassWithoutDone
-      const :three_small_things, T.nilable(T::Array[T.nilable(SmallThing)])
+      const :three_small_things, T::Array[SmallThing]
       const :final_string, T.nilable(String)
   end
 

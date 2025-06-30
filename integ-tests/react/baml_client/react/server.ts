@@ -218,12 +218,12 @@ export const AssertFn = async (
  * This server action calls the underlying BAML function "AudioInput"
  * with the specified parameters.
  *
- * @param { Audio } aud - Input parameter.
+ * @param { Image } aud - Input parameter.
  *
  * @returns {Promise<string>} A promise that resolves with the result of the action.
  */
 export const AudioInput = async (
-  aud: Audio,
+  aud: Image,
 ): Promise<string> => {
   return b.AudioInput(
     aud,
@@ -236,13 +236,13 @@ export const AudioInput = async (
  * This server action calls the underlying BAML function "AudioInputOpenai"
  * with the specified parameters.
  *
- * @param { Audio } aud - Input parameter.
+ * @param { Image } aud - Input parameter.
  * @param { string } prompt - Input parameter.
  *
  * @returns {Promise<string>} A promise that resolves with the result of the action.
  */
 export const AudioInputOpenai = async (
-  aud: Audio,
+  aud: Image,
   prompt: string,
 ): Promise<string> => {
   return b.AudioInputOpenai(

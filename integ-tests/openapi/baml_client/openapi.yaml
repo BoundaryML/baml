@@ -241,6 +241,7 @@ paths:
             application/json:
               schema:
                 title: ClassifyDynEnumTwoResponse
+                enum: []
                 $ref: '#/components/schemas/DynEnumTwo'
       operationId: ClassifyDynEnumTwo
   /call/ClassifyMessage:
@@ -254,6 +255,12 @@ paths:
             application/json:
               schema:
                 title: ClassifyMessageResponse
+                enum:
+                - Refund
+                - CancelOrder
+                - TechnicalSupport
+                - AccountIssue
+                - Question
                 $ref: '#/components/schemas/Category'
       operationId: ClassifyMessage
   /call/ClassifyMessage2:
@@ -267,6 +274,12 @@ paths:
             application/json:
               schema:
                 title: ClassifyMessage2Response
+                enum:
+                - Refund
+                - CancelOrder
+                - TechnicalSupport
+                - AccountIssue
+                - Question
                 $ref: '#/components/schemas/Category'
       operationId: ClassifyMessage2
   /call/ClassifyMessage3:
@@ -280,6 +293,12 @@ paths:
             application/json:
               schema:
                 title: ClassifyMessage3Response
+                enum:
+                - Refund
+                - CancelOrder
+                - TechnicalSupport
+                - AccountIssue
+                - Question
                 $ref: '#/components/schemas/Category'
       operationId: ClassifyMessage3
   /call/Completion:
@@ -497,6 +516,10 @@ paths:
                 title: ExtractHobbyResponse
                 type: array
                 items:
+                  enum:
+                  - SPORTS
+                  - MUSIC
+                  - READING
                   $ref: '#/components/schemas/Hobby'
       operationId: ExtractHobby
   /call/ExtractNames:
@@ -607,6 +630,10 @@ paths:
                 title: FnEnumListOutputResponse
                 type: array
                 items:
+                  enum:
+                  - ONE
+                  - TWO
+                  - THREE
                   $ref: '#/components/schemas/EnumOutput'
       operationId: FnEnumListOutput
   /call/FnEnumOutput:
@@ -620,6 +647,10 @@ paths:
             application/json:
               schema:
                 title: FnEnumOutputResponse
+                enum:
+                - ONE
+                - TWO
+                - THREE
                 $ref: '#/components/schemas/EnumOutput'
       operationId: FnEnumOutput
   /call/FnLiteralClassInputOutput:
@@ -808,6 +839,14 @@ paths:
             application/json:
               schema:
                 title: FnTestAliasedEnumOutputResponse
+                enum:
+                - A
+                - B
+                - C
+                - D
+                - E
+                - F
+                - G
                 $ref: '#/components/schemas/TestEnum'
       operationId: FnTestAliasedEnumOutput
   /call/FnTestClassAlias:
@@ -2667,6 +2706,9 @@ components:
             type: object
             properties:
               input:
+                enum:
+                - KEY_ONE
+                - KEY_TWO
                 $ref: '#/components/schemas/AliasedEnum'
               __baml_options__:
                 nullable: true
@@ -2685,6 +2727,9 @@ components:
               input:
                 type: array
                 items:
+                  enum:
+                  - KEY_ONE
+                  - KEY_TWO
                   $ref: '#/components/schemas/AliasedEnum'
               __baml_options__:
                 nullable: true
@@ -2733,7 +2778,7 @@ components:
             type: object
             properties:
               aud:
-                $ref: '#/components/schemas/BamlAudio'
+                $ref: '#/components/schemas/BamlImage'
               __baml_options__:
                 nullable: true
                 $ref: '#/components/schemas/BamlOptions'
@@ -2749,7 +2794,7 @@ components:
             type: object
             properties:
               aud:
-                $ref: '#/components/schemas/BamlAudio'
+                $ref: '#/components/schemas/BamlImage'
               prompt:
                 type: string
               __baml_options__:
@@ -3547,6 +3592,9 @@ components:
             type: object
             properties:
               myArg:
+                enum:
+                - ONE
+                - TWO
                 $ref: '#/components/schemas/NamedArgsSingleEnum'
               __baml_options__:
                 nullable: true
@@ -4770,6 +4818,9 @@ components:
               myArg:
                 type: array
                 items:
+                  enum:
+                  - ONE
+                  - TWO
                   $ref: '#/components/schemas/NamedArgsSingleEnumList'
               __baml_options__:
                 nullable: true
@@ -6032,6 +6083,7 @@ components:
         some_class:
           $ref: '#/components/schemas/SomeClassNestedDynamic'
         status:
+          enum: []
           $ref: '#/components/schemas/DynEnumOne'
       required:
       - hi
@@ -6670,6 +6722,10 @@ components:
         omega_3:
           type: array
           items:
+            enum:
+            - Aleph
+            - Beta
+            - Gamma
             $ref: '#/components/schemas/OptionalTest_CategoryType'
       required:
       - omega_3
@@ -6680,6 +6736,11 @@ components:
         estimated_arrival_date:
           type: string
         order_status:
+          enum:
+          - ORDERED
+          - SHIPPED
+          - DELIVERED
+          - CANCELLED
           $ref: '#/components/schemas/OrderStatus'
         tracking_number:
           type: string
@@ -6713,6 +6774,13 @@ components:
       type: object
       properties:
         hair_color:
+          enum:
+          - RED
+          - BLUE
+          - GREEN
+          - YELLOW
+          - BLACK
+          - WHITE
           $ref: '#/components/schemas/Color'
         name:
           type: string
@@ -6742,6 +6810,9 @@ components:
       type: object
       properties:
         dataType:
+          enum:
+          - Resume
+          - Event
           $ref: '#/components/schemas/DataType'
         value:
           oneOf:
@@ -6897,7 +6968,11 @@ components:
           type: array
           items:
             oneOf:
-            - $ref: '#/components/schemas/Tag'
+            - enum:
+              - Security
+              - AI
+              - Blockchain
+              $ref: '#/components/schemas/Tag'
             - type: string
       required:
       - description
@@ -7013,6 +7088,9 @@ components:
         prop1:
           type: string
         prop2:
+          enum:
+          - ONE
+          - TWO
           $ref: '#/components/schemas/EnumInClass'
       required:
       - prop1

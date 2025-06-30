@@ -42,7 +42,7 @@ func (s *StreamValue[TStream, TFinal]) Stream() TStream {
 }
 
 // / Streaming version of ConsumeSimpleClass
-func (*stream) ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.SimpleClass, types.SimpleClass], error) {
+func (*stream) ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.SimpleClass, types.SimpleClass], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -76,7 +76,7 @@ func (*stream) ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, o
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.SimpleClass, types.SimpleClass])
+	channel := make(chan StreamValue[stream_types.SimpleClass, types.SimpleClass])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -97,13 +97,13 @@ func (*stream) ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, o
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.SimpleClass)
-					channel <- StreamValue[*stream_types.SimpleClass, types.SimpleClass]{
+					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.SimpleClass)
-					channel <- StreamValue[*stream_types.SimpleClass, types.SimpleClass]{
+					data := *(result.StreamData).(*stream_types.SimpleClass)
+					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -115,7 +115,7 @@ func (*stream) ConsumeSimpleClass(ctx context.Context, item types.SimpleClass, o
 }
 
 // / Streaming version of MakeSimpleClass
-func (*stream) MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.SimpleClass, types.SimpleClass], error) {
+func (*stream) MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.SimpleClass, types.SimpleClass], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -149,7 +149,7 @@ func (*stream) MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (<-c
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.SimpleClass, types.SimpleClass])
+	channel := make(chan StreamValue[stream_types.SimpleClass, types.SimpleClass])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -170,13 +170,13 @@ func (*stream) MakeSimpleClass(ctx context.Context, opts ...CallOptionFunc) (<-c
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.SimpleClass)
-					channel <- StreamValue[*stream_types.SimpleClass, types.SimpleClass]{
+					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.SimpleClass)
-					channel <- StreamValue[*stream_types.SimpleClass, types.SimpleClass]{
+					data := *(result.StreamData).(*stream_types.SimpleClass)
+					channel <- StreamValue[stream_types.SimpleClass, types.SimpleClass]{
 						IsFinal:   false,
 						as_stream: &data,
 					}

@@ -19,7 +19,6 @@ import (
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
-	flatbuffers "github.com/google/flatbuffers/go"
 
 	"example.com/integ-tests/baml_client/types"
 )
@@ -27,20 +26,20 @@ import (
 type Amount = *int64
 type Combination = *Union6BoolOrFloatOrIntOrListStringOrMapStringKeyListStringValueOrString
 type Currency = *types.Checked[int64]
-type Graph = *map[string]*[]*string
-type JsonArray = *[]*JsonValue
+type Graph = *map[string][]string
+type JsonArray = *[]JsonValue
 type JsonEntry = *Union2JsonTemplateOrSimpleTag
-type JsonObject = *map[string]*JsonValue
-type JsonTemplate = *map[string]*JsonEntry
+type JsonObject = *map[string]JsonValue
+type JsonTemplate = *map[string]JsonEntry
 type JsonValue = *Union6BoolOrFloatOrIntOrJsonArrayOrJsonObjectOrString
 type LinkedListAlias = *LinkedListAliasNode
-type List = *[]*string
+type List = *[]string
 type MultipleAttrs = *types.Checked[int64]
 type NodeIndirection = *NodeWithAliasIndirection
 type Primitive = *Union4BoolOrFloatOrIntOrString
 type RecAliasOne = *RecAliasTwo
-type RecAliasThree = *[]*RecAliasOne
+type RecAliasThree = *[]RecAliasOne
 type RecAliasTwo = *RecAliasThree
-type RecursiveListAlias = *[]*RecursiveListAlias
-type RecursiveMapAlias = *map[string]*RecursiveMapAlias
+type RecursiveListAlias = *[]RecursiveListAlias
+type RecursiveMapAlias = *map[string]RecursiveMapAlias
 type RecursiveUnion = *Union2MapStringKeyRecursiveUnionValueOrString

@@ -28,7 +28,7 @@ impl Drop for BamlRuntimeFfi {
         use baml_runtime::runtime_interface::ExperimentalTracingInterface;
         match self.inner.flush() {
             Ok(_) => log::trace!("Flushed BAML log events"),
-            Err(e) => log::error!("Error while flushing BAML log events: {:?}", e),
+            Err(e) => log::error!("Error while flushing BAML log events: {e:?}"),
         }
     }
 }
@@ -43,7 +43,7 @@ impl BamlRuntimeFfi {
             .map_err(|e| {
                 Error::new(
                     ruby.exception_runtime_error(),
-                    format!("Failed to start tokio runtime because:\n{:?}", e),
+                    format!("Failed to start tokio runtime because:\n{e:?}"),
                 )
             })
     }
@@ -119,7 +119,7 @@ impl BamlRuntimeFfi {
             Err(e) => {
                 return Err(Error::new(
                     ruby.exception_syntax_error(),
-                    format!("error while parsing call_function args:\n{}", e),
+                    format!("error while parsing call_function args:\n{e}"),
                 ));
             }
         };
@@ -167,7 +167,7 @@ impl BamlRuntimeFfi {
             Err(e) => {
                 return Err(Error::new(
                     ruby.exception_syntax_error(),
-                    format!("error while parsing stream_function args:\n{}", e),
+                    format!("error while parsing stream_function args:\n{e}"),
                 ));
             }
         };
@@ -217,7 +217,7 @@ impl BamlRuntimeFfi {
             Err(e) => {
                 return Err(Error::new(
                     ruby.exception_syntax_error(),
-                    format!("error while parsing call_function args:\n{}", e),
+                    format!("error while parsing call_function args:\n{e}"),
                 ));
             }
         };
@@ -287,7 +287,7 @@ impl BamlRuntimeFfi {
             .map_err(|e| {
                 magnus::Error::new(
                     ruby.exception_type_error(),
-                    format!("failed coercing BAML value to Ruby value: {:?}", e),
+                    format!("failed coercing BAML value to Ruby value: {e:?}"),
                 )
             })
     }
@@ -316,7 +316,7 @@ fn init(ruby: &Ruby) -> Result<()> {
     baml_log::init().map_err(|e| {
         Error::new(
             ruby.exception_runtime_error(),
-            format!("Failed to initialize BAML logger: {:#}", e),
+            format!("Failed to initialize BAML logger: {e:#}"),
         )
     })?;
 

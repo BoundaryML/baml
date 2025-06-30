@@ -160,7 +160,7 @@ class BamlStreamClient {
   ConsumeSimpleClass(
       item: types.SimpleClass,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<partial_types.SimpleClass | null, types.SimpleClass> {
+  ): BamlStream<partial_types.SimpleClass, types.SimpleClass> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -180,9 +180,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<partial_types.SimpleClass | null, types.SimpleClass>(
+      return new BamlStream<partial_types.SimpleClass, types.SimpleClass>(
         raw,
-        (a): partial_types.SimpleClass | null => a,
+        (a): partial_types.SimpleClass => a,
         (a): types.SimpleClass => a,
         this.ctxManager.cloneContext(),
       )
@@ -194,7 +194,7 @@ class BamlStreamClient {
   MakeSimpleClass(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<partial_types.SimpleClass | null, types.SimpleClass> {
+  ): BamlStream<partial_types.SimpleClass, types.SimpleClass> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -214,9 +214,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<partial_types.SimpleClass | null, types.SimpleClass>(
+      return new BamlStream<partial_types.SimpleClass, types.SimpleClass>(
         raw,
-        (a): partial_types.SimpleClass | null => a,
+        (a): partial_types.SimpleClass => a,
         (a): types.SimpleClass => a,
         this.ctxManager.cloneContext(),
       )

@@ -14,7 +14,7 @@ use super::{
 };
 
 // Recursive parity
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum BamlValueWithFlags {
     String(ValueWithFlags<String>),
     Int(ValueWithFlags<i64>),
@@ -39,6 +39,52 @@ pub enum BamlValueWithFlags {
     ),
     Null(baml_types::TypeIR, DeserializerConditions),
     Media(baml_types::TypeIR, ValueWithFlags<BamlMedia>),
+}
+
+impl std::fmt::Debug for BamlValueWithFlags {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            BamlValueWithFlags::String(v) => f.debug_tuple("String").field(&v.value).finish(),
+            BamlValueWithFlags::Int(v) => f.debug_tuple("Int").field(&v.value).finish(),
+            BamlValueWithFlags::Float(v) => f.debug_tuple("Float").field(&v.value).finish(),
+            BamlValueWithFlags::Bool(v) => f.debug_tuple("Bool").field(&v.value).finish(),
+            BamlValueWithFlags::List(flags, target, items) => f
+                .debug_tuple("List")
+                .field(&target.to_string())
+                .field(&flags)
+                .field(&items)
+                .finish(),
+            BamlValueWithFlags::Map(flags, target, items) => f
+                .debug_tuple("Map")
+                .field(&target.to_string())
+                .field(&flags)
+                .field(&items)
+                .finish(),
+            BamlValueWithFlags::Enum(v, target, flags) => f
+                .debug_struct("Enum")
+                .field("name", &v)
+                .field("type", &target.to_string())
+                .field("flags", &flags)
+                .finish(),
+            BamlValueWithFlags::Class(v, c, target, fields) => f
+                .debug_struct("Class")
+                .field("name", &v)
+                .field("type", &target.to_string())
+                .field("flags", &c)
+                .field("fields", &fields)
+                .finish(),
+            BamlValueWithFlags::Null(target, flags) => f
+                .debug_struct("Null")
+                .field("type", &target.to_string())
+                .field("flags", &flags)
+                .finish(),
+            BamlValueWithFlags::Media(target, flags) => f
+                .debug_struct("Media")
+                .field("type", &target.to_string())
+                .field("flags", &flags)
+                .finish(),
+        }
+    }
 }
 
 impl BamlValueWithFlags {
@@ -296,7 +342,7 @@ impl BamlValueWithFlags {
                 }
                 for (i, value) in values.iter().enumerate() {
                     let mut scope = scope.clone();
-                    scope.push(format!("parsed:{}", i));
+                    scope.push(format!("parsed:{i}"));
                     value.explanation_impl(scope, expls);
                 }
             }
@@ -314,12 +360,12 @@ impl BamlValueWithFlags {
                     if !causes.is_empty() {
                         expls.push(ParsingError {
                             scope: scope.clone(),
-                            reason: format!("error while parsing value for map key '{}'", k),
+                            reason: format!("error while parsing value for map key '{k}'"),
                             causes,
                         });
                     }
                     let mut scope = scope.clone();
-                    scope.push(format!("parsed:{}", k));
+                    scope.push(format!("parsed:{k}"));
                     v.explanation_impl(scope, expls);
                 }
             }
@@ -338,7 +384,7 @@ impl BamlValueWithFlags {
                 if !causes.is_empty() {
                     expls.push(ParsingError {
                         scope: scope.clone(),
-                        reason: format!("error while parsing class {}", class_name),
+                        reason: format!("error while parsing class {class_name}"),
                         causes,
                     });
                 }
@@ -373,11 +419,21 @@ impl BamlValueWithFlags {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ValueWithFlags<T> {
     pub value: T,
     pub target: baml_types::TypeIR,
     pub flags: DeserializerConditions,
+}
+
+impl<T: std::fmt::Debug> std::fmt::Debug for ValueWithFlags<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_tuple("ValueWithFlags")
+            .field(&self.target.to_string())
+            .field(&self.value)
+            .field(&self.flags)
+            .finish()
+    }
 }
 
 impl<T> ValueWithFlags<T> {

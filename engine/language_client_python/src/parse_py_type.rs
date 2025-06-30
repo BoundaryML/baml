@@ -104,7 +104,7 @@ where
         Err(e) => {
             return Err(vec![SerializationError {
                 position: vec![],
-                message: format!("Failed to parse type: {}", e),
+                message: format!("Failed to parse type: {e}"),
             }])
         }
     };
@@ -198,7 +198,7 @@ where
             } else {
                 Err(vec![SerializationError {
                     position: prefix,
-                    message: format!("Unsupported type: {}", r#type),
+                    message: format!("Unsupported type: {type}"),
                 }])
             }
         }

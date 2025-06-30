@@ -286,7 +286,7 @@ export class AsyncHttpRequest {
   }
   
   async AudioInput(
-      aud: Audio,
+      aud: Image,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -311,7 +311,7 @@ export class AsyncHttpRequest {
   }
   
   async AudioInputOpenai(
-      aud: Audio,prompt: string,
+      aud: Image,prompt: string,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -4917,7 +4917,7 @@ export class AsyncHttpStreamRequest {
   }
   
   async AudioInput(
-      aud: Audio,
+      aud: Image,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {
@@ -4942,7 +4942,7 @@ export class AsyncHttpStreamRequest {
   }
   
   async AudioInputOpenai(
-      aud: Audio,prompt: string,
+      aud: Image,prompt: string,
       __baml_options__?: BamlCallOptions
   ): Promise<HTTPRequest> {
     try {

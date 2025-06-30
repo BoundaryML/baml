@@ -108,7 +108,7 @@ export class LlmStreamParser {
   MakeClassWithBlockDone(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.ClassWithBlockDone | null {
+  ): types.ClassWithBlockDone {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -122,7 +122,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.ClassWithBlockDone | null
+      ) as types.ClassWithBlockDone
     } catch (error) {
       throw toBamlError(error);
     }
@@ -131,7 +131,7 @@ export class LlmStreamParser {
   MakeClassWithExternalDone(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.ClassWithoutDone | null {
+  ): types.ClassWithoutDone {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -145,7 +145,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.ClassWithoutDone | null
+      ) as types.ClassWithoutDone
     } catch (error) {
       throw toBamlError(error);
     }
@@ -154,7 +154,7 @@ export class LlmStreamParser {
   MakeSemanticContainer(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.SemanticContainer | null {
+  ): partial_types.SemanticContainer {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -168,7 +168,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.SemanticContainer | null
+      ) as partial_types.SemanticContainer
     } catch (error) {
       throw toBamlError(error);
     }

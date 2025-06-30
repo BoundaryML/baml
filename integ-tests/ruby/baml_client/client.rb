@@ -297,7 +297,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          aud: Baml::Audio,
+          aud: Baml::Image,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)}
       def AudioInput(
@@ -322,7 +322,7 @@ module BamlClient
       end
       sig {params(
           varargs: T.untyped,
-          aud: Baml::Audio,prompt: String,
+          aud: Baml::Image,prompt: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
       ).returns(String)}
       def AudioInputOpenai(
@@ -4685,7 +4685,7 @@ module BamlClient
           varargs: T.untyped,
           recipe: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Recipe), BamlClient::Types::Recipe])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::Recipe, BamlClient::Types::Recipe])}
       def AaaSamOutputFormat(
           *varargs,
           recipe:,
@@ -4701,7 +4701,7 @@ module BamlClient
               recipe: recipe,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Recipe), BamlClient::Types::Recipe].new(
+          Baml::BamlStream[BamlClient::StreamTypes::Recipe, BamlClient::Types::Recipe].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -4710,7 +4710,7 @@ module BamlClient
           varargs: T.untyped,
           data: BamlClient::Types::LinkedListAliasNode,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::LinkedListAliasNode), BamlClient::Types::LinkedListAliasNode])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::LinkedListAliasNode, BamlClient::Types::LinkedListAliasNode])}
       def AliasThatPointsToRecursiveType(
           *varargs,
           data:,
@@ -4726,7 +4726,7 @@ module BamlClient
               data: data,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::LinkedListAliasNode), BamlClient::Types::LinkedListAliasNode].new(
+          Baml::BamlStream[BamlClient::StreamTypes::LinkedListAliasNode, BamlClient::Types::LinkedListAliasNode].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -4735,7 +4735,7 @@ module BamlClient
           varargs: T.untyped,
           money: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::Types::Checked[Integer]), BamlClient::Types::Checked[Integer]])}
+      ).returns(Baml::BamlStream[BamlClient::Types::Checked[Integer], BamlClient::Types::Checked[Integer]])}
       def AliasWithMultipleAttrs(
           *varargs,
           money:,
@@ -4751,7 +4751,7 @@ module BamlClient
               money: money,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::Types::Checked[Integer]), BamlClient::Types::Checked[Integer]].new(
+          Baml::BamlStream[BamlClient::Types::Checked[Integer], BamlClient::Types::Checked[Integer]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -4760,7 +4760,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::InputClass,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def AliasedInputClass(
           *varargs,
           input:,
@@ -4776,7 +4776,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -4785,7 +4785,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::InputClass,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def AliasedInputClass2(
           *varargs,
           input:,
@@ -4801,7 +4801,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -4810,7 +4810,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::InputClassNested,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def AliasedInputClassNested(
           *varargs,
           input:,
@@ -4826,7 +4826,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -4835,7 +4835,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::AliasedEnum,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def AliasedInputEnum(
           *varargs,
           input:,
@@ -4851,7 +4851,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -4860,7 +4860,7 @@ module BamlClient
           varargs: T.untyped,
           input: T::Array[BamlClient::Types::AliasedEnum],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def AliasedInputList(
           *varargs,
           input:,
@@ -4876,7 +4876,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -4885,7 +4885,7 @@ module BamlClient
           varargs: T.untyped,
           optionals: BamlClient::Types::OptionalListAndMap,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::OptionalListAndMap), BamlClient::Types::OptionalListAndMap])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::OptionalListAndMap, BamlClient::Types::OptionalListAndMap])}
       def AllowedOptionals(
           *varargs,
           optionals:,
@@ -4901,7 +4901,7 @@ module BamlClient
               optionals: optionals,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::OptionalListAndMap), BamlClient::Types::OptionalListAndMap].new(
+          Baml::BamlStream[BamlClient::StreamTypes::OptionalListAndMap, BamlClient::Types::OptionalListAndMap].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -4910,7 +4910,7 @@ module BamlClient
           varargs: T.untyped,
           a: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(Integer), Integer])}
+      ).returns(Baml::BamlStream[Integer, Integer])}
       def AssertFn(
           *varargs,
           a:,
@@ -4926,16 +4926,16 @@ module BamlClient
               a: a,
           })
 
-          Baml::BamlStream[T.nilable(Integer), Integer].new(
+          Baml::BamlStream[Integer, Integer].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
       end
       sig {params(
           varargs: T.untyped,
-          aud: Baml::Audio,
+          aud: Baml::Image,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def AudioInput(
           *varargs,
           aud:,
@@ -4951,16 +4951,16 @@ module BamlClient
               aud: aud,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
       end
       sig {params(
           varargs: T.untyped,
-          aud: Baml::Audio,prompt: String,
+          aud: Baml::Image,prompt: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def AudioInputOpenai(
           *varargs,
           aud:,prompt:,
@@ -4976,7 +4976,7 @@ module BamlClient
               aud: aud,prompt: prompt,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -4985,7 +4985,7 @@ module BamlClient
           varargs: T.untyped,
           input: T::Array[Integer],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::LinkedList), BamlClient::Types::LinkedList])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::LinkedList, BamlClient::Types::LinkedList])}
       def BuildLinkedList(
           *varargs,
           input:,
@@ -5001,7 +5001,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::LinkedList), BamlClient::Types::LinkedList].new(
+          Baml::BamlStream[BamlClient::StreamTypes::LinkedList, BamlClient::Types::LinkedList].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5010,7 +5010,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::BinaryNode,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Tree), BamlClient::Types::Tree])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::Tree, BamlClient::Types::Tree])}
       def BuildTree(
           *varargs,
           input:,
@@ -5026,7 +5026,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Tree), BamlClient::Types::Tree].new(
+          Baml::BamlStream[BamlClient::StreamTypes::Tree, BamlClient::Types::Tree].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5035,7 +5035,7 @@ module BamlClient
           varargs: T.untyped,
           cls: BamlClient::Types::ClassToRecAlias,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassToRecAlias), BamlClient::Types::ClassToRecAlias])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::ClassToRecAlias, BamlClient::Types::ClassToRecAlias])}
       def ClassThatPointsToRecursiveClassThroughAlias(
           *varargs,
           cls:,
@@ -5051,7 +5051,7 @@ module BamlClient
               cls: cls,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassToRecAlias), BamlClient::Types::ClassToRecAlias].new(
+          Baml::BamlStream[BamlClient::StreamTypes::ClassToRecAlias, BamlClient::Types::ClassToRecAlias].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5060,7 +5060,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T.any(BamlClient::Types::DynEnumTwo, String)), T.any(BamlClient::Types::DynEnumTwo, String)])}
+      ).returns(Baml::BamlStream[T.any(BamlClient::Types::DynEnumTwo, String), T.any(BamlClient::Types::DynEnumTwo, String)])}
       def ClassifyDynEnumTwo(
           *varargs,
           input:,
@@ -5076,7 +5076,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(T.any(BamlClient::Types::DynEnumTwo, String)), T.any(BamlClient::Types::DynEnumTwo, String)].new(
+          Baml::BamlStream[T.any(BamlClient::Types::DynEnumTwo, String), T.any(BamlClient::Types::DynEnumTwo, String)].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5085,7 +5085,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::Types::Category), BamlClient::Types::Category])}
+      ).returns(Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category])}
       def ClassifyMessage(
           *varargs,
           input:,
@@ -5101,7 +5101,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::Types::Category), BamlClient::Types::Category].new(
+          Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5110,7 +5110,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::Types::Category), BamlClient::Types::Category])}
+      ).returns(Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category])}
       def ClassifyMessage2(
           *varargs,
           input:,
@@ -5126,7 +5126,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::Types::Category), BamlClient::Types::Category].new(
+          Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5135,7 +5135,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::Types::Category), BamlClient::Types::Category])}
+      ).returns(Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category])}
       def ClassifyMessage3(
           *varargs,
           input:,
@@ -5151,7 +5151,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::Types::Category), BamlClient::Types::Category].new(
+          Baml::BamlStream[BamlClient::Types::Category, BamlClient::Types::Category].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5160,7 +5160,7 @@ module BamlClient
           varargs: T.untyped,
           prefix: String,suffix: String,language: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def Completion(
           *varargs,
           prefix:,suffix:,language:,
@@ -5176,7 +5176,7 @@ module BamlClient
               prefix: prefix,suffix: suffix,language: language,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5185,7 +5185,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T.any(BamlClient::StreamTypes::BookOrder, BamlClient::StreamTypes::FlightConfirmation, BamlClient::StreamTypes::GroceryReceipt)), T.any(BamlClient::Types::BookOrder, BamlClient::Types::FlightConfirmation, BamlClient::Types::GroceryReceipt)])}
+      ).returns(Baml::BamlStream[T.any(BamlClient::StreamTypes::BookOrder, BamlClient::StreamTypes::FlightConfirmation, BamlClient::StreamTypes::GroceryReceipt), T.any(BamlClient::Types::BookOrder, BamlClient::Types::FlightConfirmation, BamlClient::Types::GroceryReceipt)])}
       def CustomTask(
           *varargs,
           input:,
@@ -5201,7 +5201,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(T.any(BamlClient::StreamTypes::BookOrder, BamlClient::StreamTypes::FlightConfirmation, BamlClient::StreamTypes::GroceryReceipt)), T.any(BamlClient::Types::BookOrder, BamlClient::Types::FlightConfirmation, BamlClient::Types::GroceryReceipt)].new(
+          Baml::BamlStream[T.any(BamlClient::StreamTypes::BookOrder, BamlClient::StreamTypes::FlightConfirmation, BamlClient::StreamTypes::GroceryReceipt), T.any(BamlClient::Types::BookOrder, BamlClient::Types::FlightConfirmation, BamlClient::Types::GroceryReceipt)].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5210,7 +5210,7 @@ module BamlClient
           varargs: T.untyped,
           img: Baml::Image,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def DescribeImage(
           *varargs,
           img:,
@@ -5226,7 +5226,7 @@ module BamlClient
               img: img,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5235,7 +5235,7 @@ module BamlClient
           varargs: T.untyped,
           classWithImage: BamlClient::Types::ClassWithImage,img2: Baml::Image,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def DescribeImage2(
           *varargs,
           classWithImage:,img2:,
@@ -5251,7 +5251,7 @@ module BamlClient
               classWithImage: classWithImage,img2: img2,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5260,7 +5260,7 @@ module BamlClient
           varargs: T.untyped,
           classWithImage: BamlClient::Types::ClassWithImage,img2: Baml::Image,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def DescribeImage3(
           *varargs,
           classWithImage:,img2:,
@@ -5276,7 +5276,7 @@ module BamlClient
               classWithImage: classWithImage,img2: img2,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5285,7 +5285,7 @@ module BamlClient
           varargs: T.untyped,
           classWithImage: BamlClient::Types::ClassWithImage,img2: Baml::Image,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def DescribeImage4(
           *varargs,
           classWithImage:,img2:,
@@ -5301,7 +5301,7 @@ module BamlClient
               classWithImage: classWithImage,img2: img2,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5310,7 +5310,7 @@ module BamlClient
           varargs: T.untyped,
           img: Baml::Image,client_sector: String,client_name: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def DescribeMedia1599(
           *varargs,
           img:,client_sector:,client_name:,
@@ -5326,7 +5326,7 @@ module BamlClient
               img: img,client_sector: client_sector,client_name: client_name,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5335,7 +5335,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T.any(BamlClient::StreamTypes::OriginalA, BamlClient::StreamTypes::OriginalB)), T.any(BamlClient::Types::OriginalA, BamlClient::Types::OriginalB)])}
+      ).returns(Baml::BamlStream[T.any(BamlClient::StreamTypes::OriginalA, BamlClient::StreamTypes::OriginalB), T.any(BamlClient::Types::OriginalA, BamlClient::Types::OriginalB)])}
       def DifferentiateUnions(
           *varargs,
 
@@ -5351,7 +5351,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(T.any(BamlClient::StreamTypes::OriginalA, BamlClient::StreamTypes::OriginalB)), T.any(BamlClient::Types::OriginalA, BamlClient::Types::OriginalB)].new(
+          Baml::BamlStream[T.any(BamlClient::StreamTypes::OriginalA, BamlClient::StreamTypes::OriginalB), T.any(BamlClient::Types::OriginalA, BamlClient::Types::OriginalB)].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5360,7 +5360,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::DummyOutput), BamlClient::Types::DummyOutput])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::DummyOutput, BamlClient::Types::DummyOutput])}
       def DummyOutputFunction(
           *varargs,
           input:,
@@ -5376,7 +5376,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::DummyOutput), BamlClient::Types::DummyOutput].new(
+          Baml::BamlStream[BamlClient::StreamTypes::DummyOutput, BamlClient::Types::DummyOutput].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5385,7 +5385,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::DynamicClassOne,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::DynamicClassTwo), BamlClient::Types::DynamicClassTwo])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::DynamicClassTwo, BamlClient::Types::DynamicClassTwo])}
       def DynamicFunc(
           *varargs,
           input:,
@@ -5401,7 +5401,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::DynamicClassTwo), BamlClient::Types::DynamicClassTwo].new(
+          Baml::BamlStream[BamlClient::StreamTypes::DynamicClassTwo, BamlClient::Types::DynamicClassTwo].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5410,7 +5410,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::DynInputOutput,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::DynInputOutput), BamlClient::Types::DynInputOutput])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::DynInputOutput, BamlClient::Types::DynInputOutput])}
       def DynamicInputOutput(
           *varargs,
           input:,
@@ -5426,7 +5426,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::DynInputOutput), BamlClient::Types::DynInputOutput].new(
+          Baml::BamlStream[BamlClient::StreamTypes::DynInputOutput, BamlClient::Types::DynInputOutput].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5435,7 +5435,7 @@ module BamlClient
           varargs: T.untyped,
           input: T::Array[BamlClient::Types::DynInputOutput],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Array[T.nilable(BamlClient::StreamTypes::DynInputOutput)]), T::Array[BamlClient::Types::DynInputOutput]])}
+      ).returns(Baml::BamlStream[T::Array[BamlClient::StreamTypes::DynInputOutput], T::Array[BamlClient::Types::DynInputOutput]])}
       def DynamicListInputOutput(
           *varargs,
           input:,
@@ -5451,7 +5451,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(T::Array[T.nilable(BamlClient::StreamTypes::DynInputOutput)]), T::Array[BamlClient::Types::DynInputOutput]].new(
+          Baml::BamlStream[T::Array[BamlClient::StreamTypes::DynInputOutput], T::Array[BamlClient::Types::DynInputOutput]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5460,7 +5460,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def ExpectFailure(
           *varargs,
 
@@ -5476,7 +5476,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5485,7 +5485,7 @@ module BamlClient
           varargs: T.untyped,
           document: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ContactInfo), BamlClient::Types::ContactInfo])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::ContactInfo, BamlClient::Types::ContactInfo])}
       def ExtractContactInfo(
           *varargs,
           document:,
@@ -5501,7 +5501,7 @@ module BamlClient
               document: document,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ContactInfo), BamlClient::Types::ContactInfo].new(
+          Baml::BamlStream[BamlClient::StreamTypes::ContactInfo, BamlClient::Types::ContactInfo].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5510,7 +5510,7 @@ module BamlClient
           varargs: T.untyped,
           text: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::DynamicSchema), BamlClient::Types::DynamicSchema])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::DynamicSchema, BamlClient::Types::DynamicSchema])}
       def ExtractEntities(
           *varargs,
           text:,
@@ -5526,7 +5526,7 @@ module BamlClient
               text: text,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::DynamicSchema), BamlClient::Types::DynamicSchema].new(
+          Baml::BamlStream[BamlClient::StreamTypes::DynamicSchema, BamlClient::Types::DynamicSchema].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5535,7 +5535,7 @@ module BamlClient
           varargs: T.untyped,
           text: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Array[T.nilable(T.any(BamlClient::Types::Hobby, String))]), T::Array[T.any(BamlClient::Types::Hobby, String)]])}
+      ).returns(Baml::BamlStream[T::Array[T.any(BamlClient::Types::Hobby, String)], T::Array[T.any(BamlClient::Types::Hobby, String)]])}
       def ExtractHobby(
           *varargs,
           text:,
@@ -5551,7 +5551,7 @@ module BamlClient
               text: text,
           })
 
-          Baml::BamlStream[T.nilable(T::Array[T.nilable(T.any(BamlClient::Types::Hobby, String))]), T::Array[T.any(BamlClient::Types::Hobby, String)]].new(
+          Baml::BamlStream[T::Array[T.any(BamlClient::Types::Hobby, String)], T::Array[T.any(BamlClient::Types::Hobby, String)]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5560,7 +5560,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Array[T.nilable(String)]), T::Array[String]])}
+      ).returns(Baml::BamlStream[T::Array[String], T::Array[String]])}
       def ExtractNames(
           *varargs,
           input:,
@@ -5576,7 +5576,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(T::Array[T.nilable(String)]), T::Array[String]].new(
+          Baml::BamlStream[T::Array[String], T::Array[String]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5585,7 +5585,7 @@ module BamlClient
           varargs: T.untyped,
           text: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Array[T.nilable(BamlClient::StreamTypes::Person)]), T::Array[BamlClient::Types::Person]])}
+      ).returns(Baml::BamlStream[T::Array[BamlClient::StreamTypes::Person], T::Array[BamlClient::Types::Person]])}
       def ExtractPeople(
           *varargs,
           text:,
@@ -5601,7 +5601,7 @@ module BamlClient
               text: text,
           })
 
-          Baml::BamlStream[T.nilable(T::Array[T.nilable(BamlClient::StreamTypes::Person)]), T::Array[BamlClient::Types::Person]].new(
+          Baml::BamlStream[T::Array[BamlClient::StreamTypes::Person], T::Array[BamlClient::Types::Person]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5610,7 +5610,7 @@ module BamlClient
           varargs: T.untyped,
           email: String,reason: T.any(String, String),
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ReceiptInfo), BamlClient::Types::ReceiptInfo])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::ReceiptInfo, BamlClient::Types::ReceiptInfo])}
       def ExtractReceiptInfo(
           *varargs,
           email:,reason:,
@@ -5626,7 +5626,7 @@ module BamlClient
               email: email,reason: reason,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ReceiptInfo), BamlClient::Types::ReceiptInfo].new(
+          Baml::BamlStream[BamlClient::StreamTypes::ReceiptInfo, BamlClient::Types::ReceiptInfo].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5635,7 +5635,7 @@ module BamlClient
           varargs: T.untyped,
           resume: String,img: T.nilable(Baml::Image),
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Resume), BamlClient::Types::Resume])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::Resume, BamlClient::Types::Resume])}
       def ExtractResume(
           *varargs,
           resume:,img:,
@@ -5651,7 +5651,7 @@ module BamlClient
               resume: resume,img: img,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Resume), BamlClient::Types::Resume].new(
+          Baml::BamlStream[BamlClient::StreamTypes::Resume, BamlClient::Types::Resume].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5660,7 +5660,7 @@ module BamlClient
           varargs: T.untyped,
           resume: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Resume), BamlClient::Types::Resume])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::Resume, BamlClient::Types::Resume])}
       def ExtractResume2(
           *varargs,
           resume:,
@@ -5676,7 +5676,7 @@ module BamlClient
               resume: resume,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Resume), BamlClient::Types::Resume].new(
+          Baml::BamlStream[BamlClient::StreamTypes::Resume, BamlClient::Types::Resume].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5735,7 +5735,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Array[T.nilable(BamlClient::Types::EnumOutput)]), T::Array[BamlClient::Types::EnumOutput]])}
+      ).returns(Baml::BamlStream[T::Array[BamlClient::Types::EnumOutput], T::Array[BamlClient::Types::EnumOutput]])}
       def FnEnumListOutput(
           *varargs,
           input:,
@@ -5751,7 +5751,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(T::Array[T.nilable(BamlClient::Types::EnumOutput)]), T::Array[BamlClient::Types::EnumOutput]].new(
+          Baml::BamlStream[T::Array[BamlClient::Types::EnumOutput], T::Array[BamlClient::Types::EnumOutput]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5760,7 +5760,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::Types::EnumOutput), BamlClient::Types::EnumOutput])}
+      ).returns(Baml::BamlStream[BamlClient::Types::EnumOutput, BamlClient::Types::EnumOutput])}
       def FnEnumOutput(
           *varargs,
           input:,
@@ -5776,7 +5776,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::Types::EnumOutput), BamlClient::Types::EnumOutput].new(
+          Baml::BamlStream[BamlClient::Types::EnumOutput, BamlClient::Types::EnumOutput].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5785,7 +5785,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::LiteralClassHello,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::LiteralClassHello), BamlClient::Types::LiteralClassHello])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::LiteralClassHello, BamlClient::Types::LiteralClassHello])}
       def FnLiteralClassInputOutput(
           *varargs,
           input:,
@@ -5801,7 +5801,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::LiteralClassHello), BamlClient::Types::LiteralClassHello].new(
+          Baml::BamlStream[BamlClient::StreamTypes::LiteralClassHello, BamlClient::Types::LiteralClassHello].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5810,7 +5810,7 @@ module BamlClient
           varargs: T.untyped,
           input: T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo),
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T.any(BamlClient::StreamTypes::LiteralClassOne, BamlClient::StreamTypes::LiteralClassTwo)), T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo)])}
+      ).returns(Baml::BamlStream[T.any(BamlClient::StreamTypes::LiteralClassOne, BamlClient::StreamTypes::LiteralClassTwo), T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo)])}
       def FnLiteralUnionClassInputOutput(
           *varargs,
           input:,
@@ -5826,7 +5826,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(T.any(BamlClient::StreamTypes::LiteralClassOne, BamlClient::StreamTypes::LiteralClassTwo)), T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo)].new(
+          Baml::BamlStream[T.any(BamlClient::StreamTypes::LiteralClassOne, BamlClient::StreamTypes::LiteralClassTwo), T.any(BamlClient::Types::LiteralClassOne, BamlClient::Types::LiteralClassTwo)].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5835,7 +5835,7 @@ module BamlClient
           varargs: T.untyped,
           myString: T.nilable(String),
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def FnNamedArgsSingleStringOptional(
           *varargs,
           myString:,
@@ -5851,7 +5851,7 @@ module BamlClient
               myString: myString,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5860,7 +5860,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Boolean), T::Boolean])}
+      ).returns(Baml::BamlStream[T::Boolean, T::Boolean])}
       def FnOutputBool(
           *varargs,
           input:,
@@ -5876,7 +5876,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(T::Boolean), T::Boolean].new(
+          Baml::BamlStream[T::Boolean, T::Boolean].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5885,7 +5885,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::TestOutputClass), BamlClient::Types::TestOutputClass])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::TestOutputClass, BamlClient::Types::TestOutputClass])}
       def FnOutputClass(
           *varargs,
           input:,
@@ -5901,7 +5901,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::TestOutputClass), BamlClient::Types::TestOutputClass].new(
+          Baml::BamlStream[BamlClient::StreamTypes::TestOutputClass, BamlClient::Types::TestOutputClass].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5910,7 +5910,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Array[T.nilable(BamlClient::StreamTypes::TestOutputClass)]), T::Array[BamlClient::Types::TestOutputClass]])}
+      ).returns(Baml::BamlStream[T::Array[BamlClient::StreamTypes::TestOutputClass], T::Array[BamlClient::Types::TestOutputClass]])}
       def FnOutputClassList(
           *varargs,
           input:,
@@ -5926,7 +5926,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(T::Array[T.nilable(BamlClient::StreamTypes::TestOutputClass)]), T::Array[BamlClient::Types::TestOutputClass]].new(
+          Baml::BamlStream[T::Array[BamlClient::StreamTypes::TestOutputClass], T::Array[BamlClient::Types::TestOutputClass]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5935,7 +5935,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::TestClassNested), BamlClient::Types::TestClassNested])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::TestClassNested, BamlClient::Types::TestClassNested])}
       def FnOutputClassNested(
           *varargs,
           input:,
@@ -5951,7 +5951,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::TestClassNested), BamlClient::Types::TestClassNested].new(
+          Baml::BamlStream[BamlClient::StreamTypes::TestClassNested, BamlClient::Types::TestClassNested].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5960,7 +5960,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::TestClassWithEnum), BamlClient::Types::TestClassWithEnum])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::TestClassWithEnum, BamlClient::Types::TestClassWithEnum])}
       def FnOutputClassWithEnum(
           *varargs,
           input:,
@@ -5976,7 +5976,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::TestClassWithEnum), BamlClient::Types::TestClassWithEnum].new(
+          Baml::BamlStream[BamlClient::StreamTypes::TestClassWithEnum, BamlClient::Types::TestClassWithEnum].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -5985,7 +5985,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(Integer), Integer])}
+      ).returns(Baml::BamlStream[Integer, Integer])}
       def FnOutputInt(
           *varargs,
           input:,
@@ -6001,7 +6001,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(Integer), Integer].new(
+          Baml::BamlStream[Integer, Integer].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6010,7 +6010,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Boolean), T::Boolean])}
+      ).returns(Baml::BamlStream[T::Boolean, T::Boolean])}
       def FnOutputLiteralBool(
           *varargs,
           input:,
@@ -6026,7 +6026,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(T::Boolean), T::Boolean].new(
+          Baml::BamlStream[T::Boolean, T::Boolean].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6035,7 +6035,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(Integer), Integer])}
+      ).returns(Baml::BamlStream[Integer, Integer])}
       def FnOutputLiteralInt(
           *varargs,
           input:,
@@ -6051,7 +6051,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(Integer), Integer].new(
+          Baml::BamlStream[Integer, Integer].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6060,7 +6060,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def FnOutputLiteralString(
           *varargs,
           input:,
@@ -6076,7 +6076,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6085,7 +6085,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Array[T.nilable(String)]), T::Array[String]])}
+      ).returns(Baml::BamlStream[T::Array[String], T::Array[String]])}
       def FnOutputStringList(
           *varargs,
           input:,
@@ -6101,7 +6101,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(T::Array[T.nilable(String)]), T::Array[String]].new(
+          Baml::BamlStream[T::Array[String], T::Array[String]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6110,7 +6110,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::Types::TestEnum), BamlClient::Types::TestEnum])}
+      ).returns(Baml::BamlStream[BamlClient::Types::TestEnum, BamlClient::Types::TestEnum])}
       def FnTestAliasedEnumOutput(
           *varargs,
           input:,
@@ -6126,7 +6126,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::Types::TestEnum), BamlClient::Types::TestEnum].new(
+          Baml::BamlStream[BamlClient::Types::TestEnum, BamlClient::Types::TestEnum].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6135,7 +6135,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::TestClassAlias), BamlClient::Types::TestClassAlias])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::TestClassAlias, BamlClient::Types::TestClassAlias])}
       def FnTestClassAlias(
           *varargs,
           input:,
@@ -6151,7 +6151,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::TestClassAlias), BamlClient::Types::TestClassAlias].new(
+          Baml::BamlStream[BamlClient::StreamTypes::TestClassAlias, BamlClient::Types::TestClassAlias].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6160,7 +6160,7 @@ module BamlClient
           varargs: T.untyped,
           myArg: BamlClient::Types::NamedArgsSingleEnum,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def FnTestNamedArgsSingleEnum(
           *varargs,
           myArg:,
@@ -6176,7 +6176,7 @@ module BamlClient
               myArg: myArg,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6185,7 +6185,7 @@ module BamlClient
           varargs: T.untyped,
           text: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::RaysData), BamlClient::Types::RaysData])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::RaysData, BamlClient::Types::RaysData])}
       def GetDataType(
           *varargs,
           text:,
@@ -6201,7 +6201,7 @@ module BamlClient
               text: text,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::RaysData), BamlClient::Types::RaysData].new(
+          Baml::BamlStream[BamlClient::StreamTypes::RaysData, BamlClient::Types::RaysData].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6210,7 +6210,7 @@ module BamlClient
           varargs: T.untyped,
           email: BamlClient::Types::Email,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::OrderInfo), BamlClient::Types::OrderInfo])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::OrderInfo, BamlClient::Types::OrderInfo])}
       def GetOrderInfo(
           *varargs,
           email:,
@@ -6226,7 +6226,7 @@ module BamlClient
               email: email,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::OrderInfo), BamlClient::Types::OrderInfo].new(
+          Baml::BamlStream[BamlClient::StreamTypes::OrderInfo, BamlClient::Types::OrderInfo].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6235,7 +6235,7 @@ module BamlClient
           varargs: T.untyped,
           query: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::SearchParams), BamlClient::Types::SearchParams])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::SearchParams, BamlClient::Types::SearchParams])}
       def GetQuery(
           *varargs,
           query:,
@@ -6251,7 +6251,7 @@ module BamlClient
               query: query,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::SearchParams), BamlClient::Types::SearchParams].new(
+          Baml::BamlStream[BamlClient::StreamTypes::SearchParams, BamlClient::Types::SearchParams].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6260,7 +6260,7 @@ module BamlClient
           varargs: T.untyped,
           i1: T::Hash[BamlClient::Types::MapKey, String],i2: T::Hash[BamlClient::Types::MapKey, String],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Hash[BamlClient::Types::MapKey, T.nilable(String)]), T::Hash[BamlClient::Types::MapKey, String]])}
+      ).returns(Baml::BamlStream[T::Hash[BamlClient::Types::MapKey, String], T::Hash[BamlClient::Types::MapKey, String]])}
       def InOutEnumMapKey(
           *varargs,
           i1:,i2:,
@@ -6276,7 +6276,7 @@ module BamlClient
               i1: i1,i2: i2,
           })
 
-          Baml::BamlStream[T.nilable(T::Hash[BamlClient::Types::MapKey, T.nilable(String)]), T::Hash[BamlClient::Types::MapKey, String]].new(
+          Baml::BamlStream[T::Hash[BamlClient::Types::MapKey, String], T::Hash[BamlClient::Types::MapKey, String]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6285,7 +6285,7 @@ module BamlClient
           varargs: T.untyped,
           i1: T::Hash[T.any(String, String, String, String), String],i2: T::Hash[T.any(String, String, String, String), String],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Hash[T.any(String, String, String, String), T.nilable(String)]), T::Hash[T.any(String, String, String, String), String]])}
+      ).returns(Baml::BamlStream[T::Hash[T.any(String, String, String, String), String], T::Hash[T.any(String, String, String, String), String]])}
       def InOutLiteralStringUnionMapKey(
           *varargs,
           i1:,i2:,
@@ -6301,7 +6301,7 @@ module BamlClient
               i1: i1,i2: i2,
           })
 
-          Baml::BamlStream[T.nilable(T::Hash[T.any(String, String, String, String), T.nilable(String)]), T::Hash[T.any(String, String, String, String), String]].new(
+          Baml::BamlStream[T::Hash[T.any(String, String, String, String), String], T::Hash[T.any(String, String, String, String), String]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6310,7 +6310,7 @@ module BamlClient
           varargs: T.untyped,
           m: T::Hash[String, String],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Hash[String, T.nilable(String)]), T::Hash[String, String]])}
+      ).returns(Baml::BamlStream[T::Hash[String, String], T::Hash[String, String]])}
       def InOutSingleLiteralStringMapKey(
           *varargs,
           m:,
@@ -6326,7 +6326,7 @@ module BamlClient
               m: m,
           })
 
-          Baml::BamlStream[T.nilable(T::Hash[String, T.nilable(String)]), T::Hash[String, String]].new(
+          Baml::BamlStream[T::Hash[String, String], T::Hash[String, String]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6335,7 +6335,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::JsonValue,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::JsonValue), BamlClient::Types::JsonValue])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::JsonValue, BamlClient::Types::JsonValue])}
       def JsonTypeAliasCycle(
           *varargs,
           input:,
@@ -6351,7 +6351,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::JsonValue), BamlClient::Types::JsonValue].new(
+          Baml::BamlStream[BamlClient::StreamTypes::JsonValue, BamlClient::Types::JsonValue].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6360,7 +6360,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def LLMEcho(
           *varargs,
           input:,
@@ -6376,7 +6376,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6385,7 +6385,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T.any(Integer, T::Boolean, String)), T.any(Integer, T::Boolean, String)])}
+      ).returns(Baml::BamlStream[T.any(Integer, T::Boolean, String), T.any(Integer, T::Boolean, String)])}
       def LiteralUnionsTest(
           *varargs,
           input:,
@@ -6401,7 +6401,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(T.any(Integer, T::Boolean, String)), T.any(Integer, T::Boolean, String)].new(
+          Baml::BamlStream[T.any(Integer, T::Boolean, String), T.any(Integer, T::Boolean, String)].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6410,7 +6410,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::Types::Checked[BamlClient::StreamTypes::BlockConstraint]), BamlClient::Types::Checked[BamlClient::Types::BlockConstraint]])}
+      ).returns(Baml::BamlStream[BamlClient::Types::Checked[BamlClient::StreamTypes::BlockConstraint], BamlClient::Types::Checked[BamlClient::Types::BlockConstraint]])}
       def MakeBlockConstraint(
           *varargs,
 
@@ -6426,7 +6426,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::Types::Checked[BamlClient::StreamTypes::BlockConstraint]), BamlClient::Types::Checked[BamlClient::Types::BlockConstraint]].new(
+          Baml::BamlStream[BamlClient::Types::Checked[BamlClient::StreamTypes::BlockConstraint], BamlClient::Types::Checked[BamlClient::Types::BlockConstraint]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6435,7 +6435,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassWithBlockDone), BamlClient::Types::ClassWithBlockDone])}
+      ).returns(Baml::BamlStream[BamlClient::Types::ClassWithBlockDone, BamlClient::Types::ClassWithBlockDone])}
       def MakeClassWithBlockDone(
           *varargs,
 
@@ -6451,7 +6451,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassWithBlockDone), BamlClient::Types::ClassWithBlockDone].new(
+          Baml::BamlStream[BamlClient::Types::ClassWithBlockDone, BamlClient::Types::ClassWithBlockDone].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6460,7 +6460,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassWithoutDone), BamlClient::Types::ClassWithoutDone])}
+      ).returns(Baml::BamlStream[BamlClient::Types::ClassWithoutDone, BamlClient::Types::ClassWithoutDone])}
       def MakeClassWithExternalDone(
           *varargs,
 
@@ -6476,7 +6476,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassWithoutDone), BamlClient::Types::ClassWithoutDone].new(
+          Baml::BamlStream[BamlClient::Types::ClassWithoutDone, BamlClient::Types::ClassWithoutDone].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6485,7 +6485,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::NestedBlockConstraint), BamlClient::Types::NestedBlockConstraint])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::NestedBlockConstraint, BamlClient::Types::NestedBlockConstraint])}
       def MakeNestedBlockConstraint(
           *varargs,
 
@@ -6501,7 +6501,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::NestedBlockConstraint), BamlClient::Types::NestedBlockConstraint].new(
+          Baml::BamlStream[BamlClient::StreamTypes::NestedBlockConstraint, BamlClient::Types::NestedBlockConstraint].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6510,7 +6510,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::SemanticContainer), BamlClient::Types::SemanticContainer])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::SemanticContainer, BamlClient::Types::SemanticContainer])}
       def MakeSemanticContainer(
           *varargs,
 
@@ -6526,7 +6526,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::SemanticContainer), BamlClient::Types::SemanticContainer].new(
+          Baml::BamlStream[BamlClient::StreamTypes::SemanticContainer, BamlClient::Types::SemanticContainer].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6535,7 +6535,7 @@ module BamlClient
           varargs: T.untyped,
           m: T::Hash[String, T::Array[String]],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Hash[String, T.nilable(T::Array[T.nilable(String)])]), T::Hash[String, T::Array[String]]])}
+      ).returns(Baml::BamlStream[T::Hash[String, T::Array[String]], T::Hash[String, T::Array[String]]])}
       def MapAlias(
           *varargs,
           m:,
@@ -6551,7 +6551,7 @@ module BamlClient
               m: m,
           })
 
-          Baml::BamlStream[T.nilable(T::Hash[String, T.nilable(T::Array[T.nilable(String)])]), T::Hash[String, T::Array[String]]].new(
+          Baml::BamlStream[T::Hash[String, T::Array[String]], T::Hash[String, T::Array[String]]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6560,7 +6560,7 @@ module BamlClient
           varargs: T.untyped,
           money: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::MergeAttrs), BamlClient::Types::MergeAttrs])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::MergeAttrs, BamlClient::Types::MergeAttrs])}
       def MergeAliasAttributes(
           *varargs,
           money:,
@@ -6576,7 +6576,7 @@ module BamlClient
               money: money,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::MergeAttrs), BamlClient::Types::MergeAttrs].new(
+          Baml::BamlStream[BamlClient::StreamTypes::MergeAttrs, BamlClient::Types::MergeAttrs].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6585,7 +6585,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::DynamicOutput), BamlClient::Types::DynamicOutput])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::DynamicOutput, BamlClient::Types::DynamicOutput])}
       def MyFunc(
           *varargs,
           input:,
@@ -6601,7 +6601,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::DynamicOutput), BamlClient::Types::DynamicOutput].new(
+          Baml::BamlStream[BamlClient::StreamTypes::DynamicOutput, BamlClient::Types::DynamicOutput].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6610,7 +6610,7 @@ module BamlClient
           varargs: T.untyped,
           c: T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]]),
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T.any(Integer, String, T::Boolean, Float, T::Array[T.nilable(String)], T::Hash[String, T.nilable(T::Array[T.nilable(String)])])), T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]])])}
+      ).returns(Baml::BamlStream[T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]]), T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]])])}
       def NestedAlias(
           *varargs,
           c:,
@@ -6626,7 +6626,7 @@ module BamlClient
               c: c,
           })
 
-          Baml::BamlStream[T.nilable(T.any(Integer, String, T::Boolean, Float, T::Array[T.nilable(String)], T::Hash[String, T.nilable(T::Array[T.nilable(String)])])), T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]])].new(
+          Baml::BamlStream[T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]]), T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]])].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6635,7 +6635,7 @@ module BamlClient
           varargs: T.untyped,
           s: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassForNullLiteral), BamlClient::Types::ClassForNullLiteral])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::ClassForNullLiteral, BamlClient::Types::ClassForNullLiteral])}
       def NullLiteralClassHello(
           *varargs,
           s:,
@@ -6651,7 +6651,7 @@ module BamlClient
               s: s,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassForNullLiteral), BamlClient::Types::ClassForNullLiteral].new(
+          Baml::BamlStream[BamlClient::StreamTypes::ClassForNullLiteral, BamlClient::Types::ClassForNullLiteral].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6660,7 +6660,7 @@ module BamlClient
           varargs: T.untyped,
           s: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def OpenAIWithAnthropicResponseHello(
           *varargs,
           s:,
@@ -6676,7 +6676,7 @@ module BamlClient
               s: s,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6685,7 +6685,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Array[T.nilable(BamlClient::StreamTypes::OptionalTest_ReturnType)]), T::Array[T.nilable(BamlClient::Types::OptionalTest_ReturnType)]])}
+      ).returns(Baml::BamlStream[T::Array[T.nilable(BamlClient::StreamTypes::OptionalTest_ReturnType)], T::Array[T.nilable(BamlClient::Types::OptionalTest_ReturnType)]])}
       def OptionalTest_Function(
           *varargs,
           input:,
@@ -6701,7 +6701,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(T::Array[T.nilable(BamlClient::StreamTypes::OptionalTest_ReturnType)]), T::Array[T.nilable(BamlClient::Types::OptionalTest_ReturnType)]].new(
+          Baml::BamlStream[T::Array[T.nilable(BamlClient::StreamTypes::OptionalTest_ReturnType)], T::Array[T.nilable(BamlClient::Types::OptionalTest_ReturnType)]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6710,7 +6710,7 @@ module BamlClient
           varargs: T.untyped,
           name: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::FooAny), BamlClient::Types::FooAny])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::FooAny, BamlClient::Types::FooAny])}
       def PredictAge(
           *varargs,
           name:,
@@ -6726,7 +6726,7 @@ module BamlClient
               name: name,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::FooAny), BamlClient::Types::FooAny].new(
+          Baml::BamlStream[BamlClient::StreamTypes::FooAny, BamlClient::Types::FooAny].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6735,7 +6735,7 @@ module BamlClient
           varargs: T.untyped,
           inp: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::Types::Checked[Integer]), BamlClient::Types::Checked[Integer]])}
+      ).returns(Baml::BamlStream[BamlClient::Types::Checked[Integer], BamlClient::Types::Checked[Integer]])}
       def PredictAgeBare(
           *varargs,
           inp:,
@@ -6751,7 +6751,7 @@ module BamlClient
               inp: inp,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::Types::Checked[Integer]), BamlClient::Types::Checked[Integer]].new(
+          Baml::BamlStream[BamlClient::Types::Checked[Integer], BamlClient::Types::Checked[Integer]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6760,7 +6760,7 @@ module BamlClient
           varargs: T.untyped,
           p: T.any(Integer, String, T::Boolean, Float),
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T.any(Integer, String, T::Boolean, Float)), T.any(Integer, String, T::Boolean, Float)])}
+      ).returns(Baml::BamlStream[T.any(Integer, String, T::Boolean, Float), T.any(Integer, String, T::Boolean, Float)])}
       def PrimitiveAlias(
           *varargs,
           p:,
@@ -6776,7 +6776,7 @@ module BamlClient
               p: p,
           })
 
-          Baml::BamlStream[T.nilable(T.any(Integer, String, T::Boolean, Float)), T.any(Integer, String, T::Boolean, Float)].new(
+          Baml::BamlStream[T.any(Integer, String, T::Boolean, Float), T.any(Integer, String, T::Boolean, Float)].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6785,7 +6785,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def PromptTestClaude(
           *varargs,
           input:,
@@ -6801,7 +6801,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6810,7 +6810,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def PromptTestClaudeChat(
           *varargs,
           input:,
@@ -6826,7 +6826,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6835,7 +6835,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def PromptTestClaudeChatNoSystem(
           *varargs,
           input:,
@@ -6851,7 +6851,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6860,7 +6860,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def PromptTestOpenAI(
           *varargs,
           input:,
@@ -6876,7 +6876,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6885,7 +6885,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def PromptTestOpenAIChat(
           *varargs,
           input:,
@@ -6901,7 +6901,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6910,7 +6910,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def PromptTestOpenAIChatNoSystem(
           *varargs,
           input:,
@@ -6926,7 +6926,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6935,7 +6935,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def PromptTestStreaming(
           *varargs,
           input:,
@@ -6951,7 +6951,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6960,7 +6960,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::RecAliasOne,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::RecAliasOne), BamlClient::Types::RecAliasOne])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::RecAliasOne, BamlClient::Types::RecAliasOne])}
       def RecursiveAliasCycle(
           *varargs,
           input:,
@@ -6976,7 +6976,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::RecAliasOne), BamlClient::Types::RecAliasOne].new(
+          Baml::BamlStream[BamlClient::StreamTypes::RecAliasOne, BamlClient::Types::RecAliasOne].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -6985,7 +6985,7 @@ module BamlClient
           varargs: T.untyped,
           cls: BamlClient::Types::NodeWithAliasIndirection,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::NodeWithAliasIndirection), BamlClient::Types::NodeWithAliasIndirection])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::NodeWithAliasIndirection, BamlClient::Types::NodeWithAliasIndirection])}
       def RecursiveClassWithAliasIndirection(
           *varargs,
           cls:,
@@ -7001,7 +7001,7 @@ module BamlClient
               cls: cls,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::NodeWithAliasIndirection), BamlClient::Types::NodeWithAliasIndirection].new(
+          Baml::BamlStream[BamlClient::StreamTypes::NodeWithAliasIndirection, BamlClient::Types::NodeWithAliasIndirection].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7010,7 +7010,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveUnion,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::RecursiveUnion), BamlClient::Types::RecursiveUnion])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::RecursiveUnion, BamlClient::Types::RecursiveUnion])}
       def RecursiveUnionTest(
           *varargs,
           input:,
@@ -7026,7 +7026,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::RecursiveUnion), BamlClient::Types::RecursiveUnion].new(
+          Baml::BamlStream[BamlClient::StreamTypes::RecursiveUnion, BamlClient::Types::RecursiveUnion].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7035,7 +7035,7 @@ module BamlClient
           varargs: T.untyped,
           money: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::Types::Checked[Integer]), BamlClient::Types::Checked[Integer]])}
+      ).returns(Baml::BamlStream[BamlClient::Types::Checked[Integer], BamlClient::Types::Checked[Integer]])}
       def ReturnAliasWithMergedAttributes(
           *varargs,
           money:,
@@ -7051,7 +7051,7 @@ module BamlClient
               money: money,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::Types::Checked[Integer]), BamlClient::Types::Checked[Integer]].new(
+          Baml::BamlStream[BamlClient::Types::Checked[Integer], BamlClient::Types::Checked[Integer]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7060,7 +7060,7 @@ module BamlClient
           varargs: T.untyped,
           inp: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(Integer), Integer])}
+      ).returns(Baml::BamlStream[Integer, Integer])}
       def ReturnFailingAssert(
           *varargs,
           inp:,
@@ -7076,7 +7076,7 @@ module BamlClient
               inp: inp,
           })
 
-          Baml::BamlStream[T.nilable(Integer), Integer].new(
+          Baml::BamlStream[Integer, Integer].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7085,7 +7085,7 @@ module BamlClient
           varargs: T.untyped,
           s: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::JsonTemplate), BamlClient::Types::JsonTemplate])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::JsonTemplate, BamlClient::Types::JsonTemplate])}
       def ReturnJsonEntry(
           *varargs,
           s:,
@@ -7101,7 +7101,7 @@ module BamlClient
               s: s,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::JsonTemplate), BamlClient::Types::JsonTemplate].new(
+          Baml::BamlStream[BamlClient::StreamTypes::JsonTemplate, BamlClient::Types::JsonTemplate].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7110,7 +7110,7 @@ module BamlClient
           varargs: T.untyped,
           a: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::MalformedConstraints), BamlClient::Types::MalformedConstraints])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::MalformedConstraints, BamlClient::Types::MalformedConstraints])}
       def ReturnMalformedConstraints(
           *varargs,
           a:,
@@ -7126,7 +7126,7 @@ module BamlClient
               a: a,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::MalformedConstraints), BamlClient::Types::MalformedConstraints].new(
+          Baml::BamlStream[BamlClient::StreamTypes::MalformedConstraints, BamlClient::Types::MalformedConstraints].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7135,7 +7135,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Schema), BamlClient::Types::Schema])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::Schema, BamlClient::Types::Schema])}
       def SchemaDescriptions(
           *varargs,
           input:,
@@ -7151,7 +7151,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Schema), BamlClient::Types::Schema].new(
+          Baml::BamlStream[BamlClient::StreamTypes::Schema, BamlClient::Types::Schema].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7160,7 +7160,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveListAlias,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::RecursiveListAlias), BamlClient::Types::RecursiveListAlias])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::RecursiveListAlias, BamlClient::Types::RecursiveListAlias])}
       def SimpleRecursiveListAlias(
           *varargs,
           input:,
@@ -7176,7 +7176,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::RecursiveListAlias), BamlClient::Types::RecursiveListAlias].new(
+          Baml::BamlStream[BamlClient::StreamTypes::RecursiveListAlias, BamlClient::Types::RecursiveListAlias].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7185,7 +7185,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveMapAlias,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::RecursiveMapAlias), BamlClient::Types::RecursiveMapAlias])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::RecursiveMapAlias, BamlClient::Types::RecursiveMapAlias])}
       def SimpleRecursiveMapAlias(
           *varargs,
           input:,
@@ -7201,7 +7201,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::RecursiveMapAlias), BamlClient::Types::RecursiveMapAlias].new(
+          Baml::BamlStream[BamlClient::StreamTypes::RecursiveMapAlias, BamlClient::Types::RecursiveMapAlias].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7210,7 +7210,7 @@ module BamlClient
           varargs: T.untyped,
           digits: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::BigNumbers), BamlClient::Types::BigNumbers])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::BigNumbers, BamlClient::Types::BigNumbers])}
       def StreamBigNumbers(
           *varargs,
           digits:,
@@ -7226,7 +7226,7 @@ module BamlClient
               digits: digits,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::BigNumbers), BamlClient::Types::BigNumbers].new(
+          Baml::BamlStream[BamlClient::StreamTypes::BigNumbers, BamlClient::Types::BigNumbers].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7235,7 +7235,7 @@ module BamlClient
           varargs: T.untyped,
           theme: String,length: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::TwoStoriesOneTitle), BamlClient::Types::TwoStoriesOneTitle])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::TwoStoriesOneTitle, BamlClient::Types::TwoStoriesOneTitle])}
       def StreamFailingAssertion(
           *varargs,
           theme:,length:,
@@ -7251,7 +7251,7 @@ module BamlClient
               theme: theme,length: length,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::TwoStoriesOneTitle), BamlClient::Types::TwoStoriesOneTitle].new(
+          Baml::BamlStream[BamlClient::StreamTypes::TwoStoriesOneTitle, BamlClient::Types::TwoStoriesOneTitle].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7260,7 +7260,7 @@ module BamlClient
           varargs: T.untyped,
           theme: String,length: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::TwoStoriesOneTitleCheck), BamlClient::Types::TwoStoriesOneTitleCheck])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::TwoStoriesOneTitleCheck, BamlClient::Types::TwoStoriesOneTitleCheck])}
       def StreamFailingCheck(
           *varargs,
           theme:,length:,
@@ -7276,7 +7276,7 @@ module BamlClient
               theme: theme,length: length,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::TwoStoriesOneTitleCheck), BamlClient::Types::TwoStoriesOneTitleCheck].new(
+          Baml::BamlStream[BamlClient::StreamTypes::TwoStoriesOneTitleCheck, BamlClient::Types::TwoStoriesOneTitleCheck].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7285,7 +7285,7 @@ module BamlClient
           varargs: T.untyped,
           digits: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(Integer), Integer])}
+      ).returns(Baml::BamlStream[Integer, Integer])}
       def StreamOneBigNumber(
           *varargs,
           digits:,
@@ -7301,7 +7301,7 @@ module BamlClient
               digits: digits,
           })
 
-          Baml::BamlStream[T.nilable(Integer), Integer].new(
+          Baml::BamlStream[Integer, Integer].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7310,7 +7310,7 @@ module BamlClient
           varargs: T.untyped,
           digits: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Array[T.nilable(T.any(Integer, String))]), T::Array[T.any(Integer, String)]])}
+      ).returns(Baml::BamlStream[T::Array[T.any(Integer, String)], T::Array[T.any(Integer, String)]])}
       def StreamUnionIntegers(
           *varargs,
           digits:,
@@ -7326,7 +7326,7 @@ module BamlClient
               digits: digits,
           })
 
-          Baml::BamlStream[T.nilable(T::Array[T.nilable(T.any(Integer, String))]), T::Array[T.any(Integer, String)]].new(
+          Baml::BamlStream[T::Array[T.any(Integer, String)], T::Array[T.any(Integer, String)]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7335,7 +7335,7 @@ module BamlClient
           varargs: T.untyped,
           digits: Integer,yapping: T::Boolean,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::CompoundBigNumbers), BamlClient::Types::CompoundBigNumbers])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::CompoundBigNumbers, BamlClient::Types::CompoundBigNumbers])}
       def StreamingCompoundNumbers(
           *varargs,
           digits:,yapping:,
@@ -7351,7 +7351,7 @@ module BamlClient
               digits: digits,yapping: yapping,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::CompoundBigNumbers), BamlClient::Types::CompoundBigNumbers].new(
+          Baml::BamlStream[BamlClient::StreamTypes::CompoundBigNumbers, BamlClient::Types::CompoundBigNumbers].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7360,7 +7360,7 @@ module BamlClient
           varargs: T.untyped,
           document_txt: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Document1559), BamlClient::Types::Document1559])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::Document1559, BamlClient::Types::Document1559])}
       def StructureDocument1559(
           *varargs,
           document_txt:,
@@ -7376,7 +7376,7 @@ module BamlClient
               document_txt: document_txt,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Document1559), BamlClient::Types::Document1559].new(
+          Baml::BamlStream[BamlClient::StreamTypes::Document1559, BamlClient::Types::Document1559].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7385,7 +7385,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::RecursiveAliasDependency,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::RecursiveAliasDependency), BamlClient::Types::RecursiveAliasDependency])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::RecursiveAliasDependency, BamlClient::Types::RecursiveAliasDependency])}
       def TakeRecAliasDep(
           *varargs,
           input:,
@@ -7401,7 +7401,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::RecursiveAliasDependency), BamlClient::Types::RecursiveAliasDependency].new(
+          Baml::BamlStream[BamlClient::StreamTypes::RecursiveAliasDependency, BamlClient::Types::RecursiveAliasDependency].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7410,7 +7410,7 @@ module BamlClient
           varargs: T.untyped,
           story: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TellStory(
           *varargs,
           story:,
@@ -7426,7 +7426,7 @@ module BamlClient
               story: story,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7435,7 +7435,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAnthropic(
           *varargs,
           input:,
@@ -7451,7 +7451,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7460,7 +7460,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAnthropicShorthand(
           *varargs,
           input:,
@@ -7476,7 +7476,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7485,7 +7485,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAws(
           *varargs,
           input:,
@@ -7501,7 +7501,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7510,7 +7510,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAwsClaude37(
           *varargs,
           input:,
@@ -7526,7 +7526,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7535,7 +7535,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAwsInferenceProfile(
           *varargs,
           input:,
@@ -7551,7 +7551,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7560,7 +7560,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAwsInvalidAccessKey(
           *varargs,
           input:,
@@ -7576,7 +7576,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7585,7 +7585,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAwsInvalidProfile(
           *varargs,
           input:,
@@ -7601,7 +7601,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7610,7 +7610,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAwsInvalidRegion(
           *varargs,
           input:,
@@ -7626,7 +7626,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7635,7 +7635,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAwsInvalidSessionToken(
           *varargs,
           input:,
@@ -7651,7 +7651,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7660,7 +7660,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAzure(
           *varargs,
           input:,
@@ -7676,7 +7676,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7685,7 +7685,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAzureFailure(
           *varargs,
           input:,
@@ -7701,7 +7701,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7710,7 +7710,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAzureO1NoMaxTokens(
           *varargs,
           input:,
@@ -7726,7 +7726,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7735,7 +7735,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAzureO1WithMaxCompletionTokens(
           *varargs,
           input:,
@@ -7751,7 +7751,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7760,7 +7760,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAzureO1WithMaxTokens(
           *varargs,
           input:,
@@ -7776,7 +7776,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7785,7 +7785,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAzureO3NoMaxTokens(
           *varargs,
           input:,
@@ -7801,7 +7801,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7810,7 +7810,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAzureO3WithMaxCompletionTokens(
           *varargs,
           input:,
@@ -7826,7 +7826,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7835,7 +7835,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestAzureWithMaxTokens(
           *varargs,
           input:,
@@ -7851,7 +7851,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7860,7 +7860,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,not_cached: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestCaching(
           *varargs,
           input:,not_cached:,
@@ -7876,7 +7876,7 @@ module BamlClient
               input: input,not_cached: not_cached,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7885,7 +7885,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestFallbackClient(
           *varargs,
 
@@ -7901,7 +7901,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7910,7 +7910,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestFallbackStrategy(
           *varargs,
           input:,
@@ -7926,7 +7926,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7935,7 +7935,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestFallbackToShorthand(
           *varargs,
           input:,
@@ -7951,7 +7951,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7960,7 +7960,7 @@ module BamlClient
           varargs: T.untyped,
           myBool: T::Boolean,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleBool(
           *varargs,
           myBool:,
@@ -7976,7 +7976,7 @@ module BamlClient
               myBool: myBool,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -7985,7 +7985,7 @@ module BamlClient
           varargs: T.untyped,
           myArg: BamlClient::Types::NamedArgsSingleClass,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleClass(
           *varargs,
           myArg:,
@@ -8001,7 +8001,7 @@ module BamlClient
               myArg: myArg,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8010,7 +8010,7 @@ module BamlClient
           varargs: T.untyped,
           myArg: T::Array[BamlClient::Types::NamedArgsSingleEnumList],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleEnumList(
           *varargs,
           myArg:,
@@ -8026,7 +8026,7 @@ module BamlClient
               myArg: myArg,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8035,7 +8035,7 @@ module BamlClient
           varargs: T.untyped,
           myFloat: Float,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleFloat(
           *varargs,
           myFloat:,
@@ -8051,7 +8051,7 @@ module BamlClient
               myFloat: myFloat,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8060,7 +8060,7 @@ module BamlClient
           varargs: T.untyped,
           myInt: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleInt(
           *varargs,
           myInt:,
@@ -8076,7 +8076,7 @@ module BamlClient
               myInt: myInt,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8085,7 +8085,7 @@ module BamlClient
           varargs: T.untyped,
           myMap: T::Hash[String, BamlClient::Types::StringToClassEntry],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Hash[String, T.nilable(BamlClient::StreamTypes::StringToClassEntry)]), T::Hash[String, BamlClient::Types::StringToClassEntry]])}
+      ).returns(Baml::BamlStream[T::Hash[String, BamlClient::StreamTypes::StringToClassEntry], T::Hash[String, BamlClient::Types::StringToClassEntry]])}
       def TestFnNamedArgsSingleMapStringToClass(
           *varargs,
           myMap:,
@@ -8101,7 +8101,7 @@ module BamlClient
               myMap: myMap,
           })
 
-          Baml::BamlStream[T.nilable(T::Hash[String, T.nilable(BamlClient::StreamTypes::StringToClassEntry)]), T::Hash[String, BamlClient::Types::StringToClassEntry]].new(
+          Baml::BamlStream[T::Hash[String, BamlClient::StreamTypes::StringToClassEntry], T::Hash[String, BamlClient::Types::StringToClassEntry]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8110,7 +8110,7 @@ module BamlClient
           varargs: T.untyped,
           myMap: T::Hash[String, T::Hash[String, String]],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Hash[String, T.nilable(T::Hash[String, T.nilable(String)])]), T::Hash[String, T::Hash[String, String]]])}
+      ).returns(Baml::BamlStream[T::Hash[String, T::Hash[String, String]], T::Hash[String, T::Hash[String, String]]])}
       def TestFnNamedArgsSingleMapStringToMap(
           *varargs,
           myMap:,
@@ -8126,7 +8126,7 @@ module BamlClient
               myMap: myMap,
           })
 
-          Baml::BamlStream[T.nilable(T::Hash[String, T.nilable(T::Hash[String, T.nilable(String)])]), T::Hash[String, T::Hash[String, String]]].new(
+          Baml::BamlStream[T::Hash[String, T::Hash[String, String]], T::Hash[String, T::Hash[String, String]]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8135,7 +8135,7 @@ module BamlClient
           varargs: T.untyped,
           myMap: T::Hash[String, String],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Hash[String, T.nilable(String)]), T::Hash[String, String]])}
+      ).returns(Baml::BamlStream[T::Hash[String, String], T::Hash[String, String]])}
       def TestFnNamedArgsSingleMapStringToString(
           *varargs,
           myMap:,
@@ -8151,7 +8151,7 @@ module BamlClient
               myMap: myMap,
           })
 
-          Baml::BamlStream[T.nilable(T::Hash[String, T.nilable(String)]), T::Hash[String, String]].new(
+          Baml::BamlStream[T::Hash[String, String], T::Hash[String, String]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8160,7 +8160,7 @@ module BamlClient
           varargs: T.untyped,
           myString: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleString(
           *varargs,
           myString:,
@@ -8176,7 +8176,7 @@ module BamlClient
               myString: myString,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8185,7 +8185,7 @@ module BamlClient
           varargs: T.untyped,
           myStringArray: T::Array[String],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestFnNamedArgsSingleStringArray(
           *varargs,
           myStringArray:,
@@ -8201,7 +8201,7 @@ module BamlClient
               myStringArray: myStringArray,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8210,7 +8210,7 @@ module BamlClient
           varargs: T.untyped,
           myArg: T::Array[String],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T::Array[T.nilable(String)]), T::Array[String]])}
+      ).returns(Baml::BamlStream[T::Array[String], T::Array[String]])}
       def TestFnNamedArgsSingleStringList(
           *varargs,
           myArg:,
@@ -8226,7 +8226,7 @@ module BamlClient
               myArg: myArg,
           })
 
-          Baml::BamlStream[T.nilable(T::Array[T.nilable(String)]), T::Array[String]].new(
+          Baml::BamlStream[T::Array[String], T::Array[String]].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8235,7 +8235,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestGemini(
           *varargs,
           input:,
@@ -8251,7 +8251,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8260,7 +8260,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestGeminiOpenAiGeneric(
           *varargs,
 
@@ -8276,7 +8276,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8285,7 +8285,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestGeminiSystem(
           *varargs,
           input:,
@@ -8301,7 +8301,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8310,7 +8310,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestGeminiSystemAsChat(
           *varargs,
           input:,
@@ -8326,7 +8326,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8335,7 +8335,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestGroq(
           *varargs,
           input:,
@@ -8351,7 +8351,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8360,7 +8360,7 @@ module BamlClient
           varargs: T.untyped,
           img: Baml::Image,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestImageInput(
           *varargs,
           img:,
@@ -8376,7 +8376,7 @@ module BamlClient
               img: img,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8385,7 +8385,7 @@ module BamlClient
           varargs: T.untyped,
           img: Baml::Image,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestImageInputAnthropic(
           *varargs,
           img:,
@@ -8401,7 +8401,7 @@ module BamlClient
               img: img,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8410,7 +8410,7 @@ module BamlClient
           varargs: T.untyped,
           imgs: T::Array[Baml::Image],
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestImageListInput(
           *varargs,
           imgs:,
@@ -8426,7 +8426,7 @@ module BamlClient
               imgs: imgs,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8435,7 +8435,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::TestMemoryOutput), BamlClient::Types::TestMemoryOutput])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::TestMemoryOutput, BamlClient::Types::TestMemoryOutput])}
       def TestMemory(
           *varargs,
           input:,
@@ -8451,7 +8451,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::TestMemoryOutput), BamlClient::Types::TestMemoryOutput].new(
+          Baml::BamlStream[BamlClient::StreamTypes::TestMemoryOutput, BamlClient::Types::TestMemoryOutput].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8460,7 +8460,7 @@ module BamlClient
           varargs: T.untyped,
           myArg: BamlClient::Types::NamedArgsSingleClass,myArg2: BamlClient::Types::NamedArgsSingleClass,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestMulticlassNamedArgs(
           *varargs,
           myArg:,myArg2:,
@@ -8476,7 +8476,7 @@ module BamlClient
               myArg: myArg,myArg2: myArg2,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8485,7 +8485,7 @@ module BamlClient
           varargs: T.untyped,
           myBool: T::Boolean,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestNamedArgsLiteralBool(
           *varargs,
           myBool:,
@@ -8501,7 +8501,7 @@ module BamlClient
               myBool: myBool,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8510,7 +8510,7 @@ module BamlClient
           varargs: T.untyped,
           myInt: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestNamedArgsLiteralInt(
           *varargs,
           myInt:,
@@ -8526,7 +8526,7 @@ module BamlClient
               myInt: myInt,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8535,7 +8535,7 @@ module BamlClient
           varargs: T.untyped,
           myString: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestNamedArgsLiteralString(
           *varargs,
           myString:,
@@ -8551,7 +8551,7 @@ module BamlClient
               myString: myString,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8585,7 +8585,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Haiku), BamlClient::Types::Haiku])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::Haiku, BamlClient::Types::Haiku])}
       def TestOllamaHaiku(
           *varargs,
           input:,
@@ -8601,7 +8601,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Haiku), BamlClient::Types::Haiku].new(
+          Baml::BamlStream[BamlClient::StreamTypes::Haiku, BamlClient::Types::Haiku].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8610,7 +8610,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestOpenAI(
           *varargs,
           input:,
@@ -8626,7 +8626,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8635,7 +8635,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIDummyClient(
           *varargs,
           input:,
@@ -8651,7 +8651,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8660,7 +8660,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIGPT4oMini(
           *varargs,
           input:,
@@ -8676,7 +8676,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8685,7 +8685,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIGPT4oMini2(
           *varargs,
           input:,
@@ -8701,7 +8701,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8710,7 +8710,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIGPT4oMini3(
           *varargs,
           input:,
@@ -8726,7 +8726,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8735,7 +8735,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestOpenAILegacyProvider(
           *varargs,
           input:,
@@ -8751,7 +8751,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8760,7 +8760,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIO1NoMaxTokens(
           *varargs,
           input:,
@@ -8776,7 +8776,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8785,7 +8785,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIO1WithMaxCompletionTokens(
           *varargs,
           input:,
@@ -8801,7 +8801,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8810,7 +8810,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIO1WithMaxTokens(
           *varargs,
           input:,
@@ -8826,7 +8826,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8835,7 +8835,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIShorthand(
           *varargs,
           input:,
@@ -8851,7 +8851,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8860,7 +8860,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIWithFinishReasonError(
           *varargs,
           input:,
@@ -8876,7 +8876,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8885,7 +8885,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIWithMaxTokens(
           *varargs,
           input:,
@@ -8901,7 +8901,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8910,7 +8910,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestOpenAIWithNullMaxTokens(
           *varargs,
           input:,
@@ -8926,7 +8926,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8935,7 +8935,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestOpenRouterMistralSmall3_1_24b(
           *varargs,
           input:,
@@ -8951,7 +8951,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8960,7 +8960,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestRetryConstant(
           *varargs,
 
@@ -8976,7 +8976,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -8985,7 +8985,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestRetryExponential(
           *varargs,
 
@@ -9001,7 +9001,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -9010,7 +9010,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestRoundRobinStrategy(
           *varargs,
           input:,
@@ -9026,7 +9026,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -9035,7 +9035,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestSingleFallbackClient(
           *varargs,
 
@@ -9051,7 +9051,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -9060,7 +9060,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::CustomStory), BamlClient::Types::CustomStory])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::CustomStory, BamlClient::Types::CustomStory])}
       def TestThinking(
           *varargs,
           input:,
@@ -9076,7 +9076,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::CustomStory), BamlClient::Types::CustomStory].new(
+          Baml::BamlStream[BamlClient::StreamTypes::CustomStory, BamlClient::Types::CustomStory].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -9085,7 +9085,7 @@ module BamlClient
           varargs: T.untyped,
           question: BamlClient::Types::UniverseQuestionInput,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::UniverseQuestion), BamlClient::Types::UniverseQuestion])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::UniverseQuestion, BamlClient::Types::UniverseQuestion])}
       def TestUniverseQuestion(
           *varargs,
           question:,
@@ -9101,7 +9101,7 @@ module BamlClient
               question: question,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::UniverseQuestion), BamlClient::Types::UniverseQuestion].new(
+          Baml::BamlStream[BamlClient::StreamTypes::UniverseQuestion, BamlClient::Types::UniverseQuestion].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -9110,7 +9110,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestVertex(
           *varargs,
           input:,
@@ -9126,7 +9126,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -9135,7 +9135,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestVertexClaude(
           *varargs,
           input:,
@@ -9151,7 +9151,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -9160,7 +9160,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(String), String])}
+      ).returns(Baml::BamlStream[String, String])}
       def TestVertexWithSystemInstructions(
           *varargs,
 
@@ -9176,7 +9176,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(String), String].new(
+          Baml::BamlStream[String, String].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -9185,7 +9185,7 @@ module BamlClient
           varargs: T.untyped,
           input: T.any(String, T::Boolean),
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::UnionTest_ReturnType), BamlClient::Types::UnionTest_ReturnType])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::UnionTest_ReturnType, BamlClient::Types::UnionTest_ReturnType])}
       def UnionTest_Function(
           *varargs,
           input:,
@@ -9201,7 +9201,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::UnionTest_ReturnType), BamlClient::Types::UnionTest_ReturnType].new(
+          Baml::BamlStream[BamlClient::StreamTypes::UnionTest_ReturnType, BamlClient::Types::UnionTest_ReturnType].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -9210,7 +9210,7 @@ module BamlClient
           varargs: T.untyped,
           inp: BamlClient::Types::BlockConstraintForParam,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(Integer), Integer])}
+      ).returns(Baml::BamlStream[Integer, Integer])}
       def UseBlockConstraint(
           *varargs,
           inp:,
@@ -9226,7 +9226,7 @@ module BamlClient
               inp: inp,
           })
 
-          Baml::BamlStream[T.nilable(Integer), Integer].new(
+          Baml::BamlStream[Integer, Integer].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -9235,7 +9235,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::MaintainFieldOrder,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::MaintainFieldOrder), BamlClient::Types::MaintainFieldOrder])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::MaintainFieldOrder, BamlClient::Types::MaintainFieldOrder])}
       def UseMaintainFieldOrder(
           *varargs,
           input:,
@@ -9251,7 +9251,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::MaintainFieldOrder), BamlClient::Types::MaintainFieldOrder].new(
+          Baml::BamlStream[BamlClient::StreamTypes::MaintainFieldOrder, BamlClient::Types::MaintainFieldOrder].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -9260,7 +9260,7 @@ module BamlClient
           varargs: T.untyped,
           a: BamlClient::Types::MalformedConstraints2,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(Integer), Integer])}
+      ).returns(Baml::BamlStream[Integer, Integer])}
       def UseMalformedConstraints(
           *varargs,
           a:,
@@ -9276,7 +9276,7 @@ module BamlClient
               a: a,
           })
 
-          Baml::BamlStream[T.nilable(Integer), Integer].new(
+          Baml::BamlStream[Integer, Integer].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -9285,7 +9285,7 @@ module BamlClient
           varargs: T.untyped,
           inp: BamlClient::Types::NestedBlockConstraintForParam,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(Integer), Integer])}
+      ).returns(Baml::BamlStream[Integer, Integer])}
       def UseNestedBlockConstraint(
           *varargs,
           inp:,
@@ -9301,7 +9301,7 @@ module BamlClient
               inp: inp,
           })
 
-          Baml::BamlStream[T.nilable(Integer), Integer].new(
+          Baml::BamlStream[Integer, Integer].new(
               ffi_stream: result,
               ctx_manager: ctx
           )

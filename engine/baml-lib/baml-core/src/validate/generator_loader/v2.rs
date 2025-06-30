@@ -24,7 +24,7 @@ fn parse_required_key<'a>(
         Some(expr) => expr,
         None => {
             return Err(DatamodelError::new_validation_error(
-                &format!("The `{}` argument is required for a generator.", key),
+                &format!("The `{key}` argument is required for a generator."),
                 generator_span.clone(),
             ))
         }
@@ -33,7 +33,7 @@ fn parse_required_key<'a>(
     match expr.as_string_value() {
         Some((name, _)) => Ok((name, expr.span())),
         None => Err(DatamodelError::new_validation_error(
-            &format!("`{}` must be a string.", key),
+            &format!("`{key}` must be a string."),
             expr.span().clone(),
         )),
     }
@@ -53,7 +53,7 @@ fn parse_optional_key<'a>(
     match expr.as_string_value() {
         Some((name, _)) => Ok(Some(name)),
         None => Err(DatamodelError::new_validation_error(
-            &format!("`{}` must be a string.", key),
+            &format!("`{key}` must be a string."),
             expr.span().clone(),
         )),
     }
@@ -98,7 +98,7 @@ pub(crate) fn parse_generator(
                         )]),
                     };
                 } else {
-                    log::error!("Unknown output type: {}", name);
+                    log::error!("Unknown output type: {name}");
                     errors.push(DatamodelError::not_found_error(
                         "output_type",
                         name,
@@ -137,7 +137,7 @@ pub(crate) fn parse_generator(
             }
             Err(_) => {
                 errors.push(DatamodelError::new_validation_error(
-                    &format!("Invalid semver version string: '{}'", version_str),
+                    &format!("Invalid semver version string: '{version_str}'"),
                     args.get("version")
                         .map(|arg| arg.span().clone())
                         .unwrap_or_else(|| ast_generator.span().clone()),
@@ -161,7 +161,7 @@ pub(crate) fn parse_generator(
         }
         Ok(Some(name)) => {
             errors.push(DatamodelError::new_validation_error(
-                &format!("'{}' is not supported. Use one of: 'async' or 'sync'", name),
+                &format!("'{name}' is not supported. Use one of: 'async' or 'sync'"),
                 args.get("default_client_mode")
                     .map(|arg| arg.span())
                     .unwrap_or_else(|| ast_generator.span())
@@ -209,7 +209,7 @@ pub(crate) fn parse_generator(
         }
         Ok(Some(name)) => {
             errors.push(DatamodelError::new_validation_error(
-                &format!("'{}' is not supported. Use one of: 'cjs' or 'esm'", name),
+                &format!("'{name}' is not supported. Use one of: 'cjs' or 'esm'"),
                 args.get("module_format")
                     .map(|arg| arg.span().clone())
                     .unwrap_or_else(|| ast_generator.span().clone()),
@@ -261,7 +261,7 @@ fn parse_cloud_project(
             }
             Err(_) => {
                 errors.push(DatamodelError::new_validation_error(
-                    &format!("Invalid semver version string: '{}'", version_str),
+                    &format!("Invalid semver version string: '{version_str}'"),
                     args.get("version")
                         .map(|arg| arg.span().clone())
                         .unwrap_or_else(|| ast_generator.span().clone()),

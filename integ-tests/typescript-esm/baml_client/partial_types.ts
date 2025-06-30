@@ -108,11 +108,11 @@ export namespace partial_types {
       id?: string | null
       name?: string | null
       description?: string | null
-      metadata?: (string | number | number)[] | null
+      metadata: (string | number | number)[]
     }
     export interface CompoundBigNumbers {
       big?: BigNumbers | null
-      big_nums?: (BigNumbers | null)[] | null
+      big_nums: BigNumbers[]
       another?: BigNumbers | null
     }
     export interface ContactInfo {
@@ -121,7 +121,7 @@ export namespace partial_types {
     }
     export interface CustomStory {
       title?: string | null
-      characters?: (string | null)[] | null
+      characters: string[]
       content?: string | null
     }
     export interface CustomTaskResult {
@@ -131,7 +131,7 @@ export namespace partial_types {
     }
     export interface Document1559 {
       client_details?: ClientDetails1559 | null
-      notes?: (Note1599 | null)[] | null
+      notes: Note1599[]
     }
     export interface DummyOutput {
       nonce?: string | null
@@ -164,7 +164,7 @@ export namespace partial_types {
       institution?: string | null
       location?: string | null
       degree?: string | null
-      major?: (string | null)[] | null
+      major: string[]
       graduation_date?: string | null
     }
     export interface Email {
@@ -197,7 +197,7 @@ export namespace partial_types {
       species?: types.Checked<string,"regex_bad" | "regex_good" | "trivial"> | null
     }
     export interface Forest {
-      trees?: (Tree | null)[] | null
+      trees: Tree[]
     }
     export interface FormatterTest0 {
       lorem?: string | null
@@ -218,7 +218,7 @@ export namespace partial_types {
     export interface GroceryReceipt {
       receiptId?: string | null
       storeName?: string | null
-      items?: (string | number | number)[] | null
+      items: (string | number | number)[]
       totalAmount?: number | null
     }
     export interface Haiku {
@@ -324,8 +324,8 @@ export namespace partial_types {
       note_amount?: string | null
     }
     export interface OptionalListAndMap {
-      p?: (string | null)[] | null
-      q?: Record<string, string | null> | null
+      p?: string[] | null
+      q?: Record<string, string> | null
     }
     export interface OptionalTest_Prop1 {
       omega_a?: string | null
@@ -334,7 +334,7 @@ export namespace partial_types {
     export interface OptionalTest_ReturnType {
       omega_1?: OptionalTest_Prop1 | null
       omega_2?: string | null
-      omega_3?: (types.OptionalTest_CategoryType | null)[] | null
+      omega_3: (types.OptionalTest_CategoryType | null)[]
     }
     export interface OrderInfo {
       order_status?: types.OrderStatus | null
@@ -365,7 +365,7 @@ export namespace partial_types {
       value?: Resume | Event | null
     }
     export interface ReceiptInfo {
-      items?: (ReceiptItem | null)[] | null
+      items: ReceiptItem[]
       total_cost?: number | null
       venue?: "barisa" | "ox_burger" | null
     }
@@ -376,7 +376,7 @@ export namespace partial_types {
       price?: number | null
     }
     export interface Recipe {
-      ingredients?: Record<string, Quantity | null> | null
+      ingredients: Record<string, Quantity>
       recipe_type?: "breakfast" | "dinner" | null
     }
     export interface RecursiveAliasDependency {
@@ -386,35 +386,35 @@ export namespace partial_types {
       name?: string | null
       email?: string | null
       phone?: string | null
-      experience?: (string | null)[] | null
-      education?: (Education | null)[] | null
-      skills?: (string | null)[] | null
+      experience: string[]
+      education: Education[]
+      skills: string[]
     }
     export interface Schema {
       prop1?: string | null
       prop2?: Nested | string | null
-      prop5?: (string | null)[] | null
+      prop5: (string | null)[]
       prop6?: string | Nested[] | null
-      nested_attrs?: (string | Nested)[] | null
+      nested_attrs: (string | Nested)[]
       parens?: string | null
       other_group?: string | number | null
     }
     export interface SearchParams {
       dateRange?: number | null
-      location?: (string | null)[] | null
+      location: string[]
       jobTitle?: WithReasoning | null
       company?: WithReasoning | null
-      description?: (WithReasoning | null)[] | null
-      tags?: (Tag | string)[] | null
+      description: WithReasoning[]
+      tags: (Tag | string)[]
     }
     export interface SemanticContainer {
       sixteen_digit_number?: number | null
       string_with_twenty_words?: string | null
       class_1?: ClassWithoutDone | null
-      class_2?: ClassWithBlockDone | null
+      class_2?: types.ClassWithBlockDone | null
       class_done_needed: types.ClassWithBlockDone
       class_needed: ClassWithoutDone
-      three_small_things?: (SmallThing | null)[] | null
+      three_small_things: SmallThing[]
       final_string?: string | null
     }
     export interface SimpleTag {
@@ -447,8 +447,8 @@ export namespace partial_types {
       prop2?: types.EnumInClass | null
     }
     export interface TestMemoryOutput {
-      items?: (MemoryObject | ComplexMemoryObject | AnotherObject)[] | null
-      more_items?: (MemoryObject | ComplexMemoryObject | AnotherObject)[] | null
+      items: (MemoryObject | ComplexMemoryObject | AnotherObject)[]
+      more_items: (MemoryObject | ComplexMemoryObject | AnotherObject)[]
     }
     export interface TestOutputClass {
       prop1?: string | null
@@ -470,7 +470,7 @@ export namespace partial_types {
     }
     export interface UnionTest_ReturnType {
       prop1?: string | boolean | null
-      prop2?: (number | boolean)[] | null
+      prop2: (number | boolean)[]
       prop3?: boolean[] | number[] | null
     }
     /**
@@ -493,9 +493,9 @@ export type Combination = number | string | boolean | number | string[] | Record
 
 export type Currency = types.Checked<number,"gt_ten"> | null
 
-export type Graph = Record<string, (string | null)[] | null> | null
+export type Graph = Record<string, string[]> | null
 
-export type JsonArray = (JsonValue | null)[] | null
+export type JsonArray = JsonValue[]
 
 export type JsonEntry = SimpleTag | JsonTemplate | null
 
@@ -503,7 +503,7 @@ export type JsonValue = number | string | boolean | number | JsonObject | JsonAr
 
 export type LinkedListAlias = LinkedListAliasNode | null
 
-export type List = (string | null)[] | null
+export type List = string[] | null
 
 export type MultipleAttrs = types.Checked<number,"gt_ten"> | null
 
@@ -513,22 +513,22 @@ export type Primitive = number | string | boolean | number | null
 
 export type RecAliasOne = RecAliasTwo | null
 
-export type RecAliasThree = (RecAliasOne | null)[] | null
+export type RecAliasThree = RecAliasOne[]
 
 export type RecAliasTwo = RecAliasThree | null
 
-export type RecursiveListAlias = (RecursiveListAlias | null)[] | null
+export type RecursiveListAlias = RecursiveListAlias[]
 
 export interface JsonObject {
-  [key: string]: Record<string, JsonValue | null> | null
+  [key: string]: JsonValue
 }
 
 export interface JsonTemplate {
-  [key: string]: Record<string, JsonEntry | null> | null
+  [key: string]: JsonEntry
 }
 
 export interface RecursiveMapAlias {
-  [key: string]: Record<string, RecursiveMapAlias | null> | null
+  [key: string]: RecursiveMapAlias
 }
 
 export interface RecursiveUnion {

@@ -11,7 +11,6 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 
 from . import stream_types, types
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
@@ -38,8 +37,8 @@ class LlmStreamParser:
 
     def PersonTest(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.Person"]:
+    ) -> stream_types.Person:
         result = self.__options.merge_options(baml_options).parse_response(function_name="PersonTest", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.Person"], result)
+        return typing.cast(stream_types.Person, result)
 
     

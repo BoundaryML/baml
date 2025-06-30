@@ -11,7 +11,6 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 
 from . import stream_types, types
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
@@ -50,20 +49,20 @@ class LlmStreamParser:
 
     def MakeClassWithBlockDone(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.ClassWithBlockDone"]:
+    ) -> types.ClassWithBlockDone:
         result = self.__options.merge_options(baml_options).parse_response(function_name="MakeClassWithBlockDone", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.ClassWithBlockDone"], result)
+        return typing.cast(types.ClassWithBlockDone, result)
 
     def MakeClassWithExternalDone(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.ClassWithoutDone"]:
+    ) -> types.ClassWithoutDone:
         result = self.__options.merge_options(baml_options).parse_response(function_name="MakeClassWithExternalDone", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.ClassWithoutDone"], result)
+        return typing.cast(types.ClassWithoutDone, result)
 
     def MakeSemanticContainer(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.SemanticContainer"]:
+    ) -> stream_types.SemanticContainer:
         result = self.__options.merge_options(baml_options).parse_response(function_name="MakeSemanticContainer", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.SemanticContainer"], result)
+        return typing.cast(stream_types.SemanticContainer, result)
 
     

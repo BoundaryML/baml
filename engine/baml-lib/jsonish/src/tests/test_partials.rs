@@ -1,4 +1,7 @@
-use baml_types::{ir_type::UnionConstructor, type_meta::base::TypeMeta};
+use baml_types::{
+    ir_type::UnionConstructor,
+    type_meta::base::{StreamingBehavior, TypeMeta},
+};
 
 use super::*;
 
@@ -43,6 +46,8 @@ class BookAnalysis {
     The first element is the top ranking.
   "#)
   wordCounts WordCount[]
+
+  @@stream.not_null
 } 
 "###;
 
@@ -289,7 +294,17 @@ test_partial_deserializer!(
   test_partial_choppy,
   CHOPPY_BAML_FILE,
   TRIMMED_CHOPPY_RESULT,
-  TypeIR::class("GraphJson"),
+  {
+    let mut type_ir = TypeIR::class("GraphJson");
+    type_ir.set_meta(TypeMeta {
+      streaming_behavior: StreamingBehavior {
+        needed: true,
+        ..Default::default()
+      },
+      ..Default::default()
+    });
+    type_ir
+  },
   {
     "vertices": [
       {
@@ -314,7 +329,17 @@ test_partial_deserializer!(
   test_partial_choppy_union,
   CHOPPY_BAML_FILE,
   TRIMMED_CHOPPY_RESULT,
-  TypeIR::union(vec![TypeIR::class("GraphJson"), TypeIR::class("GraphJson").as_list(), TypeIR::class("Error")]),
+  {
+    let mut type_ir = TypeIR::union(vec![TypeIR::class("GraphJson"), TypeIR::class("GraphJson").as_list(), TypeIR::class("Error")]);
+    type_ir.set_meta(TypeMeta {
+      streaming_behavior: StreamingBehavior {
+        needed: true,
+        ..Default::default()
+      },
+      ..Default::default()
+    });
+    type_ir
+  },
   {
     "vertices": [
       {

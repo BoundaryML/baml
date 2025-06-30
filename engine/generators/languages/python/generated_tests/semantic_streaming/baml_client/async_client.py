@@ -11,7 +11,6 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -104,37 +103,37 @@ class BamlStreamClient:
 
     def MakeClassWithBlockDone(self, 
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional["stream_types.ClassWithBlockDone"], types.ClassWithBlockDone]:
+    ) -> baml_py.BamlStream[types.ClassWithBlockDone, types.ClassWithBlockDone]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="MakeClassWithBlockDone", args={
             
         })
-        return baml_py.BamlStream[typing.Optional["stream_types.ClassWithBlockDone"], types.ClassWithBlockDone](
+        return baml_py.BamlStream[types.ClassWithBlockDone, types.ClassWithBlockDone](
           result,
-          lambda x: typing.cast(typing.Optional["stream_types.ClassWithBlockDone"], x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(types.ClassWithBlockDone, x.cast_to(types, types, stream_types, True)),
           lambda x: typing.cast(types.ClassWithBlockDone, x.cast_to(types, types, stream_types, False)),
           ctx,
         )
     def MakeClassWithExternalDone(self, 
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional["stream_types.ClassWithoutDone"], types.ClassWithoutDone]:
+    ) -> baml_py.BamlStream[types.ClassWithoutDone, types.ClassWithoutDone]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="MakeClassWithExternalDone", args={
             
         })
-        return baml_py.BamlStream[typing.Optional["stream_types.ClassWithoutDone"], types.ClassWithoutDone](
+        return baml_py.BamlStream[types.ClassWithoutDone, types.ClassWithoutDone](
           result,
-          lambda x: typing.cast(typing.Optional["stream_types.ClassWithoutDone"], x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(types.ClassWithoutDone, x.cast_to(types, types, stream_types, True)),
           lambda x: typing.cast(types.ClassWithoutDone, x.cast_to(types, types, stream_types, False)),
           ctx,
         )
     def MakeSemanticContainer(self, 
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional["stream_types.SemanticContainer"], types.SemanticContainer]:
+    ) -> baml_py.BamlStream[stream_types.SemanticContainer, types.SemanticContainer]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="MakeSemanticContainer", args={
             
         })
-        return baml_py.BamlStream[typing.Optional["stream_types.SemanticContainer"], types.SemanticContainer](
+        return baml_py.BamlStream[stream_types.SemanticContainer, types.SemanticContainer](
           result,
-          lambda x: typing.cast(typing.Optional["stream_types.SemanticContainer"], x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(stream_types.SemanticContainer, x.cast_to(types, types, stream_types, True)),
           lambda x: typing.cast(types.SemanticContainer, x.cast_to(types, types, stream_types, False)),
           ctx,
         )

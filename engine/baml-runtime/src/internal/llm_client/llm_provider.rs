@@ -26,8 +26,8 @@ pub enum LLMProvider {
 impl std::fmt::Debug for LLMProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LLMProvider::Primitive(provider) => write!(f, "Primitive({})", provider),
-            LLMProvider::Strategy(provider) => write!(f, "Strategy({})", provider),
+            LLMProvider::Primitive(provider) => write!(f, "Primitive({provider})"),
+            LLMProvider::Strategy(provider) => write!(f, "Strategy({provider})"),
         }
     }
 }

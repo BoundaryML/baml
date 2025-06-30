@@ -98,11 +98,11 @@ class ComplexMemoryObject(BaseModel):
     id: typing.Optional[str] = None
     name: typing.Optional[str] = None
     description: typing.Optional[str] = None
-    metadata: typing.Optional[typing.List[typing.Optional[typing.Union[str, int, float]]]] = None
+    metadata: typing.List[typing.Union[str, int, float]]
 
 class CompoundBigNumbers(BaseModel):
     big: typing.Optional["BigNumbers"] = None
-    big_nums: typing.Optional[typing.List[typing.Optional["BigNumbers"]]] = None
+    big_nums: typing.List["BigNumbers"]
     another: typing.Optional["BigNumbers"] = None
 
 class ContactInfo(BaseModel):
@@ -111,7 +111,7 @@ class ContactInfo(BaseModel):
 
 class CustomStory(BaseModel):
     title: typing.Optional[str] = None
-    characters: typing.Optional[typing.List[typing.Optional[str]]] = None
+    characters: typing.List[str]
     content: typing.Optional[str] = None
 
 class CustomTaskResult(BaseModel):
@@ -121,7 +121,7 @@ class CustomTaskResult(BaseModel):
 
 class Document1559(BaseModel):
     client_details: typing.Optional["ClientDetails1559"] = None
-    notes: typing.Optional[typing.List[typing.Optional["Note1599"]]] = None
+    notes: typing.List["Note1599"]
 
 class DummyOutput(BaseModel):
     model_config = ConfigDict(extra='allow')
@@ -154,7 +154,7 @@ class Education(BaseModel):
     institution: typing.Optional[str] = None
     location: typing.Optional[str] = None
     degree: typing.Optional[str] = None
-    major: typing.Optional[typing.List[typing.Optional[str]]] = None
+    major: typing.List[str]
     graduation_date: typing.Optional[str] = None
 
 class Email(BaseModel):
@@ -187,7 +187,7 @@ class FooAny(BaseModel):
     species: typing.Optional[types.Checked[str, typing_extensions.Literal['trivial', 'regex_good', 'regex_bad']]] = None
 
 class Forest(BaseModel):
-    trees: typing.Optional[typing.List[typing.Optional["Tree"]]] = None
+    trees: typing.List["Tree"]
 
 class FormatterTest0(BaseModel):
     lorem: typing.Optional[str] = None
@@ -208,7 +208,7 @@ class FormatterTest3(BaseModel):
 class GroceryReceipt(BaseModel):
     receiptId: typing.Optional[str] = None
     storeName: typing.Optional[str] = None
-    items: typing.Optional[typing.List[typing.Optional[typing.Union[str, int, float]]]] = None
+    items: typing.List[typing.Union[str, int, float]]
     totalAmount: typing.Optional[float] = None
 
 class Haiku(BaseModel):
@@ -311,8 +311,8 @@ class Note1599(BaseModel):
     note_amount: typing.Optional[str] = None
 
 class OptionalListAndMap(BaseModel):
-    p: typing.Optional[typing.List[typing.Optional[str]]] = None
-    q: typing.Optional[typing.Dict[str, typing.Optional[str]]] = None
+    p: typing.Optional[typing.List[str]] = None
+    q: typing.Optional[typing.Dict[str, str]] = None
 
 class OptionalTest_Prop1(BaseModel):
     omega_a: typing.Optional[str] = None
@@ -321,7 +321,7 @@ class OptionalTest_Prop1(BaseModel):
 class OptionalTest_ReturnType(BaseModel):
     omega_1: typing.Optional["OptionalTest_Prop1"] = None
     omega_2: typing.Optional[str] = None
-    omega_3: typing.Optional[typing.List[typing.Optional[types.OptionalTest_CategoryType]]] = None
+    omega_3: typing.List[typing.Optional[types.OptionalTest_CategoryType]]
 
 class OrderInfo(BaseModel):
     order_status: typing.Optional[types.OrderStatus] = None
@@ -352,7 +352,7 @@ class RaysData(BaseModel):
     value: typing.Optional[typing.Union["Resume", "Event"]] = None
 
 class ReceiptInfo(BaseModel):
-    items: typing.Optional[typing.List[typing.Optional["ReceiptItem"]]] = None
+    items: typing.List["ReceiptItem"]
     total_cost: typing.Optional[float] = None
     venue: typing.Optional[typing.Union[str, str]] = None
 
@@ -363,7 +363,7 @@ class ReceiptItem(BaseModel):
     price: typing.Optional[float] = None
 
 class Recipe(BaseModel):
-    ingredients: typing.Optional[typing.Dict[str, typing.Optional["Quantity"]]] = None
+    ingredients: typing.Dict[str, "Quantity"]
     recipe_type: typing.Optional[typing.Union[str, str]] = None
 
 class RecursiveAliasDependency(BaseModel):
@@ -373,35 +373,35 @@ class Resume(BaseModel):
     name: typing.Optional[str] = None
     email: typing.Optional[str] = None
     phone: typing.Optional[str] = None
-    experience: typing.Optional[typing.List[typing.Optional[str]]] = None
-    education: typing.Optional[typing.List[typing.Optional["Education"]]] = None
-    skills: typing.Optional[typing.List[typing.Optional[str]]] = None
+    experience: typing.List[str]
+    education: typing.List["Education"]
+    skills: typing.List[str]
 
 class Schema(BaseModel):
     prop1: typing.Optional[str] = None
     prop2: typing.Optional[typing.Union["Nested", str]] = None
-    prop5: typing.Optional[typing.List[typing.Optional[str]]] = None
-    prop6: typing.Optional[typing.Union[str, typing.List[typing.Optional["Nested"]]]] = None
-    nested_attrs: typing.Optional[typing.List[typing.Optional[typing.Union[str, "Nested"]]]] = None
+    prop5: typing.List[typing.Optional[str]]
+    prop6: typing.Optional[typing.Union[str, typing.List["Nested"]]] = None
+    nested_attrs: typing.List[typing.Union[str, "Nested"]]
     parens: typing.Optional[str] = None
     other_group: typing.Optional[typing.Union[str, int]] = None
 
 class SearchParams(BaseModel):
     dateRange: typing.Optional[int] = None
-    location: typing.Optional[typing.List[typing.Optional[str]]] = None
+    location: typing.List[str]
     jobTitle: typing.Optional["WithReasoning"] = None
     company: typing.Optional["WithReasoning"] = None
-    description: typing.Optional[typing.List[typing.Optional["WithReasoning"]]] = None
-    tags: typing.Optional[typing.List[typing.Optional[typing.Union[types.Tag, str]]]] = None
+    description: typing.List["WithReasoning"]
+    tags: typing.List[typing.Union[types.Tag, str]]
 
 class SemanticContainer(BaseModel):
     sixteen_digit_number: typing.Optional[int] = None
     string_with_twenty_words: typing.Optional[str] = None
     class_1: typing.Optional["ClassWithoutDone"] = None
-    class_2: typing.Optional["ClassWithBlockDone"] = None
+    class_2: typing.Optional["types.ClassWithBlockDone"] = None
     class_done_needed: "types.ClassWithBlockDone"
     class_needed: "ClassWithoutDone"
-    three_small_things: typing.Optional[typing.List[typing.Optional["SmallThing"]]] = None
+    three_small_things: typing.List["SmallThing"]
     final_string: typing.Optional[str] = None
 
 class SimpleTag(BaseModel):
@@ -434,8 +434,8 @@ class TestClassWithEnum(BaseModel):
     prop2: typing.Optional[types.EnumInClass] = None
 
 class TestMemoryOutput(BaseModel):
-    items: typing.Optional[typing.List[typing.Optional[typing.Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]]] = None
-    more_items: typing.Optional[typing.List[typing.Optional[typing.Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]]] = None
+    items: typing.List[typing.Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]
+    more_items: typing.List[typing.Union["MemoryObject", "ComplexMemoryObject", "AnotherObject"]]
 
 class TestOutputClass(BaseModel):
     prop1: typing.Optional[str] = None
@@ -457,8 +457,8 @@ class TwoStoriesOneTitleCheck(BaseModel):
 
 class UnionTest_ReturnType(BaseModel):
     prop1: typing.Optional[typing.Union[str, bool]] = None
-    prop2: typing.Optional[typing.List[typing.Optional[typing.Union[float, bool]]]] = None
-    prop3: typing.Optional[typing.Union[typing.List[typing.Optional[bool]], typing.List[typing.Optional[int]]]] = None
+    prop2: typing.List[typing.Union[float, bool]]
+    prop3: typing.Optional[typing.Union[typing.List[bool], typing.List[int]]] = None
 
 class UniverseQuestion(BaseModel):
     # my docs
@@ -480,25 +480,25 @@ class WithReasoning(BaseModel):
 Amount: typing_extensions.TypeAlias = typing.Optional[int]
 
 
-Combination: typing_extensions.TypeAlias = typing.Optional[typing.Union[int, str, bool, float, typing.List[typing.Optional[str]], typing.Dict[str, typing.Optional[typing.List[typing.Optional[str]]]]]]
+Combination: typing_extensions.TypeAlias = typing.Optional[typing.Union[int, str, bool, float, typing.List[str], typing.Dict[str, typing.List[str]]]]
 
 
 Currency: typing_extensions.TypeAlias = typing.Optional[types.Checked[int, typing_extensions.Literal['gt_ten']]]
 
 
-Graph: typing_extensions.TypeAlias = typing.Optional[typing.Dict[str, typing.Optional[typing.List[typing.Optional[str]]]]]
+Graph: typing_extensions.TypeAlias = typing.Optional[typing.Dict[str, typing.List[str]]]
 
 
-JsonArray: typing_extensions.TypeAlias = typing.Optional[typing.List[typing.Optional["JsonValue"]]]
+JsonArray: typing_extensions.TypeAlias = typing.Optional[typing.List["JsonValue"]]
 
 
 JsonEntry: typing_extensions.TypeAlias = typing.Optional[typing.Union["SimpleTag", "JsonTemplate"]]
 
 
-JsonObject: typing_extensions.TypeAlias = typing.Optional[typing.Dict[str, typing.Optional["JsonValue"]]]
+JsonObject: typing_extensions.TypeAlias = typing.Optional[typing.Dict[str, "JsonValue"]]
 
 
-JsonTemplate: typing_extensions.TypeAlias = typing.Optional[typing.Dict[str, typing.Optional["JsonEntry"]]]
+JsonTemplate: typing_extensions.TypeAlias = typing.Optional[typing.Dict[str, "JsonEntry"]]
 
 
 JsonValue: typing_extensions.TypeAlias = typing.Optional[typing.Union[int, str, bool, float, "JsonObject", "JsonArray"]]
@@ -507,7 +507,7 @@ JsonValue: typing_extensions.TypeAlias = typing.Optional[typing.Union[int, str, 
 LinkedListAlias: typing_extensions.TypeAlias = typing.Optional["LinkedListAliasNode"]
 
 
-List: typing_extensions.TypeAlias = typing.Optional[typing.List[typing.Optional[str]]]
+List: typing_extensions.TypeAlias = typing.Optional[typing.List[str]]
 
 
 MultipleAttrs: typing_extensions.TypeAlias = typing.Optional[types.Checked[int, typing_extensions.Literal['gt_ten']]]
@@ -522,16 +522,16 @@ Primitive: typing_extensions.TypeAlias = typing.Optional[typing.Union[int, str, 
 RecAliasOne: typing_extensions.TypeAlias = typing.Optional["RecAliasTwo"]
 
 
-RecAliasThree: typing_extensions.TypeAlias = typing.Optional[typing.List[typing.Optional["RecAliasOne"]]]
+RecAliasThree: typing_extensions.TypeAlias = typing.Optional[typing.List["RecAliasOne"]]
 
 
 RecAliasTwo: typing_extensions.TypeAlias = typing.Optional["RecAliasThree"]
 
 
-RecursiveListAlias: typing_extensions.TypeAlias = typing.Optional[typing.List[typing.Optional["RecursiveListAlias"]]]
+RecursiveListAlias: typing_extensions.TypeAlias = typing.Optional[typing.List["RecursiveListAlias"]]
 
 
-RecursiveMapAlias: typing_extensions.TypeAlias = typing.Optional[typing.Dict[str, typing.Optional["RecursiveMapAlias"]]]
+RecursiveMapAlias: typing_extensions.TypeAlias = typing.Optional[typing.Dict[str, "RecursiveMapAlias"]]
 
 
-RecursiveUnion: typing_extensions.TypeAlias = typing.Optional[typing.Union[str, typing.Dict[str, typing.Optional["RecursiveUnion"]]]]
+RecursiveUnion: typing_extensions.TypeAlias = typing.Optional[typing.Union[str, typing.Dict[str, "RecursiveUnion"]]]

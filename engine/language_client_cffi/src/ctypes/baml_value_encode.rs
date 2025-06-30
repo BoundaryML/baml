@@ -46,7 +46,7 @@ where
         let target_type = match self.field_type() {
             baml_types::ir_type::TypeGeneric::RecursiveTypeAlias { name, .. } => &lookup
                 .expand_recursive_type(name)
-                .unwrap_or_else(|_| panic!("Failed to expand recursive type alias: {}", name))
+                .unwrap_or_else(|_| panic!("Failed to expand recursive type alias: {name}"))
                 .to_non_streaming_type(lookup),
             other => other,
         };
@@ -102,7 +102,7 @@ where
         let target_type = match self.field_type() {
             baml_types::ir_type::TypeGeneric::RecursiveTypeAlias { name, .. } => &lookup
                 .expand_recursive_type(name)
-                .unwrap_or_else(|_| panic!("Failed to expand recursive type alias: {}", name))
+                .unwrap_or_else(|_| panic!("Failed to expand recursive type alias: {name}"))
                 .to_streaming_type(lookup),
             other => other,
         };

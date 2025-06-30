@@ -42,7 +42,7 @@ func (s *StreamValue[TStream, TFinal]) Stream() TStream {
 }
 
 // / Streaming version of Bar
-func (*stream) Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2], error) {
+func (*stream) Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -76,7 +76,7 @@ func (*stream) Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2])
+	channel := make(chan StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -97,13 +97,13 @@ func (*stream) Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Union2ExampleOrExample2)
-					channel <- StreamValue[*stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.Union2ExampleOrExample2)
-					channel <- StreamValue[*stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					data := *(result.StreamData).(*stream_types.Union2ExampleOrExample2)
+					channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
 						IsFinal:   false,
 						as_stream: &data,
 					}
@@ -115,7 +115,7 @@ func (*stream) Bar(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 }
 
 // / Streaming version of Foo
-func (*stream) Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan StreamValue[*stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2], error) {
+func (*stream) Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2], error) {
 
 	var callOpts callOption
 	for _, opt := range opts {
@@ -149,7 +149,7 @@ func (*stream) Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 		return nil, err
 	}
 
-	channel := make(chan StreamValue[*stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2])
+	channel := make(chan StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2])
 	go func() {
 		defer func() {
 			internal_ctx.Done()
@@ -170,13 +170,13 @@ func (*stream) Foo(ctx context.Context, x int64, opts ...CallOptionFunc) (<-chan
 				}
 				if result.HasData {
 					data := *(result.Data).(*types.Union2ExampleOrExample2)
-					channel <- StreamValue[*stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
 						IsFinal:  true,
 						as_final: &data,
 					}
 				} else {
-					data := (result.StreamData).(*stream_types.Union2ExampleOrExample2)
-					channel <- StreamValue[*stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
+					data := *(result.StreamData).(*stream_types.Union2ExampleOrExample2)
+					channel <- StreamValue[stream_types.Union2ExampleOrExample2, types.Union2ExampleOrExample2]{
 						IsFinal:   false,
 						as_stream: &data,
 					}

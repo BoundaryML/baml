@@ -667,7 +667,7 @@ impl BamlRuntime {
         // baml_log::info!("env vars: {:#?}", env_vars.clone());
         baml_log::set_from_env(&env_vars).unwrap();
 
-        log::trace!("Calling function: {}", function_name);
+        log::trace!("Calling function: {function_name}");
         log::debug!("collectors: {:#?}", &collectors);
 
         let call = self
@@ -1325,7 +1325,7 @@ async fn expr_eval_result(
     let maybe_expr_f = ir.find_expr_fn(function_name);
     match maybe_expr_f {
         Ok(expr_fn) => {
-            log::trace!("Calling function: {}", function_name);
+            log::trace!("Calling function: {function_name}");
             let collectors = collector.as_ref().map(|c| vec![c.clone()]);
             let call = tracer.start_call(function_name, mgr, params, true, false, collectors);
 

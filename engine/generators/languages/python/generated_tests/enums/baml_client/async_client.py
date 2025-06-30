@@ -11,7 +11,6 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -97,25 +96,25 @@ class BamlStreamClient:
 
     def ConsumeTestEnum(self, input: types.TestEnum,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional[types.TestEnum], types.TestEnum]:
+    ) -> baml_py.BamlStream[types.TestEnum, types.TestEnum]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ConsumeTestEnum", args={
             "input": input,
         })
-        return baml_py.BamlStream[typing.Optional[types.TestEnum], types.TestEnum](
+        return baml_py.BamlStream[types.TestEnum, types.TestEnum](
           result,
-          lambda x: typing.cast(typing.Optional[types.TestEnum], x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, True)),
           lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, False)),
           ctx,
         )
     def FnTestAliasedEnumOutput(self, input: str,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional[types.TestEnum], types.TestEnum]:
+    ) -> baml_py.BamlStream[types.TestEnum, types.TestEnum]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="FnTestAliasedEnumOutput", args={
             "input": input,
         })
-        return baml_py.BamlStream[typing.Optional[types.TestEnum], types.TestEnum](
+        return baml_py.BamlStream[types.TestEnum, types.TestEnum](
           result,
-          lambda x: typing.cast(typing.Optional[types.TestEnum], x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, True)),
           lambda x: typing.cast(types.TestEnum, x.cast_to(types, types, stream_types, False)),
           ctx,
         )

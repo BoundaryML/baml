@@ -37,7 +37,7 @@ pub fn load_test_ir(file_content: &str) -> IntermediateRepr {
     match schema.diagnostics.to_result() {
         Ok(_) => {}
         Err(e) => {
-            panic!("Failed to validate schema: {}", e);
+            panic!("Failed to validate schema: {e}");
         }
     }
 
@@ -48,9 +48,14 @@ pub fn render_output_format(
     ir: &IntermediateRepr,
     output: &TypeIR,
     env_values: &EvaluationContext<'_>,
+    streaming_mode: baml_types::StreamingMode,
 ) -> Result<OutputFormatContent> {
-    let (enums, classes, recursive_classes, structural_recursive_aliases) =
-        relevant_data_models(ir, output, env_values, true)?;
+    let (enums, classes, recursive_classes, structural_recursive_aliases) = relevant_data_models(
+        ir,
+        output,
+        env_values,
+        streaming_mode == baml_types::StreamingMode::Streaming,
+    )?;
 
     Ok(OutputFormatContent::target(output.clone())
         .enums(enums)
@@ -172,8 +177,13 @@ fn relevant_data_models<'a>(
                 }
             }
             TypeIR::List(inner, _) => {
+                let inner = if partialize {
+                    &inner.to_streaming_type(ir).to_ir_type()
+                } else {
+                    inner
+                };
                 if !checked_types.contains(&inner.to_string()) {
-                    start.push(inner.as_ref().clone());
+                    start.push(inner.clone());
                 }
             }
             TypeIR::Map(k, v, _) => {
@@ -181,8 +191,13 @@ fn relevant_data_models<'a>(
                     if !checked_types.contains(&k.to_string()) {
                         start.push(k.as_ref().clone());
                     }
+                    let v = if partialize {
+                        &v.to_streaming_type(ir).to_ir_type()
+                    } else {
+                        v
+                    };
                     if !checked_types.contains(&v.to_string()) {
-                        start.push(v.as_ref().clone());
+                        start.push(v.clone());
                     }
                 }
             }
@@ -197,7 +212,7 @@ fn relevant_data_models<'a>(
             }
             TypeIR::Union(options, _) => {
                 if checked_types.insert(output.to_string()) {
-                    for inner in options.iter_include_null() {
+                    for inner in options.iter_skip_null() {
                         if !checked_types.contains(&inner.to_string()) {
                             start.push(inner.clone());
                         }
@@ -221,7 +236,16 @@ fn relevant_data_models<'a>(
                     let fields = real_fields
                         .into_iter()
                         .flatten()
-                        .map(|field| find_existing_class_field(name, &field, &walker, env_values));
+                        .map(|field| find_existing_class_field(name, &field, &walker, env_values))
+                        .map(|field| {
+                            let (name, t, prop1, prop2) = field?;
+                            let t = if partialize {
+                                t.to_streaming_type(ir).to_ir_type()
+                            } else {
+                                t
+                            };
+                            Ok((name, t, prop1, prop2))
+                        });
 
                     let fields = fields.collect::<Result<Vec<_>>>()?;
 
@@ -249,6 +273,7 @@ fn relevant_data_models<'a>(
 
                     classes.push(Class {
                         name: Name::new_with_alias(name.to_string(), walker?.alias(env_values)?),
+                        namespace: mode.clone(),
                         fields,
                         constraints: metadata.constraints.clone(),
                         streaming_behavior: metadata.streaming_behavior.clone(),
@@ -334,9 +359,13 @@ mod tests {
           }
         "#,
         );
-        let output =
-            render_output_format(&ir, &TypeIR::class("Foo"), &EvaluationContext::default())
-                .expect("Rendering should work");
+        let output = render_output_format(
+            &ir,
+            &TypeIR::class("Foo"),
+            &EvaluationContext::default(),
+            baml_types::StreamingMode::NonStreaming,
+        )
+        .expect("Rendering should work");
         let foo = output.classes.get("Foo").expect("Exists");
         assert_eq!(foo.fields.len(), 1);
         assert_eq!(foo.fields[0].2, Some("d".to_string()));

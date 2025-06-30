@@ -47,6 +47,12 @@ impl<T: Default> TypeGeneric<T> {
         TypeGeneric::Primitive(TypeValue::String, meta)
     }
 
+    #[cfg(test)]
+    pub fn with_meta(mut self, meta: T) -> Self {
+        self.set_meta(meta);
+        self
+    }
+
     pub fn float() -> Self {
         TypeGeneric::Primitive(TypeValue::Float, T::default())
     }

@@ -169,7 +169,7 @@ impl RuntimeContextManager {
     // This returns ALL tags together (global and user)
     pub fn exit(&self) -> Option<(uuid::Uuid, Vec<CallCtx>, HashMap<String, BamlValue>)> {
         let mut ctx = self.context.lock().unwrap();
-        log::trace!("Exiting: {:#?}", ctx);
+        log::trace!("Exiting: {ctx:#?}");
 
         let tracing_v1_call_stack = ctx
             .iter()

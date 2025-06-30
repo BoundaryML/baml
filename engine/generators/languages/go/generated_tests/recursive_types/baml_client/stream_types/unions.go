@@ -26,7 +26,7 @@ type Union2IntOrListRecursive1 struct {
 
 	variant_Int *int64
 
-	variant_ListRecursive1 *[]*Recursive1
+	variant_ListRecursive1 *[]Recursive1
 }
 
 func (u *Union2IntOrListRecursive1) Decode(holder *cffi.CFFIValueUnionVariant) {
@@ -39,19 +39,8 @@ func (u *Union2IntOrListRecursive1) Decode(holder *cffi.CFFIValueUnionVariant) {
 		u.variant_Int = &value
 	case "List__Recursive1":
 		u.variant = "ListRecursive1"
-		value := baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) *Recursive1 {
-			return func(param *cffi.CFFIValueHolder) *Recursive1 {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *Recursive1\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *Recursive1 {
-					if result == nil {
-						return nil
-					}
-					return (result).(*Recursive1)
-				}(decoded)
-			}(inner)
+		value := baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) Recursive1 {
+			return *baml.Decode(inner).(*Recursive1)
 		})
 		u.variant_ListRecursive1 = &value
 
@@ -142,7 +131,7 @@ func (u *Union2IntOrListRecursive1) Int() int64 {
 	return *u.variant_Int
 }
 
-func (u *Union2IntOrListRecursive1) SetListRecursive1(v []*Recursive1) {
+func (u *Union2IntOrListRecursive1) SetListRecursive1(v []Recursive1) {
 	u.variant = "ListRecursive1"
 	u.variant_ListRecursive1 = &v
 
@@ -154,7 +143,7 @@ func (u *Union2IntOrListRecursive1) IsListRecursive1() bool {
 	return u.variant == "ListRecursive1"
 }
 
-func (u *Union2IntOrListRecursive1) ListRecursive1() []*Recursive1 {
+func (u *Union2IntOrListRecursive1) ListRecursive1() []Recursive1 {
 	if u.variant != "ListRecursive1" {
 		return nil
 	}

@@ -188,7 +188,7 @@ class BamlStreamClient {
   MakeClassWithBlockDone(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<partial_types.ClassWithBlockDone | null, types.ClassWithBlockDone> {
+  ): BamlStream<types.ClassWithBlockDone, types.ClassWithBlockDone> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -208,9 +208,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<partial_types.ClassWithBlockDone | null, types.ClassWithBlockDone>(
+      return new BamlStream<types.ClassWithBlockDone, types.ClassWithBlockDone>(
         raw,
-        (a): partial_types.ClassWithBlockDone | null => a,
+        (a): types.ClassWithBlockDone => a,
         (a): types.ClassWithBlockDone => a,
         this.ctxManager.cloneContext(),
       )
@@ -222,7 +222,7 @@ class BamlStreamClient {
   MakeClassWithExternalDone(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<partial_types.ClassWithoutDone | null, types.ClassWithoutDone> {
+  ): BamlStream<types.ClassWithoutDone, types.ClassWithoutDone> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -242,9 +242,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<partial_types.ClassWithoutDone | null, types.ClassWithoutDone>(
+      return new BamlStream<types.ClassWithoutDone, types.ClassWithoutDone>(
         raw,
-        (a): partial_types.ClassWithoutDone | null => a,
+        (a): types.ClassWithoutDone => a,
         (a): types.ClassWithoutDone => a,
         this.ctxManager.cloneContext(),
       )
@@ -256,7 +256,7 @@ class BamlStreamClient {
   MakeSemanticContainer(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<partial_types.SemanticContainer | null, types.SemanticContainer> {
+  ): BamlStream<partial_types.SemanticContainer, types.SemanticContainer> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -276,9 +276,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<partial_types.SemanticContainer | null, types.SemanticContainer>(
+      return new BamlStream<partial_types.SemanticContainer, types.SemanticContainer>(
         raw,
-        (a): partial_types.SemanticContainer | null => a,
+        (a): partial_types.SemanticContainer => a,
         (a): types.SemanticContainer => a,
         this.ctxManager.cloneContext(),
       )

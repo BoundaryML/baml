@@ -12,9 +12,8 @@
 
 import typing
 import typing_extensions
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
-import baml_py
 
 from . import types
 
@@ -38,10 +37,10 @@ class SemanticContainer(BaseModel):
     sixteen_digit_number: typing.Optional[int] = None
     string_with_twenty_words: typing.Optional[str] = None
     class_1: typing.Optional["ClassWithoutDone"] = None
-    class_2: typing.Optional["ClassWithBlockDone"] = None
+    class_2: typing.Optional["types.ClassWithBlockDone"] = None
     class_done_needed: "types.ClassWithBlockDone"
     class_needed: "ClassWithoutDone"
-    three_small_things: typing.Optional[typing.List[typing.Optional["SmallThing"]]] = None
+    three_small_things: typing.List["SmallThing"]
     final_string: typing.Optional[str] = None
 
 class SmallThing(BaseModel):

@@ -25,7 +25,7 @@ mod protoc_lang_out {
     pub type Result<T> = io::Result<T>;
 
     fn err_other(s: impl AsRef<str>) -> Error {
-        Error::new(io::ErrorKind::Other, s.as_ref().to_owned())
+        Error::other(s.as_ref().to_owned())
     }
 
     /// `protoc --lang_out=... ...` command builder and spawner.
@@ -221,9 +221,9 @@ mod protoc_lang_out {
         }
 
         fn spawn(&self, cmd: &mut process::Command) -> io::Result<process::Child> {
-            println!("spawning command {:?}", cmd);
+            println!("spawning command {cmd:?}");
             cmd.spawn()
-                .map_err(|e| Error::new(e.kind(), format!("failed to spawn `{:?}`: {}", cmd, e)))
+                .map_err(|e| Error::new(e.kind(), format!("failed to spawn `{cmd:?}`: {e}")))
         }
 
         /// Obtain `protoc` version
@@ -240,8 +240,7 @@ mod protoc_lang_out {
             if !output.status.success() {
                 return Err(err_other("protoc failed with error"));
             }
-            let output = String::from_utf8(output.stdout)
-                .map_err(|e| Error::new(io::ErrorKind::Other, e))?;
+            let output = String::from_utf8(output.stdout).map_err(Error::other)?;
             let output = match output.lines().next() {
                 None => return Err(err_other("output is empty")),
                 Some(line) => line,
@@ -273,8 +272,7 @@ mod protoc_lang_out {
 
             if !child.wait()?.success() {
                 return Err(err_other(format!(
-                    "protoc ({:?}) exited with non-zero exit code",
-                    cmd
+                    "protoc ({cmd:?}) exited with non-zero exit code"
                 )));
             }
 
@@ -286,7 +284,7 @@ mod protoc_lang_out {
             let mut cmd_args: Vec<OsString> = Vec::new();
 
             for include in args.includes {
-                cmd_args.push(format!("-I{}", include).into());
+                cmd_args.push(format!("-I{include}").into());
             }
 
             if args.out.is_empty() {
@@ -342,7 +340,7 @@ fn main() -> std::io::Result<()> {
 
     {
         let lang = "go";
-        let lang_dir = format!("../language_client_{}/pkg", lang);
+        let lang_dir = format!("../language_client_{lang}/pkg");
         // let args: flatc_rust::Args<'_> = flatc_rust::Args {
         //     lang,
         //     inputs: &[Path::new("types/cffi.fbs")],
@@ -355,7 +353,7 @@ fn main() -> std::io::Result<()> {
             .input("types/cffi.proto")
             .out_dir(lang_dir)
             .run()
-            .unwrap_or_else(|_| panic!("Failed to generate {} bindings", lang));
+            .unwrap_or_else(|_| panic!("Failed to generate {lang} bindings"));
     }
 
     // Use cbindgen to generate the C header for your Rust library.
@@ -374,9 +372,9 @@ fn main() -> std::io::Result<()> {
             .write_to_file(out_path.clone());
         if std::env::var("CI").is_ok() && res {
             let new_content = std::fs::read_to_string(&out_path).unwrap();
-            println!("New header content: \n==============\n{}", new_content);
+            println!("New header content: \n==============\n{new_content}");
             println!("\n\n");
-            println!("Old header content: \n==============\n{}", outpath_content);
+            println!("Old header content: \n==============\n{outpath_content}");
             panic!("cbindgen generated a diff");
         }
     }

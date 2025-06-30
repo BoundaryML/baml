@@ -357,7 +357,7 @@ function useBamlAction<FunctionName extends FunctionNames>(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.Recipe
- * - **Streaming Partial:** Recipe | null
+ * - **Streaming Partial:** Recipe
  * - **Streaming Final:** types.Recipe
  *
  * **Usage Patterns:**
@@ -407,7 +407,7 @@ export function useAaaSamOutputFormat(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.LinkedListAliasNode
- * - **Streaming Partial:** LinkedListAliasNode | null
+ * - **Streaming Partial:** LinkedListAliasNode
  * - **Streaming Final:** types.LinkedListAliasNode
  *
  * **Usage Patterns:**
@@ -457,7 +457,7 @@ export function useAliasThatPointsToRecursiveType(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.Checked<number,"gt_ten">
- * - **Streaming Partial:** types.Checked<number,"gt_ten"> | null
+ * - **Streaming Partial:** types.Checked<number,"gt_ten">
  * - **Streaming Final:** types.Checked<number,"gt_ten">
  *
  * **Usage Patterns:**
@@ -507,7 +507,7 @@ export function useAliasWithMultipleAttrs(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -557,7 +557,7 @@ export function useAliasedInputClass(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -607,7 +607,7 @@ export function useAliasedInputClass2(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -657,7 +657,7 @@ export function useAliasedInputClassNested(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -707,7 +707,7 @@ export function useAliasedInputEnum(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -757,7 +757,7 @@ export function useAliasedInputList(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.OptionalListAndMap
- * - **Streaming Partial:** OptionalListAndMap | null
+ * - **Streaming Partial:** OptionalListAndMap
  * - **Streaming Final:** types.OptionalListAndMap
  *
  * **Usage Patterns:**
@@ -807,7 +807,7 @@ export function useAllowedOptionals(
  *
  * **Return Type:**
  * - **Non‑streaming:** number
- * - **Streaming Partial:** number | null
+ * - **Streaming Partial:** number
  * - **Streaming Final:** number
  *
  * **Usage Patterns:**
@@ -852,12 +852,12 @@ export function useAssertFn(
  *
  * **Input Types:**
  *
- * - aud: Audio
+ * - aud: Image
  *
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -902,14 +902,14 @@ export function useAudioInput(
  *
  * **Input Types:**
  *
- * - aud: Audio
+ * - aud: Image
  *
  * - prompt: string
  *
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -959,7 +959,7 @@ export function useAudioInputOpenai(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.LinkedList
- * - **Streaming Partial:** LinkedList | null
+ * - **Streaming Partial:** LinkedList
  * - **Streaming Final:** types.LinkedList
  *
  * **Usage Patterns:**
@@ -1009,7 +1009,7 @@ export function useBuildLinkedList(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.Tree
- * - **Streaming Partial:** Tree | null
+ * - **Streaming Partial:** Tree
  * - **Streaming Final:** types.Tree
  *
  * **Usage Patterns:**
@@ -1059,7 +1059,7 @@ export function useBuildTree(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.ClassToRecAlias
- * - **Streaming Partial:** ClassToRecAlias | null
+ * - **Streaming Partial:** ClassToRecAlias
  * - **Streaming Final:** types.ClassToRecAlias
  *
  * **Usage Patterns:**
@@ -1109,7 +1109,7 @@ export function useClassThatPointsToRecursiveClassThroughAlias(
  *
  * **Return Type:**
  * - **Non‑streaming:** (string | types.DynEnumTwo)
- * - **Streaming Partial:** (string | types.DynEnumTwo) | null
+ * - **Streaming Partial:** (string | types.DynEnumTwo)
  * - **Streaming Final:** (string | types.DynEnumTwo)
  *
  * **Usage Patterns:**
@@ -1159,7 +1159,7 @@ export function useClassifyDynEnumTwo(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.Category
- * - **Streaming Partial:** types.Category | null
+ * - **Streaming Partial:** types.Category
  * - **Streaming Final:** types.Category
  *
  * **Usage Patterns:**
@@ -1209,7 +1209,7 @@ export function useClassifyMessage(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.Category
- * - **Streaming Partial:** types.Category | null
+ * - **Streaming Partial:** types.Category
  * - **Streaming Final:** types.Category
  *
  * **Usage Patterns:**
@@ -1259,7 +1259,7 @@ export function useClassifyMessage2(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.Category
- * - **Streaming Partial:** types.Category | null
+ * - **Streaming Partial:** types.Category
  * - **Streaming Final:** types.Category
  *
  * **Usage Patterns:**
@@ -1313,7 +1313,7 @@ export function useClassifyMessage3(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -1363,7 +1363,7 @@ export function useCompletion(
  *
  * **Return Type:**
  * - **Non‑streaming:** BookOrder | FlightConfirmation | GroceryReceipt
- * - **Streaming Partial:** BookOrder | FlightConfirmation | GroceryReceipt | null
+ * - **Streaming Partial:** BookOrder | FlightConfirmation | GroceryReceipt
  * - **Streaming Final:** BookOrder | FlightConfirmation | GroceryReceipt
  *
  * **Usage Patterns:**
@@ -1413,7 +1413,7 @@ export function useCustomTask(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -1465,7 +1465,7 @@ export function useDescribeImage(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -1517,7 +1517,7 @@ export function useDescribeImage2(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -1569,7 +1569,7 @@ export function useDescribeImage3(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -1623,7 +1623,7 @@ export function useDescribeImage4(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -1671,7 +1671,7 @@ export function useDescribeMedia1599(
  *
  * **Return Type:**
  * - **Non‑streaming:** OriginalA | OriginalB
- * - **Streaming Partial:** OriginalA | OriginalB | null
+ * - **Streaming Partial:** OriginalA | OriginalB
  * - **Streaming Final:** OriginalA | OriginalB
  *
  * **Usage Patterns:**
@@ -1721,7 +1721,7 @@ export function useDifferentiateUnions(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.DummyOutput
- * - **Streaming Partial:** DummyOutput | null
+ * - **Streaming Partial:** DummyOutput
  * - **Streaming Final:** types.DummyOutput
  *
  * **Usage Patterns:**
@@ -1771,7 +1771,7 @@ export function useDummyOutputFunction(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.DynamicClassTwo
- * - **Streaming Partial:** DynamicClassTwo | null
+ * - **Streaming Partial:** DynamicClassTwo
  * - **Streaming Final:** types.DynamicClassTwo
  *
  * **Usage Patterns:**
@@ -1821,7 +1821,7 @@ export function useDynamicFunc(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.DynInputOutput
- * - **Streaming Partial:** DynInputOutput | null
+ * - **Streaming Partial:** DynInputOutput
  * - **Streaming Final:** types.DynInputOutput
  *
  * **Usage Patterns:**
@@ -1871,7 +1871,7 @@ export function useDynamicInputOutput(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.DynInputOutput[]
- * - **Streaming Partial:** (DynInputOutput | null)[] | null
+ * - **Streaming Partial:** DynInputOutput[]
  * - **Streaming Final:** types.DynInputOutput[]
  *
  * **Usage Patterns:**
@@ -1919,7 +1919,7 @@ export function useDynamicListInputOutput(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -1969,7 +1969,7 @@ export function useExpectFailure(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.ContactInfo
- * - **Streaming Partial:** ContactInfo | null
+ * - **Streaming Partial:** ContactInfo
  * - **Streaming Final:** types.ContactInfo
  *
  * **Usage Patterns:**
@@ -2019,7 +2019,7 @@ export function useExtractContactInfo(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.DynamicSchema
- * - **Streaming Partial:** DynamicSchema | null
+ * - **Streaming Partial:** DynamicSchema
  * - **Streaming Final:** types.DynamicSchema
  *
  * **Usage Patterns:**
@@ -2069,7 +2069,7 @@ export function useExtractEntities(
  *
  * **Return Type:**
  * - **Non‑streaming:** (string | types.Hobby)[]
- * - **Streaming Partial:** ((string | types.Hobby) | null)[] | null
+ * - **Streaming Partial:** (string | types.Hobby)[]
  * - **Streaming Final:** (string | types.Hobby)[]
  *
  * **Usage Patterns:**
@@ -2119,7 +2119,7 @@ export function useExtractHobby(
  *
  * **Return Type:**
  * - **Non‑streaming:** string[]
- * - **Streaming Partial:** (string | null)[] | null
+ * - **Streaming Partial:** string[]
  * - **Streaming Final:** string[]
  *
  * **Usage Patterns:**
@@ -2169,7 +2169,7 @@ export function useExtractNames(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.Person[]
- * - **Streaming Partial:** (Person | null)[] | null
+ * - **Streaming Partial:** Person[]
  * - **Streaming Final:** types.Person[]
  *
  * **Usage Patterns:**
@@ -2221,7 +2221,7 @@ export function useExtractPeople(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.ReceiptInfo
- * - **Streaming Partial:** ReceiptInfo | null
+ * - **Streaming Partial:** ReceiptInfo
  * - **Streaming Final:** types.ReceiptInfo
  *
  * **Usage Patterns:**
@@ -2273,7 +2273,7 @@ export function useExtractReceiptInfo(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.Resume
- * - **Streaming Partial:** Resume | null
+ * - **Streaming Partial:** Resume
  * - **Streaming Final:** types.Resume
  *
  * **Usage Patterns:**
@@ -2323,7 +2323,7 @@ export function useExtractResume(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.Resume
- * - **Streaming Partial:** Resume | null
+ * - **Streaming Partial:** Resume
  * - **Streaming Final:** types.Resume
  *
  * **Usage Patterns:**
@@ -2473,7 +2473,7 @@ export function useFnClassOptionalOutput2(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.EnumOutput[]
- * - **Streaming Partial:** (types.EnumOutput | null)[] | null
+ * - **Streaming Partial:** types.EnumOutput[]
  * - **Streaming Final:** types.EnumOutput[]
  *
  * **Usage Patterns:**
@@ -2523,7 +2523,7 @@ export function useFnEnumListOutput(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.EnumOutput
- * - **Streaming Partial:** types.EnumOutput | null
+ * - **Streaming Partial:** types.EnumOutput
  * - **Streaming Final:** types.EnumOutput
  *
  * **Usage Patterns:**
@@ -2573,7 +2573,7 @@ export function useFnEnumOutput(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.LiteralClassHello
- * - **Streaming Partial:** LiteralClassHello | null
+ * - **Streaming Partial:** LiteralClassHello
  * - **Streaming Final:** types.LiteralClassHello
  *
  * **Usage Patterns:**
@@ -2623,7 +2623,7 @@ export function useFnLiteralClassInputOutput(
  *
  * **Return Type:**
  * - **Non‑streaming:** LiteralClassOne | LiteralClassTwo
- * - **Streaming Partial:** LiteralClassOne | LiteralClassTwo | null
+ * - **Streaming Partial:** LiteralClassOne | LiteralClassTwo
  * - **Streaming Final:** LiteralClassOne | LiteralClassTwo
  *
  * **Usage Patterns:**
@@ -2673,7 +2673,7 @@ export function useFnLiteralUnionClassInputOutput(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -2723,7 +2723,7 @@ export function useFnNamedArgsSingleStringOptional(
  *
  * **Return Type:**
  * - **Non‑streaming:** boolean
- * - **Streaming Partial:** boolean | null
+ * - **Streaming Partial:** boolean
  * - **Streaming Final:** boolean
  *
  * **Usage Patterns:**
@@ -2773,7 +2773,7 @@ export function useFnOutputBool(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.TestOutputClass
- * - **Streaming Partial:** TestOutputClass | null
+ * - **Streaming Partial:** TestOutputClass
  * - **Streaming Final:** types.TestOutputClass
  *
  * **Usage Patterns:**
@@ -2823,7 +2823,7 @@ export function useFnOutputClass(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.TestOutputClass[]
- * - **Streaming Partial:** (TestOutputClass | null)[] | null
+ * - **Streaming Partial:** TestOutputClass[]
  * - **Streaming Final:** types.TestOutputClass[]
  *
  * **Usage Patterns:**
@@ -2873,7 +2873,7 @@ export function useFnOutputClassList(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.TestClassNested
- * - **Streaming Partial:** TestClassNested | null
+ * - **Streaming Partial:** TestClassNested
  * - **Streaming Final:** types.TestClassNested
  *
  * **Usage Patterns:**
@@ -2923,7 +2923,7 @@ export function useFnOutputClassNested(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.TestClassWithEnum
- * - **Streaming Partial:** TestClassWithEnum | null
+ * - **Streaming Partial:** TestClassWithEnum
  * - **Streaming Final:** types.TestClassWithEnum
  *
  * **Usage Patterns:**
@@ -2973,7 +2973,7 @@ export function useFnOutputClassWithEnum(
  *
  * **Return Type:**
  * - **Non‑streaming:** number
- * - **Streaming Partial:** number | null
+ * - **Streaming Partial:** number
  * - **Streaming Final:** number
  *
  * **Usage Patterns:**
@@ -3023,7 +3023,7 @@ export function useFnOutputInt(
  *
  * **Return Type:**
  * - **Non‑streaming:** false
- * - **Streaming Partial:** false | null
+ * - **Streaming Partial:** false
  * - **Streaming Final:** false
  *
  * **Usage Patterns:**
@@ -3073,7 +3073,7 @@ export function useFnOutputLiteralBool(
  *
  * **Return Type:**
  * - **Non‑streaming:** 5
- * - **Streaming Partial:** 5 | null
+ * - **Streaming Partial:** 5
  * - **Streaming Final:** 5
  *
  * **Usage Patterns:**
@@ -3123,7 +3123,7 @@ export function useFnOutputLiteralInt(
  *
  * **Return Type:**
  * - **Non‑streaming:** "example output"
- * - **Streaming Partial:** "example output" | null
+ * - **Streaming Partial:** "example output"
  * - **Streaming Final:** "example output"
  *
  * **Usage Patterns:**
@@ -3173,7 +3173,7 @@ export function useFnOutputLiteralString(
  *
  * **Return Type:**
  * - **Non‑streaming:** string[]
- * - **Streaming Partial:** (string | null)[] | null
+ * - **Streaming Partial:** string[]
  * - **Streaming Final:** string[]
  *
  * **Usage Patterns:**
@@ -3223,7 +3223,7 @@ export function useFnOutputStringList(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.TestEnum
- * - **Streaming Partial:** types.TestEnum | null
+ * - **Streaming Partial:** types.TestEnum
  * - **Streaming Final:** types.TestEnum
  *
  * **Usage Patterns:**
@@ -3273,7 +3273,7 @@ export function useFnTestAliasedEnumOutput(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.TestClassAlias
- * - **Streaming Partial:** TestClassAlias | null
+ * - **Streaming Partial:** TestClassAlias
  * - **Streaming Final:** types.TestClassAlias
  *
  * **Usage Patterns:**
@@ -3323,7 +3323,7 @@ export function useFnTestClassAlias(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -3373,7 +3373,7 @@ export function useFnTestNamedArgsSingleEnum(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.RaysData
- * - **Streaming Partial:** RaysData | null
+ * - **Streaming Partial:** RaysData
  * - **Streaming Final:** types.RaysData
  *
  * **Usage Patterns:**
@@ -3423,7 +3423,7 @@ export function useGetDataType(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.OrderInfo
- * - **Streaming Partial:** OrderInfo | null
+ * - **Streaming Partial:** OrderInfo
  * - **Streaming Final:** types.OrderInfo
  *
  * **Usage Patterns:**
@@ -3473,7 +3473,7 @@ export function useGetOrderInfo(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.SearchParams
- * - **Streaming Partial:** SearchParams | null
+ * - **Streaming Partial:** SearchParams
  * - **Streaming Final:** types.SearchParams
  *
  * **Usage Patterns:**
@@ -3525,7 +3525,7 @@ export function useGetQuery(
  *
  * **Return Type:**
  * - **Non‑streaming:** Partial<Record<types.MapKey, string>>
- * - **Streaming Partial:** Partial<Record<types.MapKey, string | null>> | null
+ * - **Streaming Partial:** Partial<Record<types.MapKey, string>>
  * - **Streaming Final:** Partial<Record<types.MapKey, string>>
  *
  * **Usage Patterns:**
@@ -3577,7 +3577,7 @@ export function useInOutEnumMapKey(
  *
  * **Return Type:**
  * - **Non‑streaming:** Partial<Record<"one" | "two" | "three" | "four", string>>
- * - **Streaming Partial:** Partial<Record<"one" | "two" | "three" | "four", string | null>> | null
+ * - **Streaming Partial:** Partial<Record<"one" | "two" | "three" | "four", string>>
  * - **Streaming Final:** Partial<Record<"one" | "two" | "three" | "four", string>>
  *
  * **Usage Patterns:**
@@ -3627,7 +3627,7 @@ export function useInOutLiteralStringUnionMapKey(
  *
  * **Return Type:**
  * - **Non‑streaming:** Record<"key", string>
- * - **Streaming Partial:** Record<"key", string | null> | null
+ * - **Streaming Partial:** Record<"key", string>
  * - **Streaming Final:** Record<"key", string>
  *
  * **Usage Patterns:**
@@ -3677,7 +3677,7 @@ export function useInOutSingleLiteralStringMapKey(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.JsonValue
- * - **Streaming Partial:** JsonValue | null
+ * - **Streaming Partial:** JsonValue
  * - **Streaming Final:** types.JsonValue
  *
  * **Usage Patterns:**
@@ -3727,7 +3727,7 @@ export function useJsonTypeAliasCycle(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -3777,7 +3777,7 @@ export function useLLMEcho(
  *
  * **Return Type:**
  * - **Non‑streaming:** 1 | true | "string output"
- * - **Streaming Partial:** 1 | true | "string output" | null
+ * - **Streaming Partial:** 1 | true | "string output"
  * - **Streaming Final:** 1 | true | "string output"
  *
  * **Usage Patterns:**
@@ -3825,7 +3825,7 @@ export function useLiteralUnionsTest(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.Checked<types.BlockConstraint,"cross_field">
- * - **Streaming Partial:** types.Checked<BlockConstraint,"cross_field"> | null
+ * - **Streaming Partial:** types.Checked<BlockConstraint,"cross_field">
  * - **Streaming Final:** types.Checked<types.BlockConstraint,"cross_field">
  *
  * **Usage Patterns:**
@@ -3873,7 +3873,7 @@ export function useMakeBlockConstraint(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.ClassWithBlockDone
- * - **Streaming Partial:** ClassWithBlockDone | null
+ * - **Streaming Partial:** types.ClassWithBlockDone
  * - **Streaming Final:** types.ClassWithBlockDone
  *
  * **Usage Patterns:**
@@ -3921,7 +3921,7 @@ export function useMakeClassWithBlockDone(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.ClassWithoutDone
- * - **Streaming Partial:** ClassWithoutDone | null
+ * - **Streaming Partial:** types.ClassWithoutDone
  * - **Streaming Final:** types.ClassWithoutDone
  *
  * **Usage Patterns:**
@@ -3969,7 +3969,7 @@ export function useMakeClassWithExternalDone(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.NestedBlockConstraint
- * - **Streaming Partial:** NestedBlockConstraint | null
+ * - **Streaming Partial:** NestedBlockConstraint
  * - **Streaming Final:** types.NestedBlockConstraint
  *
  * **Usage Patterns:**
@@ -4017,7 +4017,7 @@ export function useMakeNestedBlockConstraint(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.SemanticContainer
- * - **Streaming Partial:** SemanticContainer | null
+ * - **Streaming Partial:** SemanticContainer
  * - **Streaming Final:** types.SemanticContainer
  *
  * **Usage Patterns:**
@@ -4067,7 +4067,7 @@ export function useMakeSemanticContainer(
  *
  * **Return Type:**
  * - **Non‑streaming:** Record<string, string[]>
- * - **Streaming Partial:** Record<string, (string | null)[] | null> | null
+ * - **Streaming Partial:** Record<string, string[]>
  * - **Streaming Final:** Record<string, string[]>
  *
  * **Usage Patterns:**
@@ -4117,7 +4117,7 @@ export function useMapAlias(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.MergeAttrs
- * - **Streaming Partial:** MergeAttrs | null
+ * - **Streaming Partial:** MergeAttrs
  * - **Streaming Final:** types.MergeAttrs
  *
  * **Usage Patterns:**
@@ -4167,7 +4167,7 @@ export function useMergeAliasAttributes(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.DynamicOutput
- * - **Streaming Partial:** DynamicOutput | null
+ * - **Streaming Partial:** DynamicOutput
  * - **Streaming Final:** types.DynamicOutput
  *
  * **Usage Patterns:**
@@ -4217,7 +4217,7 @@ export function useMyFunc(
  *
  * **Return Type:**
  * - **Non‑streaming:** number | string | boolean | number | string[] | Record<string, string[]>
- * - **Streaming Partial:** number | string | boolean | number | string[] | Record<string, string[]> | null
+ * - **Streaming Partial:** number | string | boolean | number | string[] | Record<string, string[]>
  * - **Streaming Final:** number | string | boolean | number | string[] | Record<string, string[]>
  *
  * **Usage Patterns:**
@@ -4267,7 +4267,7 @@ export function useNestedAlias(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.ClassForNullLiteral
- * - **Streaming Partial:** ClassForNullLiteral | null
+ * - **Streaming Partial:** ClassForNullLiteral
  * - **Streaming Final:** types.ClassForNullLiteral
  *
  * **Usage Patterns:**
@@ -4317,7 +4317,7 @@ export function useNullLiteralClassHello(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -4367,7 +4367,7 @@ export function useOpenAIWithAnthropicResponseHello(
  *
  * **Return Type:**
  * - **Non‑streaming:** (types.OptionalTest_ReturnType | null)[]
- * - **Streaming Partial:** (OptionalTest_ReturnType | null)[] | null
+ * - **Streaming Partial:** (OptionalTest_ReturnType | null)[]
  * - **Streaming Final:** (types.OptionalTest_ReturnType | null)[]
  *
  * **Usage Patterns:**
@@ -4417,7 +4417,7 @@ export function useOptionalTest_Function(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.FooAny
- * - **Streaming Partial:** FooAny | null
+ * - **Streaming Partial:** FooAny
  * - **Streaming Final:** types.FooAny
  *
  * **Usage Patterns:**
@@ -4467,7 +4467,7 @@ export function usePredictAge(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.Checked<number,"too_big">
- * - **Streaming Partial:** types.Checked<number,"too_big"> | null
+ * - **Streaming Partial:** types.Checked<number,"too_big">
  * - **Streaming Final:** types.Checked<number,"too_big">
  *
  * **Usage Patterns:**
@@ -4517,7 +4517,7 @@ export function usePredictAgeBare(
  *
  * **Return Type:**
  * - **Non‑streaming:** number | string | boolean | number
- * - **Streaming Partial:** number | string | boolean | number | null
+ * - **Streaming Partial:** number | string | boolean | number
  * - **Streaming Final:** number | string | boolean | number
  *
  * **Usage Patterns:**
@@ -4567,7 +4567,7 @@ export function usePrimitiveAlias(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -4617,7 +4617,7 @@ export function usePromptTestClaude(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -4667,7 +4667,7 @@ export function usePromptTestClaudeChat(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -4717,7 +4717,7 @@ export function usePromptTestClaudeChatNoSystem(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -4767,7 +4767,7 @@ export function usePromptTestOpenAI(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -4817,7 +4817,7 @@ export function usePromptTestOpenAIChat(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -4867,7 +4867,7 @@ export function usePromptTestOpenAIChatNoSystem(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -4917,7 +4917,7 @@ export function usePromptTestStreaming(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.RecAliasOne
- * - **Streaming Partial:** RecAliasOne | null
+ * - **Streaming Partial:** RecAliasOne
  * - **Streaming Final:** types.RecAliasOne
  *
  * **Usage Patterns:**
@@ -4967,7 +4967,7 @@ export function useRecursiveAliasCycle(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.NodeWithAliasIndirection
- * - **Streaming Partial:** NodeWithAliasIndirection | null
+ * - **Streaming Partial:** NodeWithAliasIndirection
  * - **Streaming Final:** types.NodeWithAliasIndirection
  *
  * **Usage Patterns:**
@@ -5017,7 +5017,7 @@ export function useRecursiveClassWithAliasIndirection(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.RecursiveUnion
- * - **Streaming Partial:** RecursiveUnion | null
+ * - **Streaming Partial:** RecursiveUnion
  * - **Streaming Final:** types.RecursiveUnion
  *
  * **Usage Patterns:**
@@ -5067,7 +5067,7 @@ export function useRecursiveUnionTest(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.Checked<number,"gt_ten">
- * - **Streaming Partial:** types.Checked<number,"gt_ten"> | null
+ * - **Streaming Partial:** types.Checked<number,"gt_ten">
  * - **Streaming Final:** types.Checked<number,"gt_ten">
  *
  * **Usage Patterns:**
@@ -5117,7 +5117,7 @@ export function useReturnAliasWithMergedAttributes(
  *
  * **Return Type:**
  * - **Non‑streaming:** number
- * - **Streaming Partial:** number | null
+ * - **Streaming Partial:** number
  * - **Streaming Final:** number
  *
  * **Usage Patterns:**
@@ -5167,7 +5167,7 @@ export function useReturnFailingAssert(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.JsonTemplate
- * - **Streaming Partial:** JsonTemplate | null
+ * - **Streaming Partial:** JsonTemplate
  * - **Streaming Final:** types.JsonTemplate
  *
  * **Usage Patterns:**
@@ -5217,7 +5217,7 @@ export function useReturnJsonEntry(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.MalformedConstraints
- * - **Streaming Partial:** MalformedConstraints | null
+ * - **Streaming Partial:** MalformedConstraints
  * - **Streaming Final:** types.MalformedConstraints
  *
  * **Usage Patterns:**
@@ -5267,7 +5267,7 @@ export function useReturnMalformedConstraints(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.Schema
- * - **Streaming Partial:** Schema | null
+ * - **Streaming Partial:** Schema
  * - **Streaming Final:** types.Schema
  *
  * **Usage Patterns:**
@@ -5317,7 +5317,7 @@ export function useSchemaDescriptions(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.RecursiveListAlias
- * - **Streaming Partial:** RecursiveListAlias | null
+ * - **Streaming Partial:** RecursiveListAlias
  * - **Streaming Final:** types.RecursiveListAlias
  *
  * **Usage Patterns:**
@@ -5367,7 +5367,7 @@ export function useSimpleRecursiveListAlias(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.RecursiveMapAlias
- * - **Streaming Partial:** RecursiveMapAlias | null
+ * - **Streaming Partial:** RecursiveMapAlias
  * - **Streaming Final:** types.RecursiveMapAlias
  *
  * **Usage Patterns:**
@@ -5417,7 +5417,7 @@ export function useSimpleRecursiveMapAlias(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.BigNumbers
- * - **Streaming Partial:** BigNumbers | null
+ * - **Streaming Partial:** BigNumbers
  * - **Streaming Final:** types.BigNumbers
  *
  * **Usage Patterns:**
@@ -5469,7 +5469,7 @@ export function useStreamBigNumbers(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.TwoStoriesOneTitle
- * - **Streaming Partial:** TwoStoriesOneTitle | null
+ * - **Streaming Partial:** TwoStoriesOneTitle
  * - **Streaming Final:** types.TwoStoriesOneTitle
  *
  * **Usage Patterns:**
@@ -5521,7 +5521,7 @@ export function useStreamFailingAssertion(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.TwoStoriesOneTitleCheck
- * - **Streaming Partial:** TwoStoriesOneTitleCheck | null
+ * - **Streaming Partial:** TwoStoriesOneTitleCheck
  * - **Streaming Final:** types.TwoStoriesOneTitleCheck
  *
  * **Usage Patterns:**
@@ -5571,7 +5571,7 @@ export function useStreamFailingCheck(
  *
  * **Return Type:**
  * - **Non‑streaming:** number
- * - **Streaming Partial:** number | null
+ * - **Streaming Partial:** number
  * - **Streaming Final:** number
  *
  * **Usage Patterns:**
@@ -5621,7 +5621,7 @@ export function useStreamOneBigNumber(
  *
  * **Return Type:**
  * - **Non‑streaming:** (number | string)[]
- * - **Streaming Partial:** (number | string)[] | null
+ * - **Streaming Partial:** (number | string)[]
  * - **Streaming Final:** (number | string)[]
  *
  * **Usage Patterns:**
@@ -5673,7 +5673,7 @@ export function useStreamUnionIntegers(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.CompoundBigNumbers
- * - **Streaming Partial:** CompoundBigNumbers | null
+ * - **Streaming Partial:** CompoundBigNumbers
  * - **Streaming Final:** types.CompoundBigNumbers
  *
  * **Usage Patterns:**
@@ -5723,7 +5723,7 @@ export function useStreamingCompoundNumbers(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.Document1559
- * - **Streaming Partial:** Document1559 | null
+ * - **Streaming Partial:** Document1559
  * - **Streaming Final:** types.Document1559
  *
  * **Usage Patterns:**
@@ -5773,7 +5773,7 @@ export function useStructureDocument1559(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.RecursiveAliasDependency
- * - **Streaming Partial:** RecursiveAliasDependency | null
+ * - **Streaming Partial:** RecursiveAliasDependency
  * - **Streaming Final:** types.RecursiveAliasDependency
  *
  * **Usage Patterns:**
@@ -5823,7 +5823,7 @@ export function useTakeRecAliasDep(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -5873,7 +5873,7 @@ export function useTellStory(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -5923,7 +5923,7 @@ export function useTestAnthropic(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -5973,7 +5973,7 @@ export function useTestAnthropicShorthand(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6023,7 +6023,7 @@ export function useTestAws(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6073,7 +6073,7 @@ export function useTestAwsClaude37(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6123,7 +6123,7 @@ export function useTestAwsInferenceProfile(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6173,7 +6173,7 @@ export function useTestAwsInvalidAccessKey(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6223,7 +6223,7 @@ export function useTestAwsInvalidProfile(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6273,7 +6273,7 @@ export function useTestAwsInvalidRegion(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6323,7 +6323,7 @@ export function useTestAwsInvalidSessionToken(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6373,7 +6373,7 @@ export function useTestAzure(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6423,7 +6423,7 @@ export function useTestAzureFailure(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6473,7 +6473,7 @@ export function useTestAzureO1NoMaxTokens(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6523,7 +6523,7 @@ export function useTestAzureO1WithMaxCompletionTokens(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6573,7 +6573,7 @@ export function useTestAzureO1WithMaxTokens(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6623,7 +6623,7 @@ export function useTestAzureO3NoMaxTokens(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6673,7 +6673,7 @@ export function useTestAzureO3WithMaxCompletionTokens(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6725,7 +6725,7 @@ export function useTestAzureWithMaxTokens(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6773,7 +6773,7 @@ export function useTestCaching(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6823,7 +6823,7 @@ export function useTestFallbackClient(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6873,7 +6873,7 @@ export function useTestFallbackStrategy(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6923,7 +6923,7 @@ export function useTestFallbackToShorthand(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -6973,7 +6973,7 @@ export function useTestFnNamedArgsSingleBool(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -7023,7 +7023,7 @@ export function useTestFnNamedArgsSingleClass(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -7073,7 +7073,7 @@ export function useTestFnNamedArgsSingleEnumList(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -7123,7 +7123,7 @@ export function useTestFnNamedArgsSingleFloat(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -7173,7 +7173,7 @@ export function useTestFnNamedArgsSingleInt(
  *
  * **Return Type:**
  * - **Non‑streaming:** Record<string, types.StringToClassEntry>
- * - **Streaming Partial:** Record<string, StringToClassEntry | null> | null
+ * - **Streaming Partial:** Record<string, StringToClassEntry>
  * - **Streaming Final:** Record<string, types.StringToClassEntry>
  *
  * **Usage Patterns:**
@@ -7223,7 +7223,7 @@ export function useTestFnNamedArgsSingleMapStringToClass(
  *
  * **Return Type:**
  * - **Non‑streaming:** Record<string, Record<string, string>>
- * - **Streaming Partial:** Record<string, Record<string, string | null> | null> | null
+ * - **Streaming Partial:** Record<string, Record<string, string>>
  * - **Streaming Final:** Record<string, Record<string, string>>
  *
  * **Usage Patterns:**
@@ -7273,7 +7273,7 @@ export function useTestFnNamedArgsSingleMapStringToMap(
  *
  * **Return Type:**
  * - **Non‑streaming:** Record<string, string>
- * - **Streaming Partial:** Record<string, string | null> | null
+ * - **Streaming Partial:** Record<string, string>
  * - **Streaming Final:** Record<string, string>
  *
  * **Usage Patterns:**
@@ -7323,7 +7323,7 @@ export function useTestFnNamedArgsSingleMapStringToString(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -7373,7 +7373,7 @@ export function useTestFnNamedArgsSingleString(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -7423,7 +7423,7 @@ export function useTestFnNamedArgsSingleStringArray(
  *
  * **Return Type:**
  * - **Non‑streaming:** string[]
- * - **Streaming Partial:** (string | null)[] | null
+ * - **Streaming Partial:** string[]
  * - **Streaming Final:** string[]
  *
  * **Usage Patterns:**
@@ -7473,7 +7473,7 @@ export function useTestFnNamedArgsSingleStringList(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -7521,7 +7521,7 @@ export function useTestGemini(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -7571,7 +7571,7 @@ export function useTestGeminiOpenAiGeneric(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -7621,7 +7621,7 @@ export function useTestGeminiSystem(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -7671,7 +7671,7 @@ export function useTestGeminiSystemAsChat(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -7721,7 +7721,7 @@ export function useTestGroq(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -7771,7 +7771,7 @@ export function useTestImageInput(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -7821,7 +7821,7 @@ export function useTestImageInputAnthropic(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -7871,7 +7871,7 @@ export function useTestImageListInput(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.TestMemoryOutput
- * - **Streaming Partial:** TestMemoryOutput | null
+ * - **Streaming Partial:** TestMemoryOutput
  * - **Streaming Final:** types.TestMemoryOutput
  *
  * **Usage Patterns:**
@@ -7923,7 +7923,7 @@ export function useTestMemory(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -7973,7 +7973,7 @@ export function useTestMulticlassNamedArgs(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8023,7 +8023,7 @@ export function useTestNamedArgsLiteralBool(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8073,7 +8073,7 @@ export function useTestNamedArgsLiteralInt(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8173,7 +8173,7 @@ export function useTestOllama(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.Haiku
- * - **Streaming Partial:** Haiku | null
+ * - **Streaming Partial:** Haiku
  * - **Streaming Final:** types.Haiku
  *
  * **Usage Patterns:**
@@ -8223,7 +8223,7 @@ export function useTestOllamaHaiku(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8273,7 +8273,7 @@ export function useTestOpenAI(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8323,7 +8323,7 @@ export function useTestOpenAIDummyClient(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8373,7 +8373,7 @@ export function useTestOpenAIGPT4oMini(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8423,7 +8423,7 @@ export function useTestOpenAIGPT4oMini2(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8473,7 +8473,7 @@ export function useTestOpenAIGPT4oMini3(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8523,7 +8523,7 @@ export function useTestOpenAILegacyProvider(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8573,7 +8573,7 @@ export function useTestOpenAIO1NoMaxTokens(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8623,7 +8623,7 @@ export function useTestOpenAIO1WithMaxCompletionTokens(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8673,7 +8673,7 @@ export function useTestOpenAIO1WithMaxTokens(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8723,7 +8723,7 @@ export function useTestOpenAIShorthand(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8773,7 +8773,7 @@ export function useTestOpenAIWithFinishReasonError(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8823,7 +8823,7 @@ export function useTestOpenAIWithMaxTokens(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8873,7 +8873,7 @@ export function useTestOpenAIWithNullMaxTokens(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8921,7 +8921,7 @@ export function useTestOpenRouterMistralSmall3_1_24b(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -8969,7 +8969,7 @@ export function useTestRetryConstant(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -9019,7 +9019,7 @@ export function useTestRetryExponential(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -9067,7 +9067,7 @@ export function useTestRoundRobinStrategy(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -9117,7 +9117,7 @@ export function useTestSingleFallbackClient(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.CustomStory
- * - **Streaming Partial:** CustomStory | null
+ * - **Streaming Partial:** CustomStory
  * - **Streaming Final:** types.CustomStory
  *
  * **Usage Patterns:**
@@ -9167,7 +9167,7 @@ export function useTestThinking(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.UniverseQuestion
- * - **Streaming Partial:** UniverseQuestion | null
+ * - **Streaming Partial:** UniverseQuestion
  * - **Streaming Final:** types.UniverseQuestion
  *
  * **Usage Patterns:**
@@ -9217,7 +9217,7 @@ export function useTestUniverseQuestion(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -9267,7 +9267,7 @@ export function useTestVertex(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -9315,7 +9315,7 @@ export function useTestVertexClaude(
  *
  * **Return Type:**
  * - **Non‑streaming:** string
- * - **Streaming Partial:** string | null
+ * - **Streaming Partial:** string
  * - **Streaming Final:** string
  *
  * **Usage Patterns:**
@@ -9365,7 +9365,7 @@ export function useTestVertexWithSystemInstructions(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.UnionTest_ReturnType
- * - **Streaming Partial:** UnionTest_ReturnType | null
+ * - **Streaming Partial:** UnionTest_ReturnType
  * - **Streaming Final:** types.UnionTest_ReturnType
  *
  * **Usage Patterns:**
@@ -9415,7 +9415,7 @@ export function useUnionTest_Function(
  *
  * **Return Type:**
  * - **Non‑streaming:** number
- * - **Streaming Partial:** number | null
+ * - **Streaming Partial:** number
  * - **Streaming Final:** number
  *
  * **Usage Patterns:**
@@ -9465,7 +9465,7 @@ export function useUseBlockConstraint(
  *
  * **Return Type:**
  * - **Non‑streaming:** types.MaintainFieldOrder
- * - **Streaming Partial:** MaintainFieldOrder | null
+ * - **Streaming Partial:** MaintainFieldOrder
  * - **Streaming Final:** types.MaintainFieldOrder
  *
  * **Usage Patterns:**
@@ -9515,7 +9515,7 @@ export function useUseMaintainFieldOrder(
  *
  * **Return Type:**
  * - **Non‑streaming:** number
- * - **Streaming Partial:** number | null
+ * - **Streaming Partial:** number
  * - **Streaming Final:** number
  *
  * **Usage Patterns:**
@@ -9565,7 +9565,7 @@ export function useUseMalformedConstraints(
  *
  * **Return Type:**
  * - **Non‑streaming:** number
- * - **Streaming Partial:** number | null
+ * - **Streaming Partial:** number
  * - **Streaming Final:** number
  *
  * **Usage Patterns:**

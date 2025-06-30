@@ -9,7 +9,7 @@ mod filters {
         // make first letter uppercase
         let first_letter = s.chars().next().unwrap().to_uppercase();
         let rest = s[1..].to_string();
-        Ok(format!("{}{}", first_letter, rest))
+        Ok(format!("{first_letter}{rest}"))
     }
 }
 

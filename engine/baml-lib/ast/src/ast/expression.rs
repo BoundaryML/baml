@@ -176,7 +176,7 @@ impl fmt::Display for Expression {
                 write!(f, "}}")
             }
             Expression::Lambda(args, body, _span) => {
-                write!(f, "{} => {}", args, body)
+                write!(f, "{args} => {body}")
             }
             Expression::App(app) => {
                 write!(f, "{}(", app.name)?;

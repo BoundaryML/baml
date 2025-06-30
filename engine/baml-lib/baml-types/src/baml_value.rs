@@ -456,16 +456,14 @@ impl<T: HasType<type_meta::IR>> TypeQuery<type_meta::IR> for BamlValueWithMeta<T
             BamlValueWithMeta::Map(index_map, _) => match field_type {
                 TypeGeneric::Map(_, value_type, _) => {
                     // TODO: Check key type
-                    index_map
-                        .iter()
-                        .all(|(_, v)| v.is_type(&value_type, lookup))
+                    index_map.iter().all(|(_, v)| v.is_type(value_type, lookup))
                 }
                 _ => handle_composite(field_type),
             },
             BamlValueWithMeta::List(baml_value_with_metas, _) => match field_type {
                 TypeGeneric::List(item_type, _) => baml_value_with_metas
                     .iter()
-                    .all(|v| v.is_type(&item_type, lookup)),
+                    .all(|v| v.is_type(item_type, lookup)),
                 _ => handle_composite(field_type),
             },
             BamlValueWithMeta::Media(baml_media, _) => match field_type {
@@ -586,16 +584,14 @@ impl<T: HasType<type_meta::NonStreaming>> TypeQuery<type_meta::NonStreaming>
             BamlValueWithMeta::Map(index_map, _) => match field_type {
                 TypeGeneric::Map(_, value_type, _) => {
                     // TODO: Check key type
-                    index_map
-                        .iter()
-                        .all(|(_, v)| v.is_type(&value_type, lookup))
+                    index_map.iter().all(|(_, v)| v.is_type(value_type, lookup))
                 }
                 _ => handle_composite(field_type),
             },
             BamlValueWithMeta::List(baml_value_with_metas, _) => match field_type {
                 TypeGeneric::List(item_type, _) => baml_value_with_metas
                     .iter()
-                    .all(|v| v.is_type(&item_type, lookup)),
+                    .all(|v| v.is_type(item_type, lookup)),
                 _ => handle_composite(field_type),
             },
             BamlValueWithMeta::Media(baml_media, _) => match field_type {
@@ -713,16 +709,14 @@ impl<T: HasType<type_meta::Streaming>> TypeQuery<type_meta::Streaming> for BamlV
             BamlValueWithMeta::Map(index_map, _) => match field_type {
                 TypeGeneric::Map(_, value_type, _) => {
                     // TODO: Check key type
-                    index_map
-                        .iter()
-                        .all(|(_, v)| v.is_type(&value_type, lookup))
+                    index_map.iter().all(|(_, v)| v.is_type(value_type, lookup))
                 }
                 _ => handle_composite(field_type),
             },
             BamlValueWithMeta::List(baml_value_with_metas, _) => match field_type {
                 TypeGeneric::List(item_type, _) => baml_value_with_metas
                     .iter()
-                    .all(|v| v.is_type(&item_type, lookup)),
+                    .all(|v| v.is_type(item_type, lookup)),
                 _ => handle_composite(field_type),
             },
             BamlValueWithMeta::Media(baml_media, _) => match field_type {

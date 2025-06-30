@@ -104,10 +104,10 @@ mod internal_tests {
         let trace_storage = BAML_TRACER.lock().unwrap();
         let events = trace_storage.events();
         let events = events.iter().map(|k| k.0).collect::<Vec<_>>();
-        log::info!("Events: {:#?}", events);
+        log::info!("Events: {events:#?}");
         let trace = trace_storage.get_events(&function_span_id).unwrap();
 
-        log::info!("Trace: {:#?}", trace);
+        log::info!("Trace: {trace:#?}");
 
         runtime.async_runtime.block_on(flush());
 

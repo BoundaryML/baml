@@ -70,7 +70,7 @@ impl BamlLogEvent {
         format!(
             "BamlLogEvent {{\n    metadata: {{\n        event_id: \"{}\",\n        parent_id: {},\n        root_event_id: \"{}\"\n    }},\n    prompt: {},\n    raw_output: {},\n    parsed_output: {},\n    start_time: \"{}\"\n}}",
             self.metadata.event_id,
-            self.metadata.parent_id.as_ref().map_or("None".to_string(), |id| format!("\"{}\"", id)),
+            self.metadata.parent_id.as_ref().map_or("None".to_string(), |id| format!("\"{id}\"")),
             self.metadata.root_event_id,
             prompt,
             raw_output,
@@ -144,7 +144,7 @@ impl BamlRuntime {
                 "Failed to parse args. Expect kwargs",
             ));
         };
-        log::debug!("pyo3 call_function parsed args into: {:#?}", args_map);
+        log::debug!("pyo3 call_function parsed args into: {args_map:#?}");
 
         let baml_runtime = self.inner.clone();
         let ctx_mng = ctx.inner.clone();
@@ -200,7 +200,7 @@ impl BamlRuntime {
                 "Failed to parse args as a map",
             ));
         };
-        log::debug!("pyo3 call_function_sync parsed args into: {:#?}", args_map);
+        log::debug!("pyo3 call_function_sync parsed args into: {args_map:#?}");
 
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
@@ -253,7 +253,7 @@ impl BamlRuntime {
         let Some(args_map) = args.as_map() else {
             return Err(BamlInvalidArgumentError::new_err("Failed to parse args"));
         };
-        log::debug!("pyo3 stream_function parsed args into: {:#?}", args_map);
+        log::debug!("pyo3 stream_function parsed args into: {args_map:#?}");
 
         let ctx = ctx.inner.clone();
         let collector_list = collectors
@@ -306,7 +306,7 @@ impl BamlRuntime {
         let Some(args_map) = args.as_map() else {
             return Err(BamlInvalidArgumentError::new_err("Failed to parse args"));
         };
-        log::debug!("pyo3 stream_function parsed args into: {:#?}", args_map);
+        log::debug!("pyo3 stream_function parsed args into: {args_map:#?}");
 
         let ctx = ctx.inner.clone();
         let collector_list = collectors
@@ -513,7 +513,7 @@ impl BamlRuntime {
                         ) {
                             Ok(_) => Ok(()),
                             Err(e) => {
-                                log::error!("Error calling log_event_callback: {:?}", e);
+                                log::error!("Error calling log_event_callback: {e:?}");
                                 Err(anyhow::Error::new(e)) // Proper error handling
                             }
                         }

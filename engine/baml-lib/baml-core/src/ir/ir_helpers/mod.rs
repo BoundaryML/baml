@@ -754,7 +754,7 @@ impl IRHelper for IntermediateRepr {
             } else {
                 // Check if the parameter is optional.
                 if !param_type.is_optional() {
-                    scope.push_error(format!("Missing required parameter: {}", param_name));
+                    scope.push_error(format!("Missing required parameter: {param_name}"));
                 }
             }
             scope.pop(false);
@@ -854,7 +854,7 @@ impl IRSemanticStreamingHelper for IntermediateRepr {
 /// should declare as the `item_type` in the case of unions that
 /// admit multiple different children. (Perhaps a union of all the
 /// child-having variants?).
-pub fn item_type(ir: &(impl IRHelperExtended + ?Sized), field_type: &TypeIR) -> Option<TypeIR> {
+fn item_type(ir: &(impl IRHelperExtended + ?Sized), field_type: &TypeIR) -> Option<TypeIR> {
     let res = match field_type {
         TypeIR::Class { .. } => None,
         TypeIR::Enum { .. } => None,
@@ -1153,7 +1153,7 @@ mod tests {
         let my_list = mk_list_1();
         let actual = infer_type(&my_list).unwrap();
         let expected = int_type().as_list();
-        assert_eq!(actual, expected, "{} != {}", actual, expected);
+        assert_eq!(actual, expected, "{actual} != {expected}");
     }
 
     #[test]
@@ -1386,8 +1386,8 @@ mod tests {
             span_path: None,
             allow_implicit_cast_to_string: true,
         };
-        let res = ir.check_function_params(&function.inputs(), &params, arg_coercer);
-        eprintln!("res: {:?}", res);
+        let res = ir.check_function_params(function.inputs(), &params, arg_coercer);
+        eprintln!("res: {res:?}");
         assert!(res.is_err());
     }
 
@@ -1480,8 +1480,8 @@ mod tests {
             span_path: None,
             allow_implicit_cast_to_string: true,
         };
-        let res = ir.check_function_params(&function.inputs(), &params, arg_coercer);
-        let err = res.err().expect("Should fail due to block constraint");
+        let res = ir.check_function_params(function.inputs(), &params, arg_coercer);
+        let err = res.expect_err("Should fail due to block constraint");
         let msg = format!("{err}");
         assert!(
             msg.contains("Failed assert: hi"),
@@ -1682,27 +1682,33 @@ mod subtype_tests {
             .collect(),
             (),
         );
-        assert_eq!(
-            item_type(&ir, &TypeIR::recursive_type_alias("A")),
-            Some(TypeIR::recursive_type_alias("A"))
-        );
-        assert_eq!(
-            item_type(&ir, &TypeIR::recursive_type_alias("B")),
-            Some(TypeIR::List(
-                Box::new(TypeIR::recursive_type_alias("B")),
-                Default::default(),
-            ))
-        );
-        assert_eq!(
-            item_type(&ir, &TypeIR::recursive_type_alias("C")),
-            Some(TypeIR::recursive_type_alias("C"))
-        );
-        assert_eq!(
-            item_type(&ir, &TypeIR::recursive_type_alias("JsonValue")),
-            Some(TypeIR::union(vec![
-                TypeIR::recursive_type_alias("JsonValue"),
-                TypeIR::recursive_type_alias("JsonValue"),
-            ]))
-        );
+
+        // A[]
+        let ret = item_type(&ir, &TypeIR::recursive_type_alias("A")).expect("should be Some");
+        let mut expected = TypeIR::recursive_type_alias("A");
+        expected.meta_mut().streaming_behavior.needed = true;
+        assert_eq!(ret, expected, "{ret} != {expected}");
+
+        // B[][]
+        let ret = item_type(&ir, &TypeIR::recursive_type_alias("B")).expect("should be Some");
+        let mut expected = TypeIR::recursive_type_alias("B");
+        expected.meta_mut().streaming_behavior.needed = true;
+        let mut expected = expected.as_list();
+        expected.meta_mut().streaming_behavior.needed = true;
+
+        assert_eq!(ret, expected, "{ret} != {expected}");
+
+        // map<string, C>
+        let ret = item_type(&ir, &TypeIR::recursive_type_alias("C")).expect("should be Some");
+        let mut expected = TypeIR::recursive_type_alias("C");
+        expected.meta_mut().streaming_behavior.needed = true;
+        assert_eq!(ret, expected, "{ret} != {expected}");
+
+        // JsonValue
+        let ret =
+            item_type(&ir, &TypeIR::recursive_type_alias("JsonValue")).expect("should be Some");
+        let mut expected = TypeIR::recursive_type_alias("JsonValue");
+        expected.meta_mut().streaming_behavior.needed = true;
+        assert_eq!(ret, expected, "{ret} != {expected}");
     }
 }

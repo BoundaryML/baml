@@ -465,7 +465,7 @@ impl BamlRuntime {
 
                     let res = tsfn_clone.call(Ok(event), ThreadsafeFunctionCallMode::Blocking);
                     if res != napi::Status::Ok {
-                        log::error!("Error calling on_log_event callback: {:?}", res);
+                        log::error!("Error calling on_log_event callback: {res:?}");
                     }
 
                     Ok(())
@@ -480,7 +480,7 @@ impl BamlRuntime {
                 match res {
                     Ok(_) => Ok(()),
                     Err(e) => {
-                        log::error!("Error setting log_event_callback: {:?}", e);
+                        log::error!("Error setting log_event_callback: {e:?}");
                         Err(e)
                     }
                 }
@@ -494,7 +494,7 @@ impl BamlRuntime {
                 match res {
                     Ok(_) => Ok(()),
                     Err(e) => {
-                        log::error!("Error setting log_event_callback: {:?}", e);
+                        log::error!("Error setting log_event_callback: {e:?}");
                         Err(e)
                     }
                 }
@@ -504,7 +504,7 @@ impl BamlRuntime {
         let _ = match res {
             Ok(_) => Ok(env.get_undefined()?),
             Err(e) => {
-                log::error!("Error setting log_event_callback: {:?}", e);
+                log::error!("Error setting log_event_callback: {e:?}");
                 Err(e)
             }
         };
@@ -528,7 +528,7 @@ impl ObjectFinalize for BamlRuntime {
         if let Some(mut cb) = self.callback.take() {
             match cb.unref(env) {
                 Ok(_) => (),
-                Err(e) => log::error!("Error unrefing callback: {:?}", e),
+                Err(e) => log::error!("Error unrefing callback: {e:?}"),
             }
         }
         Ok(())

@@ -862,5 +862,5 @@ export interface RecursiveMapAlias {
 }
 
 export interface RecursiveUnion {
-  [key: string]: string | Record<string, RecursiveUnion>
+  [key: string]: RecursiveUnion
 }

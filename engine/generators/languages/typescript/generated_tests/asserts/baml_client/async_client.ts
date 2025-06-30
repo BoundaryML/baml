@@ -132,7 +132,7 @@ class BamlStreamClient {
   PersonTest(
       
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<partial_types.Person | null, types.Person> {
+  ): BamlStream<partial_types.Person, types.Person> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -152,9 +152,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<partial_types.Person | null, types.Person>(
+      return new BamlStream<partial_types.Person, types.Person>(
         raw,
-        (a): partial_types.Person | null => a,
+        (a): partial_types.Person => a,
         (a): types.Person => a,
         this.ctxManager.cloneContext(),
       )

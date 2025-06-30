@@ -48,10 +48,10 @@ export namespace partial_types {
       sixteen_digit_number?: number | null
       string_with_twenty_words?: string | null
       class_1?: ClassWithoutDone | null
-      class_2?: ClassWithBlockDone | null
+      class_2?: types.ClassWithBlockDone | null
       class_done_needed: types.ClassWithBlockDone
       class_needed: ClassWithoutDone
-      three_small_things?: (SmallThing | null)[] | null
+      three_small_things: SmallThing[]
       final_string?: string | null
     }
     export interface SmallThing {

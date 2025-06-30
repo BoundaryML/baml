@@ -55,18 +55,28 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
                 meta: meta.clone(),
             },
             TypeIR::List(item_type, _) => {
-                TypeStreaming::List(Box::new(from_type_ir(item_type, lookup)), meta)
+                // items inside of arrays don't need to nullable.
+                let mut item_type = item_type.clone();
+                item_type.meta_mut().streaming_behavior.needed = true;
+                TypeStreaming::List(Box::new(from_type_ir(&item_type, lookup)), meta)
             }
-            TypeIR::Map(key_type, item_type, _) => TypeStreaming::Map(
-                {
-                    // Keys cannot be null in maps
-                    let mut clone = key_type.clone();
-                    clone.meta_mut().streaming_behavior.needed = true;
-                    Box::new(from_type_ir(&clone, lookup))
-                },
-                Box::new(from_type_ir(item_type, lookup)),
-                meta,
-            ),
+            TypeIR::Map(key_type, item_type, _) => {
+                TypeStreaming::Map(
+                    {
+                        // Keys cannot be null in maps
+                        let mut clone = key_type.clone();
+                        clone.meta_mut().streaming_behavior.needed = true;
+                        Box::new(from_type_ir(&clone, lookup))
+                    },
+                    {
+                        // values don't need to be nullable.
+                        let mut item_type = item_type.clone();
+                        item_type.meta_mut().streaming_behavior.needed = true;
+                        Box::new(from_type_ir(&item_type, lookup))
+                    },
+                    meta,
+                )
+            }
             TypeIR::RecursiveTypeAlias { name, .. } => TypeStreaming::RecursiveTypeAlias {
                 name: name.clone(),
                 meta: meta.clone(),
@@ -116,16 +126,21 @@ pub fn from_type_ir(r#type: &TypeIR, lookup: &impl TypeLookups) -> TypeStreaming
             // we want that inner metadata to be default, our outer union to
             // have the metadata. So we create a new default metadata and swap
             // its memory with that of the inner base_type.
-            let meta = base_type_streaming.meta().clone();
-            *base_type_streaming.meta_mut() = Default::default();
-            let mut optional_value = TypeStreaming::Union(
+
+            let use_with_state = base_type_streaming.meta().streaming_behavior.state;
+            base_type_streaming.meta_mut().streaming_behavior.state = false;
+
+            let mut union = TypeStreaming::Union(
                 unsafe {
                     UnionTypeGeneric::new_unsafe(vec![base_type_streaming, TypeStreaming::null()])
                 },
                 Default::default(),
             );
-            *optional_value.meta_mut() = meta;
-            optional_value
+            if use_with_state {
+                let meta = union.meta_mut();
+                meta.streaming_behavior.state = use_with_state;
+            }
+            union
         }
     }
 

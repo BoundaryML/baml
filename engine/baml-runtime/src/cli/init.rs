@@ -89,7 +89,7 @@ impl InitArgs {
                 GeneratorOutputType::Typescript => "TypeScript clients".to_string(),
                 GeneratorOutputType::RubySorbet => "Ruby clients".to_string(),
                 GeneratorOutputType::OpenApi => match &self.openapi_client_type {
-                    Some(s) => format!("{} clients via OpenAPI", s),
+                    Some(s) => format!("{s} clients via OpenAPI"),
                     None => "REST clients".to_string(),
                 },
                 GeneratorOutputType::TypescriptReact => "TypeScript React clients".to_string(),
@@ -164,15 +164,13 @@ fn generate_main_baml_content(
         let openapi_generate_command = match openapi_client_type {
             Some(_) => format!(
                 r#"
-    on_generate {:?}"#,
-                openapi_generate_command
+    on_generate {openapi_generate_command:?}"#
             ),
             None => format!(
                 r#"
     //
     // Uncomment this line to tell BAML to automatically generate an OpenAPI client for you.
-    //on_generate {:?}"#,
-                openapi_generate_command
+    //on_generate {openapi_generate_command:?}"#
             ),
         };
 
@@ -219,8 +217,7 @@ fn generate_main_baml_content(
                 r#"
     // Your Go packages name as specified in go.mod
     // We need this to generate correct imports in the generated baml_client
-    client_package_name "{}""#,
-                package_name
+    client_package_name "{package_name}""#
             )
         }
         None => "".to_string(),

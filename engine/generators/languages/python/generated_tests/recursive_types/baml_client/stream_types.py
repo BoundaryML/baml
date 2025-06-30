@@ -12,11 +12,9 @@
 
 import typing
 import typing_extensions
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel
 
-import baml_py
 
-from . import types
 
 StreamStateValueT = typing.TypeVar('StreamStateValueT')
 class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
@@ -46,4 +44,4 @@ Nonrecursive1: typing_extensions.TypeAlias = typing.Optional[int]
 Nonrecursive2: typing_extensions.TypeAlias = typing.Optional[str]
 
 
-Recursive1: typing_extensions.TypeAlias = typing.Optional[typing.Union[int, typing.List[typing.Optional["Recursive1"]]]]
+Recursive1: typing_extensions.TypeAlias = typing.Optional[typing.Union[int, typing.List["Recursive1"]]]

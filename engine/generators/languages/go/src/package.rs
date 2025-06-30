@@ -92,7 +92,7 @@ impl CurrentRenderPackage {
                 *orig = std::sync::Arc::new(Package::new(package));
             }
             Err(e) => {
-                panic!("Failed to get package: {}", e);
+                panic!("Failed to get package: {e}");
             }
         }
     }
@@ -106,7 +106,7 @@ impl CurrentRenderPackage {
         match self.name().as_str() {
             "types" => "cffi.CFFITypeNamespace_TYPES".to_string(),
             "stream_types" => "cffi.CFFITypeNamespace_STREAM_TYPES".to_string(),
-            other => panic!("Invalid package for a namespace call: {}", other),
+            other => panic!("Invalid package for a namespace call: {other}"),
         }
     }
 }

@@ -11,8 +11,7 @@ use internal_baml_diagnostics::{DatamodelError, Diagnostics, Span};
 
 use crate::{
     ir::{
-        builtin::builtin_ir, ir_helpers::item_type, repr::initial_context, IRHelper,
-        IRHelperExtended, IntermediateRepr,
+        builtin::builtin_ir, repr::initial_context, IRHelper, IRHelperExtended, IntermediateRepr,
     },
     validate::validation_pipeline::context::Context,
     Configuration,
@@ -280,7 +279,7 @@ pub fn typecheck_in_context(
                             typecheck_in_context(ir, diagnostics, typing_context, field_value)?;
                         } else {
                             diagnostics.push_error(DatamodelError::new_validation_error(
-                                &format!("Class {} has no field {}", name, field_name),
+                                &format!("Class {name} has no field {field_name}"),
                                 field_value.meta().0.clone(),
                             ));
                         }
@@ -312,7 +311,7 @@ pub fn typecheck_in_context(
                 }
             } else {
                 diagnostics.push_error(DatamodelError::new_validation_error(
-                    &format!("Unknown class: {}", name),
+                    &format!("Unknown class: {name}"),
                     meta.0.clone(),
                 ));
             }

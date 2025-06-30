@@ -337,7 +337,7 @@ impl<'rb> RubyToJson<'rb> {
 
         Err(vec![SerializationError {
             position: field_pos,
-            message: format!("failed to convert {:?} to i64", any),
+            message: format!("failed to convert {any:?} to i64"),
         }])
     }
 
@@ -353,7 +353,7 @@ impl<'rb> RubyToJson<'rb> {
         let Ok(any) = any.to_string() else {
             return Err(vec![SerializationError {
                 position: field_pos,
-                message: format!("cannot convert {:#?} to utf-8 string", any),
+                message: format!("cannot convert {any:#?} to utf-8 string"),
             }]);
         };
         Ok(any)
@@ -374,7 +374,7 @@ impl<'rb> RubyToJson<'rb> {
             let Ok(value) = value else {
                 errs.push(SerializationError {
                     position: field_pos.clone(),
-                    message: format!("failed to enumerate array element at index {}", i),
+                    message: format!("failed to enumerate array element at index {i}"),
                 });
                 continue;
             };
@@ -403,20 +403,20 @@ impl<'rb> RubyToJson<'rb> {
                 Ok(k) => Ok(k.to_string()),
                 Err(_) => Err(vec![SerializationError {
                     position: field_pos.clone(),
-                    message: format!("failed to convert symbol key in hash to string: {:#?}", k),
+                    message: format!("failed to convert symbol key in hash to string: {k:#?}"),
                 }]),
             };
         }
         if let Some(k) = RString::from_value(k) {
             let mut field_pos = field_pos.clone();
-            field_pos.push(format!("{:#?}", k));
+            field_pos.push(format!("{k:#?}"));
             return match self.to_string(k, field_pos) {
                 Ok(k) => Ok(k),
                 Err(errs) => Err(errs
                     .into_iter()
                     .map(|mut e| {
                         e.message =
-                            format!("failed to convert string key in hash to string: {:#?}", k);
+                            format!("failed to convert string key in hash to string: {k:#?}");
                         e
                     })
                     .collect()),
@@ -425,8 +425,7 @@ impl<'rb> RubyToJson<'rb> {
         Err(vec![SerializationError {
             position: field_pos.clone(),
             message: format!(
-                "expected every key in this hash to be symbol or string, but found key {:#?}",
-                k
+                "expected every key in this hash to be symbol or string, but found key {k:#?}"
             ),
         }])
     }
@@ -522,7 +521,7 @@ impl<'rb> RubyToJson<'rb> {
                         .into_iter()
                         .map(|v| {
                             Symbol::from_value(v)
-                                .ok_or(format!("failed to convert {:#?} to symbol", v))
+                                .ok_or(format!("failed to convert {v:#?} to symbol"))
                         })
                         .collect::<Result<Vec<_>, std::string::String>>();
                     match fields {
@@ -608,10 +607,7 @@ impl<'rb> RubyToJson<'rb> {
 
         Err(vec![SerializationError {
             position: field_pos,
-            message: format!(
-                "struct did not respond to :to_hash with a hash, was: {:#?}",
-                any
-            ),
+            message: format!("struct did not respond to :to_hash with a hash, was: {any:#?}"),
         }])
     }
 

@@ -59,7 +59,7 @@ module BamlClient
   Nonrecursive2 = T.type_alias{ T.nilable(String) }
 
 
-  Recursive1 = T.type_alias{ T.nilable(T.any(Integer, T::Array[T.nilable(T.anything)])) }
+  Recursive1 = T.type_alias{ T.nilable(T.any(Integer, T::Array[T.anything])) }
 
 
   SystemComponentCategory = T.type_alias{ T.nilable(T.any(String, String)) }

@@ -237,6 +237,8 @@ class Resume {
     experience string[] 
     education string[] 
     skills string[] 
+    
+    @@stream.not_null
 }
 "#;
 

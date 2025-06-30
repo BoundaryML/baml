@@ -148,14 +148,14 @@ module BamlClient
       const :id, T.nilable(String)
       const :name, T.nilable(String)
       const :description, T.nilable(String)
-      const :metadata, T.nilable(T::Array[T.nilable(T.any(String, Integer, Float))])
+      const :metadata, T::Array[T.any(String, Integer, Float)]
   end
 
 
   class CompoundBigNumbers < T::Struct
       include Baml::Sorbet::Struct
       const :big, T.nilable(BigNumbers)
-      const :big_nums, T.nilable(T::Array[T.nilable(BigNumbers)])
+      const :big_nums, T::Array[BigNumbers]
       const :another, T.nilable(BigNumbers)
   end
 
@@ -170,7 +170,7 @@ module BamlClient
   class CustomStory < T::Struct
       include Baml::Sorbet::Struct
       const :title, T.nilable(String)
-      const :characters, T.nilable(T::Array[T.nilable(String)])
+      const :characters, T::Array[String]
       const :content, T.nilable(String)
   end
 
@@ -186,7 +186,7 @@ module BamlClient
   class Document1559 < T::Struct
       include Baml::Sorbet::Struct
       const :client_details, T.nilable(ClientDetails1559)
-      const :notes, T.nilable(T::Array[T.nilable(Note1599)])
+      const :notes, T::Array[Note1599]
   end
 
 
@@ -237,7 +237,7 @@ module BamlClient
       const :institution, T.nilable(String)
       const :location, T.nilable(String)
       const :degree, T.nilable(String)
-      const :major, T.nilable(T::Array[T.nilable(String)])
+      const :major, T::Array[String]
       const :graduation_date, T.nilable(String)
   end
 
@@ -291,7 +291,7 @@ module BamlClient
 
   class Forest < T::Struct
       include Baml::Sorbet::Struct
-      const :trees, T.nilable(T::Array[T.nilable(Tree)])
+      const :trees, T::Array[Tree]
   end
 
 
@@ -327,7 +327,7 @@ module BamlClient
       include Baml::Sorbet::Struct
       const :receiptId, T.nilable(String)
       const :storeName, T.nilable(String)
-      const :items, T.nilable(T::Array[T.nilable(T.any(String, Integer, Float))])
+      const :items, T::Array[T.any(String, Integer, Float)]
       const :totalAmount, T.nilable(Float)
   end
 
@@ -505,8 +505,8 @@ module BamlClient
 
   class OptionalListAndMap < T::Struct
       include Baml::Sorbet::Struct
-      const :p, T.nilable(T::Array[T.nilable(String)])
-      const :q, T.nilable(T::Hash[String, T.nilable(String)])
+      const :p, T.nilable(T::Array[String])
+      const :q, T.nilable(T::Hash[String, String])
   end
 
 
@@ -521,7 +521,7 @@ module BamlClient
       include Baml::Sorbet::Struct
       const :omega_1, T.nilable(OptionalTest_Prop1)
       const :omega_2, T.nilable(String)
-      const :omega_3, T.nilable(T::Array[T.nilable(BamlClient::Types::OptionalTest_CategoryType)])
+      const :omega_3, T::Array[T.nilable(BamlClient::Types::OptionalTest_CategoryType)]
   end
 
 
@@ -574,7 +574,7 @@ module BamlClient
 
   class ReceiptInfo < T::Struct
       include Baml::Sorbet::Struct
-      const :items, T.nilable(T::Array[T.nilable(ReceiptItem)])
+      const :items, T::Array[ReceiptItem]
       const :total_cost, T.nilable(Float)
       const :venue, T.nilable(T.any(String, String))
   end
@@ -591,7 +591,7 @@ module BamlClient
 
   class Recipe < T::Struct
       include Baml::Sorbet::Struct
-      const :ingredients, T.nilable(T::Hash[String, T.nilable(Quantity)])
+      const :ingredients, T::Hash[String, Quantity]
       const :recipe_type, T.nilable(T.any(String, String))
   end
 
@@ -607,9 +607,9 @@ module BamlClient
       const :name, T.nilable(String)
       const :email, T.nilable(String)
       const :phone, T.nilable(String)
-      const :experience, T.nilable(T::Array[T.nilable(String)])
-      const :education, T.nilable(T::Array[T.nilable(Education)])
-      const :skills, T.nilable(T::Array[T.nilable(String)])
+      const :experience, T::Array[String]
+      const :education, T::Array[Education]
+      const :skills, T::Array[String]
   end
 
 
@@ -617,9 +617,9 @@ module BamlClient
       include Baml::Sorbet::Struct
       const :prop1, T.nilable(String)
       const :prop2, T.nilable(T.any(Nested, String))
-      const :prop5, T.nilable(T::Array[T.nilable(String)])
-      const :prop6, T.nilable(T.any(String, T::Array[T.nilable(Nested)]))
-      const :nested_attrs, T.nilable(T::Array[T.nilable(T.any(String, Nested))])
+      const :prop5, T::Array[T.nilable(String)]
+      const :prop6, T.nilable(T.any(String, T::Array[Nested]))
+      const :nested_attrs, T::Array[T.any(String, Nested)]
       const :parens, T.nilable(String)
       const :other_group, T.nilable(T.any(String, Integer))
   end
@@ -628,11 +628,11 @@ module BamlClient
   class SearchParams < T::Struct
       include Baml::Sorbet::Struct
       const :dateRange, T.nilable(Integer)
-      const :location, T.nilable(T::Array[T.nilable(String)])
+      const :location, T::Array[String]
       const :jobTitle, T.nilable(WithReasoning)
       const :company, T.nilable(WithReasoning)
-      const :description, T.nilable(T::Array[T.nilable(WithReasoning)])
-      const :tags, T.nilable(T::Array[T.nilable(T.any(BamlClient::Types::Tag, String))])
+      const :description, T::Array[WithReasoning]
+      const :tags, T::Array[T.any(BamlClient::Types::Tag, String)]
   end
 
 
@@ -641,10 +641,10 @@ module BamlClient
       const :sixteen_digit_number, T.nilable(Integer)
       const :string_with_twenty_words, T.nilable(String)
       const :class_1, T.nilable(ClassWithoutDone)
-      const :class_2, T.nilable(ClassWithBlockDone)
+      const :class_2, T.nilable(BamlClient::Types::ClassWithBlockDone)
       const :class_done_needed, BamlClient::Types::ClassWithBlockDone
       const :class_needed, ClassWithoutDone
-      const :three_small_things, T.nilable(T::Array[T.nilable(SmallThing)])
+      const :three_small_things, T::Array[SmallThing]
       const :final_string, T.nilable(String)
   end
 
@@ -700,8 +700,8 @@ module BamlClient
 
   class TestMemoryOutput < T::Struct
       include Baml::Sorbet::Struct
-      const :items, T.nilable(T::Array[T.nilable(T.any(MemoryObject, ComplexMemoryObject, AnotherObject))])
-      const :more_items, T.nilable(T::Array[T.nilable(T.any(MemoryObject, ComplexMemoryObject, AnotherObject))])
+      const :items, T::Array[T.any(MemoryObject, ComplexMemoryObject, AnotherObject)]
+      const :more_items, T::Array[T.any(MemoryObject, ComplexMemoryObject, AnotherObject)]
   end
 
 
@@ -738,8 +738,8 @@ module BamlClient
   class UnionTest_ReturnType < T::Struct
       include Baml::Sorbet::Struct
       const :prop1, T.nilable(T.any(String, T::Boolean))
-      const :prop2, T.nilable(T::Array[T.nilable(T.any(Float, T::Boolean))])
-      const :prop3, T.nilable(T.any(T::Array[T.nilable(T::Boolean)], T::Array[T.nilable(Integer)]))
+      const :prop2, T::Array[T.any(Float, T::Boolean)]
+      const :prop3, T.nilable(T.any(T::Array[T::Boolean], T::Array[Integer]))
   end
 
 
@@ -771,25 +771,25 @@ module BamlClient
   Amount = T.type_alias{ T.nilable(Integer) }
 
 
-  Combination = T.type_alias{ T.nilable(T.any(Integer, String, T::Boolean, Float, T::Array[T.nilable(String)], T::Hash[String, T.nilable(T::Array[T.nilable(String)])])) }
+  Combination = T.type_alias{ T.nilable(T.any(Integer, String, T::Boolean, Float, T::Array[String], T::Hash[String, T::Array[String]])) }
 
 
   Currency = T.type_alias{ T.nilable(BamlClient::Types::Checked[Integer]) }
 
 
-  Graph = T.type_alias{ T.nilable(T::Hash[String, T.nilable(T::Array[T.nilable(String)])]) }
+  Graph = T.type_alias{ T.nilable(T::Hash[String, T::Array[String]]) }
 
 
-  JsonArray = T.type_alias{ T.nilable(T::Array[T.nilable(JsonValue)]) }
+  JsonArray = T.type_alias{ T.nilable(T::Array[JsonValue]) }
 
 
   JsonEntry = T.type_alias{ T.nilable(T.any(SimpleTag, JsonTemplate)) }
 
 
-  JsonObject = T.type_alias{ T.nilable(T::Hash[String, T.nilable(JsonValue)]) }
+  JsonObject = T.type_alias{ T.nilable(T::Hash[String, JsonValue]) }
 
 
-  JsonTemplate = T.type_alias{ T.nilable(T::Hash[String, T.nilable(JsonEntry)]) }
+  JsonTemplate = T.type_alias{ T.nilable(T::Hash[String, JsonEntry]) }
 
 
   JsonValue = T.type_alias{ T.nilable(T.any(Integer, String, T::Boolean, Float, JsonObject, JsonArray)) }
@@ -798,7 +798,7 @@ module BamlClient
   LinkedListAlias = T.type_alias{ T.nilable(LinkedListAliasNode) }
 
 
-  List = T.type_alias{ T.nilable(T::Array[T.nilable(String)]) }
+  List = T.type_alias{ T.nilable(T::Array[String]) }
 
 
   MultipleAttrs = T.type_alias{ T.nilable(BamlClient::Types::Checked[Integer]) }
@@ -813,19 +813,19 @@ module BamlClient
   RecAliasOne = T.type_alias{ T.nilable(RecAliasTwo) }
 
 
-  RecAliasThree = T.type_alias{ T.nilable(T::Array[T.nilable(RecAliasOne)]) }
+  RecAliasThree = T.type_alias{ T.nilable(T::Array[RecAliasOne]) }
 
 
   RecAliasTwo = T.type_alias{ T.nilable(RecAliasThree) }
 
 
-  RecursiveListAlias = T.type_alias{ T.nilable(T::Array[T.nilable(T.anything)]) }
+  RecursiveListAlias = T.type_alias{ T.nilable(T::Array[T.anything]) }
 
 
-  RecursiveMapAlias = T.type_alias{ T.nilable(T::Hash[String, T.nilable(T.anything)]) }
+  RecursiveMapAlias = T.type_alias{ T.nilable(T::Hash[String, T.anything]) }
 
 
-  RecursiveUnion = T.type_alias{ T.nilable(T.any(String, T::Hash[String, T.nilable(T.anything)])) }
+  RecursiveUnion = T.type_alias{ T.nilable(T.any(String, T::Hash[String, T.anything])) }
 
 
   end

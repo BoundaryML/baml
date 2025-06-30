@@ -228,12 +228,12 @@ export const AssertFn = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { Audio } aud - Input parameter.
+ * @param { Image } aud - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const AudioInput = async (
-  aud: Audio,
+  aud: Image,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.AudioInput(
     aud,
@@ -247,13 +247,13 @@ export const AudioInput = async (
  * This action initiates a streaming response by calling the corresponding
  * BAML stream function. The returned stream yields incremental updates.
  *
- * @param { Audio } aud - Input parameter.
+ * @param { Image } aud - Input parameter.
  * @param { string } prompt - Input parameter.
  *
  * @returns {ReadableStream<Uint8Array>} A stream that yields incremental updates from the action.
  */
 export const AudioInputOpenai = async (
-  aud: Audio,
+  aud: Image,
   prompt: string,
 ): Promise<ReadableStream<Uint8Array>> => {
   const stream = b.stream.AudioInputOpenai(

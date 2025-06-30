@@ -510,7 +510,7 @@ impl TracePublisher {
             .headers({
                 let mut headers = reqwest::header::HeaderMap::new();
                 for (key, value) in upload_metadata.to_map() {
-                    let header_name = format!("x-amz-meta-{}", key);
+                    let header_name = format!("x-amz-meta-{key}");
                     if let (Ok(name), Ok(val)) = (
                         reqwest::header::HeaderName::from_bytes(header_name.as_bytes()),
                         reqwest::header::HeaderValue::from_str(&value),
@@ -604,15 +604,15 @@ impl TracePublisher {
                         Ok(())
                     }
                     (Err(e1), Ok(())) => {
-                        log::info!("First half failed: {}", e1);
+                        log::info!("First half failed: {e1}");
                         Err(e1)
                     }
                     (Ok(()), Err(e2)) => {
-                        log::info!("Second half failed: {}", e2);
+                        log::info!("Second half failed: {e2}");
                         Err(e2)
                     }
                     (Err(e1), Err(e2)) => {
-                        log::debug!("Both halves failed - first: {}, second: {}", e1, e2);
+                        log::debug!("Both halves failed - first: {e1}, second: {e2}");
                         Err(e1) // Return the first error
                     }
                 }
@@ -674,7 +674,7 @@ impl TracePublisher {
         {
             Ok(response) => response,
             Err(e) => {
-                log::debug!("Failed to upload trace events: {}", e);
+                log::debug!("Failed to upload trace events: {e}");
                 return Err(e.into());
             }
         };
@@ -716,7 +716,7 @@ impl AsReqwestHeaders for S3UploadMetadata {
             .iter()
             .map(|(k, v)| {
                 Ok((
-                    HeaderName::from_bytes(format!("x-amz-meta-{}", k).as_bytes())?,
+                    HeaderName::from_bytes(format!("x-amz-meta-{k}").as_bytes())?,
                     HeaderValue::from_str(v.as_str().unwrap())?,
                 ))
             })

@@ -81,16 +81,16 @@ impl BamlError {
             }
         } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
             Self::InvalidArgument {
-                message: format!("{:?}", er),
+                message: format!("{er:?}"),
             }
         } else if let Some(er) = err.downcast_ref::<LLMResponse>() {
             match er {
                 LLMResponse::Success(_) => Self::InternalError {
-                    message: format!("Unexpected error from BAML: {:?}", err),
+                    message: format!("Unexpected error from BAML: {err:?}"),
                 },
                 LLMResponse::LLMFailure(failed) => match &failed.code {
                     crate::internal::llm_client::ErrorCode::Other(2) => Self::InternalError {
-                        message: format!("Something went wrong with the LLM client: {:?}", err),
+                        message: format!("Something went wrong with the LLM client: {err:?}"),
                     },
                     crate::internal::llm_client::ErrorCode::Other(_)
                     | crate::internal::llm_client::ErrorCode::InvalidAuthentication
@@ -100,20 +100,20 @@ impl BamlError {
                     | crate::internal::llm_client::ErrorCode::ServiceUnavailable
                     | crate::internal::llm_client::ErrorCode::UnsupportedResponse(_) => {
                         Self::ClientError {
-                            message: format!("{:?}", err),
+                            message: format!("{err:?}"),
                         }
                     }
                 },
                 LLMResponse::UserFailure(msg) => Self::InvalidArgument {
-                    message: format!("Invalid argument: {}", msg),
+                    message: format!("Invalid argument: {msg}"),
                 },
                 LLMResponse::InternalFailure(_) => Self::InternalError {
-                    message: format!("Something went wrong with the LLM client: {}", err),
+                    message: format!("Something went wrong with the LLM client: {err}"),
                 },
             }
         } else {
             Self::InternalError {
-                message: format!("{:?}", err),
+                message: format!("{err:?}"),
             }
         }
     }

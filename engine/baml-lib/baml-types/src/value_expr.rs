@@ -589,7 +589,7 @@ impl ApiKeyWithProvenance {
             self.provenance
                 .as_ref()
                 .map_or("<SECRET_HIDDEN>".to_string(), |env_var| {
-                    format!("${}", env_var)
+                    format!("${env_var}")
                 })
         }
     }

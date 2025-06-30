@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use anyhow::Result;
 use baml_types::{BamlMap, Constraint};
 use internal_baml_core::ir::TypeIR;
@@ -210,7 +212,8 @@ impl TypeCoercer for Class {
                             None => Some(BamlValueWithFlags::Null(
                                 t.clone(),
                                 DeserializerConditions::new()
-                                    .with_flag(Flag::OptionalDefaultFromNoValue),
+                                    .with_flag(Flag::OptionalDefaultFromNoValue)
+                                    .with_flag(Flag::Pending),
                             )),
                         };
 
@@ -223,7 +226,10 @@ impl TypeCoercer for Class {
                     let next = match v {
                         Some(Ok(_)) => None,
                         Some(Err(e)) => t.default_value(Some(e)),
-                        None => t.default_value(None),
+                        None => t.default_value(None).map(|mut v| {
+                            v.add_flag(Flag::Pending);
+                            v
+                        }),
                     };
 
                     if let Some(next) = next {
@@ -368,7 +374,7 @@ impl TypeCoercer for Class {
             }
         }
 
-        log::trace!("Completed class: {:#?}", completed_cls);
+        log::trace!("Completed class: {completed_cls:#?}");
 
         array_helper::pick_best(ctx, target, &completed_cls)
     }
@@ -391,7 +397,7 @@ pub fn apply_constraints(
         });
         let constraint_results = run_user_checks(&value.clone().into(), &constrained_class)
             .map_err(|e| ParsingError {
-                reason: format!("Failed to evaluate constraints: {:?}", e),
+                reason: format!("Failed to evaluate constraints: {e:?}"),
                 scope,
                 causes: Vec::new(),
             })?;
@@ -425,13 +431,13 @@ fn update_map<'a>(
     match map.get(key) {
         Some(Some(_)) => {
             // DO NOTHING (keep first value)
-            log::trace!("Duplicate field: {}", key);
+            log::trace!("Duplicate field: {key}");
         }
         Some(None) => {
             map.insert(key.into(), Some(value));
         }
         None => {
-            log::trace!("Field not found: {}", key);
+            log::trace!("Field not found: {key}");
         }
     }
 }

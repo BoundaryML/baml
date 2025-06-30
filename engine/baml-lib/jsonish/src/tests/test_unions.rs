@@ -25,12 +25,17 @@ test_deserializer!(
 fn test_union_full() {
     let ir = crate::helpers::load_test_ir(FOO_FILE);
     let target_type = TypeIR::union(vec![TypeIR::class("Foo"), TypeIR::class("Bar").as_list()]);
-    let target =
-        crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
+    let target = crate::helpers::render_output_format(
+        &ir,
+        &target_type,
+        &Default::default(),
+        baml_types::StreamingMode::NonStreaming,
+    )
+    .unwrap();
 
     let result = from_str(&target, &target_type, r#"{"hi": ["a", "b"]}"#);
 
-    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+    assert!(result.is_ok(), "Failed to parse: {result:?}");
 
     let value = result.unwrap();
     log::trace!("Score: {}", value.score());
@@ -39,19 +44,27 @@ fn test_union_full() {
         for (prop_name, prop_value) in props {
             match prop_name.as_str() {
                 "hi" => {
+                    let mut item_type = TypeIR::Primitive(TypeValue::String, TypeMeta::default());
+                    item_type.meta_mut().streaming_behavior.needed = true;
+                    let mut target_type = item_type.as_list();
+                    target_type.meta_mut().streaming_behavior.needed = true;
                     assert_eq!(
                         prop_value.field_type(),
-                        &TypeIR::Primitive(TypeValue::String, TypeMeta::default()).as_list()
+                        &target_type,
+                        "{} != {target_type}",
+                        prop_value.field_type()
                     );
+
+                    let item_type = match &target_type {
+                        TypeIR::List(item, _) => item.as_ref(),
+                        _ => panic!("Expected a list"),
+                    };
                     for item in prop_value.as_list().unwrap() {
-                        assert_eq!(
-                            item.field_type(),
-                            &TypeIR::Primitive(TypeValue::String, TypeMeta::default())
-                        );
+                        assert_eq!(item.field_type(), item_type);
                     }
                 }
                 _ => {
-                    panic!("Unexpected property: {}", prop_name);
+                    panic!("Unexpected property: {prop_name}");
                 }
             }
         }
@@ -59,7 +72,7 @@ fn test_union_full() {
         panic!("Expected a class");
     }
     let value: BamlValue = value.into();
-    log::info!("{}", value);
+    log::info!("{value}");
     let json_value = json!(value);
 
     let expected = serde_json::json!({"hi": ["a", "b"]});

@@ -11,9 +11,8 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 
-from . import stream_types, types
+from . import types
 from .runtime import DoNotUseDirectlyCallManager, BamlCallOptions
 
 class LlmResponseParser:
@@ -44,14 +43,14 @@ class LlmStreamParser:
 
     def ConsumeTestEnum(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[types.TestEnum]:
+    ) -> types.TestEnum:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ConsumeTestEnum", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[types.TestEnum], result)
+        return typing.cast(types.TestEnum, result)
 
     def FnTestAliasedEnumOutput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[types.TestEnum]:
+    ) -> types.TestEnum:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnTestAliasedEnumOutput", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[types.TestEnum], result)
+        return typing.cast(types.TestEnum, result)
 
     

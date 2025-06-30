@@ -48,7 +48,7 @@ impl FunctionResult {
             .map_err(|e| {
                 magnus::Error::new(
                     ruby.exception_type_error(),
-                    format!("failing inside parsed_using_types: {:?}", e),
+                    format!("failing inside parsed_using_types: {e:?}"),
                 )
             }),
             Err(_) => Err(Error::new(

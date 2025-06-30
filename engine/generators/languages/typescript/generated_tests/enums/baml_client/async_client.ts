@@ -160,7 +160,7 @@ class BamlStreamClient {
   ConsumeTestEnum(
       input: types.TestEnum,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<types.TestEnum | null, types.TestEnum> {
+  ): BamlStream<types.TestEnum, types.TestEnum> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -180,9 +180,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<types.TestEnum | null, types.TestEnum>(
+      return new BamlStream<types.TestEnum, types.TestEnum>(
         raw,
-        (a): types.TestEnum | null => a,
+        (a): types.TestEnum => a,
         (a): types.TestEnum => a,
         this.ctxManager.cloneContext(),
       )
@@ -194,7 +194,7 @@ class BamlStreamClient {
   FnTestAliasedEnumOutput(
       input: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<types.TestEnum | null, types.TestEnum> {
+  ): BamlStream<types.TestEnum, types.TestEnum> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -214,9 +214,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<types.TestEnum | null, types.TestEnum>(
+      return new BamlStream<types.TestEnum, types.TestEnum>(
         raw,
-        (a): types.TestEnum | null => a,
+        (a): types.TestEnum => a,
         (a): types.TestEnum => a,
         this.ctxManager.cloneContext(),
       )

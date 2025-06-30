@@ -286,7 +286,7 @@ export class HttpRequest {
   }
   
   AudioInput(
-      aud: Audio,
+      aud: Image,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
@@ -311,7 +311,7 @@ export class HttpRequest {
   }
   
   AudioInputOpenai(
-      aud: Audio,prompt: string,
+      aud: Image,prompt: string,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
@@ -4917,7 +4917,7 @@ export class HttpStreamRequest {
   }
   
   AudioInput(
-      aud: Audio,
+      aud: Image,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {
@@ -4942,7 +4942,7 @@ export class HttpStreamRequest {
   }
   
   AudioInputOpenai(
-      aud: Audio,prompt: string,
+      aud: Image,prompt: string,
       __baml_options__?: BamlCallOptions
   ): HTTPRequest {
     try {

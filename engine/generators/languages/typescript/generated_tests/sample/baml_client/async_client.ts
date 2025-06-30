@@ -160,7 +160,7 @@ class BamlStreamClient {
   Bar(
       x: number,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<Example | Example2 | null, Example | Example2> {
+  ): BamlStream<Example | Example2, Example | Example2> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -180,9 +180,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<Example | Example2 | null, Example | Example2>(
+      return new BamlStream<Example | Example2, Example | Example2>(
         raw,
-        (a): Example | Example2 | null => a,
+        (a): Example | Example2 => a,
         (a): Example | Example2 => a,
         this.ctxManager.cloneContext(),
       )
@@ -194,7 +194,7 @@ class BamlStreamClient {
   Foo(
       x: number,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, collector?: Collector | Collector[], env?: Record<string, string | undefined> }
-  ): BamlStream<Example2 | Example | null, Example2 | Example> {
+  ): BamlStream<Example2 | Example, Example2 | Example> {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
@@ -214,9 +214,9 @@ class BamlStreamClient {
         collector,
         env,
       )
-      return new BamlStream<Example2 | Example | null, Example2 | Example>(
+      return new BamlStream<Example2 | Example, Example2 | Example>(
         raw,
-        (a): Example2 | Example | null => a,
+        (a): Example2 | Example => a,
         (a): Example2 | Example => a,
         this.ctxManager.cloneContext(),
       )

@@ -185,13 +185,13 @@ pub fn convert_ir_type(ir: &IntermediateRepr, ty: &TypeNonStreaming) -> TypeOpen
                     BamlMediaType::Audio => "BamlAudio",
                 };
                 TypeOpenApi::Ref {
-                    r#ref: format!("#/components/schemas/{}", media_type),
+                    r#ref: format!("#/components/schemas/{media_type}"),
                     meta: meta_copy,
                 }
             }
         },
         TypeNonStreaming::Class { name, .. } => TypeOpenApi::Ref {
-            r#ref: format!("#/components/schemas/{}", name),
+            r#ref: format!("#/components/schemas/{name}"),
             meta: meta_copy,
         },
         TypeNonStreaming::List(inner, _) => TypeOpenApi::Inline {
@@ -201,7 +201,7 @@ pub fn convert_ir_type(ir: &IntermediateRepr, ty: &TypeNonStreaming) -> TypeOpen
             meta: meta_copy,
         },
         TypeNonStreaming::Enum { name, .. } => TypeOpenApi::Ref {
-            r#ref: format!("#/components/schemas/{}", name),
+            r#ref: format!("#/components/schemas/{name}"),
             meta: meta_copy,
         },
         TypeNonStreaming::Literal(literal, _) => TypeOpenApi::Inline {

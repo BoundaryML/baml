@@ -11,7 +11,6 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -97,25 +96,25 @@ class BamlStreamClient:
 
     def ConsumeSimpleClass(self, item: types.SimpleClass,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional["stream_types.SimpleClass"], types.SimpleClass]:
+    ) -> baml_py.BamlStream[stream_types.SimpleClass, types.SimpleClass]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="ConsumeSimpleClass", args={
             "item": item,
         })
-        return baml_py.BamlStream[typing.Optional["stream_types.SimpleClass"], types.SimpleClass](
+        return baml_py.BamlStream[stream_types.SimpleClass, types.SimpleClass](
           result,
-          lambda x: typing.cast(typing.Optional["stream_types.SimpleClass"], x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(stream_types.SimpleClass, x.cast_to(types, types, stream_types, True)),
           lambda x: typing.cast(types.SimpleClass, x.cast_to(types, types, stream_types, False)),
           ctx,
         )
     def MakeSimpleClass(self, 
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional["stream_types.SimpleClass"], types.SimpleClass]:
+    ) -> baml_py.BamlStream[stream_types.SimpleClass, types.SimpleClass]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="MakeSimpleClass", args={
             
         })
-        return baml_py.BamlStream[typing.Optional["stream_types.SimpleClass"], types.SimpleClass](
+        return baml_py.BamlStream[stream_types.SimpleClass, types.SimpleClass](
           result,
-          lambda x: typing.cast(typing.Optional["stream_types.SimpleClass"], x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(stream_types.SimpleClass, x.cast_to(types, types, stream_types, True)),
           lambda x: typing.cast(types.SimpleClass, x.cast_to(types, types, stream_types, False)),
           ctx,
         )

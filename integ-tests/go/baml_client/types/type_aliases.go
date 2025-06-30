@@ -19,7 +19,6 @@ import (
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
-	flatbuffers "github.com/google/flatbuffers/go"
 )
 
 type Amount = int64

@@ -1,8 +1,11 @@
 use std::collections::HashSet;
 
 use anyhow::Result;
-use baml_types::BamlValue;
-use baml_types::{baml_value::TypeLookups, ir_type::TypeIR, ir_type::TypeStreaming};
+use baml_types::{
+    baml_value::TypeLookups,
+    ir_type::{TypeIR, TypeStreaming},
+    BamlValue,
+};
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::{
     repr::IntermediateRepr, ClassWalker, EnumWalker, IRHelper, IRHelperExtended,
@@ -334,7 +337,7 @@ fn relevant_data_models<'a>(
             }
             TypeIR::Class {
                 name: cls,
-                mode: _,
+                mode,
                 dynamic: _,
                 meta: ref metadata,
             } => {
@@ -415,6 +418,7 @@ fn relevant_data_models<'a>(
 
                     classes.push(Class {
                         name: Name::new_with_alias(cls.to_string(), alias.value()),
+                        namespace: mode.clone(),
                         fields,
                         constraints: metadata.constraints.clone(),
                         streaming_behavior: metadata.streaming_behavior.clone(),
@@ -572,7 +576,7 @@ fn relevant_data_models_streaming<'a>(
             }
             TypeIR::Class {
                 name: cls,
-                mode: _,
+                mode,
                 dynamic: _,
                 meta: ref metadata,
             } => {
@@ -653,6 +657,7 @@ fn relevant_data_models_streaming<'a>(
 
                     classes.push(Class {
                         name: Name::new_with_alias(cls.to_string(), alias.value()),
+                        namespace: mode.clone(),
                         fields,
                         constraints: metadata.constraints.clone(),
                         streaming_behavior: metadata.streaming_behavior.clone(),
@@ -797,7 +802,7 @@ class Resume {
             .render(RenderOptions::default())
             .unwrap()
             .unwrap();
-        println!("{}", rendered);
+        println!("{rendered}");
 
         assert_eq!(
             rendered,
@@ -895,7 +900,7 @@ class Resume {
             .render(RenderOptions::default())
             .unwrap()
             .unwrap();
-        println!("{}", rendered);
+        println!("{rendered}");
 
         assert_eq!(
             rendered,

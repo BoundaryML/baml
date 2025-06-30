@@ -104,7 +104,7 @@ impl std::str::FromStr for OutputFormat {
         match s {
             "github" => Ok(OutputFormat::Github),
             "pretty" => Ok(OutputFormat::Pretty),
-            _ => Err(format!("Invalid output format: {}", s)),
+            _ => Err(format!("Invalid output format: {s}")),
         }
     }
 }

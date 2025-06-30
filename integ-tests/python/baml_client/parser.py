@@ -1142,243 +1142,243 @@ class LlmStreamParser:
 
     def AaaSamOutputFormat(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.Recipe"]:
+    ) -> stream_types.Recipe:
         result = self.__options.merge_options(baml_options).parse_response(function_name="AaaSamOutputFormat", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.Recipe"], result)
+        return typing.cast(stream_types.Recipe, result)
 
     def AliasThatPointsToRecursiveType(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.LinkedListAliasNode"]:
+    ) -> stream_types.LinkedListAliasNode:
         result = self.__options.merge_options(baml_options).parse_response(function_name="AliasThatPointsToRecursiveType", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.LinkedListAliasNode"], result)
+        return typing.cast(stream_types.LinkedListAliasNode, result)
 
     def AliasWithMultipleAttrs(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[types.Checked[int, typing_extensions.Literal['gt_ten']]]:
+    ) -> types.Checked[int, typing_extensions.Literal['gt_ten']]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="AliasWithMultipleAttrs", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[types.Checked[int, typing_extensions.Literal['gt_ten']]], result)
+        return typing.cast(types.Checked[int, typing_extensions.Literal['gt_ten']], result)
 
     def AliasedInputClass(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="AliasedInputClass", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def AliasedInputClass2(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="AliasedInputClass2", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def AliasedInputClassNested(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="AliasedInputClassNested", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def AliasedInputEnum(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="AliasedInputEnum", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def AliasedInputList(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="AliasedInputList", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def AllowedOptionals(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.OptionalListAndMap"]:
+    ) -> stream_types.OptionalListAndMap:
         result = self.__options.merge_options(baml_options).parse_response(function_name="AllowedOptionals", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.OptionalListAndMap"], result)
+        return typing.cast(stream_types.OptionalListAndMap, result)
 
     def AssertFn(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
+    ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="AssertFn", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], result)
+        return typing.cast(int, result)
 
     def AudioInput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="AudioInput", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def AudioInputOpenai(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="AudioInputOpenai", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def BuildLinkedList(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.LinkedList"]:
+    ) -> stream_types.LinkedList:
         result = self.__options.merge_options(baml_options).parse_response(function_name="BuildLinkedList", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.LinkedList"], result)
+        return typing.cast(stream_types.LinkedList, result)
 
     def BuildTree(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.Tree"]:
+    ) -> stream_types.Tree:
         result = self.__options.merge_options(baml_options).parse_response(function_name="BuildTree", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.Tree"], result)
+        return typing.cast(stream_types.Tree, result)
 
     def ClassThatPointsToRecursiveClassThroughAlias(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.ClassToRecAlias"]:
+    ) -> stream_types.ClassToRecAlias:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ClassThatPointsToRecursiveClassThroughAlias", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.ClassToRecAlias"], result)
+        return typing.cast(stream_types.ClassToRecAlias, result)
 
     def ClassifyDynEnumTwo(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.Union[types.DynEnumTwo, str]]:
+    ) -> typing.Union[types.DynEnumTwo, str]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ClassifyDynEnumTwo", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.Union[types.DynEnumTwo, str]], result)
+        return typing.cast(typing.Union[types.DynEnumTwo, str], result)
 
     def ClassifyMessage(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[types.Category]:
+    ) -> types.Category:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ClassifyMessage", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[types.Category], result)
+        return typing.cast(types.Category, result)
 
     def ClassifyMessage2(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[types.Category]:
+    ) -> types.Category:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ClassifyMessage2", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[types.Category], result)
+        return typing.cast(types.Category, result)
 
     def ClassifyMessage3(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[types.Category]:
+    ) -> types.Category:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ClassifyMessage3", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[types.Category], result)
+        return typing.cast(types.Category, result)
 
     def Completion(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="Completion", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def CustomTask(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.Union["stream_types.BookOrder", "stream_types.FlightConfirmation", "stream_types.GroceryReceipt"]]:
+    ) -> typing.Union["stream_types.BookOrder", "stream_types.FlightConfirmation", "stream_types.GroceryReceipt"]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="CustomTask", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.Union["stream_types.BookOrder", "stream_types.FlightConfirmation", "stream_types.GroceryReceipt"]], result)
+        return typing.cast(typing.Union["stream_types.BookOrder", "stream_types.FlightConfirmation", "stream_types.GroceryReceipt"], result)
 
     def DescribeImage(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="DescribeImage", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def DescribeImage2(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="DescribeImage2", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def DescribeImage3(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="DescribeImage3", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def DescribeImage4(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="DescribeImage4", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def DescribeMedia1599(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="DescribeMedia1599", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def DifferentiateUnions(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.Union["stream_types.OriginalA", "stream_types.OriginalB"]]:
+    ) -> typing.Union["stream_types.OriginalA", "stream_types.OriginalB"]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="DifferentiateUnions", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.Union["stream_types.OriginalA", "stream_types.OriginalB"]], result)
+        return typing.cast(typing.Union["stream_types.OriginalA", "stream_types.OriginalB"], result)
 
     def DummyOutputFunction(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.DummyOutput"]:
+    ) -> stream_types.DummyOutput:
         result = self.__options.merge_options(baml_options).parse_response(function_name="DummyOutputFunction", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.DummyOutput"], result)
+        return typing.cast(stream_types.DummyOutput, result)
 
     def DynamicFunc(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.DynamicClassTwo"]:
+    ) -> stream_types.DynamicClassTwo:
         result = self.__options.merge_options(baml_options).parse_response(function_name="DynamicFunc", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.DynamicClassTwo"], result)
+        return typing.cast(stream_types.DynamicClassTwo, result)
 
     def DynamicInputOutput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.DynInputOutput"]:
+    ) -> stream_types.DynInputOutput:
         result = self.__options.merge_options(baml_options).parse_response(function_name="DynamicInputOutput", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.DynInputOutput"], result)
+        return typing.cast(stream_types.DynInputOutput, result)
 
     def DynamicListInputOutput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.List[typing.Optional["stream_types.DynInputOutput"]]]:
+    ) -> typing.List["stream_types.DynInputOutput"]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="DynamicListInputOutput", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.List[typing.Optional["stream_types.DynInputOutput"]]], result)
+        return typing.cast(typing.List["stream_types.DynInputOutput"], result)
 
     def ExpectFailure(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExpectFailure", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def ExtractContactInfo(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.ContactInfo"]:
+    ) -> stream_types.ContactInfo:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractContactInfo", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.ContactInfo"], result)
+        return typing.cast(stream_types.ContactInfo, result)
 
     def ExtractEntities(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.DynamicSchema"]:
+    ) -> stream_types.DynamicSchema:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractEntities", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.DynamicSchema"], result)
+        return typing.cast(stream_types.DynamicSchema, result)
 
     def ExtractHobby(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.List[typing.Optional[typing.Union[types.Hobby, str]]]]:
+    ) -> typing.List[typing.Union[types.Hobby, str]]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractHobby", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.List[typing.Optional[typing.Union[types.Hobby, str]]]], result)
+        return typing.cast(typing.List[typing.Union[types.Hobby, str]], result)
 
     def ExtractNames(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.List[typing.Optional[str]]]:
+    ) -> typing.List[str]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractNames", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.List[typing.Optional[str]]], result)
+        return typing.cast(typing.List[str], result)
 
     def ExtractPeople(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.List[typing.Optional["stream_types.Person"]]]:
+    ) -> typing.List["stream_types.Person"]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractPeople", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.List[typing.Optional["stream_types.Person"]]], result)
+        return typing.cast(typing.List["stream_types.Person"], result)
 
     def ExtractReceiptInfo(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.ReceiptInfo"]:
+    ) -> stream_types.ReceiptInfo:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractReceiptInfo", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.ReceiptInfo"], result)
+        return typing.cast(stream_types.ReceiptInfo, result)
 
     def ExtractResume(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.Resume"]:
+    ) -> stream_types.Resume:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractResume", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.Resume"], result)
+        return typing.cast(stream_types.Resume, result)
 
     def ExtractResume2(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.Resume"]:
+    ) -> stream_types.Resume:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ExtractResume2", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.Resume"], result)
+        return typing.cast(stream_types.Resume, result)
 
     def FnClassOptionalOutput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -1394,681 +1394,681 @@ class LlmStreamParser:
 
     def FnEnumListOutput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.List[typing.Optional[types.EnumOutput]]]:
+    ) -> typing.List[types.EnumOutput]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnEnumListOutput", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.List[typing.Optional[types.EnumOutput]]], result)
+        return typing.cast(typing.List[types.EnumOutput], result)
 
     def FnEnumOutput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[types.EnumOutput]:
+    ) -> types.EnumOutput:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnEnumOutput", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[types.EnumOutput], result)
+        return typing.cast(types.EnumOutput, result)
 
     def FnLiteralClassInputOutput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.LiteralClassHello"]:
+    ) -> stream_types.LiteralClassHello:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnLiteralClassInputOutput", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.LiteralClassHello"], result)
+        return typing.cast(stream_types.LiteralClassHello, result)
 
     def FnLiteralUnionClassInputOutput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.Union["stream_types.LiteralClassOne", "stream_types.LiteralClassTwo"]]:
+    ) -> typing.Union["stream_types.LiteralClassOne", "stream_types.LiteralClassTwo"]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnLiteralUnionClassInputOutput", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.Union["stream_types.LiteralClassOne", "stream_types.LiteralClassTwo"]], result)
+        return typing.cast(typing.Union["stream_types.LiteralClassOne", "stream_types.LiteralClassTwo"], result)
 
     def FnNamedArgsSingleStringOptional(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnNamedArgsSingleStringOptional", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def FnOutputBool(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[bool]:
+    ) -> bool:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputBool", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[bool], result)
+        return typing.cast(bool, result)
 
     def FnOutputClass(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.TestOutputClass"]:
+    ) -> stream_types.TestOutputClass:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputClass", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.TestOutputClass"], result)
+        return typing.cast(stream_types.TestOutputClass, result)
 
     def FnOutputClassList(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.List[typing.Optional["stream_types.TestOutputClass"]]]:
+    ) -> typing.List["stream_types.TestOutputClass"]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputClassList", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.List[typing.Optional["stream_types.TestOutputClass"]]], result)
+        return typing.cast(typing.List["stream_types.TestOutputClass"], result)
 
     def FnOutputClassNested(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.TestClassNested"]:
+    ) -> stream_types.TestClassNested:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputClassNested", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.TestClassNested"], result)
+        return typing.cast(stream_types.TestClassNested, result)
 
     def FnOutputClassWithEnum(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.TestClassWithEnum"]:
+    ) -> stream_types.TestClassWithEnum:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputClassWithEnum", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.TestClassWithEnum"], result)
+        return typing.cast(stream_types.TestClassWithEnum, result)
 
     def FnOutputInt(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
+    ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputInt", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], result)
+        return typing.cast(int, result)
 
     def FnOutputLiteralBool(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[bool]:
+    ) -> bool:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputLiteralBool", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[bool], result)
+        return typing.cast(bool, result)
 
     def FnOutputLiteralInt(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
+    ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputLiteralInt", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], result)
+        return typing.cast(int, result)
 
     def FnOutputLiteralString(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputLiteralString", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def FnOutputStringList(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.List[typing.Optional[str]]]:
+    ) -> typing.List[str]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnOutputStringList", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.List[typing.Optional[str]]], result)
+        return typing.cast(typing.List[str], result)
 
     def FnTestAliasedEnumOutput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[types.TestEnum]:
+    ) -> types.TestEnum:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnTestAliasedEnumOutput", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[types.TestEnum], result)
+        return typing.cast(types.TestEnum, result)
 
     def FnTestClassAlias(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.TestClassAlias"]:
+    ) -> stream_types.TestClassAlias:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnTestClassAlias", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.TestClassAlias"], result)
+        return typing.cast(stream_types.TestClassAlias, result)
 
     def FnTestNamedArgsSingleEnum(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="FnTestNamedArgsSingleEnum", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def GetDataType(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.RaysData"]:
+    ) -> stream_types.RaysData:
         result = self.__options.merge_options(baml_options).parse_response(function_name="GetDataType", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.RaysData"], result)
+        return typing.cast(stream_types.RaysData, result)
 
     def GetOrderInfo(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.OrderInfo"]:
+    ) -> stream_types.OrderInfo:
         result = self.__options.merge_options(baml_options).parse_response(function_name="GetOrderInfo", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.OrderInfo"], result)
+        return typing.cast(stream_types.OrderInfo, result)
 
     def GetQuery(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.SearchParams"]:
+    ) -> stream_types.SearchParams:
         result = self.__options.merge_options(baml_options).parse_response(function_name="GetQuery", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.SearchParams"], result)
+        return typing.cast(stream_types.SearchParams, result)
 
     def InOutEnumMapKey(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.Dict[types.MapKey, typing.Optional[str]]]:
+    ) -> typing.Dict[types.MapKey, str]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="InOutEnumMapKey", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.Dict[types.MapKey, typing.Optional[str]]], result)
+        return typing.cast(typing.Dict[types.MapKey, str], result)
 
     def InOutLiteralStringUnionMapKey(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.Dict[typing.Union[str, str, str, str], typing.Optional[str]]]:
+    ) -> typing.Dict[typing.Union[str, str, str, str], str]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="InOutLiteralStringUnionMapKey", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.Dict[typing.Union[str, str, str, str], typing.Optional[str]]], result)
+        return typing.cast(typing.Dict[typing.Union[str, str, str, str], str], result)
 
     def InOutSingleLiteralStringMapKey(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.Dict[str, typing.Optional[str]]]:
+    ) -> typing.Dict[str, str]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="InOutSingleLiteralStringMapKey", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.Dict[str, typing.Optional[str]]], result)
+        return typing.cast(typing.Dict[str, str], result)
 
     def JsonTypeAliasCycle(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.JsonValue"]:
+    ) -> stream_types.JsonValue:
         result = self.__options.merge_options(baml_options).parse_response(function_name="JsonTypeAliasCycle", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.JsonValue"], result)
+        return typing.cast(stream_types.JsonValue, result)
 
     def LLMEcho(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="LLMEcho", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def LiteralUnionsTest(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.Union[int, bool, str]]:
+    ) -> typing.Union[int, bool, str]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="LiteralUnionsTest", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.Union[int, bool, str]], result)
+        return typing.cast(typing.Union[int, bool, str], result)
 
     def MakeBlockConstraint(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[types.Checked["stream_types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']]]:
+    ) -> types.Checked["stream_types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="MakeBlockConstraint", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[types.Checked["stream_types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']]], result)
+        return typing.cast(types.Checked["stream_types.BlockConstraint", typing_extensions.Literal['cross_field', 'cross_field']], result)
 
     def MakeClassWithBlockDone(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.ClassWithBlockDone"]:
+    ) -> types.ClassWithBlockDone:
         result = self.__options.merge_options(baml_options).parse_response(function_name="MakeClassWithBlockDone", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.ClassWithBlockDone"], result)
+        return typing.cast(types.ClassWithBlockDone, result)
 
     def MakeClassWithExternalDone(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.ClassWithoutDone"]:
+    ) -> types.ClassWithoutDone:
         result = self.__options.merge_options(baml_options).parse_response(function_name="MakeClassWithExternalDone", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.ClassWithoutDone"], result)
+        return typing.cast(types.ClassWithoutDone, result)
 
     def MakeNestedBlockConstraint(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.NestedBlockConstraint"]:
+    ) -> stream_types.NestedBlockConstraint:
         result = self.__options.merge_options(baml_options).parse_response(function_name="MakeNestedBlockConstraint", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.NestedBlockConstraint"], result)
+        return typing.cast(stream_types.NestedBlockConstraint, result)
 
     def MakeSemanticContainer(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.SemanticContainer"]:
+    ) -> stream_types.SemanticContainer:
         result = self.__options.merge_options(baml_options).parse_response(function_name="MakeSemanticContainer", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.SemanticContainer"], result)
+        return typing.cast(stream_types.SemanticContainer, result)
 
     def MapAlias(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.Dict[str, typing.Optional[typing.List[typing.Optional[str]]]]]:
+    ) -> typing.Dict[str, typing.List[str]]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="MapAlias", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.Dict[str, typing.Optional[typing.List[typing.Optional[str]]]]], result)
+        return typing.cast(typing.Dict[str, typing.List[str]], result)
 
     def MergeAliasAttributes(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.MergeAttrs"]:
+    ) -> stream_types.MergeAttrs:
         result = self.__options.merge_options(baml_options).parse_response(function_name="MergeAliasAttributes", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.MergeAttrs"], result)
+        return typing.cast(stream_types.MergeAttrs, result)
 
     def MyFunc(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.DynamicOutput"]:
+    ) -> stream_types.DynamicOutput:
         result = self.__options.merge_options(baml_options).parse_response(function_name="MyFunc", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.DynamicOutput"], result)
+        return typing.cast(stream_types.DynamicOutput, result)
 
     def NestedAlias(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.Union[int, str, bool, float, typing.List[typing.Optional[str]], typing.Dict[str, typing.Optional[typing.List[typing.Optional[str]]]]]]:
+    ) -> typing.Union[int, str, bool, float, typing.List[str], typing.Dict[str, typing.List[str]]]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="NestedAlias", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.Union[int, str, bool, float, typing.List[typing.Optional[str]], typing.Dict[str, typing.Optional[typing.List[typing.Optional[str]]]]]], result)
+        return typing.cast(typing.Union[int, str, bool, float, typing.List[str], typing.Dict[str, typing.List[str]]], result)
 
     def NullLiteralClassHello(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.ClassForNullLiteral"]:
+    ) -> stream_types.ClassForNullLiteral:
         result = self.__options.merge_options(baml_options).parse_response(function_name="NullLiteralClassHello", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.ClassForNullLiteral"], result)
+        return typing.cast(stream_types.ClassForNullLiteral, result)
 
     def OpenAIWithAnthropicResponseHello(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="OpenAIWithAnthropicResponseHello", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def OptionalTest_Function(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.List[typing.Optional["stream_types.OptionalTest_ReturnType"]]]:
+    ) -> typing.List[typing.Optional["stream_types.OptionalTest_ReturnType"]]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="OptionalTest_Function", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.List[typing.Optional["stream_types.OptionalTest_ReturnType"]]], result)
+        return typing.cast(typing.List[typing.Optional["stream_types.OptionalTest_ReturnType"]], result)
 
     def PredictAge(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.FooAny"]:
+    ) -> stream_types.FooAny:
         result = self.__options.merge_options(baml_options).parse_response(function_name="PredictAge", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.FooAny"], result)
+        return typing.cast(stream_types.FooAny, result)
 
     def PredictAgeBare(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[types.Checked[int, typing_extensions.Literal['too_big']]]:
+    ) -> types.Checked[int, typing_extensions.Literal['too_big']]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="PredictAgeBare", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[types.Checked[int, typing_extensions.Literal['too_big']]], result)
+        return typing.cast(types.Checked[int, typing_extensions.Literal['too_big']], result)
 
     def PrimitiveAlias(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.Union[int, str, bool, float]]:
+    ) -> typing.Union[int, str, bool, float]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="PrimitiveAlias", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.Union[int, str, bool, float]], result)
+        return typing.cast(typing.Union[int, str, bool, float], result)
 
     def PromptTestClaude(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="PromptTestClaude", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def PromptTestClaudeChat(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="PromptTestClaudeChat", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def PromptTestClaudeChatNoSystem(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="PromptTestClaudeChatNoSystem", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def PromptTestOpenAI(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="PromptTestOpenAI", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def PromptTestOpenAIChat(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="PromptTestOpenAIChat", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def PromptTestOpenAIChatNoSystem(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="PromptTestOpenAIChatNoSystem", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def PromptTestStreaming(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="PromptTestStreaming", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def RecursiveAliasCycle(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.RecAliasOne"]:
+    ) -> stream_types.RecAliasOne:
         result = self.__options.merge_options(baml_options).parse_response(function_name="RecursiveAliasCycle", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.RecAliasOne"], result)
+        return typing.cast(stream_types.RecAliasOne, result)
 
     def RecursiveClassWithAliasIndirection(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.NodeWithAliasIndirection"]:
+    ) -> stream_types.NodeWithAliasIndirection:
         result = self.__options.merge_options(baml_options).parse_response(function_name="RecursiveClassWithAliasIndirection", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.NodeWithAliasIndirection"], result)
+        return typing.cast(stream_types.NodeWithAliasIndirection, result)
 
     def RecursiveUnionTest(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.RecursiveUnion"]:
+    ) -> stream_types.RecursiveUnion:
         result = self.__options.merge_options(baml_options).parse_response(function_name="RecursiveUnionTest", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.RecursiveUnion"], result)
+        return typing.cast(stream_types.RecursiveUnion, result)
 
     def ReturnAliasWithMergedAttributes(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[types.Checked[int, typing_extensions.Literal['gt_ten']]]:
+    ) -> types.Checked[int, typing_extensions.Literal['gt_ten']]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnAliasWithMergedAttributes", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[types.Checked[int, typing_extensions.Literal['gt_ten']]], result)
+        return typing.cast(types.Checked[int, typing_extensions.Literal['gt_ten']], result)
 
     def ReturnFailingAssert(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
+    ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnFailingAssert", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], result)
+        return typing.cast(int, result)
 
     def ReturnJsonEntry(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.JsonTemplate"]:
+    ) -> stream_types.JsonTemplate:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnJsonEntry", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.JsonTemplate"], result)
+        return typing.cast(stream_types.JsonTemplate, result)
 
     def ReturnMalformedConstraints(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.MalformedConstraints"]:
+    ) -> stream_types.MalformedConstraints:
         result = self.__options.merge_options(baml_options).parse_response(function_name="ReturnMalformedConstraints", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.MalformedConstraints"], result)
+        return typing.cast(stream_types.MalformedConstraints, result)
 
     def SchemaDescriptions(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.Schema"]:
+    ) -> stream_types.Schema:
         result = self.__options.merge_options(baml_options).parse_response(function_name="SchemaDescriptions", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.Schema"], result)
+        return typing.cast(stream_types.Schema, result)
 
     def SimpleRecursiveListAlias(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.RecursiveListAlias"]:
+    ) -> stream_types.RecursiveListAlias:
         result = self.__options.merge_options(baml_options).parse_response(function_name="SimpleRecursiveListAlias", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.RecursiveListAlias"], result)
+        return typing.cast(stream_types.RecursiveListAlias, result)
 
     def SimpleRecursiveMapAlias(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.RecursiveMapAlias"]:
+    ) -> stream_types.RecursiveMapAlias:
         result = self.__options.merge_options(baml_options).parse_response(function_name="SimpleRecursiveMapAlias", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.RecursiveMapAlias"], result)
+        return typing.cast(stream_types.RecursiveMapAlias, result)
 
     def StreamBigNumbers(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.BigNumbers"]:
+    ) -> stream_types.BigNumbers:
         result = self.__options.merge_options(baml_options).parse_response(function_name="StreamBigNumbers", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.BigNumbers"], result)
+        return typing.cast(stream_types.BigNumbers, result)
 
     def StreamFailingAssertion(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.TwoStoriesOneTitle"]:
+    ) -> stream_types.TwoStoriesOneTitle:
         result = self.__options.merge_options(baml_options).parse_response(function_name="StreamFailingAssertion", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.TwoStoriesOneTitle"], result)
+        return typing.cast(stream_types.TwoStoriesOneTitle, result)
 
     def StreamFailingCheck(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.TwoStoriesOneTitleCheck"]:
+    ) -> stream_types.TwoStoriesOneTitleCheck:
         result = self.__options.merge_options(baml_options).parse_response(function_name="StreamFailingCheck", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.TwoStoriesOneTitleCheck"], result)
+        return typing.cast(stream_types.TwoStoriesOneTitleCheck, result)
 
     def StreamOneBigNumber(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
+    ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="StreamOneBigNumber", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], result)
+        return typing.cast(int, result)
 
     def StreamUnionIntegers(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.List[typing.Optional[typing.Union[int, str]]]]:
+    ) -> typing.List[typing.Union[int, str]]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="StreamUnionIntegers", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.List[typing.Optional[typing.Union[int, str]]]], result)
+        return typing.cast(typing.List[typing.Union[int, str]], result)
 
     def StreamingCompoundNumbers(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.CompoundBigNumbers"]:
+    ) -> stream_types.CompoundBigNumbers:
         result = self.__options.merge_options(baml_options).parse_response(function_name="StreamingCompoundNumbers", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.CompoundBigNumbers"], result)
+        return typing.cast(stream_types.CompoundBigNumbers, result)
 
     def StructureDocument1559(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.Document1559"]:
+    ) -> stream_types.Document1559:
         result = self.__options.merge_options(baml_options).parse_response(function_name="StructureDocument1559", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.Document1559"], result)
+        return typing.cast(stream_types.Document1559, result)
 
     def TakeRecAliasDep(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.RecursiveAliasDependency"]:
+    ) -> stream_types.RecursiveAliasDependency:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TakeRecAliasDep", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.RecursiveAliasDependency"], result)
+        return typing.cast(stream_types.RecursiveAliasDependency, result)
 
     def TellStory(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TellStory", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAnthropic(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAnthropic", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAnthropicShorthand(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAnthropicShorthand", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAws(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAws", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAwsClaude37(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsClaude37", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAwsInferenceProfile(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsInferenceProfile", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAwsInvalidAccessKey(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsInvalidAccessKey", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAwsInvalidProfile(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsInvalidProfile", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAwsInvalidRegion(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsInvalidRegion", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAwsInvalidSessionToken(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAwsInvalidSessionToken", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAzure(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAzure", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAzureFailure(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAzureFailure", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAzureO1NoMaxTokens(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAzureO1NoMaxTokens", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAzureO1WithMaxCompletionTokens(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAzureO1WithMaxCompletionTokens", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAzureO1WithMaxTokens(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAzureO1WithMaxTokens", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAzureO3NoMaxTokens(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAzureO3NoMaxTokens", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAzureO3WithMaxCompletionTokens(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAzureO3WithMaxCompletionTokens", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestAzureWithMaxTokens(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestAzureWithMaxTokens", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestCaching(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestCaching", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestFallbackClient(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFallbackClient", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestFallbackStrategy(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFallbackStrategy", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestFallbackToShorthand(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFallbackToShorthand", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestFnNamedArgsSingleBool(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleBool", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestFnNamedArgsSingleClass(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleClass", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestFnNamedArgsSingleEnumList(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleEnumList", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestFnNamedArgsSingleFloat(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleFloat", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestFnNamedArgsSingleInt(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleInt", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestFnNamedArgsSingleMapStringToClass(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.Dict[str, typing.Optional["stream_types.StringToClassEntry"]]]:
+    ) -> typing.Dict[str, "stream_types.StringToClassEntry"]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleMapStringToClass", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.Dict[str, typing.Optional["stream_types.StringToClassEntry"]]], result)
+        return typing.cast(typing.Dict[str, "stream_types.StringToClassEntry"], result)
 
     def TestFnNamedArgsSingleMapStringToMap(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.Dict[str, typing.Optional[typing.Dict[str, typing.Optional[str]]]]]:
+    ) -> typing.Dict[str, typing.Dict[str, str]]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleMapStringToMap", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.Dict[str, typing.Optional[typing.Dict[str, typing.Optional[str]]]]], result)
+        return typing.cast(typing.Dict[str, typing.Dict[str, str]], result)
 
     def TestFnNamedArgsSingleMapStringToString(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.Dict[str, typing.Optional[str]]]:
+    ) -> typing.Dict[str, str]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleMapStringToString", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.Dict[str, typing.Optional[str]]], result)
+        return typing.cast(typing.Dict[str, str], result)
 
     def TestFnNamedArgsSingleString(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleString", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestFnNamedArgsSingleStringArray(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleStringArray", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestFnNamedArgsSingleStringList(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[typing.List[typing.Optional[str]]]:
+    ) -> typing.List[str]:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestFnNamedArgsSingleStringList", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[typing.List[typing.Optional[str]]], result)
+        return typing.cast(typing.List[str], result)
 
     def TestGemini(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestGemini", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestGeminiOpenAiGeneric(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestGeminiOpenAiGeneric", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestGeminiSystem(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestGeminiSystem", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestGeminiSystemAsChat(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestGeminiSystemAsChat", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestGroq(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestGroq", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestImageInput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestImageInput", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestImageInputAnthropic(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestImageInputAnthropic", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestImageListInput(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestImageListInput", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestMemory(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.TestMemoryOutput"]:
+    ) -> stream_types.TestMemoryOutput:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestMemory", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.TestMemoryOutput"], result)
+        return typing.cast(stream_types.TestMemoryOutput, result)
 
     def TestMulticlassNamedArgs(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestMulticlassNamedArgs", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestNamedArgsLiteralBool(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestNamedArgsLiteralBool", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestNamedArgsLiteralInt(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestNamedArgsLiteralInt", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestNamedArgsLiteralString(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestNamedArgsLiteralString", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestOllama(
         self, llm_response: str, baml_options: BamlCallOptions = {},
@@ -2078,176 +2078,176 @@ class LlmStreamParser:
 
     def TestOllamaHaiku(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.Haiku"]:
+    ) -> stream_types.Haiku:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOllamaHaiku", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.Haiku"], result)
+        return typing.cast(stream_types.Haiku, result)
 
     def TestOpenAI(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAI", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestOpenAIDummyClient(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIDummyClient", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestOpenAIGPT4oMini(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIGPT4oMini", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestOpenAIGPT4oMini2(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIGPT4oMini2", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestOpenAIGPT4oMini3(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIGPT4oMini3", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestOpenAILegacyProvider(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAILegacyProvider", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestOpenAIO1NoMaxTokens(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIO1NoMaxTokens", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestOpenAIO1WithMaxCompletionTokens(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIO1WithMaxCompletionTokens", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestOpenAIO1WithMaxTokens(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIO1WithMaxTokens", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestOpenAIShorthand(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIShorthand", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestOpenAIWithFinishReasonError(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIWithFinishReasonError", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestOpenAIWithMaxTokens(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIWithMaxTokens", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestOpenAIWithNullMaxTokens(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenAIWithNullMaxTokens", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestOpenRouterMistralSmall3_1_24b(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestOpenRouterMistralSmall3_1_24b", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestRetryConstant(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestRetryConstant", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestRetryExponential(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestRetryExponential", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestRoundRobinStrategy(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestRoundRobinStrategy", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestSingleFallbackClient(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestSingleFallbackClient", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestThinking(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.CustomStory"]:
+    ) -> stream_types.CustomStory:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestThinking", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.CustomStory"], result)
+        return typing.cast(stream_types.CustomStory, result)
 
     def TestUniverseQuestion(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.UniverseQuestion"]:
+    ) -> stream_types.UniverseQuestion:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestUniverseQuestion", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.UniverseQuestion"], result)
+        return typing.cast(stream_types.UniverseQuestion, result)
 
     def TestVertex(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestVertex", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestVertexClaude(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestVertexClaude", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def TestVertexWithSystemInstructions(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[str]:
+    ) -> str:
         result = self.__options.merge_options(baml_options).parse_response(function_name="TestVertexWithSystemInstructions", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[str], result)
+        return typing.cast(str, result)
 
     def UnionTest_Function(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.UnionTest_ReturnType"]:
+    ) -> stream_types.UnionTest_ReturnType:
         result = self.__options.merge_options(baml_options).parse_response(function_name="UnionTest_Function", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.UnionTest_ReturnType"], result)
+        return typing.cast(stream_types.UnionTest_ReturnType, result)
 
     def UseBlockConstraint(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
+    ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="UseBlockConstraint", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], result)
+        return typing.cast(int, result)
 
     def UseMaintainFieldOrder(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional["stream_types.MaintainFieldOrder"]:
+    ) -> stream_types.MaintainFieldOrder:
         result = self.__options.merge_options(baml_options).parse_response(function_name="UseMaintainFieldOrder", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional["stream_types.MaintainFieldOrder"], result)
+        return typing.cast(stream_types.MaintainFieldOrder, result)
 
     def UseMalformedConstraints(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
+    ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="UseMalformedConstraints", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], result)
+        return typing.cast(int, result)
 
     def UseNestedBlockConstraint(
         self, llm_response: str, baml_options: BamlCallOptions = {},
-    ) -> typing.Optional[int]:
+    ) -> int:
         result = self.__options.merge_options(baml_options).parse_response(function_name="UseNestedBlockConstraint", llm_response=llm_response, mode="stream")
-        return typing.cast(typing.Optional[int], result)
+        return typing.cast(int, result)
 
     

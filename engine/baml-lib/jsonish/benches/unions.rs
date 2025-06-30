@@ -13,7 +13,13 @@ pub fn bench_unions(c: &mut Criterion) {
         TypeIR::class("AudioContent"),
     ]);
     let ir = jsonish::helpers::load_test_ir(UNION_SCHEMA);
-    let of = jsonish::helpers::render_output_format(&ir, &target, &Default::default()).unwrap();
+    let of = jsonish::helpers::render_output_format(
+        &ir,
+        &target,
+        &Default::default(),
+        baml_types::StreamingMode::NonStreaming,
+    )
+    .unwrap();
 
     // let of = Builder::new(target.clone()).build();
 
@@ -51,7 +57,13 @@ pub fn bench_unions(c: &mut Criterion) {
     });
 
     let target = TypeIR::recursive_type_alias("JSONValue");
-    let of = jsonish::helpers::render_output_format(&ir, &target, &Default::default()).unwrap();
+    let of = jsonish::helpers::render_output_format(
+        &ir,
+        &target,
+        &Default::default(),
+        baml_types::StreamingMode::NonStreaming,
+    )
+    .unwrap();
 
     group.bench_function("json_value_jsonish_only", |b| {
         b.iter(|| {

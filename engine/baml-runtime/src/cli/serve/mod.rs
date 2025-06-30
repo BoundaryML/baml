@@ -174,11 +174,10 @@ enum AuthEnforcementMode {
 
 impl Server {
     pub async fn new(src_dir: PathBuf, port: u16) -> Result<(Arc<Self>, TcpListener)> {
-        let tcp_listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{}", port))
+        let tcp_listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
             .await
             .context(format!(
-                "Failed to bind to port {}; try using --port PORT to specify a different port.",
-                port
+                "Failed to bind to port {port}; try using --port PORT to specify a different port."
             ))?;
         let baml_runtime = BamlRuntime::from_directory(&src_dir, std::env::vars().collect())?;
         Ok((
@@ -373,7 +372,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                                 .into_response()
                             } else {
                                 BamlError::InternalError {
-                                    message: format!("Error parsing: {:?}", e),
+                                    message: format!("Error parsing: {e:?}"),
                                 }
                                 .into_response()
                             }
@@ -404,7 +403,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 Ok(opts) => b_options = Some(opts),
                 Err(e) => {
                     return BamlError::InvalidArgument {
-                        message: format!("Failed to parse __baml_options__: {}", e),
+                        message: format!("Failed to parse __baml_options__: {e}"),
                     }
                     .into_response()
                 }
@@ -455,7 +454,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                                 match sender.send(result) {
                                     Ok(_) => (),
                                     Err(e) => {
-                                        log::error!("Error sending result to receiver: {:?}", e);
+                                        log::error!("Error sending result to receiver: {e:?}");
                                     }
                                 }
                             }),
@@ -477,7 +476,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                                     }
 
                                     Err(e) => {
-                                        log::debug!("Error parsing content: {:?}", e);
+                                        log::debug!("Error parsing content: {e:?}");
                                         if let Some(ExposedError::ValidationError {
                                             prompt,
                                             raw_output: raw_response,
@@ -492,7 +491,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                                             .into_response()
                                         } else {
                                             BamlError::InternalError {
-                                                message: format!("Error parsing: {:?}", e),
+                                                message: format!("Error parsing: {e:?}"),
                                             }
                                             .into_response()
                                         }
@@ -500,7 +499,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                                 }
                             }
                             LLMResponse::LLMFailure(failure) => {
-                                log::debug!("LLMResponse::LLMFailure: {:?}", failure);
+                                log::debug!("LLMResponse::LLMFailure: {failure:?}");
                                 BamlError::ClientError {
                                     message: format!("{:?}", failure.message),
                                 }
@@ -519,7 +518,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                     }
                 }
                 Err(e) => BamlError::InternalError {
-                    message: format!("Error starting stream: {:?}", e),
+                    message: format!("Error starting stream: {e:?}"),
                 }
                 .into_response(),
             }
@@ -541,7 +540,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
                 Ok(opts) => b_options = Some(opts),
                 Err(e) => {
                     return BamlError::InvalidArgument {
-                        message: format!("Failed to parse __baml_options__: {}", e),
+                        message: format!("Failed to parse __baml_options__: {e}"),
                     }
                     .into_response()
                 }
@@ -616,7 +615,7 @@ Tip: test that the server is up using `curl http://localhost:{}/_debug/ping`
         })?;
         let schema: OpenApiSchema = OpenApiSchema::from_ir(locked.inner.ir.as_ref());
         serde_json::to_string(&schema).map_err(|e| {
-            log::warn!("Failed to serialize openapi schema: {}", e);
+            log::warn!("Failed to serialize openapi schema: {e}");
             BamlError::InternalError {
                 message: "Failed to serialize openapi schema".to_string(),
             }
@@ -659,7 +658,7 @@ fn parse_args(
         Ok(v) => v,
         Err(e) => {
             return Err(BamlError::InvalidArgument {
-                message: format!("POST data must be valid JSON: {:?}", e),
+                message: format!("POST data must be valid JSON: {e:?}"),
             });
         }
     };
@@ -683,10 +682,7 @@ fn parse_args(
         Ok(v) => v,
         Err(e) => {
             return Err(BamlError::InvalidArgument {
-                message: format!(
-                    "Arguments must be convertible from JSON to BamlValue: {:?}",
-                    e
-                ),
+                message: format!("Arguments must be convertible from JSON to BamlValue: {e:?}"),
             });
         }
     };

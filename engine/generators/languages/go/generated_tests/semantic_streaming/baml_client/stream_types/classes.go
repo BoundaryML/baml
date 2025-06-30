@@ -175,14 +175,14 @@ func (u ClassWithoutDone) BamlEncodeName() *cffi.CFFITypeName {
 }
 
 type SemanticContainer struct {
-	Sixteen_digit_number     *int64                   `json:"sixteen_digit_number"`
-	String_with_twenty_words *string                  `json:"string_with_twenty_words"`
-	Class_1                  *ClassWithoutDone        `json:"class_1"`
-	Class_2                  *ClassWithBlockDone      `json:"class_2"`
-	Class_done_needed        types.ClassWithBlockDone `json:"class_done_needed"`
-	Class_needed             ClassWithoutDone         `json:"class_needed"`
-	Three_small_things       *[]*SmallThing           `json:"three_small_things"`
-	Final_string             *string                  `json:"final_string"`
+	Sixteen_digit_number     *int64                    `json:"sixteen_digit_number"`
+	String_with_twenty_words *string                   `json:"string_with_twenty_words"`
+	Class_1                  *ClassWithoutDone         `json:"class_1"`
+	Class_2                  *types.ClassWithBlockDone `json:"class_2"`
+	Class_done_needed        types.ClassWithBlockDone  `json:"class_done_needed"`
+	Class_needed             ClassWithoutDone          `json:"class_needed"`
+	Three_small_things       []SmallThing              `json:"three_small_things"`
+	Final_string             *string                   `json:"final_string"`
 }
 
 func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass) {
@@ -242,16 +242,16 @@ func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass) {
 			}(valueHolder)
 
 		case "class_2":
-			c.Class_2 = func(param *cffi.CFFIValueHolder) *ClassWithBlockDone {
+			c.Class_2 = func(param *cffi.CFFIValueHolder) *types.ClassWithBlockDone {
 				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *ClassWithBlockDone\n")
+				fmt.Printf("Expecting type: *types.ClassWithBlockDone\n")
 				fmt.Printf("===================\n")
 				decoded := baml.Decode(param)
-				return func(result any) *ClassWithBlockDone {
+				return func(result any) *types.ClassWithBlockDone {
 					if result == nil {
 						return nil
 					}
-					return (result).(*ClassWithBlockDone)
+					return (result).(*types.ClassWithBlockDone)
 				}(decoded)
 			}(valueHolder)
 
@@ -262,18 +262,9 @@ func (c *SemanticContainer) Decode(holder *cffi.CFFIValueClass) {
 			c.Class_needed = *baml.Decode(valueHolder).(*ClassWithoutDone)
 
 		case "three_small_things":
-			c.Three_small_things = func(param *cffi.CFFIValueHolder) *[]*SmallThing {
-				fmt.Printf("\n=== FIELD DECODE ===\n")
-				fmt.Printf("Expecting type: *[]*SmallThing\n")
-				fmt.Printf("===================\n")
-				decoded := baml.Decode(param)
-				return func(result any) *[]*SmallThing {
-					if result == nil {
-						return nil
-					}
-					return (result).(*[]*SmallThing)
-				}(decoded)
-			}(valueHolder)
+			c.Three_small_things = baml.DecodeList(valueHolder, func(inner *cffi.CFFIValueHolder) SmallThing {
+				return *baml.Decode(inner).(*SmallThing)
+			})
 
 		case "final_string":
 			c.Final_string = func(param *cffi.CFFIValueHolder) *string {

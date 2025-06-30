@@ -102,6 +102,8 @@ class Foo {
 
 class Bar {
   foos Foo[]
+
+  @@stream.not_null
 }
 "#;
 
@@ -118,15 +120,25 @@ const DONE_FIELD: &str = r#"
 class Foo {
   foo string @stream.done
   bar string
+
+  @@stream.not_null
 }
 "#;
 
 test_partial_deserializer_streaming!(
-  test_done_field,
+  test_done_field_0,
   DONE_FIELD,
   r#"{"foo": ""#,
   TypeIR::class("Foo"),
   {"foo": null, "bar": null}
+);
+
+test_partial_deserializer_streaming!(
+  test_done_field_1,
+  DONE_FIELD,
+  r#"{"foo": """#,
+  TypeIR::class("Foo"),
+  {"foo": "", "bar": null}
 );
 
 const MEMORY_TEST: &str = r##"

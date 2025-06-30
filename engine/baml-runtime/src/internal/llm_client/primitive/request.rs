@@ -104,7 +104,7 @@ pub(crate) fn json_body(input: JsonBodyInput) -> Result<serde_json::Value> {
         return Ok(json);
     }
     // Try to parse as JSON array
-    if let Ok(json) = serde_json::from_str(&format!("[{}]", string_to_parse)) {
+    if let Ok(json) = serde_json::from_str(&format!("[{string_to_parse}]")) {
         return Ok(json);
     }
     // Fall back to string if not valid JSON object or array
@@ -160,7 +160,7 @@ pub(crate) async fn build_and_log_outbound_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("Failed to create request builder: {:#?}", e),
+                message: format!("Failed to create request builder: {e:#?}"),
                 code: ErrorCode::Other(2),
             })
         })?;
@@ -175,7 +175,7 @@ pub(crate) async fn build_and_log_outbound_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("Failed to build request: {:#?}", e),
+                message: format!("Failed to build request: {e:#?}"),
                 code: ErrorCode::Other(2),
             }));
         }
@@ -222,7 +222,7 @@ pub async fn execute_request(
                     .unwrap_or(reqwest::StatusCode::INTERNAL_SERVER_ERROR)
                     .as_u16(),
                 None,
-                HTTPBody::new(format!("No response. Error: {:?}", e).into_bytes()),
+                HTTPBody::new(format!("No response. Error: {e:?}").into_bytes()),
             )
             .await;
 
@@ -236,7 +236,7 @@ pub async fn execute_request(
                 message: {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
-                        format!("{:?}", e)
+                        format!("{e:?}")
                     }
                     #[cfg(target_arch = "wasm32")]
                     {
@@ -262,7 +262,7 @@ pub async fn execute_request(
                     runtime_context,
                     0,
                     None,
-                    HTTPBody::new(format!("Could not read response body: {:?}", e).into_bytes()),
+                    HTTPBody::new(format!("Could not read response body: {e:?}").into_bytes()),
                 )
                 .await;
                 return Err(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -272,7 +272,7 @@ pub async fn execute_request(
                     start_time: system_now,
                     request_options: client.request_options().clone(),
                     latency: instant_now.elapsed(),
-                    message: format!("Could not read response body: {:?}", e),
+                    message: format!("Could not read response body: {e:?}"),
                     code: e
                         .status()
                         .map_or(ErrorCode::Other(2), ErrorCode::from_status),
@@ -316,7 +316,7 @@ pub async fn execute_request(
                     runtime_context,
                     0,
                     None,
-                    HTTPBody::new(format!("Could not read response body: {:?}", e).into_bytes()),
+                    HTTPBody::new(format!("Could not read response body: {e:?}").into_bytes()),
                 )
                 .await;
                 return Err(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -326,7 +326,7 @@ pub async fn execute_request(
                     start_time: system_now,
                     request_options: client.request_options().clone(),
                     latency: instant_now.elapsed(),
-                    message: format!("Could not read response body: {:?}", e),
+                    message: format!("Could not read response body: {e:?}"),
                     code: e
                         .status()
                         .map_or(ErrorCode::Other(2), ErrorCode::from_status),

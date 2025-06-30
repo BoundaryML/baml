@@ -85,7 +85,7 @@ export class LlmStreamParser {
   ConsumeSimpleClass(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.SimpleClass | null {
+  ): partial_types.SimpleClass {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -99,7 +99,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.SimpleClass | null
+      ) as partial_types.SimpleClass
     } catch (error) {
       throw toBamlError(error);
     }
@@ -108,7 +108,7 @@ export class LlmStreamParser {
   MakeSimpleClass(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.SimpleClass | null {
+  ): partial_types.SimpleClass {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -122,7 +122,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.SimpleClass | null
+      ) as partial_types.SimpleClass
     } catch (error) {
       throw toBamlError(error);
     }

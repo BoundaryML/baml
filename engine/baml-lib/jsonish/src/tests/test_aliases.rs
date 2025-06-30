@@ -339,8 +339,13 @@ type JsonObject = map<string, JsonValue>
     );
 
     let target_type = TypeIR::recursive_type_alias("JsonValue");
-    let target =
-        crate::helpers::render_output_format(&ir, &target_type, &Default::default()).unwrap();
+    let target = crate::helpers::render_output_format(
+        &ir,
+        &target_type,
+        &Default::default(),
+        baml_types::StreamingMode::NonStreaming,
+    )
+    .unwrap();
 
     let result = from_str(
         &target,
@@ -372,7 +377,7 @@ type JsonObject = map<string, JsonValue>
     }"#,
     );
 
-    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+    assert!(result.is_ok(), "Failed to parse: {result:?}");
 
     let value = result.unwrap();
 

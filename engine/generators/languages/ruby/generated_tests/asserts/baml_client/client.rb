@@ -85,7 +85,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Person), BamlClient::Types::Person])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::Person, BamlClient::Types::Person])}
       def PersonTest(
           *varargs,
 
@@ -101,7 +101,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::Person), BamlClient::Types::Person].new(
+          Baml::BamlStream[BamlClient::StreamTypes::Person, BamlClient::Types::Person].new(
               ffi_stream: result,
               ctx_manager: ctx
           )

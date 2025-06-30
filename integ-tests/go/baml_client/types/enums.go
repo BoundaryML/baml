@@ -19,7 +19,6 @@ import (
 
 	baml "github.com/boundaryml/baml/engine/language_client_go/pkg"
 	"github.com/boundaryml/baml/engine/language_client_go/pkg/cffi"
-	flatbuffers "github.com/google/flatbuffers/go"
 )
 
 type AliasedEnum string
@@ -70,30 +69,28 @@ func (e *AliasedEnum) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *AliasedEnum) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "AliasedEnum" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.AliasedEnum, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *AliasedEnum) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "AliasedEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.AliasedEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = AliasedEnum(value)
 }
 
-func (e AliasedEnum) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e AliasedEnum) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e AliasedEnum) BamlTypeName() string {
 	return "AliasedEnum"
 }
 
-func (u AliasedEnum) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("AliasedEnum")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u AliasedEnum) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "AliasedEnum",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type Category string
@@ -150,30 +147,28 @@ func (e *Category) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Category) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "Category" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.Category, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *Category) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "Category" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.Category, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = Category(value)
 }
 
-func (e Category) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e Category) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e Category) BamlTypeName() string {
 	return "Category"
 }
 
-func (u Category) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("Category")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u Category) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "Category",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type Category2 string
@@ -230,30 +225,28 @@ func (e *Category2) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Category2) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "Category2" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.Category2, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *Category2) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "Category2" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.Category2, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = Category2(value)
 }
 
-func (e Category2) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e Category2) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e Category2) BamlTypeName() string {
 	return "Category2"
 }
 
-func (u Category2) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("Category2")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u Category2) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "Category2",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type Category3 string
@@ -310,30 +303,28 @@ func (e *Category3) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Category3) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "Category3" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.Category3, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *Category3) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "Category3" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.Category3, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = Category3(value)
 }
 
-func (e Category3) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e Category3) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e Category3) BamlTypeName() string {
 	return "Category3"
 }
 
-func (u Category3) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("Category3")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u Category3) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "Category3",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type Color string
@@ -388,30 +379,28 @@ func (e *Color) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Color) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "Color" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.Color, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *Color) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "Color" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.Color, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = Color(value)
 }
 
-func (e Color) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e Color) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e Color) BamlTypeName() string {
 	return "Color"
 }
 
-func (u Color) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("Color")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u Color) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "Color",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type DataType string
@@ -462,30 +451,28 @@ func (e *DataType) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *DataType) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "DataType" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.DataType, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *DataType) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "DataType" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.DataType, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = DataType(value)
 }
 
-func (e DataType) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e DataType) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e DataType) BamlTypeName() string {
 	return "DataType"
 }
 
-func (u DataType) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("DataType")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u DataType) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "DataType",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type DynEnumOne string
@@ -529,30 +516,28 @@ func (e *DynEnumOne) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *DynEnumOne) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "DynEnumOne" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.DynEnumOne, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *DynEnumOne) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "DynEnumOne" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.DynEnumOne, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = DynEnumOne(value)
 }
 
-func (e DynEnumOne) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e DynEnumOne) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e DynEnumOne) BamlTypeName() string {
 	return "DynEnumOne"
 }
 
-func (u DynEnumOne) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("DynEnumOne")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u DynEnumOne) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "DynEnumOne",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type DynEnumTwo string
@@ -596,30 +581,28 @@ func (e *DynEnumTwo) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *DynEnumTwo) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "DynEnumTwo" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.DynEnumTwo, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *DynEnumTwo) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "DynEnumTwo" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.DynEnumTwo, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = DynEnumTwo(value)
 }
 
-func (e DynEnumTwo) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e DynEnumTwo) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e DynEnumTwo) BamlTypeName() string {
 	return "DynEnumTwo"
 }
 
-func (u DynEnumTwo) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("DynEnumTwo")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u DynEnumTwo) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "DynEnumTwo",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type EnumInClass string
@@ -670,30 +653,28 @@ func (e *EnumInClass) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *EnumInClass) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "EnumInClass" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.EnumInClass, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *EnumInClass) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "EnumInClass" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.EnumInClass, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = EnumInClass(value)
 }
 
-func (e EnumInClass) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e EnumInClass) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e EnumInClass) BamlTypeName() string {
 	return "EnumInClass"
 }
 
-func (u EnumInClass) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("EnumInClass")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u EnumInClass) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "EnumInClass",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 // An enum with three values,
@@ -751,30 +732,28 @@ func (e *EnumOutput) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *EnumOutput) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "EnumOutput" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.EnumOutput, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *EnumOutput) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "EnumOutput" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.EnumOutput, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = EnumOutput(value)
 }
 
-func (e EnumOutput) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e EnumOutput) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e EnumOutput) BamlTypeName() string {
 	return "EnumOutput"
 }
 
-func (u EnumOutput) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("EnumOutput")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u EnumOutput) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "EnumOutput",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type Hobby string
@@ -823,30 +802,28 @@ func (e *Hobby) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Hobby) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "Hobby" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.Hobby, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *Hobby) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "Hobby" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.Hobby, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = Hobby(value)
 }
 
-func (e Hobby) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e Hobby) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e Hobby) BamlTypeName() string {
 	return "Hobby"
 }
 
-func (u Hobby) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("Hobby")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u Hobby) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "Hobby",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type MapKey string
@@ -899,30 +876,28 @@ func (e *MapKey) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *MapKey) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "MapKey" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.MapKey, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *MapKey) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "MapKey" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.MapKey, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = MapKey(value)
 }
 
-func (e MapKey) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e MapKey) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e MapKey) BamlTypeName() string {
 	return "MapKey"
 }
 
-func (u MapKey) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("MapKey")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u MapKey) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "MapKey",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type NamedArgsSingleEnum string
@@ -973,30 +948,28 @@ func (e *NamedArgsSingleEnum) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *NamedArgsSingleEnum) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "NamedArgsSingleEnum" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.NamedArgsSingleEnum, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *NamedArgsSingleEnum) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "NamedArgsSingleEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.NamedArgsSingleEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = NamedArgsSingleEnum(value)
 }
 
-func (e NamedArgsSingleEnum) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e NamedArgsSingleEnum) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e NamedArgsSingleEnum) BamlTypeName() string {
 	return "NamedArgsSingleEnum"
 }
 
-func (u NamedArgsSingleEnum) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("NamedArgsSingleEnum")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u NamedArgsSingleEnum) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "NamedArgsSingleEnum",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type NamedArgsSingleEnumList string
@@ -1047,30 +1020,28 @@ func (e *NamedArgsSingleEnumList) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *NamedArgsSingleEnumList) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "NamedArgsSingleEnumList" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.NamedArgsSingleEnumList, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *NamedArgsSingleEnumList) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "NamedArgsSingleEnumList" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.NamedArgsSingleEnumList, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = NamedArgsSingleEnumList(value)
 }
 
-func (e NamedArgsSingleEnumList) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e NamedArgsSingleEnumList) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e NamedArgsSingleEnumList) BamlTypeName() string {
 	return "NamedArgsSingleEnumList"
 }
 
-func (u NamedArgsSingleEnumList) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("NamedArgsSingleEnumList")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u NamedArgsSingleEnumList) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "NamedArgsSingleEnumList",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type OptionalTest_CategoryType string
@@ -1123,30 +1094,28 @@ func (e *OptionalTest_CategoryType) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *OptionalTest_CategoryType) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "OptionalTest_CategoryType" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.OptionalTest_CategoryType, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *OptionalTest_CategoryType) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "OptionalTest_CategoryType" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.OptionalTest_CategoryType, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = OptionalTest_CategoryType(value)
 }
 
-func (e OptionalTest_CategoryType) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e OptionalTest_CategoryType) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e OptionalTest_CategoryType) BamlTypeName() string {
 	return "OptionalTest_CategoryType"
 }
 
-func (u OptionalTest_CategoryType) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("OptionalTest_CategoryType")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u OptionalTest_CategoryType) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "OptionalTest_CategoryType",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type OrderStatus string
@@ -1201,30 +1170,28 @@ func (e *OrderStatus) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *OrderStatus) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "OrderStatus" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.OrderStatus, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *OrderStatus) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "OrderStatus" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.OrderStatus, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = OrderStatus(value)
 }
 
-func (e OrderStatus) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e OrderStatus) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e OrderStatus) BamlTypeName() string {
 	return "OrderStatus"
 }
 
-func (u OrderStatus) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("OrderStatus")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u OrderStatus) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "OrderStatus",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type Tag string
@@ -1277,30 +1244,28 @@ func (e *Tag) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *Tag) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "Tag" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.Tag, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *Tag) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "Tag" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.Tag, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = Tag(value)
 }
 
-func (e Tag) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e Tag) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e Tag) BamlTypeName() string {
 	return "Tag"
 }
 
-func (u Tag) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("Tag")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u Tag) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "Tag",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }
 
 type TestEnum string
@@ -1361,28 +1326,26 @@ func (e *TestEnum) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-func (e *TestEnum) Decode(holder cffi.CFFIValueEnum) {
-	name := holder.Name(nil)
-	if string(name.Name()) != "TestEnum" && string(name.Namespace()) != "types" {
-		panic(fmt.Sprintf("expected types.TestEnum, got %s.%s", string(name.Namespace()), string(name.Name())))
+func (e *TestEnum) Decode(holder *cffi.CFFIValueEnum) {
+	name := holder.Name
+	if name.Name != "TestEnum" && name.Namespace != cffi.CFFITypeNamespace_TYPES {
+		panic(fmt.Sprintf("expected types.TestEnum, got %s.%s", string(name.Namespace.String()), string(name.Name)))
 	}
-	value := string(holder.Value())
+	value := holder.Value
 	*e = TestEnum(value)
 }
 
-func (e TestEnum) Encode(builder *flatbuffers.Builder) (cffi.CFFIValueUnion, flatbuffers.UOffsetT, error) {
-	return baml.EncodeEnum(builder, e.BamlEncodeName, string(e), false)
+func (e TestEnum) Encode() (*cffi.CFFIValueHolder, error) {
+	return baml.EncodeEnum(e.BamlEncodeName, string(e), false)
 }
 
 func (e TestEnum) BamlTypeName() string {
 	return "TestEnum"
 }
 
-func (u TestEnum) BamlEncodeName(builder *flatbuffers.Builder) flatbuffers.UOffsetT {
-	nameOffset := builder.CreateString("TestEnum")
-	namespaceOffset := builder.CreateString("types")
-	cffi.CFFITypeNameStart(builder)
-	cffi.CFFITypeNameAddName(builder, nameOffset)
-	cffi.CFFITypeNameAddNamespace(builder, namespaceOffset)
-	return cffi.CFFITypeNameEnd(builder)
+func (u TestEnum) BamlEncodeName() *cffi.CFFITypeName {
+	return &cffi.CFFITypeName{
+		Name:      "TestEnum",
+		Namespace: cffi.CFFITypeNamespace_TYPES,
+	}
 }

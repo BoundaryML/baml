@@ -82,7 +82,7 @@ mod internal_tests {
             }
             "##,
         );
-        log::info!("Files: {:?}", files);
+        log::info!("Files: {files:?}");
 
         let runtime = BamlRuntime::from_file_content(
             "baml_src",
@@ -189,7 +189,7 @@ mod internal_tests {
 
         let (prompt, scope, _) = runtime.async_runtime.block_on(render_prompt_future)?;
 
-        log::info!("Prompt: {:#?}", prompt);
+        log::info!("Prompt: {prompt:#?}");
 
         Ok(())
     }
@@ -270,7 +270,7 @@ mod internal_tests {
         //     .map(|(p, scope)| p)
         //     .map_err(|e| anyhow::anyhow!("Error rendering prompt: {:#?}", e))?;
 
-        log::info!("Prompt: {:#?}", prompt);
+        log::info!("Prompt: {prompt:#?}");
 
         Ok(())
     }

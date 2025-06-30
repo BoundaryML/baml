@@ -110,7 +110,7 @@ module BamlClient
           varargs: T.untyped,
           x: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T.any(BamlClient::StreamTypes::Example, BamlClient::StreamTypes::Example2)), T.any(BamlClient::Types::Example, BamlClient::Types::Example2)])}
+      ).returns(Baml::BamlStream[T.any(BamlClient::StreamTypes::Example, BamlClient::StreamTypes::Example2), T.any(BamlClient::Types::Example, BamlClient::Types::Example2)])}
       def Bar(
           *varargs,
           x:,
@@ -126,7 +126,7 @@ module BamlClient
               x: x,
           })
 
-          Baml::BamlStream[T.nilable(T.any(BamlClient::StreamTypes::Example, BamlClient::StreamTypes::Example2)), T.any(BamlClient::Types::Example, BamlClient::Types::Example2)].new(
+          Baml::BamlStream[T.any(BamlClient::StreamTypes::Example, BamlClient::StreamTypes::Example2), T.any(BamlClient::Types::Example, BamlClient::Types::Example2)].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -135,7 +135,7 @@ module BamlClient
           varargs: T.untyped,
           x: Integer,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(T.any(BamlClient::StreamTypes::Example2, BamlClient::StreamTypes::Example)), T.any(BamlClient::Types::Example2, BamlClient::Types::Example)])}
+      ).returns(Baml::BamlStream[T.any(BamlClient::StreamTypes::Example2, BamlClient::StreamTypes::Example), T.any(BamlClient::Types::Example2, BamlClient::Types::Example)])}
       def Foo(
           *varargs,
           x:,
@@ -151,7 +151,7 @@ module BamlClient
               x: x,
           })
 
-          Baml::BamlStream[T.nilable(T.any(BamlClient::StreamTypes::Example2, BamlClient::StreamTypes::Example)), T.any(BamlClient::Types::Example2, BamlClient::Types::Example)].new(
+          Baml::BamlStream[T.any(BamlClient::StreamTypes::Example2, BamlClient::StreamTypes::Example), T.any(BamlClient::Types::Example2, BamlClient::Types::Example)].new(
               ffi_stream: result,
               ctx_manager: ctx
           )

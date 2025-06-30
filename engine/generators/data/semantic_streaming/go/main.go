@@ -64,7 +64,7 @@ func main() {
 		}
 
 		// Checks for @stream.not_null
-		for _, sub := range *msgStream.Three_small_things {
+		for _, sub := range msgStream.Three_small_things {
 			if sub.I_16_digits == 0 {
 				panic("three_small_things.i_16_digits is null/zero")
 			}

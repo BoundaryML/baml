@@ -11,7 +11,6 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -97,25 +96,25 @@ class BamlStreamClient:
 
     def Bar(self, x: int,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional[typing.Union["stream_types.Example", "stream_types.Example2"]], typing.Union["types.Example", "types.Example2"]]:
+    ) -> baml_py.BamlStream[typing.Union["stream_types.Example", "stream_types.Example2"], typing.Union["types.Example", "types.Example2"]]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="Bar", args={
             "x": x,
         })
-        return baml_py.BamlStream[typing.Optional[typing.Union["stream_types.Example", "stream_types.Example2"]], typing.Union["types.Example", "types.Example2"]](
+        return baml_py.BamlStream[typing.Union["stream_types.Example", "stream_types.Example2"], typing.Union["types.Example", "types.Example2"]](
           result,
-          lambda x: typing.cast(typing.Optional[typing.Union["stream_types.Example", "stream_types.Example2"]], x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(typing.Union["stream_types.Example", "stream_types.Example2"], x.cast_to(types, types, stream_types, True)),
           lambda x: typing.cast(typing.Union["types.Example", "types.Example2"], x.cast_to(types, types, stream_types, False)),
           ctx,
         )
     def Foo(self, x: int,
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional[typing.Union["stream_types.Example2", "stream_types.Example"]], typing.Union["types.Example2", "types.Example"]]:
+    ) -> baml_py.BamlStream[typing.Union["stream_types.Example2", "stream_types.Example"], typing.Union["types.Example2", "types.Example"]]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="Foo", args={
             "x": x,
         })
-        return baml_py.BamlStream[typing.Optional[typing.Union["stream_types.Example2", "stream_types.Example"]], typing.Union["types.Example2", "types.Example"]](
+        return baml_py.BamlStream[typing.Union["stream_types.Example2", "stream_types.Example"], typing.Union["types.Example2", "types.Example"]](
           result,
-          lambda x: typing.cast(typing.Optional[typing.Union["stream_types.Example2", "stream_types.Example"]], x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(typing.Union["stream_types.Example2", "stream_types.Example"], x.cast_to(types, types, stream_types, True)),
           lambda x: typing.cast(typing.Union["types.Example2", "types.Example"], x.cast_to(types, types, stream_types, False)),
           ctx,
         )

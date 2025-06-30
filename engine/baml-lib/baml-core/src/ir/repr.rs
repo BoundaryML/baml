@@ -87,6 +87,8 @@ impl Pass2Repr {
                     meta.streaming_behavior = meta
                         .streaming_behavior
                         .combine(&attributes.streaming_behavior());
+                    // enums must always be done
+                    meta.streaming_behavior.done = true;
                     meta.constraints.extend(attributes.constraints.clone());
                 }
             }
@@ -104,13 +106,24 @@ impl Pass2Repr {
                     meta.constraints.extend(attributes.constraints.clone());
                 }
             }
-            TypeGeneric::Primitive(..)
-            | TypeGeneric::Literal(..)
+            TypeGeneric::Primitive(TypeValue::Int | TypeValue::Float | TypeValue::Bool, meta)
+            | TypeGeneric::Literal(.., meta) => {
+                meta.streaming_behavior.done = true;
+            }
+            TypeGeneric::Primitive(
+                TypeValue::String | TypeValue::Media(..) | TypeValue::Null,
+                ..,
+            )
             | TypeGeneric::RecursiveTypeAlias { .. } => {}
-            TypeGeneric::List(element, _) => {
+            TypeGeneric::List(element, meta) => {
+                meta.streaming_behavior.needed = true;
+                element.meta_mut().streaming_behavior.needed = true;
                 self.update_type(element);
             }
-            TypeGeneric::Map(key, value, _) => {
+            TypeGeneric::Map(key, value, meta) => {
+                meta.streaming_behavior.needed = true;
+                key.meta_mut().streaming_behavior.needed = true;
+                value.meta_mut().streaming_behavior.needed = true;
                 self.update_type(key);
                 self.update_type(value);
             }
@@ -816,6 +829,11 @@ impl IntermediateRepr {
         // Strip out builtin classes.
         repr.classes
             .retain(|c| !is_builtin_identifier(&c.elem.name));
+
+        // all return types of functions must be set to needed
+        for f in repr.functions.iter_mut() {
+            f.elem.output.meta_mut().streaming_behavior.needed = true;
+        }
 
         repr.distribute_attributes();
 
@@ -3048,12 +3066,12 @@ mod tests {
             // Both fields should have consistent type resolution for Recursive1
             assert_eq!(
                 field1_type.to_string(),
-                "(Recursive1 | int | string | null)", // Union3IntOrRecursive1OrString
+                "(Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
                 "field1 type resolution is inconsistent"
             );
             assert_eq!(
                 field2_type.to_string(),
-                "(Recursive1 | int | string | null)", // Union3IntOrRecursive1OrString
+                "(Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
                 "field2 type resolution is inconsistent"
             );
         }
@@ -3087,12 +3105,12 @@ mod tests {
             // Both fields should have consistent type resolution for Recursive1
             assert_eq!(
                 field1_type.to_string(),
-                "(int | Recursive1[] | string | null)", // Union3IntOrRecursive1OrString
+                "(int @stream.done | Recursive1 @stream.not_null[] @stream.not_null | string | null)", // Union3IntOrRecursive1OrString
                 "field1 type resolution is inconsistent"
             );
             assert_eq!(
                 field2_type.to_string(),
-                "(Recursive1 | int | string | null)", // Union3IntOrRecursive1OrString
+                "(Recursive1 | int @stream.done | string | null)", // Union3IntOrRecursive1OrString
                 "field2 type resolution is inconsistent"
             );
         }
@@ -3145,7 +3163,7 @@ mod tests {
             // JsonObject should be extractable as it's a map type in a cycle
             assert!(
                 extractable_aliases.contains(&"JsonObject".to_string())
-                    || conversion_map.get("JsonObject").is_some()
+                    || conversion_map.contains_key("JsonObject")
             );
         }
     }

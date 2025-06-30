@@ -132,7 +132,7 @@ impl FunctionResultStream {
         #[cfg(not(target_arch = "wasm32"))]
         match self.tracer.finish_baml_call(call, ctx, &res) {
             Ok(id) => {}
-            Err(e) => log::debug!("Error during logging: {}", e),
+            Err(e) => log::debug!("Error during logging: {e}"),
         }
         #[cfg(target_arch = "wasm32")]
         match self.tracer.finish_baml_call(call, ctx, &res).await {

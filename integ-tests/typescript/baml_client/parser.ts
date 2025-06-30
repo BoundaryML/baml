@@ -4294,7 +4294,7 @@ export class LlmStreamParser {
   AaaSamOutputFormat(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.Recipe | null {
+  ): partial_types.Recipe {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4308,7 +4308,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.Recipe | null
+      ) as partial_types.Recipe
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4317,7 +4317,7 @@ export class LlmStreamParser {
   AliasThatPointsToRecursiveType(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.LinkedListAliasNode | null {
+  ): partial_types.LinkedListAliasNode {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4331,7 +4331,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.LinkedListAliasNode | null
+      ) as partial_types.LinkedListAliasNode
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4340,7 +4340,7 @@ export class LlmStreamParser {
   AliasWithMultipleAttrs(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): types.Checked<number,"gt_ten"> | null {
+  ): types.Checked<number,"gt_ten"> {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4354,7 +4354,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as types.Checked<number,"gt_ten"> | null
+      ) as types.Checked<number,"gt_ten">
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4363,7 +4363,7 @@ export class LlmStreamParser {
   AliasedInputClass(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4377,7 +4377,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4386,7 +4386,7 @@ export class LlmStreamParser {
   AliasedInputClass2(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4400,7 +4400,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4409,7 +4409,7 @@ export class LlmStreamParser {
   AliasedInputClassNested(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4423,7 +4423,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4432,7 +4432,7 @@ export class LlmStreamParser {
   AliasedInputEnum(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4446,7 +4446,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4455,7 +4455,7 @@ export class LlmStreamParser {
   AliasedInputList(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4469,7 +4469,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4478,7 +4478,7 @@ export class LlmStreamParser {
   AllowedOptionals(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.OptionalListAndMap | null {
+  ): partial_types.OptionalListAndMap {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4492,7 +4492,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.OptionalListAndMap | null
+      ) as partial_types.OptionalListAndMap
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4501,7 +4501,7 @@ export class LlmStreamParser {
   AssertFn(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number | null {
+  ): number {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4515,7 +4515,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as number | null
+      ) as number
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4524,7 +4524,7 @@ export class LlmStreamParser {
   AudioInput(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4538,7 +4538,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4547,7 +4547,7 @@ export class LlmStreamParser {
   AudioInputOpenai(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4561,7 +4561,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4570,7 +4570,7 @@ export class LlmStreamParser {
   BuildLinkedList(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.LinkedList | null {
+  ): partial_types.LinkedList {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4584,7 +4584,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.LinkedList | null
+      ) as partial_types.LinkedList
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4593,7 +4593,7 @@ export class LlmStreamParser {
   BuildTree(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.Tree | null {
+  ): partial_types.Tree {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4607,7 +4607,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.Tree | null
+      ) as partial_types.Tree
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4616,7 +4616,7 @@ export class LlmStreamParser {
   ClassThatPointsToRecursiveClassThroughAlias(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.ClassToRecAlias | null {
+  ): partial_types.ClassToRecAlias {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4630,7 +4630,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.ClassToRecAlias | null
+      ) as partial_types.ClassToRecAlias
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4639,7 +4639,7 @@ export class LlmStreamParser {
   ClassifyDynEnumTwo(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): (string | types.DynEnumTwo) | null {
+  ): (string | types.DynEnumTwo) {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4653,7 +4653,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as (string | types.DynEnumTwo) | null
+      ) as (string | types.DynEnumTwo)
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4662,7 +4662,7 @@ export class LlmStreamParser {
   ClassifyMessage(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): types.Category | null {
+  ): types.Category {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4676,7 +4676,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as types.Category | null
+      ) as types.Category
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4685,7 +4685,7 @@ export class LlmStreamParser {
   ClassifyMessage2(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): types.Category | null {
+  ): types.Category {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4699,7 +4699,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as types.Category | null
+      ) as types.Category
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4708,7 +4708,7 @@ export class LlmStreamParser {
   ClassifyMessage3(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): types.Category | null {
+  ): types.Category {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4722,7 +4722,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as types.Category | null
+      ) as types.Category
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4731,7 +4731,7 @@ export class LlmStreamParser {
   Completion(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4745,7 +4745,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4754,7 +4754,7 @@ export class LlmStreamParser {
   CustomTask(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): BookOrder | FlightConfirmation | GroceryReceipt | null {
+  ): BookOrder | FlightConfirmation | GroceryReceipt {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4768,7 +4768,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as BookOrder | FlightConfirmation | GroceryReceipt | null
+      ) as BookOrder | FlightConfirmation | GroceryReceipt
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4777,7 +4777,7 @@ export class LlmStreamParser {
   DescribeImage(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4791,7 +4791,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4800,7 +4800,7 @@ export class LlmStreamParser {
   DescribeImage2(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4814,7 +4814,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4823,7 +4823,7 @@ export class LlmStreamParser {
   DescribeImage3(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4837,7 +4837,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4846,7 +4846,7 @@ export class LlmStreamParser {
   DescribeImage4(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4860,7 +4860,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4869,7 +4869,7 @@ export class LlmStreamParser {
   DescribeMedia1599(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4883,7 +4883,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4892,7 +4892,7 @@ export class LlmStreamParser {
   DifferentiateUnions(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): OriginalA | OriginalB | null {
+  ): OriginalA | OriginalB {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4906,7 +4906,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as OriginalA | OriginalB | null
+      ) as OriginalA | OriginalB
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4915,7 +4915,7 @@ export class LlmStreamParser {
   DummyOutputFunction(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.DummyOutput | null {
+  ): partial_types.DummyOutput {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4929,7 +4929,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.DummyOutput | null
+      ) as partial_types.DummyOutput
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4938,7 +4938,7 @@ export class LlmStreamParser {
   DynamicFunc(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.DynamicClassTwo | null {
+  ): partial_types.DynamicClassTwo {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4952,7 +4952,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.DynamicClassTwo | null
+      ) as partial_types.DynamicClassTwo
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4961,7 +4961,7 @@ export class LlmStreamParser {
   DynamicInputOutput(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.DynInputOutput | null {
+  ): partial_types.DynInputOutput {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4975,7 +4975,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.DynInputOutput | null
+      ) as partial_types.DynInputOutput
     } catch (error) {
       throw toBamlError(error);
     }
@@ -4984,7 +4984,7 @@ export class LlmStreamParser {
   DynamicListInputOutput(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): (partial_types.DynInputOutput | null)[] | null {
+  ): partial_types.DynInputOutput[] {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -4998,7 +4998,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as (partial_types.DynInputOutput | null)[] | null
+      ) as partial_types.DynInputOutput[]
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5007,7 +5007,7 @@ export class LlmStreamParser {
   ExpectFailure(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5021,7 +5021,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5030,7 +5030,7 @@ export class LlmStreamParser {
   ExtractContactInfo(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.ContactInfo | null {
+  ): partial_types.ContactInfo {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5044,7 +5044,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.ContactInfo | null
+      ) as partial_types.ContactInfo
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5053,7 +5053,7 @@ export class LlmStreamParser {
   ExtractEntities(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.DynamicSchema | null {
+  ): partial_types.DynamicSchema {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5067,7 +5067,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.DynamicSchema | null
+      ) as partial_types.DynamicSchema
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5076,7 +5076,7 @@ export class LlmStreamParser {
   ExtractHobby(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): ((string | types.Hobby) | null)[] | null {
+  ): (string | types.Hobby)[] {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5090,7 +5090,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as ((string | types.Hobby) | null)[] | null
+      ) as (string | types.Hobby)[]
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5099,7 +5099,7 @@ export class LlmStreamParser {
   ExtractNames(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): (string | null)[] | null {
+  ): string[] {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5113,7 +5113,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as (string | null)[] | null
+      ) as string[]
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5122,7 +5122,7 @@ export class LlmStreamParser {
   ExtractPeople(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): (partial_types.Person | null)[] | null {
+  ): partial_types.Person[] {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5136,7 +5136,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as (partial_types.Person | null)[] | null
+      ) as partial_types.Person[]
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5145,7 +5145,7 @@ export class LlmStreamParser {
   ExtractReceiptInfo(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.ReceiptInfo | null {
+  ): partial_types.ReceiptInfo {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5159,7 +5159,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.ReceiptInfo | null
+      ) as partial_types.ReceiptInfo
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5168,7 +5168,7 @@ export class LlmStreamParser {
   ExtractResume(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.Resume | null {
+  ): partial_types.Resume {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5182,7 +5182,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.Resume | null
+      ) as partial_types.Resume
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5191,7 +5191,7 @@ export class LlmStreamParser {
   ExtractResume2(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.Resume | null {
+  ): partial_types.Resume {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5205,7 +5205,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.Resume | null
+      ) as partial_types.Resume
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5260,7 +5260,7 @@ export class LlmStreamParser {
   FnEnumListOutput(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): (types.EnumOutput | null)[] | null {
+  ): types.EnumOutput[] {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5274,7 +5274,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as (types.EnumOutput | null)[] | null
+      ) as types.EnumOutput[]
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5283,7 +5283,7 @@ export class LlmStreamParser {
   FnEnumOutput(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): types.EnumOutput | null {
+  ): types.EnumOutput {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5297,7 +5297,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as types.EnumOutput | null
+      ) as types.EnumOutput
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5306,7 +5306,7 @@ export class LlmStreamParser {
   FnLiteralClassInputOutput(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.LiteralClassHello | null {
+  ): partial_types.LiteralClassHello {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5320,7 +5320,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.LiteralClassHello | null
+      ) as partial_types.LiteralClassHello
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5329,7 +5329,7 @@ export class LlmStreamParser {
   FnLiteralUnionClassInputOutput(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): LiteralClassOne | LiteralClassTwo | null {
+  ): LiteralClassOne | LiteralClassTwo {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5343,7 +5343,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as LiteralClassOne | LiteralClassTwo | null
+      ) as LiteralClassOne | LiteralClassTwo
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5352,7 +5352,7 @@ export class LlmStreamParser {
   FnNamedArgsSingleStringOptional(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5366,7 +5366,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5375,7 +5375,7 @@ export class LlmStreamParser {
   FnOutputBool(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): boolean | null {
+  ): boolean {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5389,7 +5389,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as boolean | null
+      ) as boolean
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5398,7 +5398,7 @@ export class LlmStreamParser {
   FnOutputClass(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.TestOutputClass | null {
+  ): partial_types.TestOutputClass {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5412,7 +5412,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.TestOutputClass | null
+      ) as partial_types.TestOutputClass
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5421,7 +5421,7 @@ export class LlmStreamParser {
   FnOutputClassList(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): (partial_types.TestOutputClass | null)[] | null {
+  ): partial_types.TestOutputClass[] {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5435,7 +5435,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as (partial_types.TestOutputClass | null)[] | null
+      ) as partial_types.TestOutputClass[]
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5444,7 +5444,7 @@ export class LlmStreamParser {
   FnOutputClassNested(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.TestClassNested | null {
+  ): partial_types.TestClassNested {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5458,7 +5458,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.TestClassNested | null
+      ) as partial_types.TestClassNested
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5467,7 +5467,7 @@ export class LlmStreamParser {
   FnOutputClassWithEnum(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.TestClassWithEnum | null {
+  ): partial_types.TestClassWithEnum {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5481,7 +5481,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.TestClassWithEnum | null
+      ) as partial_types.TestClassWithEnum
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5490,7 +5490,7 @@ export class LlmStreamParser {
   FnOutputInt(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number | null {
+  ): number {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5504,7 +5504,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as number | null
+      ) as number
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5513,7 +5513,7 @@ export class LlmStreamParser {
   FnOutputLiteralBool(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): false | null {
+  ): false {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5527,7 +5527,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as false | null
+      ) as false
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5536,7 +5536,7 @@ export class LlmStreamParser {
   FnOutputLiteralInt(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): 5 | null {
+  ): 5 {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5550,7 +5550,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as 5 | null
+      ) as 5
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5559,7 +5559,7 @@ export class LlmStreamParser {
   FnOutputLiteralString(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): "example output" | null {
+  ): "example output" {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5573,7 +5573,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as "example output" | null
+      ) as "example output"
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5582,7 +5582,7 @@ export class LlmStreamParser {
   FnOutputStringList(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): (string | null)[] | null {
+  ): string[] {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5596,7 +5596,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as (string | null)[] | null
+      ) as string[]
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5605,7 +5605,7 @@ export class LlmStreamParser {
   FnTestAliasedEnumOutput(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): types.TestEnum | null {
+  ): types.TestEnum {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5619,7 +5619,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as types.TestEnum | null
+      ) as types.TestEnum
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5628,7 +5628,7 @@ export class LlmStreamParser {
   FnTestClassAlias(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.TestClassAlias | null {
+  ): partial_types.TestClassAlias {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5642,7 +5642,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.TestClassAlias | null
+      ) as partial_types.TestClassAlias
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5651,7 +5651,7 @@ export class LlmStreamParser {
   FnTestNamedArgsSingleEnum(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5665,7 +5665,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5674,7 +5674,7 @@ export class LlmStreamParser {
   GetDataType(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.RaysData | null {
+  ): partial_types.RaysData {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5688,7 +5688,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.RaysData | null
+      ) as partial_types.RaysData
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5697,7 +5697,7 @@ export class LlmStreamParser {
   GetOrderInfo(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.OrderInfo | null {
+  ): partial_types.OrderInfo {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5711,7 +5711,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.OrderInfo | null
+      ) as partial_types.OrderInfo
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5720,7 +5720,7 @@ export class LlmStreamParser {
   GetQuery(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.SearchParams | null {
+  ): partial_types.SearchParams {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5734,7 +5734,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.SearchParams | null
+      ) as partial_types.SearchParams
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5743,7 +5743,7 @@ export class LlmStreamParser {
   InOutEnumMapKey(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): Partial<Record<types.MapKey, string | null>> | null {
+  ): Partial<Record<types.MapKey, string>> {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5757,7 +5757,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as Partial<Record<types.MapKey, string | null>> | null
+      ) as Partial<Record<types.MapKey, string>>
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5766,7 +5766,7 @@ export class LlmStreamParser {
   InOutLiteralStringUnionMapKey(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): Partial<Record<"one" | "two" | "three" | "four", string | null>> | null {
+  ): Partial<Record<"one" | "two" | "three" | "four", string>> {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5780,7 +5780,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as Partial<Record<"one" | "two" | "three" | "four", string | null>> | null
+      ) as Partial<Record<"one" | "two" | "three" | "four", string>>
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5789,7 +5789,7 @@ export class LlmStreamParser {
   InOutSingleLiteralStringMapKey(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): Record<"key", string | null> | null {
+  ): Record<"key", string> {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5803,7 +5803,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as Record<"key", string | null> | null
+      ) as Record<"key", string>
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5812,7 +5812,7 @@ export class LlmStreamParser {
   JsonTypeAliasCycle(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.JsonValue | null {
+  ): partial_types.JsonValue {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5826,7 +5826,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.JsonValue | null
+      ) as partial_types.JsonValue
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5835,7 +5835,7 @@ export class LlmStreamParser {
   LLMEcho(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5849,7 +5849,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5858,7 +5858,7 @@ export class LlmStreamParser {
   LiteralUnionsTest(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): 1 | true | "string output" | null {
+  ): 1 | true | "string output" {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5872,7 +5872,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as 1 | true | "string output" | null
+      ) as 1 | true | "string output"
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5881,7 +5881,7 @@ export class LlmStreamParser {
   MakeBlockConstraint(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): types.Checked<partial_types.BlockConstraint,"cross_field"> | null {
+  ): types.Checked<partial_types.BlockConstraint,"cross_field"> {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5895,7 +5895,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as types.Checked<partial_types.BlockConstraint,"cross_field"> | null
+      ) as types.Checked<partial_types.BlockConstraint,"cross_field">
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5904,7 +5904,7 @@ export class LlmStreamParser {
   MakeClassWithBlockDone(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.ClassWithBlockDone | null {
+  ): types.ClassWithBlockDone {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5918,7 +5918,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.ClassWithBlockDone | null
+      ) as types.ClassWithBlockDone
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5927,7 +5927,7 @@ export class LlmStreamParser {
   MakeClassWithExternalDone(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.ClassWithoutDone | null {
+  ): types.ClassWithoutDone {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5941,7 +5941,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.ClassWithoutDone | null
+      ) as types.ClassWithoutDone
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5950,7 +5950,7 @@ export class LlmStreamParser {
   MakeNestedBlockConstraint(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.NestedBlockConstraint | null {
+  ): partial_types.NestedBlockConstraint {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5964,7 +5964,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.NestedBlockConstraint | null
+      ) as partial_types.NestedBlockConstraint
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5973,7 +5973,7 @@ export class LlmStreamParser {
   MakeSemanticContainer(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.SemanticContainer | null {
+  ): partial_types.SemanticContainer {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -5987,7 +5987,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.SemanticContainer | null
+      ) as partial_types.SemanticContainer
     } catch (error) {
       throw toBamlError(error);
     }
@@ -5996,7 +5996,7 @@ export class LlmStreamParser {
   MapAlias(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): Record<string, (string | null)[] | null> | null {
+  ): Record<string, string[]> {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6010,7 +6010,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as Record<string, (string | null)[] | null> | null
+      ) as Record<string, string[]>
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6019,7 +6019,7 @@ export class LlmStreamParser {
   MergeAliasAttributes(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.MergeAttrs | null {
+  ): partial_types.MergeAttrs {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6033,7 +6033,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.MergeAttrs | null
+      ) as partial_types.MergeAttrs
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6042,7 +6042,7 @@ export class LlmStreamParser {
   MyFunc(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.DynamicOutput | null {
+  ): partial_types.DynamicOutput {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6056,7 +6056,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.DynamicOutput | null
+      ) as partial_types.DynamicOutput
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6065,7 +6065,7 @@ export class LlmStreamParser {
   NestedAlias(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number | string | boolean | number | string[] | Record<string, string[]> | null {
+  ): number | string | boolean | number | string[] | Record<string, string[]> {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6079,7 +6079,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as number | string | boolean | number | string[] | Record<string, string[]> | null
+      ) as number | string | boolean | number | string[] | Record<string, string[]>
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6088,7 +6088,7 @@ export class LlmStreamParser {
   NullLiteralClassHello(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.ClassForNullLiteral | null {
+  ): partial_types.ClassForNullLiteral {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6102,7 +6102,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.ClassForNullLiteral | null
+      ) as partial_types.ClassForNullLiteral
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6111,7 +6111,7 @@ export class LlmStreamParser {
   OpenAIWithAnthropicResponseHello(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6125,7 +6125,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6134,7 +6134,7 @@ export class LlmStreamParser {
   OptionalTest_Function(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): (partial_types.OptionalTest_ReturnType | null)[] | null {
+  ): (partial_types.OptionalTest_ReturnType | null)[] {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6148,7 +6148,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as (partial_types.OptionalTest_ReturnType | null)[] | null
+      ) as (partial_types.OptionalTest_ReturnType | null)[]
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6157,7 +6157,7 @@ export class LlmStreamParser {
   PredictAge(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.FooAny | null {
+  ): partial_types.FooAny {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6171,7 +6171,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.FooAny | null
+      ) as partial_types.FooAny
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6180,7 +6180,7 @@ export class LlmStreamParser {
   PredictAgeBare(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): types.Checked<number,"too_big"> | null {
+  ): types.Checked<number,"too_big"> {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6194,7 +6194,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as types.Checked<number,"too_big"> | null
+      ) as types.Checked<number,"too_big">
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6203,7 +6203,7 @@ export class LlmStreamParser {
   PrimitiveAlias(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number | string | boolean | number | null {
+  ): number | string | boolean | number {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6217,7 +6217,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as number | string | boolean | number | null
+      ) as number | string | boolean | number
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6226,7 +6226,7 @@ export class LlmStreamParser {
   PromptTestClaude(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6240,7 +6240,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6249,7 +6249,7 @@ export class LlmStreamParser {
   PromptTestClaudeChat(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6263,7 +6263,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6272,7 +6272,7 @@ export class LlmStreamParser {
   PromptTestClaudeChatNoSystem(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6286,7 +6286,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6295,7 +6295,7 @@ export class LlmStreamParser {
   PromptTestOpenAI(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6309,7 +6309,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6318,7 +6318,7 @@ export class LlmStreamParser {
   PromptTestOpenAIChat(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6332,7 +6332,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6341,7 +6341,7 @@ export class LlmStreamParser {
   PromptTestOpenAIChatNoSystem(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6355,7 +6355,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6364,7 +6364,7 @@ export class LlmStreamParser {
   PromptTestStreaming(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6378,7 +6378,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6387,7 +6387,7 @@ export class LlmStreamParser {
   RecursiveAliasCycle(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.RecAliasOne | null {
+  ): partial_types.RecAliasOne {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6401,7 +6401,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.RecAliasOne | null
+      ) as partial_types.RecAliasOne
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6410,7 +6410,7 @@ export class LlmStreamParser {
   RecursiveClassWithAliasIndirection(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.NodeWithAliasIndirection | null {
+  ): partial_types.NodeWithAliasIndirection {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6424,7 +6424,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.NodeWithAliasIndirection | null
+      ) as partial_types.NodeWithAliasIndirection
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6433,7 +6433,7 @@ export class LlmStreamParser {
   RecursiveUnionTest(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.RecursiveUnion | null {
+  ): partial_types.RecursiveUnion {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6447,7 +6447,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.RecursiveUnion | null
+      ) as partial_types.RecursiveUnion
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6456,7 +6456,7 @@ export class LlmStreamParser {
   ReturnAliasWithMergedAttributes(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): types.Checked<number,"gt_ten"> | null {
+  ): types.Checked<number,"gt_ten"> {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6470,7 +6470,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as types.Checked<number,"gt_ten"> | null
+      ) as types.Checked<number,"gt_ten">
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6479,7 +6479,7 @@ export class LlmStreamParser {
   ReturnFailingAssert(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number | null {
+  ): number {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6493,7 +6493,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as number | null
+      ) as number
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6502,7 +6502,7 @@ export class LlmStreamParser {
   ReturnJsonEntry(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.JsonTemplate | null {
+  ): partial_types.JsonTemplate {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6516,7 +6516,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.JsonTemplate | null
+      ) as partial_types.JsonTemplate
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6525,7 +6525,7 @@ export class LlmStreamParser {
   ReturnMalformedConstraints(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.MalformedConstraints | null {
+  ): partial_types.MalformedConstraints {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6539,7 +6539,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.MalformedConstraints | null
+      ) as partial_types.MalformedConstraints
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6548,7 +6548,7 @@ export class LlmStreamParser {
   SchemaDescriptions(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.Schema | null {
+  ): partial_types.Schema {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6562,7 +6562,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.Schema | null
+      ) as partial_types.Schema
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6571,7 +6571,7 @@ export class LlmStreamParser {
   SimpleRecursiveListAlias(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.RecursiveListAlias | null {
+  ): partial_types.RecursiveListAlias {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6585,7 +6585,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.RecursiveListAlias | null
+      ) as partial_types.RecursiveListAlias
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6594,7 +6594,7 @@ export class LlmStreamParser {
   SimpleRecursiveMapAlias(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.RecursiveMapAlias | null {
+  ): partial_types.RecursiveMapAlias {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6608,7 +6608,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.RecursiveMapAlias | null
+      ) as partial_types.RecursiveMapAlias
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6617,7 +6617,7 @@ export class LlmStreamParser {
   StreamBigNumbers(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.BigNumbers | null {
+  ): partial_types.BigNumbers {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6631,7 +6631,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.BigNumbers | null
+      ) as partial_types.BigNumbers
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6640,7 +6640,7 @@ export class LlmStreamParser {
   StreamFailingAssertion(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.TwoStoriesOneTitle | null {
+  ): partial_types.TwoStoriesOneTitle {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6654,7 +6654,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.TwoStoriesOneTitle | null
+      ) as partial_types.TwoStoriesOneTitle
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6663,7 +6663,7 @@ export class LlmStreamParser {
   StreamFailingCheck(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.TwoStoriesOneTitleCheck | null {
+  ): partial_types.TwoStoriesOneTitleCheck {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6677,7 +6677,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.TwoStoriesOneTitleCheck | null
+      ) as partial_types.TwoStoriesOneTitleCheck
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6686,7 +6686,7 @@ export class LlmStreamParser {
   StreamOneBigNumber(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number | null {
+  ): number {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6700,7 +6700,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as number | null
+      ) as number
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6709,7 +6709,7 @@ export class LlmStreamParser {
   StreamUnionIntegers(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): (number | string)[] | null {
+  ): (number | string)[] {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6723,7 +6723,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as (number | string)[] | null
+      ) as (number | string)[]
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6732,7 +6732,7 @@ export class LlmStreamParser {
   StreamingCompoundNumbers(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.CompoundBigNumbers | null {
+  ): partial_types.CompoundBigNumbers {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6746,7 +6746,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.CompoundBigNumbers | null
+      ) as partial_types.CompoundBigNumbers
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6755,7 +6755,7 @@ export class LlmStreamParser {
   StructureDocument1559(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.Document1559 | null {
+  ): partial_types.Document1559 {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6769,7 +6769,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.Document1559 | null
+      ) as partial_types.Document1559
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6778,7 +6778,7 @@ export class LlmStreamParser {
   TakeRecAliasDep(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.RecursiveAliasDependency | null {
+  ): partial_types.RecursiveAliasDependency {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6792,7 +6792,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.RecursiveAliasDependency | null
+      ) as partial_types.RecursiveAliasDependency
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6801,7 +6801,7 @@ export class LlmStreamParser {
   TellStory(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6815,7 +6815,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6824,7 +6824,7 @@ export class LlmStreamParser {
   TestAnthropic(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6838,7 +6838,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6847,7 +6847,7 @@ export class LlmStreamParser {
   TestAnthropicShorthand(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6861,7 +6861,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6870,7 +6870,7 @@ export class LlmStreamParser {
   TestAws(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6884,7 +6884,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6893,7 +6893,7 @@ export class LlmStreamParser {
   TestAwsClaude37(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6907,7 +6907,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6916,7 +6916,7 @@ export class LlmStreamParser {
   TestAwsInferenceProfile(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6930,7 +6930,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6939,7 +6939,7 @@ export class LlmStreamParser {
   TestAwsInvalidAccessKey(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6953,7 +6953,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6962,7 +6962,7 @@ export class LlmStreamParser {
   TestAwsInvalidProfile(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6976,7 +6976,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -6985,7 +6985,7 @@ export class LlmStreamParser {
   TestAwsInvalidRegion(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -6999,7 +6999,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7008,7 +7008,7 @@ export class LlmStreamParser {
   TestAwsInvalidSessionToken(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7022,7 +7022,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7031,7 +7031,7 @@ export class LlmStreamParser {
   TestAzure(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7045,7 +7045,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7054,7 +7054,7 @@ export class LlmStreamParser {
   TestAzureFailure(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7068,7 +7068,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7077,7 +7077,7 @@ export class LlmStreamParser {
   TestAzureO1NoMaxTokens(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7091,7 +7091,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7100,7 +7100,7 @@ export class LlmStreamParser {
   TestAzureO1WithMaxCompletionTokens(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7114,7 +7114,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7123,7 +7123,7 @@ export class LlmStreamParser {
   TestAzureO1WithMaxTokens(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7137,7 +7137,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7146,7 +7146,7 @@ export class LlmStreamParser {
   TestAzureO3NoMaxTokens(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7160,7 +7160,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7169,7 +7169,7 @@ export class LlmStreamParser {
   TestAzureO3WithMaxCompletionTokens(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7183,7 +7183,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7192,7 +7192,7 @@ export class LlmStreamParser {
   TestAzureWithMaxTokens(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7206,7 +7206,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7215,7 +7215,7 @@ export class LlmStreamParser {
   TestCaching(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7229,7 +7229,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7238,7 +7238,7 @@ export class LlmStreamParser {
   TestFallbackClient(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7252,7 +7252,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7261,7 +7261,7 @@ export class LlmStreamParser {
   TestFallbackStrategy(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7275,7 +7275,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7284,7 +7284,7 @@ export class LlmStreamParser {
   TestFallbackToShorthand(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7298,7 +7298,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7307,7 +7307,7 @@ export class LlmStreamParser {
   TestFnNamedArgsSingleBool(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7321,7 +7321,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7330,7 +7330,7 @@ export class LlmStreamParser {
   TestFnNamedArgsSingleClass(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7344,7 +7344,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7353,7 +7353,7 @@ export class LlmStreamParser {
   TestFnNamedArgsSingleEnumList(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7367,7 +7367,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7376,7 +7376,7 @@ export class LlmStreamParser {
   TestFnNamedArgsSingleFloat(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7390,7 +7390,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7399,7 +7399,7 @@ export class LlmStreamParser {
   TestFnNamedArgsSingleInt(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7413,7 +7413,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7422,7 +7422,7 @@ export class LlmStreamParser {
   TestFnNamedArgsSingleMapStringToClass(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): Record<string, partial_types.StringToClassEntry | null> | null {
+  ): Record<string, partial_types.StringToClassEntry> {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7436,7 +7436,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as Record<string, partial_types.StringToClassEntry | null> | null
+      ) as Record<string, partial_types.StringToClassEntry>
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7445,7 +7445,7 @@ export class LlmStreamParser {
   TestFnNamedArgsSingleMapStringToMap(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): Record<string, Record<string, string | null> | null> | null {
+  ): Record<string, Record<string, string>> {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7459,7 +7459,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as Record<string, Record<string, string | null> | null> | null
+      ) as Record<string, Record<string, string>>
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7468,7 +7468,7 @@ export class LlmStreamParser {
   TestFnNamedArgsSingleMapStringToString(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): Record<string, string | null> | null {
+  ): Record<string, string> {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7482,7 +7482,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as Record<string, string | null> | null
+      ) as Record<string, string>
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7491,7 +7491,7 @@ export class LlmStreamParser {
   TestFnNamedArgsSingleString(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7505,7 +7505,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7514,7 +7514,7 @@ export class LlmStreamParser {
   TestFnNamedArgsSingleStringArray(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7528,7 +7528,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7537,7 +7537,7 @@ export class LlmStreamParser {
   TestFnNamedArgsSingleStringList(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): (string | null)[] | null {
+  ): string[] {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7551,7 +7551,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as (string | null)[] | null
+      ) as string[]
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7560,7 +7560,7 @@ export class LlmStreamParser {
   TestGemini(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7574,7 +7574,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7583,7 +7583,7 @@ export class LlmStreamParser {
   TestGeminiOpenAiGeneric(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7597,7 +7597,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7606,7 +7606,7 @@ export class LlmStreamParser {
   TestGeminiSystem(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7620,7 +7620,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7629,7 +7629,7 @@ export class LlmStreamParser {
   TestGeminiSystemAsChat(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7643,7 +7643,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7652,7 +7652,7 @@ export class LlmStreamParser {
   TestGroq(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7666,7 +7666,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7675,7 +7675,7 @@ export class LlmStreamParser {
   TestImageInput(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7689,7 +7689,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7698,7 +7698,7 @@ export class LlmStreamParser {
   TestImageInputAnthropic(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7712,7 +7712,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7721,7 +7721,7 @@ export class LlmStreamParser {
   TestImageListInput(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7735,7 +7735,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7744,7 +7744,7 @@ export class LlmStreamParser {
   TestMemory(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.TestMemoryOutput | null {
+  ): partial_types.TestMemoryOutput {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7758,7 +7758,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.TestMemoryOutput | null
+      ) as partial_types.TestMemoryOutput
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7767,7 +7767,7 @@ export class LlmStreamParser {
   TestMulticlassNamedArgs(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7781,7 +7781,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7790,7 +7790,7 @@ export class LlmStreamParser {
   TestNamedArgsLiteralBool(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7804,7 +7804,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7813,7 +7813,7 @@ export class LlmStreamParser {
   TestNamedArgsLiteralInt(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7827,7 +7827,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7836,7 +7836,7 @@ export class LlmStreamParser {
   TestNamedArgsLiteralString(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7850,7 +7850,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7882,7 +7882,7 @@ export class LlmStreamParser {
   TestOllamaHaiku(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.Haiku | null {
+  ): partial_types.Haiku {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7896,7 +7896,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.Haiku | null
+      ) as partial_types.Haiku
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7905,7 +7905,7 @@ export class LlmStreamParser {
   TestOpenAI(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7919,7 +7919,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7928,7 +7928,7 @@ export class LlmStreamParser {
   TestOpenAIDummyClient(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7942,7 +7942,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7951,7 +7951,7 @@ export class LlmStreamParser {
   TestOpenAIGPT4oMini(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7965,7 +7965,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7974,7 +7974,7 @@ export class LlmStreamParser {
   TestOpenAIGPT4oMini2(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -7988,7 +7988,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -7997,7 +7997,7 @@ export class LlmStreamParser {
   TestOpenAIGPT4oMini3(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8011,7 +8011,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8020,7 +8020,7 @@ export class LlmStreamParser {
   TestOpenAILegacyProvider(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8034,7 +8034,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8043,7 +8043,7 @@ export class LlmStreamParser {
   TestOpenAIO1NoMaxTokens(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8057,7 +8057,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8066,7 +8066,7 @@ export class LlmStreamParser {
   TestOpenAIO1WithMaxCompletionTokens(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8080,7 +8080,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8089,7 +8089,7 @@ export class LlmStreamParser {
   TestOpenAIO1WithMaxTokens(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8103,7 +8103,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8112,7 +8112,7 @@ export class LlmStreamParser {
   TestOpenAIShorthand(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8126,7 +8126,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8135,7 +8135,7 @@ export class LlmStreamParser {
   TestOpenAIWithFinishReasonError(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8149,7 +8149,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8158,7 +8158,7 @@ export class LlmStreamParser {
   TestOpenAIWithMaxTokens(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8172,7 +8172,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8181,7 +8181,7 @@ export class LlmStreamParser {
   TestOpenAIWithNullMaxTokens(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8195,7 +8195,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8204,7 +8204,7 @@ export class LlmStreamParser {
   TestOpenRouterMistralSmall3_1_24b(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8218,7 +8218,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8227,7 +8227,7 @@ export class LlmStreamParser {
   TestRetryConstant(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8241,7 +8241,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8250,7 +8250,7 @@ export class LlmStreamParser {
   TestRetryExponential(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8264,7 +8264,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8273,7 +8273,7 @@ export class LlmStreamParser {
   TestRoundRobinStrategy(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8287,7 +8287,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8296,7 +8296,7 @@ export class LlmStreamParser {
   TestSingleFallbackClient(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8310,7 +8310,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8319,7 +8319,7 @@ export class LlmStreamParser {
   TestThinking(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.CustomStory | null {
+  ): partial_types.CustomStory {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8333,7 +8333,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.CustomStory | null
+      ) as partial_types.CustomStory
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8342,7 +8342,7 @@ export class LlmStreamParser {
   TestUniverseQuestion(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.UniverseQuestion | null {
+  ): partial_types.UniverseQuestion {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8356,7 +8356,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.UniverseQuestion | null
+      ) as partial_types.UniverseQuestion
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8365,7 +8365,7 @@ export class LlmStreamParser {
   TestVertex(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8379,7 +8379,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8388,7 +8388,7 @@ export class LlmStreamParser {
   TestVertexClaude(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8402,7 +8402,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8411,7 +8411,7 @@ export class LlmStreamParser {
   TestVertexWithSystemInstructions(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): string | null {
+  ): string {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8425,7 +8425,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as string | null
+      ) as string
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8434,7 +8434,7 @@ export class LlmStreamParser {
   UnionTest_Function(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.UnionTest_ReturnType | null {
+  ): partial_types.UnionTest_ReturnType {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8448,7 +8448,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.UnionTest_ReturnType | null
+      ) as partial_types.UnionTest_ReturnType
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8457,7 +8457,7 @@ export class LlmStreamParser {
   UseBlockConstraint(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number | null {
+  ): number {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8471,7 +8471,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as number | null
+      ) as number
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8480,7 +8480,7 @@ export class LlmStreamParser {
   UseMaintainFieldOrder(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): partial_types.MaintainFieldOrder | null {
+  ): partial_types.MaintainFieldOrder {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8494,7 +8494,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as partial_types.MaintainFieldOrder | null
+      ) as partial_types.MaintainFieldOrder
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8503,7 +8503,7 @@ export class LlmStreamParser {
   UseMalformedConstraints(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number | null {
+  ): number {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8517,7 +8517,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as number | null
+      ) as number
     } catch (error) {
       throw toBamlError(error);
     }
@@ -8526,7 +8526,7 @@ export class LlmStreamParser {
   UseNestedBlockConstraint(
       llmResponse: string,
       __baml_options__?: { tb?: TypeBuilder, clientRegistry?: ClientRegistry, env?: Record<string, string | undefined> }
-  ): number | null {
+  ): number {
     try {
       const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
       const env: Record<string, string> = Object.fromEntries(
@@ -8540,7 +8540,7 @@ export class LlmStreamParser {
         __baml_options__?.tb?.__tb(),
         __baml_options__?.clientRegistry,
         env,
-      ) as number | null
+      ) as number
     } catch (error) {
       throw toBamlError(error);
     }

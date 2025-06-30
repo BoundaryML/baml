@@ -53,7 +53,7 @@ pub fn generate_sdk(
                 .arg(cmd)
                 .current_dir(gen.output_dir())
                 .output()
-                .context(format!("Failed to run on_generate command: {}", cmd));
+                .context(format!("Failed to run on_generate command: {cmd}"));
 
             let output = match output_result {
                 Ok(output) => output,
@@ -70,7 +70,7 @@ pub fn generate_sdk(
                 let error_msg = format!(
                     "on_generate command finished with {}: {}\nStdout:\n{}\nStderr:\n{}",
                     match output.status.code() {
-                        Some(code) => format!("exit code {}", code),
+                        Some(code) => format!("exit code {code}"),
                         None => "no exit code".to_string(),
                     },
                     cmd,

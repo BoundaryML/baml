@@ -1,7 +1,7 @@
 use anyhow::Result;
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta, LiteralValue, TypeIR, TypeValue};
 use internal_baml_core::ir::{
-    ir_helpers::{infer_type, infer_type_with_meta, item_type, map_types},
+    ir_helpers::{infer_type, infer_type_with_meta, map_types},
     IRHelper, IRHelperExtended, IRSemanticStreamingHelper,
 };
 

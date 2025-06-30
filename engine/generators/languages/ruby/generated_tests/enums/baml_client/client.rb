@@ -110,7 +110,7 @@ module BamlClient
           varargs: T.untyped,
           input: BamlClient::Types::TestEnum,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::Types::TestEnum), BamlClient::Types::TestEnum])}
+      ).returns(Baml::BamlStream[BamlClient::Types::TestEnum, BamlClient::Types::TestEnum])}
       def ConsumeTestEnum(
           *varargs,
           input:,
@@ -126,7 +126,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::Types::TestEnum), BamlClient::Types::TestEnum].new(
+          Baml::BamlStream[BamlClient::Types::TestEnum, BamlClient::Types::TestEnum].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -135,7 +135,7 @@ module BamlClient
           varargs: T.untyped,
           input: String,
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::Types::TestEnum), BamlClient::Types::TestEnum])}
+      ).returns(Baml::BamlStream[BamlClient::Types::TestEnum, BamlClient::Types::TestEnum])}
       def FnTestAliasedEnumOutput(
           *varargs,
           input:,
@@ -151,7 +151,7 @@ module BamlClient
               input: input,
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::Types::TestEnum), BamlClient::Types::TestEnum].new(
+          Baml::BamlStream[BamlClient::Types::TestEnum, BamlClient::Types::TestEnum].new(
               ffi_stream: result,
               ctx_manager: ctx
           )

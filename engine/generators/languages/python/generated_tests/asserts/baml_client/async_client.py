@@ -11,7 +11,6 @@
 # baml-cli is available with the baml package.
 
 import typing
-import typing_extensions
 import baml_py
 
 from . import stream_types, types, type_builder
@@ -90,13 +89,13 @@ class BamlStreamClient:
 
     def PersonTest(self, 
         baml_options: BamlCallOptions = {},
-    ) -> baml_py.BamlStream[typing.Optional["stream_types.Person"], types.Person]:
+    ) -> baml_py.BamlStream[stream_types.Person, types.Person]:
         ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="PersonTest", args={
             
         })
-        return baml_py.BamlStream[typing.Optional["stream_types.Person"], types.Person](
+        return baml_py.BamlStream[stream_types.Person, types.Person](
           result,
-          lambda x: typing.cast(typing.Optional["stream_types.Person"], x.cast_to(types, types, stream_types, True)),
+          lambda x: typing.cast(stream_types.Person, x.cast_to(types, types, stream_types, True)),
           lambda x: typing.cast(types.Person, x.cast_to(types, types, stream_types, False)),
           ctx,
         )

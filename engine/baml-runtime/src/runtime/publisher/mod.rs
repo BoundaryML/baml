@@ -318,7 +318,7 @@ enum Status {
 "###;
 
         let pattern_size = pattern.len();
-        let repetitions = (size_bytes + pattern_size - 1) / pattern_size; // ceiling division
+        let repetitions = size_bytes.div_ceil(pattern_size); // ceiling division
 
         let mut content = String::with_capacity(size_bytes);
         for i in 0..repetitions {
@@ -341,15 +341,14 @@ enum Status {
         const BYTES_PER_FILE: usize = TOTAL_SIZE_BYTES / NUM_FILES;
 
         println!(
-            "Creating fake file map with {} files, {} bytes each, total {}MB",
-            NUM_FILES, BYTES_PER_FILE, TOTAL_SIZE_MB
+            "Creating fake file map with {NUM_FILES} files, {BYTES_PER_FILE} bytes each, total {TOTAL_SIZE_MB}MB"
         );
 
         // Create fake source code map totaling 5MB
         let mut source_code = HashMap::new();
 
         for i in 0..NUM_FILES {
-            let file_path = PathBuf::from(format!("baml_src/file_{:03}.baml", i));
+            let file_path = PathBuf::from(format!("baml_src/file_{i:03}.baml"));
             let content = create_fake_content(BYTES_PER_FILE);
             source_code.insert(file_path, CowStr::from(content));
         }
@@ -380,7 +379,7 @@ enum Status {
         const ITERATIONS: usize = 10;
         let mut timings = Vec::with_capacity(ITERATIONS);
 
-        println!("Running {} performance iterations...", ITERATIONS);
+        println!("Running {ITERATIONS} performance iterations...");
         for i in 0..ITERATIONS {
             let start = Instant::now();
             let hash = wrapper.baml_src_hash();
@@ -394,7 +393,7 @@ enum Status {
             assert!(!hash_str.is_empty());
 
             if i == 0 {
-                println!("First hash result: {}", hash_str);
+                println!("First hash result: {hash_str}");
             }
         }
 
@@ -405,15 +404,12 @@ enum Status {
         let max_time = *timings.iter().max().unwrap();
 
         println!("\nPerformance Results:");
-        println!(
-            "Data size: {}MB ({} bytes)",
-            TOTAL_SIZE_MB, actual_total_size
-        );
-        println!("Number of files: {}", NUM_FILES);
-        println!("Iterations: {}", ITERATIONS);
-        println!("Average time: {:?}", avg_time);
-        println!("Min time: {:?}", min_time);
-        println!("Max time: {:?}", max_time);
+        println!("Data size: {TOTAL_SIZE_MB}MB ({actual_total_size} bytes)");
+        println!("Number of files: {NUM_FILES}");
+        println!("Iterations: {ITERATIONS}");
+        println!("Average time: {avg_time:?}");
+        println!("Min time: {min_time:?}");
+        println!("Max time: {max_time:?}");
         println!(
             "Throughput: {:.2} MB/s",
             (actual_total_size as f64 / (1024.0 * 1024.0)) / avg_time.as_secs_f64()
@@ -423,9 +419,7 @@ enum Status {
         // Hash should complete within a reasonable time for 5MB
         assert!(
             avg_time.as_millis() < 1000,
-            "Hash took too long: {:?} for {}MB",
-            avg_time,
-            TOTAL_SIZE_MB
+            "Hash took too long: {avg_time:?} for {TOTAL_SIZE_MB}MB"
         );
 
         // Test deterministic hashing - same input should produce same hash
@@ -554,22 +548,19 @@ enum ProcessingStatus {
 }
 "###;
 
-        println!(
-            "📝 Generating {} files with ~{} bytes each",
-            NUM_FILES, BYTES_PER_FILE
-        );
+        println!("📝 Generating {NUM_FILES} files with ~{BYTES_PER_FILE} bytes each");
 
         let mut source_code = HashMap::new();
 
         for i in 0..NUM_FILES {
-            let file_path = PathBuf::from(format!("baml_src/module_{:03}.baml", i));
+            let file_path = PathBuf::from(format!("baml_src/module_{i:03}.baml"));
 
             // Create unique content by replacing {{id}} with the file number
             let file_specific_content = baml_pattern.replace("{{id}}", &i.to_string());
 
             // Repeat content to reach target size
             let pattern_size = file_specific_content.len();
-            let repetitions = (BYTES_PER_FILE + pattern_size - 1) / pattern_size;
+            let repetitions = BYTES_PER_FILE.div_ceil(pattern_size);
 
             let mut content = String::with_capacity(BYTES_PER_FILE);
             for _ in 0..repetitions {
@@ -644,12 +635,12 @@ enum ProcessingStatus {
             actual_total_size as f64 / (1024.0 * 1024.0),
             actual_total_size
         );
-        println!("📁 Number of files: {}", NUM_FILES);
-        println!("🔄 Iterations: {}", ITERATIONS);
-        println!("⏱️  Average time: {:?}", avg_time);
-        println!("⚡ Min time: {:?}", min_time);
-        println!("🐌 Max time: {:?}", max_time);
-        println!("📈 Median time: {:?}", median_time);
+        println!("📁 Number of files: {NUM_FILES}");
+        println!("🔄 Iterations: {ITERATIONS}");
+        println!("⏱️  Average time: {avg_time:?}");
+        println!("⚡ Min time: {min_time:?}");
+        println!("🐌 Max time: {max_time:?}");
+        println!("📈 Median time: {median_time:?}");
         println!(
             "🚀 Throughput: {:.2} MB/s",
             (actual_total_size as f64 / (1024.0 * 1024.0)) / avg_time.as_secs_f64()
@@ -658,8 +649,7 @@ enum ProcessingStatus {
         // Performance validation
         if avg_time.as_millis() > 1000 {
             println!(
-                "⚠️  WARNING: Average time ({:?}) exceeds 1 second for {}MB",
-                avg_time, TOTAL_SIZE_MB
+                "⚠️  WARNING: Average time ({avg_time:?}) exceeds 1 second for {TOTAL_SIZE_MB}MB"
             );
         } else {
             println!("✅ Performance is within acceptable bounds!");

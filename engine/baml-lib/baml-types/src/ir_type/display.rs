@@ -1,258 +1,152 @@
-use super::{type_meta, ConstraintLevel, TypeGeneric, TypeNonStreaming, TypeStreaming};
+use std::fmt::{self, Formatter};
+
+use super::{type_meta, ConstraintLevel, TypeGeneric};
 use crate::ir_type::UnionTypeViewGeneric;
 
-impl std::fmt::Display for TypeStreaming {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut metadata_display_fmt = String::new();
-
-        for constraint in &self.meta().constraints {
-            // " @check( the_name, {{..}} )"
-            let constraint_level = match constraint.level {
-                ConstraintLevel::Assert => "assert",
-                ConstraintLevel::Check => "check",
+/// ---------- 1. The helper that prints the *core* type string ----------
+fn fmt_type_body<M>(ty: &TypeGeneric<M>, f: &mut Formatter<'_>) -> fmt::Result
+where
+    M: MetaSuffix,
+{
+    match ty {
+        TypeGeneric::Enum { name, .. } => write!(f, "{name}"),
+        TypeGeneric::Class { name, mode, .. } => match mode {
+            crate::StreamingMode::NonStreaming => write!(f, "{name}"),
+            crate::StreamingMode::Streaming => write!(f, "Streaming.{name}"),
+        },
+        TypeGeneric::RecursiveTypeAlias { name, .. } => write!(f, "{name}"),
+        TypeGeneric::Primitive(t, _) => write!(f, "{t}"),
+        TypeGeneric::Literal(v, _) => write!(f, "{v}"),
+        TypeGeneric::Union(choices, _) => {
+            let view = choices.view();
+            let res = match view {
+                UnionTypeViewGeneric::Null => "null".to_owned(),
+                UnionTypeViewGeneric::Optional(t) => format!("{t} | null"),
+                UnionTypeViewGeneric::OneOf(types) => types
+                    .iter()
+                    .map(ToString::to_string)
+                    .collect::<Vec<_>>()
+                    .join(" | "),
+                UnionTypeViewGeneric::OneOfOptional(types) => {
+                    let inner = types
+                        .iter()
+                        .map(ToString::to_string)
+                        .collect::<Vec<_>>()
+                        .join(" | ");
+                    format!("{inner} | null")
+                }
             };
-            let constraint_name = match &constraint.label {
-                None => "".to_string(),
-                Some(label) => format!("{}, ", label),
-            };
-            metadata_display_fmt.push_str(&format!(
-                " @{constraint_level}({constraint_name}, {{{{..}}}} )"
-            ));
+            write!(f, "({res})")
         }
-        let type_meta::stream::StreamingBehavior { done, state } = self.meta().streaming_behavior;
+        TypeGeneric::Tuple(items, _) => write!(
+            f,
+            "({})",
+            items
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", ")
+        ),
+        TypeGeneric::Map(k, v, _) => write!(f, "map<{k}, {v}>"),
+        TypeGeneric::List(t, _) => write!(f, "{t}[]"),
+        TypeGeneric::Arrow(arrow, _) => write!(
+            f,
+            "({}) -> {}",
+            arrow
+                .param_types
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>()
+                .join(", "),
+            arrow.return_type
+        ),
+    }
+}
+
+/// ---------- 2. A tiny trait that says “add my meta-specific tags” ----------
+trait MetaSuffix {
+    /// Pushes *only* the extra suffixes this meta type needs.
+    fn push_suffix(&self, buf: &mut String);
+    fn constraints(&self) -> &[crate::Constraint];
+}
+
+/// • Non-streaming adds nothing
+impl MetaSuffix for type_meta::NonStreaming {
+    fn push_suffix(&self, _: &mut String) {}
+    fn constraints(&self) -> &[crate::Constraint] {
+        self.constraints.as_slice()
+    }
+}
+
+/// • Streaming adds `done`/`with_state`
+impl MetaSuffix for type_meta::Streaming {
+    fn push_suffix(&self, buf: &mut String) {
+        let type_meta::stream::StreamingBehavior { done, state } = self.streaming_behavior;
         if done {
-            metadata_display_fmt.push_str(" @stream.done")
+            buf.push_str(" @stream.done");
         }
-
         if state {
-            metadata_display_fmt.push_str(" @stream.with_state")
+            buf.push_str(" @stream.with_state");
         }
-
-        match self {
-            TypeStreaming::Enum { name, .. } => write!(f, "{name}"),
-            TypeStreaming::Class { name, mode, .. } => write!(f, "{mode}.{name}"),
-            TypeStreaming::RecursiveTypeAlias { name, .. } => write!(f, "{name}"),
-            TypeStreaming::Primitive(t, _) => write!(f, "{t}"),
-            TypeStreaming::Literal(v, _) => write!(f, "{v}"),
-            TypeStreaming::Union(choices, _) => {
-                let view = choices.view();
-                let res = match view {
-                    UnionTypeViewGeneric::Null => "null".to_string(),
-                    UnionTypeViewGeneric::Optional(field_type) => {
-                        format!("{} | null", field_type)
-                    }
-                    UnionTypeViewGeneric::OneOf(field_types) => field_types
-                        .iter()
-                        .map(|t| t.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" | "),
-                    UnionTypeViewGeneric::OneOfOptional(field_types) => {
-                        let not_null_choices_str = field_types
-                            .iter()
-                            .map(|t| t.to_string())
-                            .collect::<Vec<_>>()
-                            .join(" | ");
-                        format!("{} | null", not_null_choices_str)
-                    }
-                };
-                write!(f, "({res})")
-            }
-            TypeStreaming::Tuple(choices, _) => {
-                write!(
-                    f,
-                    "({})",
-                    choices
-                        .iter()
-                        .map(|t| t.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-            TypeStreaming::Map(k, v, _) => write!(f, "map<{k}, {v}>"),
-            TypeStreaming::List(t, _) => write!(f, "{t}[]"),
-            TypeStreaming::Arrow(arrow, _) => write!(
-                f,
-                "({}) -> {}",
-                arrow
-                    .param_types
-                    .iter()
-                    .map(|t| t.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                arrow.return_type
-            ),
-        }?;
-
-        write!(f, "{}", metadata_display_fmt)
+    }
+    fn constraints(&self) -> &[crate::Constraint] {
+        self.constraints.as_slice()
     }
 }
 
-impl std::fmt::Display for TypeNonStreaming {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut metadata_display_fmt = String::new();
-
-        for constraint in &self.meta().constraints {
-            // " @check( the_name, {{..}} )"
-            let constraint_level = match constraint.level {
-                ConstraintLevel::Assert => "assert",
-                ConstraintLevel::Check => "check",
-            };
-            let constraint_name = match &constraint.label {
-                None => "".to_string(),
-                Some(label) => format!("{}, ", label),
-            };
-            metadata_display_fmt.push_str(&format!(
-                " @{constraint_level}({constraint_name}, {{{{..}}}} )"
-            ));
-        }
-
-        match self {
-            TypeNonStreaming::Enum { name, .. }
-            | TypeNonStreaming::Class { name, .. }
-            | TypeNonStreaming::RecursiveTypeAlias { name, .. } => write!(f, "{name}"),
-            TypeNonStreaming::Primitive(t, _) => write!(f, "{t}"),
-            TypeNonStreaming::Literal(v, _) => write!(f, "{v}"),
-            TypeNonStreaming::Union(choices, _) => {
-                let view = choices.view();
-                let res = match view {
-                    UnionTypeViewGeneric::Null => "null".to_string(),
-                    UnionTypeViewGeneric::Optional(field_type) => {
-                        format!("{} | null", field_type)
-                    }
-                    UnionTypeViewGeneric::OneOf(field_types) => field_types
-                        .iter()
-                        .map(|t| t.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" | "),
-                    UnionTypeViewGeneric::OneOfOptional(field_types) => {
-                        let not_null_choices_str = field_types
-                            .iter()
-                            .map(|t| t.to_string())
-                            .collect::<Vec<_>>()
-                            .join(" | ");
-                        format!("{} | null", not_null_choices_str)
-                    }
-                };
-                write!(f, "({res})")
-            }
-            TypeNonStreaming::Tuple(choices, _) => {
-                write!(
-                    f,
-                    "({})",
-                    choices
-                        .iter()
-                        .map(|t| t.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-            TypeNonStreaming::Map(k, v, _) => write!(f, "map<{k}, {v}>"),
-            TypeNonStreaming::List(t, _) => write!(f, "{t}[]"),
-            TypeNonStreaming::Arrow(arrow, _) => write!(
-                f,
-                "({}) -> {}",
-                arrow
-                    .param_types
-                    .iter()
-                    .map(|t| t.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                arrow.return_type
-            ),
-        }?;
-
-        write!(f, "{}", metadata_display_fmt)
-    }
-}
-
-impl std::fmt::Display for TypeGeneric<type_meta::IR> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let mut metadata_display_fmt = String::new();
-
-        for constraint in &self.meta().constraints {
-            // " @check( the_name, {{..}} )"
-            let constraint_level = match constraint.level {
-                ConstraintLevel::Assert => "assert",
-                ConstraintLevel::Check => "check",
-            };
-            let constraint_name = match &constraint.label {
-                None => "".to_string(),
-                Some(label) => format!("{}, ", label),
-            };
-            metadata_display_fmt.push_str(&format!(
-                " @{constraint_level}({constraint_name}, {{{{..}}}} )"
-            ));
-        }
+/// • IR adds `done`/`not_null`/`with_state`
+impl MetaSuffix for type_meta::IR {
+    fn push_suffix(&self, buf: &mut String) {
         let type_meta::base::StreamingBehavior {
             done,
             needed,
             state,
-        } = self.streaming_behavior();
+        } = &self.streaming_behavior;
         if *done {
-            metadata_display_fmt.push_str(" @stream.done")
+            buf.push_str(" @stream.done");
         }
         if *needed {
-            metadata_display_fmt.push_str(" @stream.not_null")
+            buf.push_str(" @stream.not_null");
         }
         if *state {
-            metadata_display_fmt.push_str(" @stream.with_state")
+            buf.push_str(" @stream.with_state");
+        }
+    }
+    fn constraints(&self) -> &[crate::Constraint] {
+        self.constraints.as_slice()
+    }
+}
+
+/// ---------- 3. The one‐size-fits-all Display impl ----------
+impl<M> std::fmt::Display for TypeGeneric<M>
+where
+    M: MetaSuffix, // meta knows how to add its tags
+{
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        // a) print the body
+        fmt_type_body(self, f)?;
+
+        // b) build all suffixes
+        let mut suffix = String::new();
+
+        //   • constraints (same for every meta)
+        for constraint in self.meta().constraints() {
+            let lvl = match constraint.level {
+                ConstraintLevel::Assert => "assert",
+                ConstraintLevel::Check => "check",
+            };
+            let label = constraint
+                .label
+                .as_ref()
+                .map(|l| format!("{l}, "))
+                .unwrap_or_default();
+            suffix.push_str(&format!(" @{lvl}({label}{{{{..}}}} )"));
         }
 
-        match self {
-            TypeGeneric::Enum { name, .. }
-            | TypeGeneric::Class { name, .. }
-            | TypeGeneric::RecursiveTypeAlias { name, .. } => write!(f, "{name}"),
-            TypeGeneric::Primitive(t, _) => write!(f, "{t}"),
-            TypeGeneric::Literal(v, _) => write!(f, "{v}"),
-            TypeGeneric::Union(choices, _) => {
-                let view = choices.view();
-                let res = match view {
-                    UnionTypeViewGeneric::Null => "null".to_string(),
-                    UnionTypeViewGeneric::Optional(field_type) => {
-                        format!("{} | null", field_type)
-                    }
-                    UnionTypeViewGeneric::OneOf(field_types) => field_types
-                        .iter()
-                        .map(|t| t.to_string())
-                        .collect::<Vec<_>>()
-                        .join(" | "),
-                    UnionTypeViewGeneric::OneOfOptional(field_types) => {
-                        let not_null_choices_str = field_types
-                            .iter()
-                            .map(|t| t.to_string())
-                            .collect::<Vec<_>>()
-                            .join(" | ");
-                        format!("{} | null", not_null_choices_str)
-                    }
-                };
-                write!(f, "({res})")
-            }
-            TypeGeneric::Tuple(choices, _) => {
-                write!(
-                    f,
-                    "({})",
-                    choices
-                        .iter()
-                        .map(|t| t.to_string())
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            }
-            TypeGeneric::Map(k, v, _) => write!(f, "map<{k}, {v}>"),
-            TypeGeneric::List(t, _) => write!(f, "{t}[]"),
-            TypeGeneric::Arrow(arrow, _) => write!(
-                f,
-                "({}) -> {}",
-                arrow
-                    .param_types
-                    .iter()
-                    .map(|t| t.to_string())
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                arrow.return_type
-            ),
-        }?;
+        //   • meta-specific ones
+        self.meta().push_suffix(&mut suffix);
 
-        write!(f, "{}", metadata_display_fmt)
+        // c) finally flush the suffix
+        write!(f, "{suffix}")
     }
 }

@@ -135,7 +135,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassWithBlockDone), BamlClient::Types::ClassWithBlockDone])}
+      ).returns(Baml::BamlStream[BamlClient::Types::ClassWithBlockDone, BamlClient::Types::ClassWithBlockDone])}
       def MakeClassWithBlockDone(
           *varargs,
 
@@ -151,7 +151,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassWithBlockDone), BamlClient::Types::ClassWithBlockDone].new(
+          Baml::BamlStream[BamlClient::Types::ClassWithBlockDone, BamlClient::Types::ClassWithBlockDone].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -160,7 +160,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassWithoutDone), BamlClient::Types::ClassWithoutDone])}
+      ).returns(Baml::BamlStream[BamlClient::Types::ClassWithoutDone, BamlClient::Types::ClassWithoutDone])}
       def MakeClassWithExternalDone(
           *varargs,
 
@@ -176,7 +176,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::ClassWithoutDone), BamlClient::Types::ClassWithoutDone].new(
+          Baml::BamlStream[BamlClient::Types::ClassWithoutDone, BamlClient::Types::ClassWithoutDone].new(
               ffi_stream: result,
               ctx_manager: ctx
           )
@@ -185,7 +185,7 @@ module BamlClient
           varargs: T.untyped,
 
           baml_options: T::Hash[Symbol, T.any(BamlClient::TypeBuilder, Baml::ClientRegistry, T.any(Baml::Collector, T::Array[Baml::Collector]), T::Hash[Symbol, String])]
-      ).returns(Baml::BamlStream[T.nilable(BamlClient::StreamTypes::SemanticContainer), BamlClient::Types::SemanticContainer])}
+      ).returns(Baml::BamlStream[BamlClient::StreamTypes::SemanticContainer, BamlClient::Types::SemanticContainer])}
       def MakeSemanticContainer(
           *varargs,
 
@@ -201,7 +201,7 @@ module BamlClient
 
           })
 
-          Baml::BamlStream[T.nilable(BamlClient::StreamTypes::SemanticContainer), BamlClient::Types::SemanticContainer].new(
+          Baml::BamlStream[BamlClient::StreamTypes::SemanticContainer, BamlClient::Types::SemanticContainer].new(
               ffi_stream: result,
               ctx_manager: ctx
           )

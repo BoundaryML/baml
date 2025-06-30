@@ -93,7 +93,7 @@ mod tests {
         let ir = std::sync::Arc::new(ir);
         let class = ir.find_class("SimpleClass").unwrap().item;
         let pkg = CurrentRenderPackage::new("baml_client", ir.clone());
-        let class_go = ir_class_to_go_stream(&class, &pkg);
+        let class_go = ir_class_to_go_stream(class, &pkg);
         assert_eq!(class_go.name, "SimpleClass");
         assert_eq!(class_go.fields.len(), 1);
         assert!(class_go.fields[0].r#type.meta().wrap_stream_state);
