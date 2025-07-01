@@ -84,7 +84,6 @@ class BamlStream(Generic[PartialOutputType, FinalOutputType]):
                     if event is None:
                         break
                     if event.is_ok():
-                        print(f"\n------------------Yield: {event!r}")
                         yield self.__partial_coerce(event)
                 except queue.Empty:
                     await asyncio.sleep(0.050)
@@ -127,7 +126,6 @@ class BamlSyncStream(Generic[PartialOutputType, FinalOutputType]):
         self.__is_done = False
 
     def __enqueue(self, data: FunctionResult) -> None:
-        print(f"\n------------------Enqueue: {data}")
         self.__event_queue.put_nowait(data)
 
     def __drive_to_completion(self) -> FunctionResult:
@@ -166,7 +164,6 @@ class BamlSyncStream(Generic[PartialOutputType, FinalOutputType]):
                 if event is None:
                     break
                 if event.is_ok():
-                    print(f"\n------------------Event: {event!r}")
                     yield self.__partial_coerce(event)
         except Exception as e:
             raise e

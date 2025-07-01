@@ -89,7 +89,7 @@ class {{ call_manager_name }}:
             function_name,
             args,
             # ctx
-            __ctx__manager__.get(),
+            __ctx__manager__.clone_context(),
             # tb
             resolved_options.tb,
             # cr
@@ -127,7 +127,7 @@ class {{ call_manager_name }}:
         args: typing.Dict[str, typing.Any],
     ) -> typing.Tuple[baml_py.baml_py.RuntimeContextManager, baml_py.baml_py.FunctionResultStream]:
         resolved_options = self.{{ managled_resolve_fn }}()
-        ctx = __ctx__manager__.get()
+        ctx = __ctx__manager__.clone_context()
         result = __runtime__.stream_function(
             function_name,
             args,
@@ -186,7 +186,7 @@ class {{ call_manager_name }}:
             function_name,
             args,
             # ctx
-            __ctx__manager__.get(),
+            __ctx__manager__.clone_context(),
             # tb
             resolved_options.tb,
             # cr
