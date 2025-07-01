@@ -826,11 +826,11 @@ impl WithRenderError for baml_runtime::internal::llm_client::LLMResponse {
 fn get_dummy_value(
     indent: usize,
     allow_multiline: bool,
-    t: &baml_runtime::FieldType,
+    t: &baml_runtime::TypeIR,
 ) -> Option<String> {
     let indent_str = "  ".repeat(indent);
     match t {
-        baml_runtime::FieldType::Primitive(t, _) => {
+        baml_runtime::TypeIR::Primitive(t, _) => {
             let dummy = match t {
                 TypeValue::String => {
                     if allow_multiline {
@@ -856,11 +856,11 @@ fn get_dummy_value(
 
             Some(dummy)
         }
-        baml_runtime::FieldType::Literal(_, _) => None,
-        baml_runtime::FieldType::Enum { .. } => None,
-        baml_runtime::FieldType::Class { .. } => None,
-        baml_runtime::FieldType::RecursiveTypeAlias { .. } => None,
-        baml_runtime::FieldType::List(item, _) => {
+        baml_runtime::TypeIR::Literal(_, _) => None,
+        baml_runtime::TypeIR::Enum { .. } => None,
+        baml_runtime::TypeIR::Class { .. } => None,
+        baml_runtime::TypeIR::RecursiveTypeAlias { .. } => None,
+        baml_runtime::TypeIR::List(item, _) => {
             let dummy = get_dummy_value(indent + 1, allow_multiline, item);
             // Repeat it 2 times
             match dummy {
@@ -878,7 +878,7 @@ fn get_dummy_value(
                 _ => None,
             }
         }
-        baml_runtime::FieldType::Map(k, v, _) => {
+        baml_runtime::TypeIR::Map(k, v, _) => {
             let dummy_k = get_dummy_value(indent, false, k);
             let dummy_v = get_dummy_value(indent + 1, allow_multiline, v);
             match (dummy_k, dummy_v) {
@@ -898,12 +898,12 @@ fn get_dummy_value(
             }
         }
 
-        baml_runtime::FieldType::Union(fields, _) => fields
+        baml_runtime::TypeIR::Union(fields, _) => fields
             .iter_include_null()
             .iter()
             .filter_map(|f| get_dummy_value(indent, allow_multiline, f))
             .next(),
-        baml_runtime::FieldType::Tuple(vals, _) => {
+        baml_runtime::TypeIR::Tuple(vals, _) => {
             let dummy = vals
                 .iter()
                 .filter_map(|f| get_dummy_value(0, false, f))
@@ -911,11 +911,11 @@ fn get_dummy_value(
                 .join(", ");
             Some(format!("({dummy},)"))
         }
-        baml_runtime::FieldType::Arrow(..) => None,
+        baml_runtime::TypeIR::Arrow(..) => None,
     }
 }
 
-fn get_dummy_field(indent: usize, name: &str, t: &baml_runtime::FieldType) -> Option<String> {
+fn get_dummy_field(indent: usize, name: &str, t: &baml_runtime::TypeIR) -> Option<String> {
     let indent_str = "  ".repeat(indent);
     let dummy = get_dummy_value(indent, true, t);
 
