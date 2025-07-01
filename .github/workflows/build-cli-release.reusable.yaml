@@ -75,6 +75,13 @@ jobs:
           toolchain: stable
           target: ${{ matrix._.target }}
       
+      - uses: actions/setup-go@v5
+        with:
+          go-version: '1.21'
+      
+      - name: Install protoc-gen-go
+        run: go install github.com/golang/protobuf/protoc-gen-go@latest
+      
       - name: Use Cross
         if: contains(matrix._.os, 'ubuntu')
         run: |
