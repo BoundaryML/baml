@@ -3,7 +3,7 @@ use std::{fs, path::PathBuf};
 use anyhow::Result;
 use baml_runtime::baml_src_files;
 use clap::Args;
-use internal_baml_core::internal_baml_schema_ast::{format_schema, FormatOptions};
+use internal_baml_core::internal_baml_ast::{format_schema, FormatOptions};
 
 #[derive(Args, Debug)]
 pub struct FormatArgs {
@@ -38,7 +38,7 @@ impl FormatArgs {
         };
 
         for path in paths.iter() {
-            let source = fs::read_to_string(&path)?;
+            let source = fs::read_to_string(path)?;
             match format_schema(
                 &source,
                 FormatOptions {
@@ -48,9 +48,9 @@ impl FormatArgs {
             ) {
                 Ok(formatted) => {
                     if self.dry_run {
-                        println!("{}", formatted);
+                        println!("{formatted}");
                     } else {
-                        fs::write(&path, formatted)?;
+                        fs::write(path, formatted)?;
                     }
                 }
                 Err(e) => {

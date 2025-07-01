@@ -1,7 +1,7 @@
-use crate::Result;
 use magnus::{class, method, Error, Module, RModule, Ruby};
 
 use super::request::HTTPBody;
+use crate::Result;
 
 crate::lang_wrapper!(
     HTTPResponse,
@@ -27,7 +27,7 @@ impl HTTPResponse {
     pub fn headers(ruby: &Ruby, rb_self: &Self) -> Result<magnus::Value> {
         // Convert headers to Ruby hash
         serde_magnus::serialize(&rb_self.inner.headers())
-            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
+            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{e:?}")))
     }
 
     pub fn body(&self) -> HTTPBody {

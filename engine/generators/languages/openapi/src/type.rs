@@ -1,10 +1,12 @@
-use baml_types::ir_type::{Type, TypeValue, UnionTypeViewGeneric};
-use baml_types::{BamlMediaType, Constraint, ConstraintLevel, LiteralValue};
-use indexmap::{IndexMap, IndexSet};
-use internal_baml_core::ir::ir_helpers::IRHelper;
-use internal_baml_core::ir::repr::IntermediateRepr;
-use serde::Serialize;
 use std::hash::Hash;
+
+use baml_types::{
+    ir_type::{Type, TypeValue, UnionTypeViewGeneric},
+    BamlMediaType, Constraint, ConstraintLevel, LiteralValue,
+};
+use indexmap::{IndexMap, IndexSet};
+use internal_baml_core::ir::{ir_helpers::IRHelper, repr::IntermediateRepr};
+use serde::Serialize;
 /// The abstract type system of OpenAPI.
 /// We convert IR into this, before generating the OpenAPI yaml file.
 ///
@@ -82,7 +84,7 @@ impl Serialize for AdditionalProperties {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Default)]
 pub struct OpenApiMeta {
     /// Pydantic includes this by default.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -101,17 +103,6 @@ pub struct OpenApiMeta {
     /// Nulls in OpenAPI are weird: https://swagger.io/docs/specification/data-models/data-types/
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub nullable: bool,
-}
-
-impl Default for OpenApiMeta {
-    fn default() -> Self {
-        Self {
-            nullable: false,
-            title: None,
-            r#enum: None,
-            r#const: None,
-        }
-    }
 }
 
 impl Hash for TypeOpenApi {
@@ -159,10 +150,10 @@ pub fn convert_ir_type(ir: &IntermediateRepr, ty: &Type) -> TypeOpenApi {
         _ => None,
     };
     let meta_enum = None;
-    let meta_const = match ty {
-        Type::Literal(literal, _) => Some(literal.to_string()),
-        _ => None,
-    };
+    // let meta_const = match ty {
+    //     Type::Literal(literal, _) => Some(literal.to_string()),
+    //     _ => None,
+    // };
     let meta_const = None;
     let meta = OpenApiMeta {
         nullable: ty.is_optional(),
@@ -199,13 +190,13 @@ pub fn convert_ir_type(ir: &IntermediateRepr, ty: &Type) -> TypeOpenApi {
                     BamlMediaType::Audio => "BamlAudio",
                 };
                 TypeOpenApi::Ref {
-                    r#ref: format!("#/components/schemas/{}", media_type),
+                    r#ref: format!("#/components/schemas/{media_type}"),
                     meta: meta_copy,
                 }
             }
         },
         Type::Class { name, .. } => TypeOpenApi::Ref {
-            r#ref: format!("#/components/schemas/{}", name),
+            r#ref: format!("#/components/schemas/{name}"),
             meta: meta_copy,
         },
         Type::List(inner, _) => TypeOpenApi::Inline {
@@ -215,7 +206,7 @@ pub fn convert_ir_type(ir: &IntermediateRepr, ty: &Type) -> TypeOpenApi {
             meta: meta_copy,
         },
         Type::Enum { name, .. } => TypeOpenApi::Ref {
-            r#ref: format!("#/components/schemas/{}", name),
+            r#ref: format!("#/components/schemas/{name}"),
             meta: meta_copy,
         },
         Type::Literal(literal, _) => TypeOpenApi::Inline {
@@ -303,7 +294,7 @@ fn type_def_for_checks(checks: Vec<String>) -> TypeOpenApi {
             (
                 check_name.clone(),
                 TypeOpenApi::Ref {
-                    r#ref: format!("#/components/schemas/Check"),
+                    r#ref: "#/components/schemas/Check".to_string(),
                     meta: OpenApiMeta::default(),
                 },
             )

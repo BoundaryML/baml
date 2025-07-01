@@ -1,14 +1,14 @@
-use napi::bindgen_prelude::ObjectFinalize;
-use napi::threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode};
-use napi::Env;
-use napi::{JsFunction, JsObject, JsUndefined};
-use napi_derive::napi;
 use std::collections::HashMap;
 
-use crate::errors::from_anyhow_error;
+use napi::{
+    bindgen_prelude::ObjectFinalize,
+    threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode},
+    Env, JsFunction, JsObject, JsUndefined,
+};
+use napi_derive::napi;
 
-use super::function_results::FunctionResult;
-use super::runtime_ctx_manager::RuntimeContextManager;
+use super::{function_results::FunctionResult, runtime_ctx_manager::RuntimeContextManager};
+use crate::errors::from_anyhow_error;
 
 crate::lang_wrapper!(
     FunctionResultStream,
@@ -55,11 +55,10 @@ impl FunctionResultStream {
                 old_cb.unref(env)?;
             }
             self.callback = Some(cb);
-        } else {
-            if let Some(mut cb) = self.callback.take() {
-                cb.unref(env)?;
-            }
+        } else if let Some(mut cb) = self.callback.take() {
+            cb.unref(env)?;
         }
+
         env.get_undefined()
     }
 
@@ -81,7 +80,7 @@ impl FunctionResultStream {
                 Some(move |event: baml_runtime::FunctionResult| {
                     let res = tsfn.call(Ok(event), ThreadsafeFunctionCallMode::Blocking);
                     if res != napi::Status::Ok {
-                        log::error!("Error calling on_event callback: {:?}", res);
+                        log::error!("Error calling on_event callback: {res:?}");
                     }
                 })
             }
@@ -98,7 +97,7 @@ impl FunctionResultStream {
             let res = inner
                 .lock()
                 .await
-                    .run(on_event, &ctx_mng, tb.as_ref(), cb.as_ref(), env_vars)
+                .run(on_event, &ctx_mng, tb.as_ref(), cb.as_ref(), env_vars)
                 .await;
             res.0.map(FunctionResult::from).map_err(from_anyhow_error)
         };

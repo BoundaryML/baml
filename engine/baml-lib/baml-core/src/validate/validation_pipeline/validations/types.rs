@@ -2,11 +2,11 @@ use std::collections::VecDeque;
 
 use baml_types::{LiteralValue, TypeValue};
 use either::Either;
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
-use internal_baml_parser_database::TypeWalker;
-use internal_baml_schema_ast::ast::{
+use internal_baml_ast::ast::{
     Argument, Attribute, Expression, FieldArity, FieldType, Identifier, WithName, WithSpan,
 };
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
+use internal_baml_parser_database::TypeWalker;
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -154,7 +154,7 @@ fn validate_type_constraints(ctx: &mut Context<'_>, field_type: &FieldType) {
                                 Some(range) => range,
                                 None => {
                                     ctx.push_error(DatamodelError::new_validation_error(
-                                        &format!("Error parsing jinja template: {}", e),
+                                        &format!("Error parsing jinja template: {e}"),
                                         span.clone(),
                                     ));
                                     continue;
@@ -164,14 +164,10 @@ fn validate_type_constraints(ctx: &mut Context<'_>, field_type: &FieldType) {
                             let start_offset = span.start + range.start;
                             let end_offset = span.start + range.end;
 
-                            let span = Span::new(
-                                span.file.clone(),
-                                start_offset as usize,
-                                end_offset as usize,
-                            );
+                            let span = Span::new(span.file.clone(), start_offset, end_offset);
 
                             ctx.push_error(DatamodelError::new_validation_error(
-                                &format!("Error parsing jinja template: {}", e),
+                                &format!("Error parsing jinja template: {e}"),
                                 span,
                             ))
                         } else {
@@ -204,7 +200,7 @@ fn validate_type_constraints(ctx: &mut Context<'_>, field_type: &FieldType) {
                                 Some(range) => range,
                                 None => {
                                     ctx.push_error(DatamodelError::new_validation_error(
-                                        &format!("Error parsing jinja template: {}", e),
+                                        &format!("Error parsing jinja template: {e}"),
                                         span.clone(),
                                     ));
                                     continue;
@@ -214,14 +210,10 @@ fn validate_type_constraints(ctx: &mut Context<'_>, field_type: &FieldType) {
                             let start_offset = span.start + range.start;
                             let end_offset = span.start + range.end;
 
-                            let span = Span::new(
-                                span.file.clone(),
-                                start_offset as usize,
-                                end_offset as usize,
-                            );
+                            let span = Span::new(span.file.clone(), start_offset, end_offset);
 
                             ctx.push_error(DatamodelError::new_validation_error(
-                                &format!("Error parsing jinja template: {}", e),
+                                &format!("Error parsing jinja template: {e}"),
                                 span,
                             ))
                         } else {

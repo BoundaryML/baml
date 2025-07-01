@@ -1,7 +1,7 @@
-use crate::jsonish::Value;
+use anyhow::Result;
 
 use super::{entry, ParseOptions};
-use anyhow::Result;
+use crate::jsonish::Value;
 
 pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
     // Find all balanced JSON objects but w/o any fixes.
@@ -38,12 +38,10 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
                         json_str,
                         options.next_from_mode(super::ParsingMode::AllJsonObjects),
                     ) {
-                        Ok(json) => {
-                            json_objects.push(json)
-                        },
+                        Ok(json) => json_objects.push(json),
                         Err(e) => {
                             // Ignore errors
-                            log::error!("Failed to parse JSON object: {:?}", e);
+                            log::error!("Failed to parse JSON object: {e:?}");
                         }
                     }
                 }
@@ -64,11 +62,10 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
                     Ok(json) => {
                         complete_stack_head(&mut json_objects);
                         json_objects.push(json)
-
-                    },
+                    }
                     Err(e) => {
                         // Ignore errors
-                        log::error!("Failed to parse JSON object: {:?}", e);
+                        log::error!("Failed to parse JSON object: {e:?}");
                     }
                 }
             }
@@ -84,19 +81,18 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
     }
 }
 
-fn complete_stack_head(stack: &mut Vec<Value>) {
-    match stack.last_mut() {
-        Some(v) => { v.complete_deeply(); },
-        None => {},
+fn complete_stack_head(stack: &mut [Value]) {
+    if let Some(v) = stack.last_mut() {
+        v.complete_deeply();
     }
 }
 
 #[cfg(test)]
 mod test {
     use baml_types::CompletionState;
+    use test_log::test;
 
     use super::*;
-    use test_log::test;
 
     #[test]
     fn test_parse() -> Result<()> {
@@ -124,7 +120,7 @@ print("Hello, world!")
         {
             let value = &res[0];
             let Value::AnyOf(value, _) = value else {
-                panic!("Expected AnyOf, got {:#?}", value);
+                panic!("Expected AnyOf, got {value:#?}");
             };
             assert!(value.contains(&Value::Object(
                 [(
@@ -139,7 +135,7 @@ print("Hello, world!")
         {
             let value = &res[1];
             let Value::AnyOf(value, _) = value else {
-                panic!("Expected AnyOf, got {:#?}", value);
+                panic!("Expected AnyOf, got {value:#?}");
             };
             assert!(value.contains(&Value::Array(
                 vec![Value::String(

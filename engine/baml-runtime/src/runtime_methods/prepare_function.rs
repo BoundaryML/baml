@@ -1,11 +1,22 @@
-use crate::runtime::InternalBamlRuntime;
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use crate::internal::llm_client::traits::WithClientProperties;
-use crate::internal::llm_client::LLMResponse;
-use crate::tracingv2::storage::storage::{Collector, BAML_TRACER};
-use crate::type_builder::TypeBuilder;
-use crate::RuntimeContextManager;
+use anyhow::{Context, Result};
+use baml_types::{
+    tracing::events::{FunctionEnd, FunctionStart, TraceData, TraceEvent},
+    BamlMap, BamlValue, BamlValueWithMeta, Constraint, EvaluationContext, FieldType,
+};
+use indexmap::IndexMap;
+use internal_baml_core::{
+    internal_baml_diagnostics::SourceFile,
+    ir::{
+        repr::{IntermediateRepr, Node, TypeBuilderEntry},
+        ArgCoercer, ExprFunctionWalker, FunctionWalker, IRHelper, TestCase,
+    },
+    validate,
+};
+use internal_baml_jinja::RenderedPrompt;
+use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
+
 use crate::{
     client_registry::ClientProperty,
     internal::{
@@ -17,29 +28,19 @@ use crate::{
             },
             primitive::LLMPrimitiveProvider,
             retry_policy::CallablePolicy,
-            traits::{WithPrompt, WithRenderRawCurl},
+            traits::{WithClientProperties, WithPrompt, WithRenderRawCurl},
+            LLMResponse,
         },
         prompt_renderer::PromptRenderer,
     },
+    runtime::InternalBamlRuntime,
     runtime_interface::{InternalClientLookup, RuntimeConstructor},
     tracing::BamlTracer,
+    tracingv2::storage::storage::{Collector, BAML_TRACER},
+    type_builder::TypeBuilder,
     FunctionResult, FunctionResultStream, InternalRuntimeInterface, RenderCurlSettings,
-    RuntimeContext,
+    RuntimeContext, RuntimeContextManager,
 };
-use anyhow::{Context, Result};
-use baml_types::tracing::events::{FunctionEnd, FunctionStart, TraceData, TraceEvent};
-
-use baml_types::{BamlMap, BamlValue, BamlValueWithMeta, Constraint, EvaluationContext, FieldType};
-use indexmap::IndexMap;
-use internal_baml_core::ir::repr::{Node, TypeBuilderEntry};
-use internal_baml_core::ir::TestCase;
-use internal_baml_core::{
-    internal_baml_diagnostics::SourceFile,
-    ir::{repr::IntermediateRepr, ArgCoercer, ExprFunctionWalker, FunctionWalker, IRHelper},
-    validate,
-};
-use internal_baml_jinja::RenderedPrompt;
-use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
 
 pub(crate) struct PreparedFunction<'ir> {
     pub function_name: String,
@@ -64,7 +65,7 @@ pub(crate) enum PrepareFunctionError {
 }
 
 impl PrepareFunctionError {
-    pub fn as_error(self) -> anyhow::Error {
+    pub fn into_error(self) -> anyhow::Error {
         match self {
             PrepareFunctionError::FunctionNotFound {
                 function_name,
@@ -118,7 +119,7 @@ impl InternalBamlRuntime {
         };
 
         let baml_args = match self.ir().check_function_params(
-            &func.inputs(),
+            func.inputs(),
             params,
             ArgCoercer {
                 span_path: None,

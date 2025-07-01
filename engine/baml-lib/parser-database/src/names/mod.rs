@@ -1,19 +1,17 @@
 mod validate_reserved_names;
 
-use crate::{
-    ast::{self, TopId, WithAttributes, WithName, WithSpan},
-    coerce, coerce_array, Context, DatamodelError, StaticType, StringId,
-};
-
 use baml_types::{BamlMap, FieldType};
 use indexmap::map::IndexedEntry;
+use internal_baml_ast::ast::{ConfigBlockProperty, Expression, Field, WithIdentifier};
 use internal_baml_diagnostics::Span;
-use internal_baml_schema_ast::ast::{ConfigBlockProperty, Expression, Field, WithIdentifier};
-
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use validate_reserved_names::*;
 
 use self::validate_reserved_names::{validate_enum_value_name, validate_function_name};
+use crate::{
+    ast::{self, TopId, WithAttributes, WithName, WithSpan},
+    coerce, coerce_array, Context, DatamodelError, StaticType, StringId,
+};
 
 /// Resolved names for use in the validation process.
 #[derive(Default, Clone)]
@@ -37,7 +35,7 @@ struct DuplicateNames {
 }
 
 impl DuplicateNames {
-    fn to_errors(self, ctx: &mut Context<'_>) {
+    fn into_errors(self, ctx: &mut Context<'_>) {
         for category in [self.tops, self.generators] {
             for (name, ids) in category {
                 let ast_tops = ids.iter().map(|id| &ctx.ast[*id]).collect::<Vec<_>>();
@@ -287,7 +285,7 @@ pub(super) fn resolve_names(ctx: &mut Context<'_>) {
         }
     }
 
-    duplicate_names.to_errors(ctx);
+    duplicate_names.into_errors(ctx);
     let _ = std::mem::replace(ctx.names, names);
 }
 
@@ -309,24 +307,20 @@ fn insert_name(
             duplicate_names
                 .dynamic_types
                 .entry(name)
-                .or_insert_with(indexmap::IndexSet::default)
+                .or_default()
                 .insert(existing);
             duplicate_names
                 .dynamic_types
                 .entry(name)
-                .or_insert_with(indexmap::IndexSet::default)
+                .or_default()
                 .insert(top_id);
         } else {
             duplicate_names
                 .tops
                 .entry(name)
-                .or_insert_with(indexmap::IndexSet::default)
+                .or_default()
                 .insert(existing);
-            duplicate_names
-                .tops
-                .entry(name)
-                .or_insert_with(indexmap::IndexSet::default)
-                .insert(top_id);
+            duplicate_names.tops.entry(name).or_default().insert(top_id);
         }
     }
 }

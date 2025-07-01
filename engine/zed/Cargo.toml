@@ -1,0 +1,20 @@
+[package]
+name = "zed"
+edition = "2024"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+
+[lib]
+crate-type = ["cdylib"]
+
+[features]
+# This enables the debug mode by default
+# default = ["debug"]
+# Use this for releases
+default = []
+debug = []
+
+[dependencies]
+zed_extension_api = "0.1.0"

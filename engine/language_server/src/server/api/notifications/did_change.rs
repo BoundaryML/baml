@@ -1,15 +1,23 @@
-use std::time::Instant;
+use std::{collections::HashMap, time::Instant};
 
-use lsp_types::notification::DidChangeTextDocument;
-use lsp_types::{DidChangeTextDocumentParams, PublishDiagnosticsParams};
+use lsp_types::{
+    notification::DidChangeTextDocument, DidChangeTextDocumentParams, PublishDiagnosticsParams,
+};
 
-use crate::server::api::diagnostics::publish_diagnostics;
-use crate::server::api::traits::{NotificationHandler, SyncNotificationHandler};
-use crate::server::api::ResultExt;
-use crate::server::client::{Notifier, Requester};
-use crate::server::Result;
-use crate::session::Session;
-use crate::DocumentKey;
+use crate::{
+    playground::broadcast_project_update,
+    server::{
+        api::{
+            diagnostics::publish_diagnostics,
+            traits::{NotificationHandler, SyncNotificationHandler},
+            ResultExt,
+        },
+        client::{Notifier, Requester},
+        Result,
+    },
+    session::Session,
+    DocumentKey,
+};
 
 pub(crate) struct DidChangeTextDocumentHandler;
 
@@ -45,7 +53,7 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
 
         let project = project.unwrap();
         let document_key =
-            DocumentKey::from_url(&project.lock().unwrap().root_path(), &url).internal_error()?;
+            DocumentKey::from_url(project.lock().unwrap().root_path(), &url).internal_error()?;
 
         session
             .update_text_document(
@@ -55,6 +63,36 @@ impl SyncNotificationHandler for DidChangeTextDocumentHandler {
                 Some(notifier.clone()),
             )
             .internal_error()?;
+
+        // Broadcast update to playground clients
+        if let Some(state) = &session.playground_state {
+            let project = project.lock().unwrap();
+            let files_map: std::collections::HashMap<String, String> = project
+                .baml_project
+                .files
+                .iter()
+                .map(|(path, doc)| {
+                    let key = path.path().to_string_lossy().to_string();
+                    // If there's an unsaved version, use it
+                    let contents = project
+                        .baml_project
+                        .unsaved_files
+                        .get(path)
+                        .map(|unsaved| unsaved.contents.clone())
+                        .unwrap_or_else(|| doc.contents.clone());
+                    (key, contents)
+                })
+                .collect();
+            let root_path = project.root_path().to_string_lossy().to_string();
+            let state = state.clone();
+            if let Some(runtime) = &session.playground_runtime {
+                runtime.spawn(async move {
+                    let _ =
+                        crate::playground::broadcast_project_update(&state, &root_path, files_map)
+                            .await;
+                });
+            }
+        }
 
         tracing::info!("publishing diagnostics");
 

@@ -12,7 +12,6 @@ pub use ir_helpers::{
     IRSemanticStreamingHelper, RetryPolicyWalker, TemplateStringWalker, TestCaseWalker,
     TypeAliasWalker,
 };
-
 pub(super) use repr::IntermediateRepr;
 
 // Add aliases for the IR types

@@ -1,26 +1,28 @@
-use crate::errors::{from_anyhow_error, invalid_argument_error};
-use crate::parse_ts_types;
-use crate::types::client_registry::ClientRegistry;
-use crate::types::function_result_stream::FunctionResultStream;
-use crate::types::function_results::FunctionResult;
-use crate::types::log_collector::Collector;
-use crate::types::request::HTTPRequest;
-use crate::types::runtime_ctx_manager::RuntimeContextManager;
-use crate::types::trace_stats::TraceStats;
-use crate::types::type_builder::TypeBuilder;
-use baml_runtime::on_log_event::LogEvent;
-use baml_runtime::runtime_interface::ExperimentalTracingInterface;
-use baml_runtime::BamlRuntime as CoreRuntime;
+use std::{collections::HashMap, path::PathBuf};
+
+use baml_runtime::{
+    on_log_event::LogEvent, runtime_interface::ExperimentalTracingInterface,
+    BamlRuntime as CoreRuntime,
+};
 use baml_types::BamlValue;
-use napi::bindgen_prelude::ObjectFinalize;
-use napi::threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode};
-use napi::JsFunction;
-use napi::JsObject;
-use napi::{Env, JsUndefined};
+use napi::{
+    bindgen_prelude::ObjectFinalize,
+    threadsafe_function::{ThreadSafeCallContext, ThreadsafeFunctionCallMode},
+    Env, JsFunction, JsObject, JsUndefined,
+};
 use napi_derive::napi;
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::path::PathBuf;
+
+use crate::{
+    errors::{from_anyhow_error, invalid_argument_error},
+    parse_ts_types,
+    types::{
+        client_registry::ClientRegistry, function_result_stream::FunctionResultStream,
+        function_results::FunctionResult, log_collector::Collector, request::HTTPRequest,
+        runtime_ctx_manager::RuntimeContextManager, trace_stats::TraceStats,
+        type_builder::TypeBuilder,
+    },
+};
 
 crate::lang_wrapper!(BamlRuntime,
     CoreRuntime,
@@ -463,7 +465,7 @@ impl BamlRuntime {
 
                     let res = tsfn_clone.call(Ok(event), ThreadsafeFunctionCallMode::Blocking);
                     if res != napi::Status::Ok {
-                        log::error!("Error calling on_log_event callback: {:?}", res);
+                        log::error!("Error calling on_log_event callback: {res:?}");
                     }
 
                     Ok(())
@@ -478,7 +480,7 @@ impl BamlRuntime {
                 match res {
                     Ok(_) => Ok(()),
                     Err(e) => {
-                        log::error!("Error setting log_event_callback: {:?}", e);
+                        log::error!("Error setting log_event_callback: {e:?}");
                         Err(e)
                     }
                 }
@@ -492,7 +494,7 @@ impl BamlRuntime {
                 match res {
                     Ok(_) => Ok(()),
                     Err(e) => {
-                        log::error!("Error setting log_event_callback: {:?}", e);
+                        log::error!("Error setting log_event_callback: {e:?}");
                         Err(e)
                     }
                 }
@@ -502,7 +504,7 @@ impl BamlRuntime {
         let _ = match res {
             Ok(_) => Ok(env.get_undefined()?),
             Err(e) => {
-                log::error!("Error setting log_event_callback: {:?}", e);
+                log::error!("Error setting log_event_callback: {e:?}");
                 Err(e)
             }
         };
@@ -526,7 +528,7 @@ impl ObjectFinalize for BamlRuntime {
         if let Some(mut cb) = self.callback.take() {
             match cb.unref(env) {
                 Ok(_) => (),
-                Err(e) => log::error!("Error unrefing callback: {:?}", e),
+                Err(e) => log::error!("Error unrefing callback: {e:?}"),
             }
         }
         Ok(())

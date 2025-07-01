@@ -1,16 +1,18 @@
+use internal_baml_ast::ast::{Assignment, Top, TopId, TypeAliasId, TypeExpId, TypeExpressionBlock};
 use internal_baml_diagnostics::{DatamodelError, Span};
-use internal_baml_schema_ast::ast::{
-    Assignment, Top, TopId, TypeAliasId, TypeExpId, TypeExpressionBlock,
-};
 
 mod alias;
 pub mod constraint;
 mod description;
 mod to_string_attribute;
-use crate::interner::StringId;
-use crate::{context::Context, types::ClassAttributes, types::EnumAttributes};
 use baml_types::{Constraint, UnresolvedValue};
-use internal_baml_schema_ast::ast::{Expression, SubType};
+use internal_baml_ast::ast::{Expression, SubType};
+
+use crate::{
+    context::Context,
+    interner::StringId,
+    types::{ClassAttributes, EnumAttributes},
+};
 
 /// Node attributes.
 #[derive(Debug, Default, Clone)]
@@ -90,17 +92,17 @@ impl Attributes {
                 .or(other.description.as_ref())
                 .cloned(),
             alias: self.alias.as_ref().or(other.alias.as_ref()).cloned(),
-            dynamic_type: self.dynamic_type.or(other.dynamic_type).clone(),
-            skip: self.skip.or(other.skip).clone(),
+            dynamic_type: self.dynamic_type.or(other.dynamic_type),
+            skip: self.skip.or(other.skip),
             constraints: self
                 .constraints
                 .iter()
                 .chain(other.constraints.iter())
                 .cloned()
                 .collect(),
-            streaming_done: self.streaming_done.or(other.streaming_done).clone(),
-            streaming_needed: self.streaming_needed.or(other.streaming_needed).clone(),
-            streaming_state: self.streaming_state.or(other.streaming_state).clone(),
+            streaming_done: self.streaming_done.or(other.streaming_done),
+            streaming_needed: self.streaming_needed.or(other.streaming_needed),
+            streaming_state: self.streaming_state.or(other.streaming_state),
         }
     }
 }
@@ -136,14 +138,14 @@ fn resolve_type_exp_block_attributes<'db>(
             for (value_idx, _value) in ast_typexpr.iter_fields() {
                 ctx.assert_all_attributes_processed((type_id, value_idx).into());
                 if let Some(attrs) = to_string_attribute::visit(ctx, &span, false) {
-                    enum_attributes.value_serilizers.insert(value_idx, attrs);
+                    enum_attributes.value_serializers.insert(value_idx, attrs);
                 }
                 ctx.validate_visited_attributes();
             }
 
             // Now validate the enum attributes.
             ctx.assert_all_attributes_processed(type_id.into());
-            enum_attributes.serilizer = to_string_attribute::visit(ctx, &span, true);
+            enum_attributes.serializer = to_string_attribute::visit(ctx, &span, true);
             ctx.validate_visited_attributes();
 
             ctx.types.enum_attributes.insert(type_id, enum_attributes);

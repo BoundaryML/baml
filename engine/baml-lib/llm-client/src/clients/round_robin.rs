@@ -4,9 +4,8 @@ use anyhow::Result;
 use baml_derive::BamlHash;
 use baml_types::{EvaluationContext, StringOr};
 
-use crate::ClientSpec;
-
 use super::helpers::{Error, PropertyHandler};
+use crate::ClientSpec;
 
 #[derive(Debug, Clone, BamlHash)]
 pub struct UnresolvedRoundRobin<Meta> {

@@ -1,13 +1,12 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
+use serde::Deserialize;
+use serde_json::Value;
 
 use super::types::VertexResponse;
 use crate::internal::llm_client::{
     primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse,
     LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
 };
-use anyhow::Context;
-use serde::Deserialize;
-use serde_json::Value;
 
 fn to_prompt(
     prompt: either::Either<&String, &[internal_baml_jinja::RenderedChatMessage]>,
@@ -39,7 +38,7 @@ pub fn parse_vertex_response<C: WithClient + RequestBuilder>(
             start_time: system_now,
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
-            message: format!("{:?}", e),
+            message: format!("{e:?}"),
             code: ErrorCode::Other(2),
         }) {
         Ok(response) => response,
@@ -128,7 +127,7 @@ pub fn scan_vertex_response_stream(
         Err(e) => return Ok(()),
     };
 
-    let event = match VertexResponse::deserialize(&event_body)
+    let event = VertexResponse::deserialize(&event_body)
         .context(format!(
             "Failed to parse into a response accepted by {}: {}",
             std::any::type_name::<VertexResponse>(),
@@ -138,16 +137,14 @@ pub fn scan_vertex_response_stream(
             client: client_name.to_string(),
             model: model_name.clone(),
             prompt: prompt.clone(),
-            start_time: system_now.clone(),
+            start_time: *system_now,
             request_options: request_options.clone(),
             latency: instant_now.elapsed(),
-            message: format!("{:?}", e),
+            message: format!("{e:?}"),
             code: ErrorCode::Other(2),
-        }) {
-        Ok(response) => response,
-        Err(e) => return Err(e),
-    };
-    if let Some(choice) = event.candidates.get(0) {
+        })?;
+
+    if let Some(choice) = event.candidates.first() {
         let part_index = content_part(
             model_name
                 .as_ref()
@@ -173,11 +170,11 @@ pub fn scan_vertex_response_stream(
 
 #[cfg(test)]
 mod tests {
-    use crate::internal::llm_client::primitive::tests::MockClient;
-
-    use super::*;
     use pretty_assertions::assert_eq;
     use web_time::Duration;
+
+    use super::*;
+    use crate::internal::llm_client::primitive::tests::MockClient;
 
     const RESPONSE: &str = r#"
 {
@@ -267,7 +264,7 @@ mod tests {
             actual_result.latency = Duration::ZERO;
             assert_eq!(actual_result, expected);
         } else {
-            panic!("Expected LLMResponse::Success, got {:?}", result);
+            panic!("Expected LLMResponse::Success, got {result:?}");
         }
     }
 }

@@ -1,8 +1,9 @@
 use std::collections::HashSet;
 
-use super::TypeWalker;
+use internal_baml_ast::ast::{self, FieldType, Identifier, WithName, WithSpan};
 use internal_baml_diagnostics::Span;
-use internal_baml_schema_ast::ast::{self, FieldType, Identifier, WithName, WithSpan};
+
+use super::TypeWalker;
 
 /// Type alias walker
 pub type TypeAliasWalker<'db> = super::Walker<'db, ast::TypeAliasId>;
@@ -10,7 +11,7 @@ pub type TypeAliasWalker<'db> = super::Walker<'db, ast::TypeAliasId>;
 impl<'db> TypeAliasWalker<'db> {
     /// Name of the type alias.
     pub fn name(&self) -> &str {
-        &self.db.ast[self.id].identifier.name()
+        self.db.ast[self.id].identifier.name()
     }
 
     /// Identifier span.
@@ -38,6 +39,6 @@ impl<'db> TypeAliasWalker<'db> {
 
     /// Add to Jinja types.
     pub fn add_to_types(self, types: &mut internal_baml_jinja_types::PredefinedTypes) {
-        types.add_alias(self.name(), self.db.to_jinja_type(&self.target()))
+        types.add_alias(self.name(), self.db.to_jinja_type(self.target()))
     }
 }

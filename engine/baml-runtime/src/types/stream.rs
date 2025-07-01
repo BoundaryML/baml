@@ -1,12 +1,12 @@
-use anyhow::Result;
+use std::{collections::HashMap, sync::Arc};
 
+use anyhow::Result;
 use baml_types::{
     tracing::events::{FunctionEnd, FunctionStart, TraceData, TraceEvent},
     BamlValueWithMeta, FieldType,
 };
 use internal_baml_core::ir::repr::IntermediateRepr;
 use serde_json::json;
-use std::{collections::HashMap, sync::Arc};
 
 use crate::{
     client_registry::ClientRegistry,
@@ -131,12 +131,12 @@ impl FunctionResultStream {
         #[cfg(not(target_arch = "wasm32"))]
         match self.tracer.finish_baml_call(call, ctx, &res) {
             Ok(id) => {}
-            Err(e) => log::debug!("Error during logging: {}", e),
+            Err(e) => log::debug!("Error during logging: {e}"),
         }
         #[cfg(target_arch = "wasm32")]
         match self.tracer.finish_baml_call(call, ctx, &res).await {
             Ok(id) => {}
-            Err(e) => log::debug!("Error during logging: {}", e),
+            Err(e) => log::debug!("Error during logging: {e}"),
         }
 
         let trace_event = TraceEvent::new_function_end(
@@ -145,7 +145,7 @@ impl FunctionResultStream {
                 Ok(result) => Ok(baml_types::BamlValueWithMeta::<FieldType>::Null(
                     FieldType::null(),
                 )),
-                Err(e) => Err(e.into_baml_error()),
+                Err(e) => Err(e.to_baml_error()),
             },
         );
         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));

@@ -6,10 +6,9 @@ pub(crate) mod core_types;
 use serde::{de::DeserializeOwned, Deserialize};
 use serde_json::{json, Value};
 
-use crate::request::create_tracing_client;
-
 pub(super) use self::api_interface::{BoundaryAPI, BoundaryTestAPI};
 use self::core_types::{TestCaseStatus, UpdateTestCase};
+use crate::request::create_tracing_client;
 
 #[derive(Debug, Clone)]
 pub struct APIWrapper {
@@ -97,13 +96,21 @@ pub(super) struct CompleteAPIConfig {
 
 impl PartialEq for CompleteAPIConfig {
     fn eq(&self, other: &Self) -> bool {
-        self.base_url == other.base_url && self.api_key == other.api_key && self.project_id == other.project_id && self.stage == other.stage && self.host_name == other.host_name
+        self.base_url == other.base_url
+            && self.api_key == other.api_key
+            && self.project_id == other.project_id
+            && self.stage == other.stage
+            && self.host_name == other.host_name
     }
 }
 
 impl PartialEq for PartialAPIConfig {
     fn eq(&self, other: &Self) -> bool {
-        self.base_url == other.base_url && self.api_key == other.api_key && self.project_id == other.project_id && self.stage == other.stage && self.host_name == other.host_name
+        self.base_url == other.base_url
+            && self.api_key == other.api_key
+            && self.project_id == other.project_id
+            && self.stage == other.stage
+            && self.host_name == other.host_name
     }
 }
 
@@ -123,7 +130,7 @@ pub(super) struct PartialAPIConfig {
 }
 
 impl CompleteAPIConfig {
-    pub(self) async fn post<'a, T: DeserializeOwned>(&self, path: &str, body: &Value) -> Result<T> {
+    pub(self) async fn post<T: DeserializeOwned>(&self, path: &str, body: &Value) -> Result<T> {
         let url = format!("{}/{}", self.base_url, path);
 
         let req = self

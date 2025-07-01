@@ -1,7 +1,8 @@
-use crate::PreviewFeature;
 use baml_types::FieldType;
 use enumflags2::BitFlags;
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Diagnostics};
+
+use crate::PreviewFeature;
 
 /// The validation context. The lifetime parameter is _not_ the AST lifetime, but the subtype of
 /// all relevant lifetimes. No data escapes for validations, so the context only need to be valid

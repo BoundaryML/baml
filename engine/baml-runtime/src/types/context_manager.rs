@@ -1,19 +1,18 @@
 use std::{
     collections::HashMap,
+    fmt,
     sync::{Arc, Mutex},
 };
 
 use anyhow::{Context, Result};
 use baml_ids::FunctionCallId;
 use baml_types::{tracing::events::TraceEvent, BamlValue};
-use std::fmt;
 
+use super::runtime_context::BamlSrcReader;
 use crate::{
     client_registry::ClientRegistry, tracing::BamlTracer, tracingv2::storage::storage::BAML_TRACER,
     type_builder::TypeBuilder, CallCtx, RuntimeContext,
 };
-
-use super::runtime_context::BamlSrcReader;
 pub type BamlContext = (
     uuid::Uuid,
     String,
@@ -109,7 +108,7 @@ impl RuntimeContextManager {
                 let mut all_tags = self.global_tags.lock().unwrap().clone();
                 let ctx = self.context.lock().unwrap();
                 if let Some((.., ctx_tags, _)) = ctx.last() {
-                    all_tags.extend(ctx_tags.into_iter().map(|(k, v)| (k.clone(), v.clone())));
+                    all_tags.extend(ctx_tags.iter().map(|(k, v)| (k.clone(), v.clone())));
                 }
                 all_tags
             };
@@ -170,7 +169,7 @@ impl RuntimeContextManager {
     // This returns ALL tags together (global and user)
     pub fn exit(&self) -> Option<(uuid::Uuid, Vec<CallCtx>, HashMap<String, BamlValue>)> {
         let mut ctx = self.context.lock().unwrap();
-        log::trace!("Exiting: {:#?}", ctx);
+        log::trace!("Exiting: {ctx:#?}");
 
         let tracing_v1_call_stack = ctx
             .iter()
@@ -220,7 +219,7 @@ impl RuntimeContextManager {
             let ctx = self.context.lock().unwrap();
             let ctx = ctx.last();
             if let Some((.., ctx_tags, _)) = ctx {
-                tags.extend(ctx_tags.into_iter().map(|(k, v)| (k.clone(), v.clone())));
+                tags.extend(ctx_tags.iter().map(|(k, v)| (k.clone(), v.clone())));
             }
             tags
         };

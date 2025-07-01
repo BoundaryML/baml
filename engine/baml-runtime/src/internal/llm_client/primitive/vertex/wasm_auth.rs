@@ -1,7 +1,8 @@
+use std::{future::Future, pin::Pin, sync::Arc};
+
 use anyhow::{Context, Result};
 use internal_llm_client::vertex::ResolvedGcpAuthStrategy;
 use serde::{Deserialize, Serialize};
-use std::{future::Future, pin::Pin, sync::Arc};
 
 use crate::{
     internal::wasm_jwt::encode_jwt,
@@ -38,13 +39,13 @@ impl VertexAuth {
                 };
 
                 log::debug!("Attempting to auth using JsonString strategy");
-                Self(Some(serde_json::from_str(str).context(format!("Failed to parse 'credentials' as GCP service account creds (are you using JSON format creds?); credentials={}", debug_str))?))
+                Self(Some(serde_json::from_str(str).context(format!("Failed to parse 'credentials' as GCP service account creds (are you using JSON format creds?); credentials={debug_str}"))?))
             }
             ResolvedGcpAuthStrategy::JsonObject(json) => {
                 // NB: this should never happen in WASM, there's no way to pass a JSON object in
                 log::debug!("Attempting to auth using JsonObject strategy");
                 Self(Some(serde_json::from_value(
-                    serde_json::to_value(&json).context("Failed to parse service account credentials as GCP service account creds (issue during serialization)")?).context("Failed to parse service account credentials as GCP service account creds (are you using JSON format creds?)")?))
+                    serde_json::to_value(json).context("Failed to parse service account credentials as GCP service account creds (issue during serialization)")?).context("Failed to parse service account credentials as GCP service account creds (are you using JSON format creds?)")?))
             }
             ResolvedGcpAuthStrategy::SystemDefault => Self(None),
         })
@@ -131,7 +132,7 @@ pub struct ServiceAccount {
 
 impl ServiceAccount {
     async fn get_oauth2_token(&self) -> Result<Token> {
-        let claims = Claims::from_service_account(&self);
+        let claims = Claims::from_service_account(self);
 
         let jwt = encode_jwt(&serde_json::to_value(claims)?, &self.private_key)
             .await

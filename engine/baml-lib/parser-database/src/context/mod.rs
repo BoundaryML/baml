@@ -1,12 +1,11 @@
+use internal_baml_ast::ast::{Argument, ArgumentId, Attribute};
 use internal_baml_diagnostics::{DatamodelWarning, Span};
-use internal_baml_schema_ast::ast::{Argument, ArgumentId, Attribute};
 
+use self::attributes::AttributesValidationState;
 use crate::{
     ast, ast::WithName, interner::StringInterner, names::Names, types::Types, DatamodelError,
     Diagnostics, StringId,
 };
-
-use self::attributes::AttributesValidationState;
 
 mod attributes;
 
@@ -24,7 +23,7 @@ mod attributes;
 ///
 /// See [`Self::assert_all_attributes_processed`].
 pub(crate) struct Context<'db> {
-    pub(crate) ast: &'db ast::SchemaAst,
+    pub(crate) ast: &'db ast::Ast,
     pub(crate) interner: &'db mut StringInterner,
     pub(crate) names: &'db mut Names,
     pub(crate) types: &'db mut Types,
@@ -34,7 +33,7 @@ pub(crate) struct Context<'db> {
 
 impl<'db> Context<'db> {
     pub(super) fn new(
-        ast: &'db ast::SchemaAst,
+        ast: &'db ast::Ast,
         interner: &'db mut StringInterner,
         names: &'db mut Names,
         types: &'db mut Types,
@@ -85,8 +84,8 @@ impl<'db> Context<'db> {
     /// process, emitting unknown attribute errors when it is not the case.
     ///
     /// - When you are done validating an attribute, you must call
-    /// [`Self::discard_arguments()`] or [`Self::validate_visited_arguments()`].
-    /// Otherwise, [`Context`] will helpfully panic.
+    ///   [`Self::discard_arguments()`] or [`Self::validate_visited_arguments()`].
+    ///   Otherwise, [`Context`] will helpfully panic.
     pub(super) fn assert_all_attributes_processed(
         &mut self,
         ast_attributes: ast::AttributeContainer,
@@ -284,7 +283,7 @@ impl<'db> Context<'db> {
 // Implementation detail. Used for arguments validation.
 fn iter_attributes<'a, 'ast: 'a>(
     attrs: Option<&'a ast::AttributeContainer>,
-    ast: &'ast ast::SchemaAst,
+    ast: &'ast ast::Ast,
 ) -> impl Iterator<Item = (ast::AttributeId, &'ast ast::Attribute)> + 'a {
     attrs
         .into_iter()

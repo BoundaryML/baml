@@ -4,9 +4,8 @@ use internal_baml_core::ir::scope_diagnostics::ScopeStack;
 use serde::Serialize;
 use serde_json::json;
 
-use crate::{errors::ExposedError, internal::llm_client::LLMResponse};
-
 use super::json_response::Json;
+use crate::{errors::ExposedError, internal::llm_client::LLMResponse};
 
 /// The concrete HTTP error type that we return to our users if something goes wrong.
 /// See https://docs.boundaryml.com/get-started/debugging/exception-handling for
@@ -82,16 +81,16 @@ impl BamlError {
             }
         } else if let Some(er) = err.downcast_ref::<ScopeStack>() {
             Self::InvalidArgument {
-                message: format!("{:?}", er),
+                message: format!("{er:?}"),
             }
         } else if let Some(er) = err.downcast_ref::<LLMResponse>() {
             match er {
                 LLMResponse::Success(_) => Self::InternalError {
-                    message: format!("Unexpected error from BAML: {:?}", err),
+                    message: format!("Unexpected error from BAML: {err:?}"),
                 },
                 LLMResponse::LLMFailure(failed) => match &failed.code {
                     crate::internal::llm_client::ErrorCode::Other(2) => Self::InternalError {
-                        message: format!("Something went wrong with the LLM client: {:?}", err),
+                        message: format!("Something went wrong with the LLM client: {err:?}"),
                     },
                     crate::internal::llm_client::ErrorCode::Other(_)
                     | crate::internal::llm_client::ErrorCode::InvalidAuthentication
@@ -101,20 +100,20 @@ impl BamlError {
                     | crate::internal::llm_client::ErrorCode::ServiceUnavailable
                     | crate::internal::llm_client::ErrorCode::UnsupportedResponse(_) => {
                         Self::ClientError {
-                            message: format!("{:?}", err),
+                            message: format!("{err:?}"),
                         }
                     }
                 },
                 LLMResponse::UserFailure(msg) => Self::InvalidArgument {
-                    message: format!("Invalid argument: {}", msg),
+                    message: format!("Invalid argument: {msg}"),
                 },
                 LLMResponse::InternalFailure(_) => Self::InternalError {
-                    message: format!("Something went wrong with the LLM client: {}", err),
+                    message: format!("Something went wrong with the LLM client: {err}"),
                 },
             }
         } else {
             Self::InternalError {
-                message: format!("{:?}", err),
+                message: format!("{err:?}"),
             }
         }
     }
@@ -129,7 +128,9 @@ impl IntoResponse for BamlError {
                 BamlError::FinishReasonError { .. } => StatusCode::INTERNAL_SERVER_ERROR, // ??? - FIXME
                 BamlError::ValidationFailure { .. } => StatusCode::INTERNAL_SERVER_ERROR, // ??? - FIXME
                 BamlError::InternalError { .. } => StatusCode::INTERNAL_SERVER_ERROR,
-                BamlError::ClientHttpError { status_code, .. } => StatusCode::from_u16(*status_code).unwrap_or(StatusCode::BAD_GATEWAY),
+                BamlError::ClientHttpError { status_code, .. } => {
+                    StatusCode::from_u16(*status_code).unwrap_or(StatusCode::BAD_GATEWAY)
+                }
             },
             Json(match serde_json::to_value(&self) {
                 Ok(serde_json::Value::Object(mut v)) => {

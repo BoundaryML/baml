@@ -11,7 +11,7 @@ fn is_type(ty: &Type, target: &str) -> bool {
             .path
             .segments
             .last()
-            .map_or(false, |seg| seg.ident == target),
+            .is_some_and(|seg| seg.ident == target),
         _ => false,
     }
 }
@@ -142,7 +142,7 @@ pub fn derive_baml_hash(input: TokenStream) -> TokenStream {
                     },
                     syn::Fields::Unnamed(fields) => {
                         let binders: Vec<_> = (0..fields.unnamed.len())
-                            .map(|i| syn::Ident::new(&format!("v{}", i), variant.ident.span()))
+                            .map(|i| syn::Ident::new(&format!("v{i}"), variant.ident.span()))
                             .collect();
 
                         let hash_stmts = binders.iter().zip(fields.unnamed.iter()).map(|(ident, field)| {

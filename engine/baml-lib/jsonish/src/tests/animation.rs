@@ -1,8 +1,12 @@
+use baml_types::{
+    type_meta::base::{StreamingBehavior, TypeMeta},
+    FieldType,
+};
+use internal_baml_core::ir::repr::make_test_ir;
+
 use crate::helpers::render_output_format;
 #[cfg(test)]
 use crate::{from_str, helpers::parsed_value_to_response};
-use baml_types::{FieldType, type_meta::base::StreamingBehavior, type_meta::base::TypeMeta};
-use internal_baml_core::ir::repr::make_test_ir;
 
 #[test]
 pub fn make_test_data1() {
@@ -42,16 +46,16 @@ pub fn make_test_data1() {
             let parsed_value = from_str(&target, &target_type, partial_llm_data, true);
             let value = parsed_value_to_response(&ir, parsed_value.unwrap(), true).unwrap();
 
-            serde_json::to_value(&vec![
+            serde_json::to_value(vec![
                 serde_json::to_value(partial_llm_data).unwrap(),
-                serde_json::to_value(&value.serialize_partial()).unwrap(),
+                serde_json::to_value(value.serialize_partial()).unwrap(),
             ])
             .unwrap()
         })
         .collect::<Vec<_>>();
 
     let json = serde_json::to_string(&results).unwrap();
-    eprintln!("{}", json);
+    eprintln!("{json}");
 
     // assert!(false);
 }

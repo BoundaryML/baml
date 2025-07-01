@@ -1,19 +1,10 @@
-use crate::internal::llm_client::{
-    primitive::request::ResponseType,
-    traits::{
-        CompletionToProviderBody, HttpContext, ToProviderMessage, ToProviderMessageExt,
-        WithClientProperties,
-    },
-    ResolveMediaUrls,
-};
-use indexmap::IndexMap;
-use secrecy::{ExposeSecret, SecretString};
 use std::collections::HashMap;
 
 use anyhow::{Context, Result};
 use baml_types::{ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent};
 use eventsource_stream::Eventsource;
 use futures::StreamExt;
+use indexmap::IndexMap;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{
     ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
@@ -22,28 +13,28 @@ use internal_llm_client::{
     anthropic::ResolvedAnthropic, AllowedRoleMetadata, ClientProvider, ResolvedClientProperty,
     RolesSelection, SupportedRequestModes, UnresolvedClientProperty,
 };
+use secrecy::{ExposeSecret, SecretString};
+use serde_json::json;
 
+use super::types::MessageChunk;
 use crate::{
     client_registry::ClientProperty,
     internal::llm_client::{
         primitive::{
             anthropic::types::AnthropicMessageResponse,
-            request::{make_parsed_request, make_request, RequestBuilder},
+            request::{make_parsed_request, make_request, RequestBuilder, ResponseType},
         },
         traits::{
-            SseResponseTrait, StreamResponse, WithChat, WithClient, WithNoCompletion,
-            WithRetryPolicy, WithStreamChat,
+            CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse,
+            ToProviderMessage, ToProviderMessageExt, WithChat, WithClient, WithClientProperties,
+            WithNoCompletion, WithRetryPolicy, WithStreamChat,
         },
         ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
-        ModelFeatures,
+        ModelFeatures, ResolveMediaUrls,
     },
     request::create_client,
+    RuntimeContext,
 };
-use serde_json::json;
-
-use crate::RuntimeContext;
-
-use super::types::MessageChunk;
 
 // represents client that interacts with the Anthropic API
 pub struct AnthropicClient {
@@ -126,7 +117,7 @@ impl WithStreamChat for AnthropicClient {
             .request_options()
             .get("model")
             .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .map(String::from);
         crate::internal::llm_client::primitive::stream_request::make_stream_request(
             self,
             either::Either::Right(prompt),
@@ -165,7 +156,7 @@ impl AnthropicClient {
     }
 
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<AnthropicClient> {
-        let properties = resolve_properties(&client.elem().provider, &client.options(), ctx)?;
+        let properties = resolve_properties(&client.elem().provider, client.options(), ctx)?;
         Ok(Self {
             name: client.name().into(),
             context: RenderContext_Client {
@@ -182,11 +173,7 @@ impl AnthropicClient {
                 resolve_image_urls: ResolveMediaUrls::Never,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
-            retry_policy: client
-                .elem()
-                .retry_policy_id
-                .as_ref()
-                .map(|s| s.to_string()),
+            retry_policy: client.elem().retry_policy_id.as_ref().map(String::from),
             client: create_client()?,
             properties,
         })
@@ -205,7 +192,7 @@ impl AnthropicClient {
         role_selection: RolesSelection,
     ) -> Result<Self> {
         Ok(Self {
-            name: format!("{}:baml-anthropic", name),
+            name: format!("{name}:baml-anthropic"),
             context,
             retry_policy: None,
             features: ModelFeatures {
@@ -245,9 +232,9 @@ impl RequestBuilder for AnthropicClient {
         };
 
         let mut req = self.client.post(if prompt.is_left() {
-            format!("{}/v1/complete", destination_url)
+            format!("{destination_url}/v1/complete")
         } else {
-            format!("{}/v1/messages", destination_url)
+            format!("{destination_url}/v1/messages")
         });
 
         for (key, value) in &self.properties.headers {
@@ -270,7 +257,7 @@ impl RequestBuilder for AnthropicClient {
             }
         }
 
-        log::trace!("request body: {:?}", body_obj);
+        log::trace!("request body: {body_obj:?}");
 
         if stream {
             body_obj.insert("stream".into(), true.into());
@@ -289,8 +276,8 @@ impl WithChat for AnthropicClient {
         let model_name = self
             .request_options()
             .get("model")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .and_then(serde_json::Value::as_str)
+            .map(String::from);
         make_parsed_request(
             self,
             model_name,
@@ -402,7 +389,7 @@ impl ToProviderMessageExt for AnthropicClient {
 
 // converts completion prompt into JSON body for request
 pub fn convert_completion_prompt_to_body(
-    prompt: &String,
+    prompt: &str,
 ) -> serde_json::Map<String, serde_json::Value> {
     let mut map = serde_json::Map::new();
     map.insert("prompt".into(), json!(prompt));
@@ -412,7 +399,7 @@ pub fn convert_completion_prompt_to_body(
 impl CompletionToProviderBody for AnthropicClient {
     fn completion_to_provider_body(
         &self,
-        prompt: &String,
+        prompt: &str,
     ) -> serde_json::Map<String, serde_json::Value> {
         convert_completion_prompt_to_body(prompt)
     }

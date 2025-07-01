@@ -6,6 +6,10 @@ authors.workspace = true
 description.workspace = true
 license-file.workspace = true
 
+[lints.clippy]
+type_complexity = "allow"
+too_many_arguments = "allow"
+
 [dependencies]
 anyhow.workspace = true
 indexmap.workspace = true

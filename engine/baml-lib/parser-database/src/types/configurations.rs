@@ -1,17 +1,18 @@
-use baml_types::Constraint;
-use baml_types::UnresolvedValue;
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
-use internal_baml_schema_ast::ast::{
-    Attribute, ValExpId, ValueExprBlock, WithIdentifier, WithName, WithSpan,
-};
-use regex::Regex;
 use std::{collections::HashSet, ops::Deref};
 
-use crate::attributes::constraint::attribute_as_constraint;
-use crate::{coerce, coerce_array, coerce_expression::coerce_map, context::Context};
+use baml_types::{Constraint, UnresolvedValue};
+use internal_baml_ast::ast::{
+    Attribute, ValExpId, ValueExprBlock, WithIdentifier, WithName, WithSpan,
+};
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
+use regex::Regex;
 
 use super::{
     Attributes, ContantDelayStrategy, ExponentialBackoffStrategy, RetryPolicy, RetryPolicyStrategy,
+};
+use crate::{
+    attributes::constraint::attribute_as_constraint, coerce, coerce_array,
+    coerce_expression::coerce_map, context::Context,
 };
 
 fn dedent(s: &str) -> String {
@@ -28,7 +29,7 @@ fn dedent(s: &str) -> String {
     }
 
     // Remove that amount of indentation from each line.
-    let dedent_pattern = format!(r"(?m)^\s{{1,{}}}", shortest_indent);
+    let dedent_pattern = format!(r"(?m)^\s{{1,{shortest_indent}}}");
     Regex::new(&dedent_pattern)
         .unwrap()
         .replace_all(s, "")
@@ -114,7 +115,7 @@ pub(crate) fn visit_retry_policy<'db>(
 
 fn visit_strategy(
     field_span: &Span,
-    val: Vec<((&str, &Span), &internal_baml_schema_ast::ast::Expression)>,
+    val: Vec<((&str, &Span), &internal_baml_ast::ast::Expression)>,
     diagnostics: &mut internal_baml_diagnostics::Diagnostics,
 ) -> Option<RetryPolicyStrategy> {
     let mut r#type = None;
@@ -179,7 +180,7 @@ fn visit_strategy(
         Some((name, span)) => {
             diagnostics.push_error(
                 internal_baml_diagnostics::DatamodelError::new_validation_error(
-                    &format!("Unknown retry strategy type: {}. Options are `constant_delay` or `exponential_backoff`", name),
+                    &format!("Unknown retry strategy type: {name}. Options are `constant_delay` or `exponential_backoff`"),
                     span.clone(),
                 ),
             );

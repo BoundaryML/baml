@@ -1,14 +1,13 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use baml_types::BamlMap;
+use serde::Deserialize;
+use serde_json::Value;
 
 use super::types::{AnthropicMessageContent, AnthropicMessageResponse, MessageChunk};
 use crate::internal::llm_client::{
     primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse,
     LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
 };
-use anyhow::Context;
-use serde::Deserialize;
-use serde_json::Value;
 
 fn to_prompt(
     prompt: either::Either<&String, &[internal_baml_jinja::RenderedChatMessage]>,
@@ -20,7 +19,7 @@ fn to_prompt(
 }
 
 fn is_done(stop_reason: &Option<String>) -> bool {
-    stop_reason.as_ref().map_or(false, |r| {
+    stop_reason.as_ref().is_some_and(|r| {
         r.eq_ignore_ascii_case("end_turn") || r.eq_ignore_ascii_case("stop_sequence")
     })
 }
@@ -46,7 +45,7 @@ pub fn parse_anthropic_response<C: WithClient + RequestBuilder>(
             start_time: system_now,
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
-            message: format!("{:?}", e),
+            message: format!("{e:?}"),
             code: ErrorCode::Other(2),
         }) {
         Ok(response) => response,
@@ -111,7 +110,7 @@ pub fn scan_anthropic_response_stream(
         Err(e) => return Ok(()),
     };
 
-    let event = match MessageChunk::deserialize(&event_body)
+    let event = MessageChunk::deserialize(&event_body)
         .context(format!(
             "Failed to parse into a response accepted by {}: {}",
             std::any::type_name::<MessageChunk>(),
@@ -121,15 +120,13 @@ pub fn scan_anthropic_response_stream(
             client: client_name.to_string(),
             model: model_name.clone(),
             prompt: prompt.clone(),
-            start_time: system_now.clone(),
+            start_time: *system_now,
             request_options: request_options.clone(),
             latency: instant_now.elapsed(),
-            message: format!("{:?}", e),
+            message: format!("{e:?}"),
             code: ErrorCode::Other(2),
-        }) {
-        Ok(response) => response,
-        Err(e) => return Err(e),
-    };
+        })?;
+
     match event {
         MessageChunk::MessageStart(chunk) => {
             let body = chunk.message;
@@ -141,12 +138,11 @@ pub fn scan_anthropic_response_stream(
             inner.output_tokens = Some(body.usage.output_tokens);
             inner.total_tokens = Some(body.usage.input_tokens + body.usage.output_tokens);
         }
-        MessageChunk::ContentBlockDelta(event) => match event.delta {
-            super::types::ContentBlockDelta::TextDelta { text } => {
+        MessageChunk::ContentBlockDelta(event) => {
+            if let super::types::ContentBlockDelta::TextDelta { text } = event.delta {
                 inner.content += &text;
             }
-            _ => (),
-        },
+        }
         MessageChunk::ContentBlockStart(_) => (),
         MessageChunk::ContentBlockStop(_) => (),
         MessageChunk::Ping => (),
@@ -165,7 +161,7 @@ pub fn scan_anthropic_response_stream(
                 model: model_name.clone(),
                 prompt: prompt.clone(),
                 request_options: request_options.clone(),
-                start_time: system_now.clone(),
+                start_time: *system_now,
                 latency: instant_now.elapsed(),
                 message: err.message,
                 code: ErrorCode::Other(2),
@@ -180,11 +176,11 @@ pub fn scan_anthropic_response_stream(
 
 #[cfg(test)]
 mod tests {
-    use crate::internal::llm_client::primitive::tests::MockClient;
-
-    use super::*;
     use pretty_assertions::assert_eq;
     use web_time::Duration;
+
+    use super::*;
+    use crate::internal::llm_client::primitive::tests::MockClient;
 
     const RESPONSE: &str = r#"
 {"id":"msg_01TmchHftFKihgeV7Zy9vCvZ","type":"message","role":"assistant","model":"claude-3-5-sonnet-20241022","content":[{"type":"text","text":"{\n  \"isCompanyPost\": false,\n  \"companyName\": null,\n  \"stage\": null,\n  \"engineeringAssessment\": \"UNKNOWN\",\n  \"teamMembers\": [],\n  \"technicalHighlights\": []\n}\n\nNotes:\n- This is a general discussion post asking for programming book recommendations\n- Not a company/startup related post\n- No technical signals or team information can be extracted\n- Cannot make engineering assessment as this is just a question\n\nThis appears to be a learning/discussion oriented post rather than a startup/company related post, so most of the structured fields are null or empty. The post doesn't contain any analyzable technical due diligence information."}],"stop_reason":"end_turn","stop_sequence":null,"usage":{"input_tokens":321,"cache_creation_input_tokens":0,"cache_read_input_tokens":0,"output_tokens":158}}
@@ -229,7 +225,7 @@ mod tests {
             actual_result.latency = Duration::ZERO;
             assert_eq!(actual_result, expected);
         } else {
-            panic!("Expected LLMResponse::Success, got {:?}", result);
+            panic!("Expected LLMResponse::Success, got {result:?}");
         }
     }
 }

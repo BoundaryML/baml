@@ -1,4 +1,4 @@
-use super::{TypeGeneric, UnionTypeGeneric, type_meta};
+use super::{type_meta, TypeGeneric, UnionTypeGeneric};
 
 impl<T: std::fmt::Debug + Default> UnionTypeGeneric<T> {
     // disallow construction so people have to use:
@@ -12,7 +12,7 @@ impl<T: std::fmt::Debug + Default> UnionTypeGeneric<T> {
 
     pub(crate) unsafe fn new_unsafe(types: Vec<TypeGeneric<T>>) -> Self {
         if types.iter().all(|t| t.is_null()) {
-            panic!("FATAL, please report this bug: Union type must have at least one non-null type. Got {:?}", types);
+            panic!("FATAL, please report this bug: Union type must have at least one non-null type. Got {types:?}");
         }
         Self {
             types,
@@ -26,7 +26,10 @@ impl TypeGeneric<type_meta::Base> {
         TypeGeneric::Union(UnionTypeGeneric::new(choices), type_meta::Base::default()).simplify()
     }
 
-    pub fn union_with_meta(choices: Vec<TypeGeneric<type_meta::Base>>, meta: type_meta::Base) -> TypeGeneric<type_meta::Base> {
+    pub fn union_with_meta(
+        choices: Vec<TypeGeneric<type_meta::Base>>,
+        meta: type_meta::Base,
+    ) -> TypeGeneric<type_meta::Base> {
         TypeGeneric::Union(unsafe { UnionTypeGeneric::new_unsafe(choices) }, meta).simplify()
     }
 

@@ -1,13 +1,12 @@
 use baml_types::Constraint;
 use internal_baml_diagnostics::{DatamodelError, Span};
-
 use itertools::Itertools;
 
+use super::{
+    alias::visit_alias_attribute, constraint::visit_constraint_attributes,
+    description::visit_description_attribute,
+};
 use crate::{context::Context, types::Attributes};
-
-use super::alias::visit_alias_attribute;
-use super::constraint::visit_constraint_attributes;
-use super::description::visit_description_attribute;
 pub(super) fn visit(ctx: &mut Context<'_>, span: &Span, as_block: bool) -> Option<Attributes> {
     let mut modified = false;
 
@@ -55,12 +54,10 @@ pub(super) fn visit(ctx: &mut Context<'_>, span: &Span, as_block: bool) -> Optio
         ctx.validate_visited_arguments();
     }
 
-    if as_block {
-        if ctx.visit_optional_single_attr("dynamic") {
-            attributes.set_dynamic_type();
-            modified = true;
-            ctx.validate_visited_arguments();
-        }
+    if as_block && ctx.visit_optional_single_attr("dynamic") {
+        attributes.set_dynamic_type();
+        modified = true;
+        ctx.validate_visited_arguments();
     }
 
     if modified {

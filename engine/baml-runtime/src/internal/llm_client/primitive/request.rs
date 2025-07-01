@@ -1,5 +1,19 @@
 use std::{collections::HashMap, sync::Arc};
 
+use anyhow::{Context, Result};
+use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
+use baml_types::{
+    tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, TraceEvent},
+    BamlMap,
+};
+use bytes::Bytes;
+use http::Response as HttpResponse;
+use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
+pub use internal_llm_client::ResponseType;
+use reqwest::{header::HeaderMap, Response, StatusCode};
+use serde::de::DeserializeOwned;
+use serde_json::json;
+
 use crate::{
     internal::llm_client::{
         traits::{HttpContext, WithClient},
@@ -7,19 +21,6 @@ use crate::{
     },
     tracingv2::storage::storage::BAML_TRACER,
 };
-use anyhow::{Context, Result};
-use aws_smithy_runtime_api::client::orchestrator::HttpRequest;
-use baml_types::tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, TraceEvent};
-use baml_types::BamlMap;
-use internal_baml_jinja::{RenderedChatMessage, RenderedPrompt};
-pub use internal_llm_client::ResponseType;
-use reqwest::{header::HeaderMap, Response, StatusCode};
-
-use serde::de::DeserializeOwned;
-use serde_json::json;
-
-use bytes::Bytes;
-use http::Response as HttpResponse;
 
 #[derive(Debug)]
 pub struct LoggedHttpResponse {
@@ -103,7 +104,7 @@ pub(crate) fn json_body(input: JsonBodyInput) -> Result<serde_json::Value> {
         return Ok(json);
     }
     // Try to parse as JSON array
-    if let Ok(json) = serde_json::from_str(&format!("[{}]", string_to_parse)) {
+    if let Ok(json) = serde_json::from_str(&format!("[{string_to_parse}]")) {
         return Ok(json);
     }
     // Fall back to string if not valid JSON object or array
@@ -159,7 +160,7 @@ pub(crate) async fn build_and_log_outbound_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("Failed to create request builder: {:#?}", e),
+                message: format!("Failed to create request builder: {e:#?}"),
                 code: ErrorCode::Other(2),
             })
         })?;
@@ -174,7 +175,7 @@ pub(crate) async fn build_and_log_outbound_request(
                 start_time: system_now,
                 request_options: client.request_options().clone(),
                 latency: instant_now.elapsed(),
-                message: format!("Failed to build request: {:#?}", e),
+                message: format!("Failed to build request: {e:#?}"),
                 code: ErrorCode::Other(2),
             }));
         }
@@ -191,8 +192,7 @@ pub(crate) async fn build_and_log_outbound_request(
                 HTTPBody::new(
                     built_req
                         .body()
-                        .map(reqwest::Body::as_bytes)
-                        .flatten()
+                        .and_then(reqwest::Body::as_bytes)
                         .unwrap_or_default()
                         .into(),
                 ),
@@ -222,7 +222,7 @@ pub async fn execute_request(
                     .unwrap_or(reqwest::StatusCode::INTERNAL_SERVER_ERROR)
                     .as_u16(),
                 None,
-                HTTPBody::new(format!("No response. Error: {:?}", e).into_bytes()),
+                HTTPBody::new(format!("No response. Error: {e:?}").into_bytes()),
             )
             .await;
 
@@ -236,20 +236,19 @@ pub async fn execute_request(
                 message: {
                     #[cfg(not(target_arch = "wasm32"))]
                     {
-                        format!("{:?}", e)
+                        format!("{e:?}")
                     }
                     #[cfg(target_arch = "wasm32")]
                     {
                         // Note, Wasm can't use :? for some reason (it makes it so the error looks like garbage). But only doing to_string also makes it so that the full error is not shown. E.g. DNS errors only say "error sending request for url".
                         format!(
-                            "{}\n\nIf you haven't yet, try enabling the proxy (See API Keys button)",
-                            e.to_string()
+                            "{e}\n\nIf you haven't yet, try enabling the proxy (See API Keys button)"
                         )
                     }
                 },
                 code: e
                     .status()
-                    .map_or(ErrorCode::Other(2), |s| ErrorCode::from_status(s)),
+                    .map_or(ErrorCode::Other(2), ErrorCode::from_status),
             }));
         }
     };
@@ -262,7 +261,7 @@ pub async fn execute_request(
                     runtime_context,
                     0,
                     None,
-                    HTTPBody::new(format!("Could not read response body: {:?}", e).into_bytes()),
+                    HTTPBody::new(format!("Could not read response body: {e:?}").into_bytes()),
                 )
                 .await;
                 return Err(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -272,7 +271,7 @@ pub async fn execute_request(
                     start_time: system_now,
                     request_options: client.request_options().clone(),
                     latency: instant_now.elapsed(),
-                    message: format!("Could not read response body: {:?}", e),
+                    message: format!("Could not read response body: {e:?}"),
                     code: e
                         .status()
                         .map_or(ErrorCode::Other(2), ErrorCode::from_status),
@@ -316,7 +315,7 @@ pub async fn execute_request(
                     runtime_context,
                     0,
                     None,
-                    HTTPBody::new(format!("Could not read response body: {:?}", e).into_bytes()),
+                    HTTPBody::new(format!("Could not read response body: {e:?}").into_bytes()),
                 )
                 .await;
                 return Err(LLMResponse::LLMFailure(LLMErrorResponse {
@@ -326,7 +325,7 @@ pub async fn execute_request(
                     start_time: system_now,
                     request_options: client.request_options().clone(),
                     latency: instant_now.elapsed(),
-                    message: format!("Could not read response body: {:?}", e),
+                    message: format!("Could not read response body: {e:?}"),
                     code: e
                         .status()
                         .map_or(ErrorCode::Other(2), ErrorCode::from_status),
@@ -408,7 +407,7 @@ pub async fn make_parsed_request(
             start_time: system_now,
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
-            message: format!("Failed to parse JSON: {}", e.to_string()),
+            message: format!("Failed to parse JSON: {e}"),
             code: ErrorCode::from_status(response.status),
         })
     });
@@ -439,8 +438,7 @@ pub async fn make_parsed_request(
             latency: instant_now.elapsed(),
             message: format!(
                 "Request failed with status code: {}. {}",
-                response.status,
-                response_body.to_string()
+                response.status, response_body
             ),
             code: ErrorCode::from_status(response.status),
         });

@@ -1,5 +1,6 @@
-use crate::Span;
 use colored::{ColoredString, Colorize};
+
+use crate::Span;
 
 pub trait DiagnosticColorer {
     fn title(&self) -> &'static str;
@@ -46,7 +47,9 @@ pub(crate) fn pretty_print(
         let end_in_line = std::cmp::min(start_in_line + (span.end - span.start), line.len());
 
         let prefix = &line[..start_in_line];
-        let offending = colorer.primary_color(&line[start_in_line..end_in_line]).bold();
+        let offending = colorer
+            .primary_color(&line[start_in_line..end_in_line])
+            .bold();
         let suffix = &line[end_in_line..];
 
         let arrow = "-->".bright_blue().bold();
@@ -55,24 +58,36 @@ pub(crate) fn pretty_print(
         writeln!(f, "  {arrow}  {file_path}")?;
         writeln!(f, "{}", format_line_number(0))?;
 
-        writeln!(f, "{}", format_line_number_with_line(start_line_number, &file_lines))?;
-        writeln!(f, "{}{}{}{}",
-                 format_line_number(start_line_number + 1),
-                 prefix,
-                 offending,
-                 suffix
+        writeln!(
+            f,
+            "{}",
+            format_line_number_with_line(start_line_number, &file_lines)
         )?;
-        if offending.len() == 0 {
+        writeln!(
+            f,
+            "{}{}{}{}",
+            format_line_number(start_line_number + 1),
+            prefix,
+            offending,
+            suffix
+        )?;
+        if offending.is_empty() {
             let spacing = " ".repeat(start_in_line);
-            writeln!(f, "{}{}{}",
-                     format_line_number(0),
-                     spacing,
-                     colorer.primary_color("^ Unexpected token.").bold()
+            writeln!(
+                f,
+                "{}{}{}",
+                format_line_number(0),
+                spacing,
+                colorer.primary_color("^ Unexpected token.").bold()
             )?;
         }
 
         for line_number in start_line_number + 2..end_line_number + 2 {
-            writeln!(f, "{}", format_line_number_with_line(line_number, &file_lines))?;
+            writeln!(
+                f,
+                "{}",
+                format_line_number_with_line(line_number, &file_lines)
+            )?;
         }
 
         writeln!(f, "{}", format_line_number(0))?;

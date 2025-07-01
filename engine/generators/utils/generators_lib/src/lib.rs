@@ -11,32 +11,28 @@ pub fn generate_sdk(
     let res = match gen.client_type {
         GeneratorOutputType::Go => {
             use generators_go::GoLanguageFeatures;
-            let features = GoLanguageFeatures::default();
+            let features = GoLanguageFeatures;
             features.generate_sdk(ir, gen)?
         }
         GeneratorOutputType::PythonPydantic | GeneratorOutputType::PythonPydanticV1 => {
             use generators_python::PyLanguageFeatures;
-            let features = PyLanguageFeatures::default();
+            let features = PyLanguageFeatures;
             features.generate_sdk(ir, gen)?
         }
         GeneratorOutputType::OpenApi => {
             use generators_openapi::OpenApiLanguageFeatures;
-            let features = OpenApiLanguageFeatures::default();
+            let features = OpenApiLanguageFeatures;
             features.generate_sdk(ir, gen)?
         }
-        GeneratorOutputType::Typescript => {
+        GeneratorOutputType::Typescript | GeneratorOutputType::TypescriptReact => {
             use generators_typescript::TsLanguageFeatures;
-            let features = TsLanguageFeatures::default();
+            let features = TsLanguageFeatures;
             features.generate_sdk(ir, gen)?
         }
         GeneratorOutputType::RubySorbet => {
             use generators_ruby::RbLanguageFeatures;
             let features = RbLanguageFeatures::default();
             features.generate_sdk(ir, gen)?
-        }
-        _ => {
-            println!("Generating SDK for {} not supported yet", gen.client_type);
-            return Ok(Default::default());
         }
     };
 
@@ -57,7 +53,7 @@ pub fn generate_sdk(
                 .arg(cmd)
                 .current_dir(gen.output_dir())
                 .output()
-                .context(format!("Failed to run on_generate command: {}", cmd));
+                .context(format!("Failed to run on_generate command: {cmd}"));
 
             let output = match output_result {
                 Ok(output) => output,
@@ -74,7 +70,7 @@ pub fn generate_sdk(
                 let error_msg = format!(
                     "on_generate command finished with {}: {}\nStdout:\n{}\nStderr:\n{}",
                     match output.status.code() {
-                        Some(code) => format!("exit code {}", code),
+                        Some(code) => format!("exit code {code}"),
                         None => "no exit code".to_string(),
                     },
                     cmd,
@@ -88,7 +84,8 @@ pub fn generate_sdk(
         Ok(res)
     }
 
-    #[cfg(target_arch = "wasm32")] {
+    #[cfg(target_arch = "wasm32")]
+    {
         Ok(res)
     }
 }

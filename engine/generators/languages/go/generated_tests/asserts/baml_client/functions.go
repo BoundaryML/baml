@@ -37,6 +37,10 @@ func PersonTest(ctx context.Context, opts ...CallOptionFunc) (types.Person, erro
 		args.ClientRegistry = callOpts.clientRegistry
 	}
 
+	if callOpts.collectors != nil {
+		args.Collectors = callOpts.collectors
+	}
+
 	encoded, err := baml.EncodeRoot(args)
 	if err != nil {
 		panic(err)

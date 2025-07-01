@@ -1,21 +1,23 @@
+use std::{
+    collections::HashMap,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
+
 use baml_runtime::InternalRuntimeInterface;
 use internal_baml_diagnostics::{SourceFile, Span};
 use lsp_server::{ErrorCode, Notification, Request};
 use lsp_types::{
     notification::PublishDiagnostics, Diagnostic, DiagnosticSeverity, PublishDiagnosticsParams, Url,
 };
-use std::collections::HashMap;
-use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
-
-use crate::baml_project::{self, Project};
-use crate::baml_text_size::TextSize;
-use crate::server::api::ResultExt;
-use crate::server::client::Notifier;
-use crate::server::Result;
-use crate::{DocumentKey, Session};
 
 use super::LSPResult;
+use crate::{
+    baml_project::{self, Project},
+    baml_text_size::TextSize,
+    server::{api::ResultExt, client::Notifier, Result},
+    DocumentKey, Session,
+};
 
 pub(super) fn clear_diagnostics(uri: &Url, notifier: &Notifier) -> Result<()> {
     notifier
@@ -86,7 +88,7 @@ pub fn publish_session_lsp_diagnostics(
     file_url: &Url,
 ) -> Result<()> {
     // let keys = session.index().documents.keys();
-    let path = file_url.to_file_path().unwrap_or(PathBuf::new());
+    let path = file_url.to_file_path().unwrap_or_default();
     if !file_url.to_string().contains("baml_src") {
         return Ok(());
     }
@@ -206,10 +208,7 @@ pub fn project_diagnostics(
                     &guard,
                     &root_path,
                     &Span {
-                        file: SourceFile::new_static(
-                            PathBuf::from(gen.span.file_path.clone()),
-                            &"",
-                        ),
+                        file: SourceFile::new_static(PathBuf::from(gen.span.file_path.clone()), ""),
                         start: gen.span.start,
                         end: gen.span.end,
                     },
@@ -226,10 +225,7 @@ pub fn project_diagnostics(
                         ensure_absolute(&root_path, &PathBuf::from(gen.span.file_path.clone()));
                     match Url::from_file_path(span_path) {
                         Ok(uri) => {
-                            diagnostics_map
-                                .entry(uri)
-                                .or_insert_with(Vec::new)
-                                .push(diagnostic);
+                            diagnostics_map.entry(uri).or_default().push(diagnostic);
                         }
                         Err(_) => {
                             tracing::error!(
@@ -276,10 +272,7 @@ pub fn project_diagnostics(
 
                     match Url::from_file_path(span_path) {
                         Ok(uri) => {
-                            diagnostics_map
-                                .entry(uri)
-                                .or_insert_with(Vec::new)
-                                .push(diagnostic);
+                            diagnostics_map.entry(uri).or_default().push(diagnostic);
                         }
                         Err(_) => {
                             tracing::error!(
@@ -386,7 +379,7 @@ fn span_to_range(
     //     e
     // })?;
 
-    let doc_key = DocumentKey::from_path(project_root, &PathBuf::from(span_path))
+    let doc_key = DocumentKey::from_path(project_root, &span_path)
         .map_err(|e| {
             tracing::warn!("Failed to create DocumentKey: {}", e);
         })

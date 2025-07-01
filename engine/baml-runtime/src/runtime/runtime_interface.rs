@@ -1,12 +1,21 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
-use crate::internal::llm_client::traits::WithClientProperties;
-use crate::internal::llm_client::LLMResponse;
-use crate::runtime::CachedClient;
-use crate::tracingv2::storage::storage::{Collector, BAML_TRACER};
-use crate::type_builder::TypeBuilder;
-use crate::InternalBamlRuntime;
-use crate::RuntimeContextManager;
+use anyhow::{Context, Result};
+use baml_types::{
+    tracing::events::{FunctionEnd, FunctionStart, TraceData, TraceEvent},
+    BamlMap, BamlValue, Constraint, EvaluationContext,
+};
+use internal_baml_core::{
+    internal_baml_diagnostics::SourceFile,
+    ir::{
+        repr::{IntermediateRepr, Node, TypeBuilderEntry},
+        ArgCoercer, ExprFunctionWalker, FunctionWalker, IRHelper, TestCase,
+    },
+    validate,
+};
+use internal_baml_jinja::RenderedPrompt;
+use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
+
 use crate::{
     client_registry::ClientProperty,
     internal::{
@@ -18,28 +27,19 @@ use crate::{
             },
             primitive::LLMPrimitiveProvider,
             retry_policy::CallablePolicy,
-            traits::{WithPrompt, WithRenderRawCurl},
+            traits::{WithClientProperties, WithPrompt, WithRenderRawCurl},
+            LLMResponse,
         },
         prompt_renderer::PromptRenderer,
     },
+    runtime::CachedClient,
     runtime_interface::{InternalClientLookup, RuntimeConstructor},
     tracing::BamlTracer,
-    FunctionResult, FunctionResultStream, InternalRuntimeInterface, RenderCurlSettings,
-    RuntimeContext,
+    tracingv2::storage::storage::{Collector, BAML_TRACER},
+    type_builder::TypeBuilder,
+    FunctionResult, FunctionResultStream, InternalBamlRuntime, InternalRuntimeInterface,
+    RenderCurlSettings, RuntimeContext, RuntimeContextManager,
 };
-use anyhow::{Context, Result};
-use baml_types::tracing::events::{FunctionEnd, FunctionStart, TraceData, TraceEvent};
-
-use baml_types::{BamlMap, BamlValue, Constraint, EvaluationContext};
-use internal_baml_core::ir::repr::{Node, TypeBuilderEntry};
-use internal_baml_core::ir::TestCase;
-use internal_baml_core::{
-    internal_baml_diagnostics::SourceFile,
-    ir::{repr::IntermediateRepr, ArgCoercer, ExprFunctionWalker, FunctionWalker, IRHelper},
-    validate,
-};
-use internal_baml_jinja::RenderedPrompt;
-use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
 
 impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
     // Gets a top-level client/strategy by name
@@ -63,7 +63,7 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                 // TODO: allow other providers
                 let llm_primitive_provider =
                     LLMPrimitiveProvider::try_from((&client_property, ctx))
-                        .context(format!("Failed to parse client: {}/{}", provider, model))?;
+                        .context(format!("Failed to parse client: {provider}/{model}"))?;
 
                 Ok(Arc::new(LLMProvider::Primitive(Arc::new(
                     llm_primitive_provider,
@@ -86,6 +86,7 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                 // if a client exists, check if the env vars have changed
                 if clients.contains_key(client_name) {
                     // make sure to clone the client to avoid holding a lock, otherwise dashmap will deadlock!
+                    #[allow(clippy::map_clone)]
                     let client = clients.get(client_name).map(|c| c.clone()).unwrap();
                     // if the env vars haven't changed, return the cached client
                     if !client.has_env_vars_changed(ctx.env_vars()) {
@@ -100,7 +101,7 @@ impl<'a> InternalClientLookup<'a> for InternalBamlRuntime {
                 let walker = self
                     .ir()
                     .find_client(client_name)
-                    .context(format!("Could not find client with name: {}", client_name))?;
+                    .context(format!("Could not find client with name: {client_name}"))?;
                 // Get required env vars from the client walker
                 let new_client = LLMProvider::try_from((&walker, ctx)).map(Arc::new)?;
                 // Only store the required env vars
@@ -183,7 +184,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
         let func = self.get_function(function_name)?;
         let function_params = func.inputs();
         let baml_args = self.ir().check_function_params(
-            &function_params,
+            function_params,
             params,
             ArgCoercer {
                 span_path: None,
@@ -283,7 +284,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
             let test = self.ir().find_test(&func, test_name)?;
             let test_case_params = test.test_case_params(&ctx.eval_ctx(strict))?;
             let inputs = func.inputs().clone();
-            let span = test.span().clone();
+            let span = test.span();
             Ok((test_case_params, inputs, span.cloned()))
         });
         let maybe_expr_test_and_params =
@@ -291,7 +292,7 @@ impl InternalRuntimeInterface for InternalBamlRuntime {
                 let test = self.ir().find_expr_fn_test(&func, test_name)?;
                 let test_case_params = test.test_case_params(&ctx.eval_ctx(strict))?;
                 let inputs = func.inputs().clone();
-                let span = test.span().clone();
+                let span = test.span();
                 Ok((test_case_params, inputs, span.cloned()))
             });
 

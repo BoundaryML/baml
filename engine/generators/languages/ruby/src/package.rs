@@ -10,13 +10,13 @@ pub struct Package {
 
 impl Package {
     fn new(package: &str) -> Self {
-        let parts: Vec<_> = package.split('.').map(|s| s.to_string()).collect();
+        let parts: Vec<_> = package.split('.').map(str::to_string).collect();
         if parts.is_empty() {
             panic!("Package cannot be empty");
         }
         // ensure the first part is baml_client
         if parts[0] != "BamlClient" && parts[0] != "Baml" {
-            panic!("Package must start with baml_client: {}", package);
+            panic!("Package must start with baml_client: {package}");
         }
         Package {
             package_path: parts,
@@ -34,7 +34,6 @@ impl Package {
     pub fn in_type_definition(&self) -> bool {
         self.type_definition_scope
     }
-
 
     pub fn relative_from(&self, other: &CurrentRenderPackage) -> String {
         let other = other.get();
@@ -82,7 +81,9 @@ pub(crate) struct CurrentRenderPackage {
 impl CurrentRenderPackage {
     pub fn new(package: &str, lookup: std::sync::Arc<IntermediateRepr>) -> Self {
         Self {
-            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(Package::new(package)))),
+            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(Package::new(
+                package,
+            )))),
             lookup,
             currently_defining_alias: None,
         }
@@ -90,14 +91,19 @@ impl CurrentRenderPackage {
 
     pub fn define_alias(&self, name: &str) -> Self {
         Self {
-            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(self.get().clone_as_type_definition()))),
+            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(
+                self.get().clone_as_type_definition(),
+            ))),
             lookup: self.lookup.clone(),
             currently_defining_alias: Some(name.to_string()),
         }
     }
 
     pub fn is_defining_alias(&self, name: &str) -> bool {
-        self.currently_defining_alias.as_ref().map(|s| s == name).unwrap_or(false)
+        self.currently_defining_alias
+            .as_ref()
+            .map(|s| s == name)
+            .unwrap_or(false)
     }
 
     pub fn lookup(&self) -> &impl TypeLookups {
@@ -114,7 +120,7 @@ impl CurrentRenderPackage {
                 *orig = std::sync::Arc::new(Package::new(package));
             }
             Err(e) => {
-                panic!("Failed to get package: {}", e);
+                panic!("Failed to get package: {e}");
             }
         }
     }

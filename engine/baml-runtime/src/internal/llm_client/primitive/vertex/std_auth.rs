@@ -1,8 +1,8 @@
-use anyhow::{Context, Result};
-use internal_llm_client::vertex::ResolvedGcpAuthStrategy;
 use std::{future::Future, pin::Pin, sync::Arc};
 
+use anyhow::{Context, Result};
 use gcp_auth::{Error, Token, TokenProvider};
+use internal_llm_client::vertex::ResolvedGcpAuthStrategy;
 
 pub enum VertexAuth {
     CustomServiceAccount(gcp_auth::CustomServiceAccount),
@@ -17,7 +17,7 @@ impl VertexAuth {
             ResolvedGcpAuthStrategy::MaybeFilePath(path) => {
                 log::debug!("Attempting to auth using JsonFile strategy");
                 let authz_user =
-                    gcp_auth::CustomServiceAccount::from_file(&path).context(format!(
+                    gcp_auth::CustomServiceAccount::from_file(path).context(format!(
                         "Failed to parse credentials as JSON file: {}",
                         serde_json::to_string(&path)
                             .expect("Serialization of string should always succeed")
@@ -26,7 +26,7 @@ impl VertexAuth {
             }
             ResolvedGcpAuthStrategy::StringContainingJson(s) => {
                 log::debug!("Attempting to auth using JsonString strategy");
-                let authz_user = gcp_auth::CustomServiceAccount::from_json(&s).context(format!(
+                let authz_user = gcp_auth::CustomServiceAccount::from_json(s).context(format!(
                     "Failed to parse credentials as JSON string: {}",
                     {
                         let s = serde_json::to_string(&s)
@@ -93,7 +93,7 @@ impl VertexAuth {
 
                 // Log all collected errors if no strategy succeeded
                 for err in &errors {
-                    log::error!("{:?}", err);
+                    log::error!("{err:?}");
                 }
                 anyhow::bail!(
                     "Failed to auth - system_default strategy did not resolve successfully. Errors encountered: {:?}",

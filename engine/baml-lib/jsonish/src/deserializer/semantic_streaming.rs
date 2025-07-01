@@ -1,20 +1,21 @@
 // This module helps resolve baml values with attached streaming state
 // in the context of the streaming behavior associated with their types.
 
-use crate::deserializer::coercer::ParsingError;
-use crate::{BamlValueWithFlags, Flag};
-use indexmap::{IndexMap, IndexSet};
-use internal_baml_core::ir::ir_helpers::infer_type_with_meta;
-use internal_baml_core::ir::repr::{IntermediateRepr, Walker};
-use internal_baml_core::ir::{Field, IRHelper, IRHelperExtended, IRSemanticStreamingHelper};
+use std::collections::HashSet;
 
+use anyhow::{Context, Error};
 use baml_types::{
     BamlMap, BamlValueWithMeta, Completion, CompletionState, FieldType, ResponseCheck, TypeValue,
 };
-
-use anyhow::{Context, Error};
-use std::collections::HashSet;
+use indexmap::{IndexMap, IndexSet};
+use internal_baml_core::ir::{
+    ir_helpers::infer_type_with_meta,
+    repr::{IntermediateRepr, Walker},
+    Field, IRHelper, IRHelperExtended, IRSemanticStreamingHelper,
+};
 use thiserror;
+
+use crate::{deserializer::coercer::ParsingError, BamlValueWithFlags, Flag};
 
 #[derive(Debug, thiserror::Error)]
 pub enum StreamingError {
@@ -39,7 +40,7 @@ pub fn validate_streaming_state(
     let typed_baml_value: BamlValueWithMeta<(Vec<Flag>, FieldType)> =
         ir.distribute_type_with_meta(baml_value_with_meta_flags, baml_value.field_type().clone())?;
     let baml_value_with_streaming_state_and_behavior =
-        typed_baml_value.map_meta(|(flags, r#type)| (completion_state(&flags), r#type));
+        typed_baml_value.map_meta(|(flags, r#type)| (completion_state(flags), r#type));
 
     let top_level_node = process_node(
         ir,
@@ -65,7 +66,7 @@ fn process_node(
     ir: &impl IRHelperExtended,
     value: BamlValueWithMeta<(CompletionState, &FieldType)>,
     allow_partials: bool,
-    depth: usize,
+    _depth: usize,
 ) -> Result<BamlValueWithMeta<Completion>, StreamingError> {
     let (completion_state, field_type) = value.meta().clone();
     let metadata = field_type.meta();
@@ -94,17 +95,14 @@ fn process_node(
             items
                 .into_iter()
                 .filter_map(|item| {
-                    process_node(ir, item, allow_partials_in_sub_nodes, depth + 1).ok()
+                    process_node(ir, item, allow_partials_in_sub_nodes, _depth + 1).ok()
                 })
                 .collect(),
             new_meta,
         )),
         BamlValueWithMeta::Class(ref class_name, value_fields, _) => {
-            let value_field_names: IndexSet<String> = value_fields
-                .keys()
-                .into_iter()
-                .map(|s| s.to_string())
-                .collect();
+            let value_field_names: IndexSet<String> =
+                value_fields.keys().map(String::to_owned).collect();
             let needed_fields: HashSet<String> =
                 needed_fields(ir, class_name, allow_partials_in_sub_nodes)?;
 
@@ -127,7 +125,7 @@ fn process_node(
             // Null values used to fill gaps in the input map.
             let filler_nulls = fields_needing_null
                 .into_iter()
-                .filter_map(|ref null_field_name| {
+                .map(|ref null_field_name| {
                     let field = value_fields
                         .get(null_field_name)
                         .expect("This field is guaranteed to be in the field set");
@@ -137,10 +135,10 @@ fn process_node(
                         display: use_state,
                         required_done: false,
                     };
-                    Some((
+                    (
                         null_field_name.to_string(),
                         BamlValueWithMeta::Null(field_stream_state),
-                    ))
+                    )
                 })
                 .collect::<IndexMap<String, BamlValueWithMeta<Completion>>>();
 
@@ -151,7 +149,7 @@ fn process_node(
                 .filter_map(|(field_name, field_value)| {
                     let with_state = field_value.meta().1.meta().streaming_behavior.state;
                     let completion_state = field_value.meta().0.clone();
-                    match process_node(ir, field_value, allow_partials_in_sub_nodes, depth + 1) {
+                    match process_node(ir, field_value, allow_partials_in_sub_nodes, _depth + 1) {
                         Ok(res) => Some((field_name, res)),
                         _ => {
                             let state = Completion {
@@ -180,7 +178,6 @@ fn process_node(
                 .collect();
             let missing_needed_fields: Vec<_> = needed_fields
                 .difference(&derived_present_nonnull_fields)
-                .into_iter()
                 .collect();
 
             new_fields.extend(filler_nulls);
@@ -199,7 +196,7 @@ fn process_node(
             });
 
             let res = BamlValueWithMeta::Class(class_name.clone(), new_fields, new_meta);
-            if missing_needed_fields.clone().len() == 0 {
+            if missing_needed_fields.is_empty() {
                 Ok(res)
             } else {
                 Err(StreamingError::MissingNeededFields)
@@ -212,7 +209,7 @@ fn process_node(
             let new_kvs = kvs
                 .into_iter()
                 .filter_map(|(k, v)| {
-                    process_node(ir, v, allow_partials_in_sub_nodes, depth + 1)
+                    process_node(ir, v, allow_partials_in_sub_nodes, _depth + 1)
                         .ok()
                         .map(|v| (k, v))
                 })
@@ -245,7 +242,7 @@ fn fields_needing_null_filler<'a>(
     value_names: HashSet<String>,
     allow_partials: bool,
 ) -> Result<HashSet<String>, anyhow::Error> {
-    if allow_partials == false {
+    if !allow_partials {
         return Ok(HashSet::new());
     }
     ir.find_class_fields_needing_null_filler(class_name, &value_names)
@@ -263,7 +260,7 @@ fn needed_fields(
     class_name: &str,
     allow_partials: bool,
 ) -> Result<HashSet<String>, anyhow::Error> {
-    if allow_partials == false {
+    if !allow_partials {
         return Ok(HashSet::new());
     }
     ir.class_streaming_needed_fields(class_name)
@@ -322,25 +319,23 @@ fn required_done<T>(
             view.iter().any(|option| {
                 let variant_required_done = required_done(ir, option, value);
                 let value_unifies_with_variant =
-                    infer_type_with_meta(value).map_or(false, |v| ir.is_subtype(&v, option));
+                    infer_type_with_meta(value).is_some_and(|v| ir.is_subtype(&v, option));
                 variant_required_done && value_unifies_with_variant
             })
         }
         FieldType::Arrow(_, _) => false, // TODO: Error? Arrow shouldn't appear here.
     };
-    let res = type_implies_done || metadata.streaming_behavior.done;
-    res
+
+    type_implies_done || metadata.streaming_behavior.done
 }
 
-fn completion_state(flags: &Vec<Flag>) -> CompletionState {
+fn completion_state(flags: &[Flag]) -> CompletionState {
     if flags.iter().any(|f| matches!(f, Flag::Pending)) {
         CompletionState::Pending
+    } else if flags.iter().any(|f| matches!(f, Flag::Incomplete)) {
+        CompletionState::Incomplete
     } else {
-        if flags.iter().any(|f| matches!(f, Flag::Incomplete)) {
-            CompletionState::Incomplete
-        } else {
-            CompletionState::Complete
-        }
+        CompletionState::Complete
     }
 }
 
@@ -349,9 +344,8 @@ mod tests {
     use baml_types::type_meta::base::TypeMeta;
     use internal_baml_core::ir::repr::make_test_ir;
 
-    use crate::deserializer::{deserialize_flags::DeserializerConditions, types::ValueWithFlags};
-
     use super::*;
+    use crate::deserializer::{deserialize_flags::DeserializerConditions, types::ValueWithFlags};
 
     fn mk_null() -> BamlValueWithFlags {
         BamlValueWithFlags::Null(

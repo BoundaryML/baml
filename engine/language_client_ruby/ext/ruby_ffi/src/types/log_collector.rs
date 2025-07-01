@@ -1,19 +1,21 @@
-use std::str::FromStr;
-use std::sync::Arc;
-use std::sync::Mutex;
+use std::{
+    str::FromStr,
+    sync::{Arc, Mutex},
+};
 
-use crate::Result;
 use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
-use magnus::scan_args::get_kwargs;
 use magnus::{
-    class, function, method, scan_args::scan_args, try_convert::TryConvertOwned, Error,
-    IntoValueFromNative, Module, Object, RArray, RModule, Ruby, Value,
+    class, function, method,
+    scan_args::{get_kwargs, scan_args},
+    try_convert::TryConvertOwned,
+    Error, IntoValueFromNative, Module, Object, RArray, RModule, Ruby, Value,
 };
 
 use super::{
     request::{HTTPBody, HTTPRequest},
     response::HTTPResponse,
 };
+use crate::Result;
 
 crate::lang_wrapper!(
     Collector,
@@ -132,7 +134,7 @@ impl Collector {
 
     pub fn __print_storage() {
         let tracer = BAML_TRACER.lock().unwrap();
-        println!("Storage: {:#?}", tracer);
+        println!("Storage: {tracer:#?}");
     }
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
@@ -352,7 +354,7 @@ impl Timing {
 
     pub fn into_value(self, ruby: &Ruby) -> crate::Result<Value> {
         serde_magnus::serialize(&self.inner)
-            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
+            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{e:?}")))
     }
 }
 
@@ -489,20 +491,20 @@ impl LLMCall {
 
     pub fn to_s(&self) -> String {
         format!(
-            "LLMCall(provider={}, client_name={}, selected={}, usage={}, timing={}, http_request={}, http_response={})",
+            "LLMCall(provider={}, client_name={}, selected={}, usage={}, timing={:?}, http_request={}, http_response={})",
             self.inner.provider,
             self.inner.client_name,
             self.inner.selected,
-            self.inner.usage.as_ref().map_or("null".to_string(), |u| format!("{:?}", u)),
-            format!("{:?}", self.inner.timing),
-            self.inner.request.as_ref().map_or("null".to_string(), |req| format!("{:?}", req)),
-            self.inner.response.as_ref().map_or("null".to_string(), |resp| format!("{:?}", resp))
+            self.inner.usage.as_ref().map_or("null".to_string(), |u| format!("{u:?}")),
+            self.inner.timing,
+            self.inner.request.as_ref().map_or("null".to_string(), |req| format!("{req:?}")),
+            self.inner.response.as_ref().map_or("null".to_string(), |resp| format!("{resp:?}"))
         )
     }
 
-    pub fn to_value(self, ruby: &Ruby) -> crate::Result<Value> {
+    pub fn to_value(&self, ruby: &Ruby) -> crate::Result<Value> {
         serde_magnus::serialize(&self.inner)
-            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
+            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{e:?}")))
     }
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {
@@ -527,14 +529,14 @@ unsafe impl TryConvertOwned for &LLMStreamCall {}
 impl LLMStreamCall {
     pub fn to_s(&self) -> String {
         format!(
-            "LLMStreamCall(provider={}, client_name={}, selected={}, usage={}, timing={}, http_request={}, http_response={})",
+            "LLMStreamCall(provider={}, client_name={}, selected={}, usage={}, timing={:?}, http_request={}, http_response={})",
             self.inner.provider,
             self.inner.client_name,
             self.inner.selected,
-            self.inner.usage.as_ref().map_or("null".to_string(), |u| format!("{:?}", u)),
-            format!("{:?}", self.inner.timing),
-            self.inner.request.as_ref().map_or("null".to_string(), |req| format!("{:?}", req)),
-            self.inner.response.as_ref().map_or("null".to_string(), |resp| format!("{:?}", resp))
+            self.inner.usage.as_ref().map_or("null".to_string(), |u| format!("{u:?}")),
+            self.inner.timing,
+            self.inner.request.as_ref().map_or("null".to_string(), |req| format!("{req:?}")),
+            self.inner.response.as_ref().map_or("null".to_string(), |resp| format!("{resp:?}"))
         )
     }
 
@@ -573,10 +575,10 @@ impl LLMStreamCall {
         }
     }
 
-    pub fn to_value(self, ruby: &Ruby) -> crate::Result<Value> {
+    pub fn to_value(&self, ruby: &Ruby) -> crate::Result<Value> {
         // Serialize to Ruby value - handle errors gracefully
         serde_magnus::serialize(&self.inner)
-            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{:?}", e)))
+            .map_err(|e| Error::new(ruby.exception_runtime_error(), format!("{e:?}")))
     }
 
     pub fn define_in_ruby(module: &RModule) -> Result<()> {

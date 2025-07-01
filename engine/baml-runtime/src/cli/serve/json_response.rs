@@ -1,3 +1,5 @@
+use std::io::Write;
+
 use axum::{
     http::{HeaderValue, StatusCode},
     response::{IntoResponse, Response},
@@ -5,7 +7,6 @@ use axum::{
 use bytes::{BufMut, BytesMut};
 use http::header;
 use serde::Serialize;
-use std::io::Write;
 
 pub(super) struct Json<T: Serialize>(pub T);
 

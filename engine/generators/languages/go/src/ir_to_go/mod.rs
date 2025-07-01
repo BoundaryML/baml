@@ -1,11 +1,13 @@
-use crate::package::Package;
-use crate::r#type::{MediaTypeGo, TypeGo, TypeMetaGo, TypeWrapper};
 use baml_types::{
     baml_value::TypeLookups,
     ir_type::{Type, TypeStreaming},
-    type_meta::base::TypeMeta,
-    type_meta::stream::TypeMetaStreaming,
+    type_meta::{base::TypeMeta, stream::TypeMetaStreaming},
     BamlMediaType, ConstraintLevel, TypeValue,
+};
+
+use crate::{
+    package::Package,
+    r#type::{MediaTypeGo, TypeGo, TypeMetaGo, TypeWrapper},
 };
 
 pub mod classes;
@@ -35,8 +37,8 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, _lookup: &impl TypeLookup
         },
         T::Literal(literal_value, _) => match literal_value {
             baml_types::LiteralValue::String(val) => TypeGo::String(Some(val.clone()), meta),
-            baml_types::LiteralValue::Int(val) => TypeGo::Int(Some(val.clone()), meta),
-            baml_types::LiteralValue::Bool(val) => TypeGo::Bool(Some(val.clone()), meta),
+            baml_types::LiteralValue::Int(val) => TypeGo::Int(Some(*val), meta),
+            baml_types::LiteralValue::Bool(val) => TypeGo::Bool(Some(*val), meta),
         },
         T::Class {
             name,
@@ -109,7 +111,7 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, _lookup: &impl TypeLookup
                 let name = name.join("Or");
                 TypeGo::Union {
                     package: stream_pkg.clone(),
-                    name: format!("Union{}{}", num_options, name),
+                    name: format!("Union{num_options}{name}"),
                     meta,
                 }
             }
@@ -129,7 +131,7 @@ pub(crate) fn stream_type_to_go(field: &TypeStreaming, _lookup: &impl TypeLookup
                         true => types_pkg.clone(),
                         false => stream_pkg.clone(),
                     },
-                    name: format!("Union{}{}", num_options, name),
+                    name: format!("Union{num_options}{name}"),
                     meta,
                 }
             }
@@ -156,8 +158,8 @@ pub(crate) fn type_to_go(field: &Type, _lookup: &impl TypeLookups) -> TypeGo {
         },
         T::Literal(literal_value, _) => match literal_value {
             baml_types::LiteralValue::String(val) => TypeGo::String(Some(val.clone()), meta),
-            baml_types::LiteralValue::Int(val) => TypeGo::Int(Some(val.clone()), meta),
-            baml_types::LiteralValue::Bool(val) => TypeGo::Bool(Some(val.clone()), meta),
+            baml_types::LiteralValue::Int(val) => TypeGo::Int(Some(*val), meta),
+            baml_types::LiteralValue::Bool(val) => TypeGo::Bool(Some(*val), meta),
         },
         T::Class { name, dynamic, .. } => TypeGo::Class {
             package: type_pkg.clone(),
@@ -212,7 +214,7 @@ pub(crate) fn type_to_go(field: &Type, _lookup: &impl TypeLookups) -> TypeGo {
                 let name = name.join("Or");
                 TypeGo::Union {
                     package: type_pkg.clone(),
-                    name: format!("Union{}{}", num_options, name),
+                    name: format!("Union{num_options}{name}"),
                     meta,
                 }
             }
@@ -231,7 +233,7 @@ pub(crate) fn type_to_go(field: &Type, _lookup: &impl TypeLookups) -> TypeGo {
                 meta.make_optional();
                 TypeGo::Union {
                     package: type_pkg.clone(),
-                    name: format!("Union{}{}", num_options, name),
+                    name: format!("Union{num_options}{name}"),
                     meta,
                 }
             }

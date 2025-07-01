@@ -1,15 +1,22 @@
-use crate::baml_project::position_utils::get_word_at_position;
-use crate::baml_project::{trim_line, BamlRuntimeExt};
-use crate::server::api::traits::{RequestHandler, SyncRequestHandler};
-use crate::server::api::ResultExt;
-use crate::server::client::Requester;
-use crate::server::{client::Notifier, Result};
-use crate::{DocumentKey, Session};
+use std::path::PathBuf;
+
 use lsp_types::{
     self, request as req, GotoDefinitionParams, GotoDefinitionResponse, Location, Position, Range,
     Url,
 };
-use std::path::PathBuf;
+
+use crate::{
+    baml_project::{position_utils::get_word_at_position, trim_line, BamlRuntimeExt},
+    server::{
+        api::{
+            traits::{RequestHandler, SyncRequestHandler},
+            ResultExt,
+        },
+        client::{Notifier, Requester},
+        Result,
+    },
+    DocumentKey, Session,
+};
 
 pub struct GotoDefinition;
 
@@ -46,7 +53,7 @@ impl SyncRequestHandler for GotoDefinition {
             .internal_error()?;
 
         let document_key = DocumentKey::from_url(
-            &PathBuf::from(project.lock().unwrap().baml_project.root_dir_name.clone()),
+            &project.lock().unwrap().baml_project.root_dir_name,
             &params.text_document_position_params.text_document.uri,
         )
         .internal_error()?;
@@ -90,6 +97,33 @@ impl SyncRequestHandler for GotoDefinition {
                     uri: target_uri,
                     range,
                 });
+
+                // Broadcast function change to playground clients
+                if let Some(state) = &session.playground_state {
+                    // Get the first function from the current file if available
+                    if let Some(function) = guard
+                        .list_functions()
+                        .unwrap_or_default()
+                        .into_iter()
+                        .find(|f| f.span.file_path == document_key.path().to_string_lossy())
+                    {
+                        tracing::info!("Broadcasting function change for: {}", function.name);
+                        let root_path = guard.root_path().to_string_lossy().to_string();
+                        let state = state.clone();
+                        let function_name = function.name.clone();
+                        if let Some(runtime) = &session.playground_runtime {
+                            runtime.spawn(async move {
+                                let _ = crate::playground::broadcast_function_change(
+                                    &state,
+                                    &root_path,
+                                    function_name,
+                                )
+                                .await;
+                            });
+                        }
+                    }
+                }
+
                 Ok(Some(goto_definition_response))
             }
         }

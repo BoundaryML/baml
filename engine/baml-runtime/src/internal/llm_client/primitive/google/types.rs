@@ -1,5 +1,6 @@
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -340,8 +341,9 @@ pub struct UsageMetaData {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use serde_json::Error;
+
+    use super::*;
 
     #[test]
     fn test_deserialization() {
@@ -401,9 +403,9 @@ mod tests {
         let parsed: Result<GoogleResponse, Error> = serde_json::from_str(data);
 
         match parsed {
-            Ok(response) => println!("Parsed successfully: {:?}", response),
+            Ok(response) => println!("Parsed successfully: {response:?}"),
             Err(e) => {
-                println!("Failed to parse: {}", e);
+                println!("Failed to parse: {e}");
                 println!("Error line: {}", e.line());
                 println!("Error column: {}", e.column());
                 println!("Error cause: {:?}", e.classify());

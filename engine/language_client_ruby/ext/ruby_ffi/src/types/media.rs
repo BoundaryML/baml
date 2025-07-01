@@ -1,6 +1,7 @@
-use crate::Result;
 use baml_types::{BamlMedia, BamlMediaType, BamlValue};
 use magnus::{class, function, Module, Object, RModule};
+
+use crate::Result;
 
 pub(crate) trait CloneAsBamlValue {
     fn clone_as_baml_value(&self) -> BamlValue;

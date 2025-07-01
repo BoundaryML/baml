@@ -23,99 +23,84 @@ pub mod tracingv2;
 pub mod type_builder;
 mod types;
 
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::{
+    collections::{hash_map::DefaultHasher, HashMap},
+    hash::{Hash, Hasher},
+    path::PathBuf,
+    sync::{Arc, Mutex, OnceLock},
+};
 
-use anyhow::Context;
-use anyhow::Result;
-use baml_ids::FunctionCallId;
-use baml_ids::HttpRequestId;
-use baml_types::tracing::events::TraceEvent;
-use eval_expr::ExprEvalResult;
-use futures::channel::mpsc;
-use internal_baml_core::ast::Span;
-use internal_baml_core::internal_baml_diagnostics::SerializedSpan;
-use internal_baml_core::ir::repr::initial_context;
-use internal_baml_core::ir::repr::IntermediateRepr;
-use jsonish::ResponseValueMeta;
-use tracingv2::publisher::flush;
-
-use crate::errors::IntoBamlError;
-use crate::internal::llm_client::LLMCompleteResponse;
-use baml_types::expr::{Expr, ExprMetadata};
-use baml_types::tracing::events::HTTPBody;
-use baml_types::tracing::events::HTTPRequest;
-use baml_types::BamlMap;
-use baml_types::BamlValue;
-use baml_types::BamlValueWithMeta;
-use baml_types::Completion;
-use baml_types::Constraint;
+use anyhow::{Context, Result};
+use baml_ids::{FunctionCallId, HttpRequestId};
+use baml_types::{
+    expr::{Expr, ExprMetadata},
+    tracing::events::{HTTPBody, HTTPRequest, TraceEvent},
+    BamlMap, BamlValue, BamlValueWithMeta, Completion, Constraint,
+};
 use cfg_if::cfg_if;
-use client_registry::ClientRegistry;
-use dashmap::DashMap;
-use eval_expr::EvalEnv;
-use futures::future::join;
-use futures::future::join_all;
-use indexmap::IndexMap;
-use internal::llm_client::llm_provider::LLMProvider;
-use internal::llm_client::orchestrator::OrchestrationScope;
-use internal::llm_client::primitive::json_body;
-use internal::llm_client::primitive::json_headers;
-use internal::llm_client::primitive::JsonBodyInput;
-use internal::llm_client::retry_policy::CallablePolicy;
-use internal::prompt_renderer::PromptRenderer;
-use internal_baml_core::configuration::CloudProject;
-use internal_baml_core::configuration::CodegenGenerator;
-use internal_baml_core::configuration::Generator;
-use internal_baml_core::configuration::GeneratorOutputType;
-use internal_baml_core::ir::FunctionWalker;
-use internal_baml_core::ir::IRHelperExtended;
-use internal_llm_client::AllowedRoleMetadata;
-use internal_llm_client::ClientSpec;
-use jsonish::ResponseBamlValue;
-use on_log_event::LogEventCallbackSync;
-use runtime::InternalBamlRuntime;
-use runtime_interface::InternalClientLookup;
-use serde_json;
-use serde_json::json;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use std::sync::OnceLock;
-use tracingv2::storage::storage::Collector;
-use tracingv2::storage::storage::BAML_TRACER;
-use web_time::SystemTime;
-
-use crate::internal::llm_client::LLMCompleteResponseMetadata;
 #[cfg(not(target_arch = "wasm32"))]
 pub use cli::RuntimeCliDefaults;
-pub use runtime_context::BamlSrcReader;
-use runtime_interface::ExperimentalTracingInterface;
-use runtime_interface::RuntimeConstructor;
-use tracing::{BamlTracer, TracingCall};
-use type_builder::TypeBuilder;
-pub use types::*;
-use web_time::Duration;
-
+use client_registry::ClientRegistry;
+use dashmap::DashMap;
+use eval_expr::{EvalEnv, ExprEvalResult};
+use futures::{
+    channel::mpsc,
+    future::{join, join_all},
+};
+use indexmap::IndexMap;
+use internal::{
+    llm_client::{
+        llm_provider::LLMProvider,
+        orchestrator::OrchestrationScope,
+        primitive::{json_body, json_headers, JsonBodyInput},
+        retry_policy::CallablePolicy,
+    },
+    prompt_renderer::PromptRenderer,
+};
+use internal_baml_core::{
+    ast::Span,
+    configuration::{CloudProject, CodegenGenerator, Generator, GeneratorOutputType},
+    internal_baml_diagnostics::SerializedSpan,
+    ir::{
+        repr::{initial_context, IntermediateRepr},
+        FunctionWalker, IRHelperExtended,
+    },
+};
+pub use internal_baml_core::{
+    internal_baml_diagnostics,
+    internal_baml_diagnostics::Diagnostics as DiagnosticsError,
+    ir::{ir_helpers::infer_type, scope_diagnostics, FieldType, IRHelper, TypeValue},
+};
 #[cfg(feature = "internal")]
 pub use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
-#[cfg(feature = "internal")]
-pub use runtime_interface::InternalRuntimeInterface;
-
 #[cfg(not(feature = "internal"))]
 pub(crate) use internal_baml_jinja::{ChatMessagePart, RenderedPrompt};
+use internal_llm_client::{AllowedRoleMetadata, ClientSpec};
+use jsonish::{ResponseBamlValue, ResponseValueMeta};
+use on_log_event::LogEventCallbackSync;
+use runtime::InternalBamlRuntime;
+pub use runtime_context::BamlSrcReader;
+#[cfg(feature = "internal")]
+pub use runtime_interface::InternalRuntimeInterface;
 #[cfg(not(feature = "internal"))]
 pub(crate) use runtime_interface::InternalRuntimeInterface;
-
-pub use internal_baml_core::internal_baml_diagnostics;
-pub use internal_baml_core::internal_baml_diagnostics::Diagnostics as DiagnosticsError;
-pub use internal_baml_core::ir::{
-    ir_helpers::infer_type, scope_diagnostics, FieldType, IRHelper, TypeValue,
-};
+use runtime_interface::{ExperimentalTracingInterface, InternalClientLookup, RuntimeConstructor};
 pub(crate) use runtime_methods::prepare_function::PreparedFunctionArgs;
+use serde_json::{self, json};
+use tracing::{BamlTracer, TracingCall};
+use tracingv2::{
+    publisher::flush,
+    storage::storage::{Collector, BAML_TRACER},
+};
+use type_builder::TypeBuilder;
+pub use types::*;
+use web_time::{Duration, SystemTime};
 
-use crate::internal::llm_client::LLMResponse;
-use crate::test_constraints::{evaluate_test_constraints, TestConstraintsResult};
+use crate::{
+    errors::IntoBamlError,
+    internal::llm_client::{LLMCompleteResponse, LLMCompleteResponseMetadata, LLMResponse},
+    test_constraints::{evaluate_test_constraints, TestConstraintsResult},
+};
 
 #[cfg(not(target_arch = "wasm32"))]
 static TOKIO_SINGLETON: OnceLock<std::io::Result<Arc<tokio::runtime::Runtime>>> = OnceLock::new();
@@ -215,7 +200,7 @@ impl BamlRuntime {
 
         let runtime = BamlRuntime {
             inner: inner.clone(),
-            tracer_wrapper: Arc::new(BamlTracerWrapper::new(&env_vars)?),
+            tracer_wrapper: Arc::new(BamlTracerWrapper::new(env_vars)?),
             #[cfg(not(target_arch = "wasm32"))]
             async_runtime: rt.clone(),
         };
@@ -361,9 +346,9 @@ impl BamlRuntime {
         ctx: &RuntimeContext,
     ) -> Result<Arc<LLMProvider>> {
         let renderer = PromptRenderer::from_function(
-            &self.inner.get_function(&function_name)?,
+            &self.inner.get_function(function_name)?,
             self.inner.ir(),
-            &ctx,
+            ctx,
         )?;
 
         self.inner.get_llm_provider(renderer.client_spec(), ctx)
@@ -382,8 +367,8 @@ impl BamlRuntime {
         let constraints = self
             .inner
             .get_test_constraints(function_name, test_name, ctx)
-            .unwrap_or(vec![]); // TODO: Fix this.
-                                // .get_test_constraints(function_name, test_name, ctx)?;
+            .unwrap_or_default(); // TODO: Fix this.
+                                  // .get_test_constraints(function_name, test_name, ctx)?;
         Ok((params, constraints))
     }
 
@@ -411,14 +396,7 @@ impl BamlRuntime {
     where
         F: Fn(FunctionResult),
     {
-        log::info!("env vars1: {:#?}", env_vars.clone());
-
         baml_log::set_from_env(&env_vars).unwrap();
-        baml_log::info!("env vars: {:#?}", env_vars.clone());
-        log::info!("env vars2: {:#?}", env_vars.clone());
-        for (key, value) in env_vars.iter() {
-            log::info!("env var: {} = {}", key, value);
-        }
 
         let call = self
             .tracer_wrapper
@@ -526,7 +504,7 @@ impl BamlRuntime {
             };
 
             let mut stream = self.inner.stream_function_impl(
-                function_name.into(),
+                function_name,
                 &params,
                 self.tracer_wrapper.get_or_create_tracer(&env_vars),
                 rctx,
@@ -567,7 +545,7 @@ impl BamlRuntime {
                         evaluate_test_constraints(
                             &params,
                             &value_with_constraints,
-                            &complete_resp,
+                            complete_resp,
                             constraints,
                         )
                     }
@@ -593,7 +571,7 @@ impl BamlRuntime {
                 .finish_call(call, ctx, None)
             {
                 Ok(id) => {}
-                Err(e) => baml_log::error!("Error during logging: {}", e),
+                Err(e) => baml_log::error!("Error during logging: {e}"),
             }
             #[cfg(target_arch = "wasm32")]
             match self
@@ -603,7 +581,7 @@ impl BamlRuntime {
                 .await
             {
                 Ok(id) => {}
-                Err(e) => log::error!("Error during logging: {}", e),
+                Err(e) => log::error!("Error during logging: {e}"),
             }
         }
 
@@ -689,7 +667,7 @@ impl BamlRuntime {
         // baml_log::info!("env vars: {:#?}", env_vars.clone());
         baml_log::set_from_env(&env_vars).unwrap();
 
-        log::trace!("Calling function: {}", function_name);
+        log::trace!("Calling function: {function_name}");
         log::debug!("collectors: {:#?}", &collectors);
 
         let call = self
@@ -707,8 +685,7 @@ impl BamlRuntime {
                         .ir()
                         .expr_fns
                         .iter()
-                        .find(|f| f.elem.name == function_name)
-                        .is_some();
+                        .any(|f| f.elem.name == function_name);
                     if !is_expr_fn {
                         let call_id_stack = rctx.call_id_stack.clone();
                         // TODO: is this the right naming?
@@ -729,15 +706,15 @@ impl BamlRuntime {
                             match &result {
                                 Ok(result) => match result.result_with_constraints_content() {
                                     Ok(value) => Ok(value.0.map_meta(|f| f.3.clone())),
-                                    Err(e) => Err((&e).into_baml_error()), // None => Err(baml_types::tracing::errors::BamlError::Base {
-                                                                           //     message: format!(
-                                                                           //         "No parsed result found for function: {}",
-                                                                           //         function_name
-                                                                           //     )
-                                                                           //     .into(),
-                                                                           // }),
+                                    Err(e) => Err((&e).to_baml_error()), // None => Err(baml_types::tracing::errors::BamlError::Base {
+                                                                         //     message: format!(
+                                                                         //         "No parsed result found for function: {}",
+                                                                         //         function_name
+                                                                         //     )
+                                                                         //     .into(),
+                                                                         // }),
                                 },
-                                Err(e) => Err(e.into_baml_error()),
+                                Err(e) => Err(e.to_baml_error()),
                             },
                         );
                         BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
@@ -756,7 +733,7 @@ impl BamlRuntime {
                             .expect("We checked earlier that this function is an expr_fn")
                             .elem;
                         let fn_expr = expr_fn.expr.clone();
-                        let context = initial_context(&self.inner.ir());
+                        let context = initial_context(self.inner.ir());
                         let env = EvalEnv {
                             context,
                             runtime: self,
@@ -865,7 +842,7 @@ impl BamlRuntime {
             .await
         {
             Ok(id) => {}
-            Err(e) => log::error!("Error during logging: {}", e),
+            Err(e) => log::error!("Error during logging: {e}"),
         }
 
         (response, curr_call_id)
@@ -890,7 +867,7 @@ impl BamlRuntime {
             ctx.create_ctx(tb, cb, env_vars, ctx.call_id_stack(true)?)?,
             #[cfg(not(target_arch = "wasm32"))]
             self.async_runtime.clone(),
-            collectors.unwrap_or_else(|| vec![]),
+            collectors.unwrap_or_default(),
         )
     }
 
@@ -932,7 +909,7 @@ impl BamlRuntime {
         let provider = self.llm_provider_from_function(&function_name, &ctx)?;
 
         let prompt = self
-            .render_prompt(&function_name, &ctx, &params, None)
+            .render_prompt(&function_name, &ctx, params, None)
             .await
             .map(|(prompt, ..)| prompt)?;
 
@@ -963,8 +940,7 @@ impl BamlRuntime {
             HTTPBody::new(
                 request
                     .body()
-                    .map(reqwest::Body::as_bytes)
-                    .flatten()
+                    .and_then(reqwest::Body::as_bytes)
                     .unwrap_or_default()
                     .into(),
             ),
@@ -1016,7 +992,7 @@ impl BamlRuntime {
             &ctx,
         )?;
 
-        renderer.parse(&self.inner.ir(), &ctx, &llm_response, allow_partials)
+        renderer.parse(self.inner.ir(), &ctx, &llm_response, allow_partials)
     }
 
     #[cfg(not(target_arch = "wasm32"))]
@@ -1243,7 +1219,7 @@ impl ExperimentalTracingInterface for BamlRuntime {
         }
         #[cfg(target_arch = "wasm32")]
         {
-            let _ = wasm_bindgen_futures::spawn_local(async move {
+            wasm_bindgen_futures::spawn_local(async move {
                 if let Err(e) = flush().await {
                     baml_log::error!("Failed to flush: {}", e);
                 }
@@ -1347,9 +1323,9 @@ async fn expr_eval_result(
     let maybe_expr_f = ir.find_expr_fn(function_name);
     match maybe_expr_f {
         Ok(expr_fn) => {
-            log::trace!("Calling function: {}", function_name);
+            log::trace!("Calling function: {function_name}");
             let collectors = collector.as_ref().map(|c| vec![c.clone()]);
-            let call = tracer.start_call(&function_name, mgr, params, true, false, collectors);
+            let call = tracer.start_call(function_name, mgr, params, true, false, collectors);
 
             let ctx = mgr.create_ctx(tb, cb, env_vars.clone(), call.new_call_id_stack.clone())?;
             let env = EvalEnv {

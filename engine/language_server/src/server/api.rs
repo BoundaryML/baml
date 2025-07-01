@@ -1,7 +1,8 @@
-use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::{
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
-use crate::{server::schedule::Task, session::Session};
 use diagnostics::{file_diagnostics, project_diagnostics};
 use log::info;
 use lsp_server;
@@ -11,6 +12,8 @@ use lsp_types::{
 };
 use serde::{Deserialize, Serialize};
 use url::Url;
+
+use crate::{server::schedule::Task, session::Session};
 
 mod diagnostics;
 pub(crate) mod notifications;
@@ -24,10 +27,8 @@ use self::traits::{
     BackgroundDocumentNotificationHandler, NotificationHandler, RequestHandler,
     SyncNotificationHandler,
 };
-
 use super::{
-    client::Responder,
-    client::{Notifier, Requester},
+    client::{Notifier, Requester, Responder},
     schedule::BackgroundSchedule,
     Result,
 };
@@ -52,13 +53,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
     let id = req.id.clone();
 
     match req.method.as_str() {
-        // request::CodeActions::METHOD => background_request_task::<request::CodeActions>(
-        //     req,
-        //     BackgroundSchedule::LatencySensitive,
-        // ),
-        // request::CodeActionResolve::METHOD => {
-        //     background_request_task::<request::CodeActionResolve>(req, BackgroundSchedule::Worker)
-        // }
+        request::CodeActionHandler::METHOD => local_request_task::<request::CodeActionHandler>(req),
         "bamlCliVersion" => {
             let version = env!("CARGO_PKG_VERSION");
             return Task::local(move |_, _, _, responder| {
@@ -72,6 +67,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
         }
         request::Completion::METHOD => local_request_task::<request::Completion>(req),
         request::CodeLens::METHOD => local_request_task::<request::CodeLens>(req),
+        request::CodeLensResolve::METHOD => local_request_task::<request::CodeLensResolve>(req),
         request::GotoDefinition::METHOD => local_request_task::<request::GotoDefinition>(req),
         request::Rename::METHOD => local_request_task::<request::Rename>(req),
         request::DocumentDiagnosticRequestHandler::METHOD => {
@@ -82,7 +78,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
         "getBAMLFunctions" => {
             tracing::info!("getBAMLFunctions");
             return Task::local(move |session, _notifier, requester, responder| {
-                let result: anyhow::Result<(serde_json::Value,)> = (|| {
+                let result: anyhow::Result<(serde_json::Value,)> = {
                     let mut all_functions = Vec::new();
                     let projects = session.baml_src_projects.lock().unwrap();
 
@@ -115,7 +111,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                             result
                         ))
                     }
-                })();
+                };
                 if let Ok((result,)) = result {
                     responder.respond(id, Ok(result)).unwrap();
                 } else {
@@ -139,7 +135,7 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                     }
 
                     let project = session
-                        .get_or_create_project(&url.to_file_path().unwrap())
+                        .get_or_create_project(url.to_file_path().unwrap())
                         .expect("Already checked for project's existence");
                     project.lock().unwrap().update_runtime(Some(notifier))?;
 
@@ -155,17 +151,15 @@ pub(super) fn request<'a>(req: lsp_server::Request) -> Task<'a> {
                             },
                         }),
                     ));
-                    let res = responder.respond(id, report)?;
-                    Ok(res)
+                    responder.respond(id, report)?;
+                    Ok(())
                 })();
                 result.unwrap_or_else(|e| {
                     tracing::error!("Failed to send response: {e}");
-                    ()
                 })
             });
         }
-
-        // request::ExecuteCommand::METHOD => local_request_task::<request::ExecuteCommand>(req),
+        request::ExecuteCommand::METHOD => local_request_task::<request::ExecuteCommand>(req),
         // request::Format::METHOD => {
         //     background_request_task::<request::Format>(req, BackgroundSchedule::Fmt)
         // }

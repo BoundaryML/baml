@@ -10,13 +10,13 @@ pub struct Package {
 
 impl Package {
     fn new(package: &str) -> Self {
-        let parts: Vec<_> = package.split('.').map(|s| s.to_string()).collect();
+        let parts: Vec<_> = package.split('.').map(str::to_string).collect();
         if parts.is_empty() {
             panic!("Package cannot be empty");
         }
         // ensure the first part is baml_client
         if parts[0] != "baml_client" && parts[0] != "baml_py" {
-            panic!("Package must start with baml_client: {}", package);
+            panic!("Package must start with baml_client: {package}");
         }
         Package {
             package_path: parts,
@@ -34,7 +34,6 @@ impl Package {
     pub fn in_type_definition(&self) -> bool {
         self.type_definition_scope
     }
-
 
     pub fn relative_from(&self, other: &CurrentRenderPackage) -> String {
         // Py does wierd imports, so we return only the last part of the package
@@ -81,9 +80,15 @@ pub(crate) struct CurrentRenderPackage {
 }
 
 impl CurrentRenderPackage {
-    pub fn new(package: &str, lookup: std::sync::Arc<IntermediateRepr>, is_pydantic_2: bool) -> Self {
+    pub fn new(
+        package: &str,
+        lookup: std::sync::Arc<IntermediateRepr>,
+        is_pydantic_2: bool,
+    ) -> Self {
         Self {
-            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(Package::new(package)))),
+            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(Package::new(
+                package,
+            )))),
             lookup,
             is_pydantic_2,
         }
@@ -91,12 +96,13 @@ impl CurrentRenderPackage {
 
     pub fn in_type_definition(&self) -> Self {
         Self {
-            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(self.get().clone_as_type_definition()))),
+            package: std::sync::Arc::new(std::sync::Mutex::new(std::sync::Arc::new(
+                self.get().clone_as_type_definition(),
+            ))),
             lookup: self.lookup.clone(),
             is_pydantic_2: self.is_pydantic_2,
         }
     }
-
 
     pub fn lookup(&self) -> &impl TypeLookups {
         self.lookup.as_ref()
@@ -112,7 +118,7 @@ impl CurrentRenderPackage {
                 *orig = std::sync::Arc::new(Package::new(package));
             }
             Err(e) => {
-                panic!("Failed to get package: {}", e);
+                panic!("Failed to get package: {e}");
             }
         }
     }

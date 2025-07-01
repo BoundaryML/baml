@@ -12,6 +12,11 @@ dead_code = "deny"
 elided_named_lifetimes = "deny"
 unused_imports = "allow"
 unused_variables = "allow"
+deprecated = "allow"
+
+[lints.clippy]
+too_many_arguments = "allow"
+inherent_to_string = "allow"
 
 [dependencies]
 anyhow.workspace = true

@@ -1,6 +1,6 @@
-use serde::{Deserialize, Serialize};
-use serde::{Deserializer, Serializer};
 use std::time::Duration;
+
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use time::OffsetDateTime;
 use ts_rs::TS;
 

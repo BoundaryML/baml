@@ -1,12 +1,10 @@
 use std::collections::HashSet;
 
-use crate::validate::validation_pipeline::context::Context;
-
+use internal_baml_ast::ast::{FieldType, TypeExpId, WithIdentifier, WithName, WithSpan};
 use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
 
-use internal_baml_schema_ast::ast::{FieldType, TypeExpId, WithIdentifier, WithName, WithSpan};
-
 use super::types::validate_type;
+use crate::validate::validation_pipeline::context::Context;
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
     let mut defined_types = internal_baml_jinja_types::PredefinedTypes::default(
@@ -83,7 +81,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                         Some(range) => range,
                         None => {
                             ctx.push_error(DatamodelError::new_validation_error(
-                                &format!("Error parsing jinja template: {}", e),
+                                &format!("Error parsing jinja template: {e}"),
                                 pspan.clone(),
                             ));
                             continue;
@@ -93,14 +91,10 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                     let start_offset = pspan.start + range.start;
                     let end_offset = pspan.start + range.end;
 
-                    let span = Span::new(
-                        pspan.file.clone(),
-                        start_offset as usize,
-                        end_offset as usize,
-                    );
+                    let span = Span::new(pspan.file.clone(), start_offset, end_offset);
 
                     ctx.push_error(DatamodelError::new_validation_error(
-                        &format!("Error parsing jinja template: {}", e),
+                        &format!("Error parsing jinja template: {e}"),
                         span,
                     ))
                 } else {

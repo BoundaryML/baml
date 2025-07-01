@@ -2,16 +2,13 @@
 mod ctypes;
 
 mod raw_ptr_wrapper;
-use std::ops::Deref;
-use std::{collections::HashMap, ffi::CStr, ptr::null, sync::Arc};
+use std::{collections::HashMap, ffi::CStr, ops::Deref, ptr::null, sync::Arc};
+
 use anyhow::Result;
-use baml_runtime::tracingv2::storage::storage::{Collector, Usage};
-use baml_runtime::{BamlRuntime, FunctionResult};
+use baml_runtime::{tracingv2::storage::storage::Collector, BamlRuntime, FunctionResult};
 use once_cell::sync::{Lazy, OnceCell};
 
-
 const VERSION: &str = env!("CARGO_PKG_VERSION");
-
 
 #[no_mangle]
 pub extern "C" fn version() -> *const libc::c_char {
@@ -82,13 +79,14 @@ pub extern "C" fn invoke_runtime_cli(args: *const *const libc::c_char) -> libc::
     }
 }
 
-use std::ffi::CString;
-use std::os::raw::c_char;
+use std::{ffi::CString, os::raw::c_char};
 
 use baml_types::BamlValue;
 
-use crate::ctypes::BamlFunctionArguments;
-use crate::raw_ptr_wrapper::{UsageWrapper, CollectorWrapper};
+use crate::{
+    ctypes::BamlFunctionArguments,
+    raw_ptr_wrapper::{CollectorWrapper, UsageWrapper},
+};
 
 pub type CallbackFn = extern "C" fn(call_id: u32, is_done: i32, content: *const i8, length: usize);
 
@@ -104,13 +102,16 @@ extern "C" fn register_callbacks(callback_fn: CallbackFn, error_callback_fn: Cal
     let _ = env_logger::try_init_from_env(env_logger::Env::new().filter("BAML_INTERNAL_LOG"));
 
     // Create a global runtime or pass it along as needed.
-    unsafe {
-        let _ = RESULT_CALLBACK_FN.set(std::mem::transmute(callback_fn));
-        let _ = ERROR_CALLBACK_FN.set(std::mem::transmute(error_callback_fn));
-    }
+    let _ = RESULT_CALLBACK_FN.set(callback_fn);
+    let _ = ERROR_CALLBACK_FN.set(error_callback_fn);
 }
 
-fn safe_trigger_callback(id: u32, is_done: bool, result: Result<FunctionResult>, runtime: &BamlRuntime) {
+fn safe_trigger_callback(
+    id: u32,
+    is_done: bool,
+    result: Result<FunctionResult>,
+    runtime: &BamlRuntime,
+) {
     let callback_fn = RESULT_CALLBACK_FN
         .get()
         .expect("expected callback function to be set. Did you call register_callbacks?");
@@ -123,7 +124,12 @@ fn safe_trigger_callback(id: u32, is_done: bool, result: Result<FunctionResult>,
         Ok(result) => match result.parsed() {
             Some(Ok(content)) => {
                 let mut builder = flatbuffers::FlatBufferBuilder::new();
-                let content = ctypes::serialize_baml_value_with_meta(&content.0, &mut builder, !is_done, &runtime.inner);
+                let content = ctypes::serialize_baml_value_with_meta(
+                    &content.0,
+                    &mut builder,
+                    !is_done,
+                    &runtime.inner,
+                );
                 let is_done_int = if is_done { 1 } else { 0 };
                 callback_fn(
                     id,
@@ -143,7 +149,7 @@ fn safe_trigger_callback(id: u32, is_done: bool, result: Result<FunctionResult>,
             }
         },
         Err(e) => {
-            let message = format!("Error: {}", e);
+            let message = format!("Error: {e}");
             error_callback_fn(id, 1, message.as_ptr() as *const i8, message.len());
         }
     }
@@ -163,13 +169,7 @@ pub extern "C" fn call_function_from_c(
     length: usize,
     id: u32,
 ) -> *const libc::c_void {
-    match call_function_from_c_inner(
-        runtime,
-        function_name,
-        encoded_args,
-        length,
-        id,
-    ) {
+    match call_function_from_c_inner(runtime, function_name, encoded_args, length, id) {
         Ok(_) => null(),
         Err(e) => {
             Box::into_raw(Box::new(CString::new(e.to_string()).unwrap())) as *const libc::c_void
@@ -182,7 +182,7 @@ fn call_function_from_c_inner(
     function_name: *const c_char,
     encoded_args: *const libc::c_char,
     length: usize,
-    id: u32
+    id: u32,
 ) -> Result<()> {
     // Safety: assume that the pointers provided are valid.
     let runtime = unsafe { &*(runtime as *const BamlRuntime) };
@@ -197,7 +197,12 @@ fn call_function_from_c_inner(
 
     // Convert keyword arguments.
     let buffer = unsafe { std::slice::from_raw_parts(encoded_args as *const u8, length) };
-    let ctypes::BamlFunctionArguments { kwargs, client_registry, env_vars, collectors } = ctypes::buffer_to_cffi_function_arguments(buffer)?;
+    let ctypes::BamlFunctionArguments {
+        kwargs,
+        client_registry,
+        env_vars,
+        collectors,
+    } = ctypes::buffer_to_cffi_function_arguments(buffer)?;
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
 
@@ -260,7 +265,12 @@ fn call_function_stream_from_c_inner(
 
     // Convert keyword arguments.
     let buffer = unsafe { std::slice::from_raw_parts(encoded_args as *const u8, length) };
-    let BamlFunctionArguments{ kwargs, client_registry, env_vars, collectors } = ctypes::buffer_to_cffi_function_arguments(buffer)?;
+    let BamlFunctionArguments {
+        kwargs,
+        client_registry,
+        env_vars,
+        collectors,
+    } = ctypes::buffer_to_cffi_function_arguments(buffer)?;
 
     let ctx = runtime.create_ctx_manager(BamlValue::String("cffi".to_string()), None);
     let mut stream = match runtime.stream_function(
@@ -270,7 +280,8 @@ fn call_function_stream_from_c_inner(
         None,
         client_registry.as_ref(),
         collectors.map(|c| c.iter().map(|c| c.deref().clone()).collect()),
-        env_vars){
+        env_vars,
+    ) {
         Ok(stream) => stream,
         Err(e) => {
             return Err(anyhow::anyhow!("Failed to stream function: {}", e));
@@ -281,7 +292,13 @@ fn call_function_stream_from_c_inner(
 
     RUNTIME.spawn(async move {
         let (result, _) = stream
-            .run(Some(|r| on_event(id, r, runtime)), &ctx, None, None, HashMap::new())
+            .run(
+                Some(|r| on_event(id, r, runtime)),
+                &ctx,
+                None,
+                None,
+                HashMap::new(),
+            )
             .await;
         safe_trigger_callback(id, true, result, runtime);
     });
@@ -352,8 +369,8 @@ fn call_collector_function_inner(
                 "usage" => {
                     let logs = collector.function_logs();
                     let usage = collector.usage();
-                    println!("logs: {:?}", logs);
-                    println!("usage: {:?}", usage);
+                    println!("logs: {logs:?}");
+                    println!("usage: {usage:?}");
                     Ok(UsageWrapper::from_object(usage).send())
                 }
                 _ => Err(anyhow::anyhow!(

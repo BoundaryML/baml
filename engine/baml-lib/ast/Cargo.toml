@@ -1,0 +1,36 @@
+[package]
+edition = "2021"
+name = "internal-baml-ast"
+version.workspace = true
+authors.workspace = true
+description.workspace = true
+license-file.workspace = true
+
+[lints.rust]
+dead_code = "deny"
+elided_named_lifetimes = "deny"
+unused_imports = "allow"
+
+[dependencies]
+internal-baml-diagnostics = { path = "../diagnostics" }
+baml-types = { path = "../baml-types" }
+bstd.workspace = true
+log = "0.4.20"
+serde_json.workspace = true
+serde.workspace = true
+anyhow.workspace = true
+
+pest = "2.8.1"
+pest_derive = "2.8.1"
+either = "1.8.1"
+test-log = "0.2.16"
+pretty = "0.12.3"
+regex.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+unindent = "0.2.3"
+
+[features]
+debug_parser = []
+# default = ["debug_parser"]

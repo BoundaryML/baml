@@ -4,10 +4,6 @@ use anyhow::Result;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::RenderedChatMessage;
 
-use crate::{
-    client_registry::ClientProperty, runtime_interface::InternalClientLookup, RuntimeContext,
-};
-
 use super::{
     orchestrator::{
         ExecutionScope, IterOrchestrator, OrchestrationScope, OrchestrationState,
@@ -18,6 +14,9 @@ use super::{
     traits::WithRetryPolicy,
     LLMResponse,
 };
+use crate::{
+    client_registry::ClientProperty, runtime_interface::InternalClientLookup, RuntimeContext,
+};
 
 pub enum LLMProvider {
     Primitive(Arc<LLMPrimitiveProvider>),
@@ -27,8 +26,8 @@ pub enum LLMProvider {
 impl std::fmt::Debug for LLMProvider {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            LLMProvider::Primitive(provider) => write!(f, "Primitive({})", provider),
-            LLMProvider::Strategy(provider) => write!(f, "Strategy({})", provider),
+            LLMProvider::Primitive(provider) => write!(f, "Primitive({provider})"),
+            LLMProvider::Strategy(provider) => write!(f, "Strategy({provider})"),
         }
     }
 }
@@ -94,7 +93,7 @@ impl LLMProvider {
 
     pub fn completion_to_provider_body<'a>(
         &self,
-        prompt: &String,
+        prompt: &str,
         ctx: &RuntimeContext,
         client_lookup: &'a dyn InternalClientLookup<'a>,
     ) -> Result<serde_json::Map<String, serde_json::Value>> {

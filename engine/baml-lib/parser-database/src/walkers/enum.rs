@@ -1,6 +1,6 @@
-use crate::{ast, types::Attributes, walkers::Walker};
+use internal_baml_ast::ast::{WithDocumentation, WithName, WithSpan};
 
-use internal_baml_schema_ast::ast::{WithDocumentation, WithName, WithSpan};
+use crate::{ast, types::Attributes, walkers::Walker};
 /// An `enum` declaration in the schema.
 pub type EnumWalker<'db> = Walker<'db, ast::TypeExpId>;
 /// One value in an `enum` declaration in the schema.
@@ -47,7 +47,7 @@ impl<'db> EnumValueWalker<'db> {
             .types
             .enum_attributes
             .get(&self.id.0)
-            .and_then(|f| f.value_serilizers.get(&self.id.1));
+            .and_then(|f| f.value_serializers.get(&self.id.1));
 
         result
     }

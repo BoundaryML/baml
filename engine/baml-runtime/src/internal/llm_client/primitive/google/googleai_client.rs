@@ -1,26 +1,5 @@
-use crate::client_registry::ClientProperty;
-use crate::internal::llm_client::primitive::request::ResponseType;
-use crate::internal::llm_client::traits::{
-    CompletionToProviderBody, HttpContext, ToProviderMessage, ToProviderMessageExt,
-    WithClientProperties,
-};
-use crate::internal::llm_client::ResolveMediaUrls;
-use crate::RuntimeContext;
-use crate::{
-    internal::llm_client::{
-        primitive::{
-            google::types::GoogleResponse,
-            request::{make_parsed_request, make_request, RequestBuilder},
-        },
-        traits::{
-            SseResponseTrait, StreamResponse, WithChat, WithClient, WithNoCompletion,
-            WithRetryPolicy, WithStreamChat,
-        },
-        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
-        ModelFeatures,
-    },
-    request::create_client,
-};
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent};
 use eventsource_stream::Eventsource;
@@ -28,13 +7,31 @@ use futures::StreamExt;
 use http::header;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-use internal_llm_client::google_ai::ResolvedGoogleAI;
 use internal_llm_client::{
-    AllowedRoleMetadata, ClientProvider, ResolvedClientProperty, UnresolvedClientProperty,
+    google_ai::ResolvedGoogleAI, AllowedRoleMetadata, ClientProvider, ResolvedClientProperty,
+    UnresolvedClientProperty,
 };
 use secrecy::ExposeSecret;
 use serde_json::json;
-use std::collections::HashMap;
+
+use crate::{
+    client_registry::ClientProperty,
+    internal::llm_client::{
+        primitive::{
+            google::types::GoogleResponse,
+            request::{make_parsed_request, make_request, RequestBuilder, ResponseType},
+        },
+        traits::{
+            CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse,
+            ToProviderMessage, ToProviderMessageExt, WithChat, WithClient, WithClientProperties,
+            WithNoCompletion, WithRetryPolicy, WithStreamChat,
+        },
+        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+        ModelFeatures, ResolveMediaUrls,
+    },
+    request::create_client,
+    RuntimeContext,
+};
 
 pub struct GoogleAIClient {
     pub name: String,
@@ -123,7 +120,7 @@ impl WithStreamChat for GoogleAIClient {
 
 impl GoogleAIClient {
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<Self> {
-        let properties = resolve_properties(&client.elem().provider, &client.options(), ctx)?;
+        let properties = resolve_properties(&client.elem().provider, client.options(), ctx)?;
         Ok(Self {
             name: client.name().into(),
             context: RenderContext_Client {
@@ -140,11 +137,7 @@ impl GoogleAIClient {
                 resolve_image_urls: ResolveMediaUrls::IfMatchesGoogleFileUri,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
-            retry_policy: client
-                .elem()
-                .retry_policy_id
-                .as_ref()
-                .map(|s| s.to_string()),
+            retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),
             client: create_client()?,
             properties,
         })
@@ -253,9 +246,7 @@ impl WithChat for GoogleAIClient {
 }
 
 //simple, Map with key "prompt" and value of the prompt string
-fn convert_completion_prompt_to_body(
-    prompt: &String,
-) -> serde_json::Map<String, serde_json::Value> {
+fn convert_completion_prompt_to_body(prompt: &str) -> serde_json::Map<String, serde_json::Value> {
     let mut map = serde_json::Map::new();
     let content = json!({
         "role": "user",
@@ -356,7 +347,7 @@ impl ToProviderMessage for GoogleAIClient {
 impl CompletionToProviderBody for GoogleAIClient {
     fn completion_to_provider_body(
         &self,
-        prompt: &String,
+        prompt: &str,
     ) -> serde_json::Map<String, serde_json::Value> {
         convert_completion_prompt_to_body(prompt)
     }

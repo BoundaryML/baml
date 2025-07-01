@@ -1,13 +1,12 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
+use serde::Deserialize;
+use serde_json::Value;
 
 use super::types::{GoogleResponse, Part};
 use crate::internal::llm_client::{
     primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse,
     LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
 };
-use anyhow::Context;
-use serde::Deserialize;
-use serde_json::Value;
 
 fn to_prompt(
     prompt: either::Either<&String, &[internal_baml_jinja::RenderedChatMessage]>,
@@ -40,7 +39,7 @@ pub fn parse_google_response<C: WithClient + RequestBuilder>(
             start_time: system_now,
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
-            message: format!("{:?}", e),
+            message: format!("{e:?}"),
             code: ErrorCode::Other(2),
         }) {
         Ok(response) => response,
@@ -102,10 +101,10 @@ pub fn parse_google_response<C: WithClient + RequestBuilder>(
     })
 }
 
-fn text_content_part(parts: &Vec<Part>) -> Option<String> {
+fn text_content_part(parts: &[Part]) -> Option<String> {
     parts
         .iter()
-        .position(|part| !part.text.is_empty() && part.thought.unwrap_or(false) == false)
+        .position(|part| !part.text.is_empty() && !part.thought.unwrap_or(false))
         .map(|index| parts[index].text.clone())
 }
 
@@ -125,7 +124,7 @@ pub fn scan_google_response_stream(
         Err(e) => return Ok(()),
     };
 
-    let event = match GoogleResponse::deserialize(&event_body)
+    let event = GoogleResponse::deserialize(&event_body)
         .context(format!(
             "Failed to parse into a response accepted by {}: {}",
             std::any::type_name::<GoogleResponse>(),
@@ -135,23 +134,21 @@ pub fn scan_google_response_stream(
             client: client_name.to_string(),
             model: model_name.clone(),
             prompt: prompt.clone(),
-            start_time: system_now.clone(),
+            start_time: *system_now,
             request_options: request_options.clone(),
             latency: instant_now.elapsed(),
-            message: format!("{:?}", e),
+            message: format!("{e:?}"),
             code: ErrorCode::Other(2),
-        }) {
-        Ok(response) => response,
-        Err(e) => return Err(e),
-    };
-    if let Some(choice) = event.candidates.get(0) {
+        })?;
+
+    if let Some(choice) = event.candidates.first() {
         let text_content = &choice
             .content
             .as_ref()
             .and_then(|c| text_content_part(&c.parts));
 
         if let Some(text_content) = text_content {
-            inner.content += &text_content;
+            inner.content += text_content;
         }
         inner.metadata.finish_reason = choice.finish_reason.as_ref().map(|r| r.to_string());
         if choice
@@ -170,14 +167,14 @@ pub fn scan_google_response_stream(
 
 #[cfg(test)]
 mod tests {
+    use pretty_assertions::assert_eq;
+    use web_time::Duration;
+
+    use super::*;
     use crate::internal::llm_client::primitive::{
         google::types::{Candidate, Content, Part, UsageMetaData},
         tests::MockClient,
     };
-
-    use super::*;
-    use pretty_assertions::assert_eq;
-    use web_time::Duration;
 
     const RESPONSE: &str = r#"
 {
@@ -291,7 +288,7 @@ mod tests {
             actual_result.latency = Duration::ZERO;
             assert_eq!(actual_result, expected);
         } else {
-            panic!("Expected LLMResponse::Success, got {:?}", result);
+            panic!("Expected LLMResponse::Success, got {result:?}");
         }
     }
 }

@@ -2,8 +2,7 @@ use std::sync::Arc;
 
 use baml_types::EvaluationContext;
 use indexmap::IndexMap;
-use internal_baml_core::ir::repr::IntermediateRepr;
-use internal_baml_core::ir::IRHelper;
+use internal_baml_core::ir::{repr::IntermediateRepr, IRHelper};
 use minijinja::value::{Enumerator, Object, ObjectRepr};
 
 use crate::{BamlMedia, BamlValue};
@@ -134,7 +133,7 @@ impl minijinja::value::Object for MinijinjaBamlMedia {
     ) -> Result<minijinja::value::Value, minijinja::Error> {
         Err(minijinja::Error::new(
             minijinja::ErrorKind::UnknownMethod,
-            format!("BamlImage has no callable attribute '{:#?}'", args),
+            format!("BamlImage has no callable attribute '{args:#?}'"),
         ))
     }
 
@@ -211,7 +210,7 @@ impl std::fmt::Display for MinijinjaBamlClass {
             map.insert(alias.to_string(), value);
         }
         // Use pretty-printed JSON formatting as expected by tests
-        write!(f, "{:#?}", map)
+        write!(f, "{map:#?}")
     }
 }
 

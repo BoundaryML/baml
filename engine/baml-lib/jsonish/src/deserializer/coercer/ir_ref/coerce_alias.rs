@@ -1,9 +1,8 @@
 use anyhow::Result;
 use internal_baml_core::ir::FieldType;
 
-use crate::deserializer::types::BamlValueWithFlags;
-
 use super::{ParsingContext, ParsingError, TypeCoercer};
+use crate::deserializer::types::BamlValueWithFlags;
 
 pub fn coerce_alias(
     ctx: &ParsingContext,
@@ -13,7 +12,7 @@ pub fn coerce_alias(
     assert!(matches!(target, FieldType::RecursiveTypeAlias { .. }));
     log::debug!(
         "scope: {scope} :: coercing to: {name} (current: {current})",
-        name = target.to_string(),
+        name = target,
         scope = ctx.display_scope(),
         current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
     );

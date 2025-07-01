@@ -86,6 +86,14 @@ Issues labeled `good first issue` are a good place to start.
 
 4. Run the integration tests.
 
+5. **Set up Git hooks (Recommended)**:
+   - Install the pre-commit hook to automatically format Rust code:
+     ```bash
+     ./tools/install-hooks
+     ```
+   - This hook will run `cargo fmt` with import organization before each commit
+   - If formatting changes are made, you'll need to review and re-commit the changes
+
 ## Running Integration Tests
 
 The integration tests verify BAML's functionality across multiple programming languages. Each language has its own test suite in the `integ-tests/` directory.

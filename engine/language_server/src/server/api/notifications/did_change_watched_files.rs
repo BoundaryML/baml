@@ -1,11 +1,14 @@
-use crate::server::api::diagnostics::publish_session_lsp_diagnostics;
-use crate::server::api::ResultExt;
-use crate::server::client::{Notifier, Requester};
-use crate::server::Result;
-use crate::session::Session;
 use lsp_types as types;
-use lsp_types::notification as notif;
-use lsp_types::{PublishDiagnosticsParams, Url};
+use lsp_types::{notification as notif, PublishDiagnosticsParams, Url};
+
+use crate::{
+    server::{
+        api::{diagnostics::publish_session_lsp_diagnostics, ResultExt},
+        client::{Notifier, Requester},
+        Result,
+    },
+    session::Session,
+};
 
 pub(crate) struct DidChangeWatchedFiles;
 

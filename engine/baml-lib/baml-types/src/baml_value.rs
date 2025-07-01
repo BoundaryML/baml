@@ -349,7 +349,6 @@ pub enum BamlValueWithMeta<T> {
     Null(T),
 }
 
-
 pub trait TypeLookups: Sized {
     fn expand_recursive_type(&self, type_alias: &str) -> anyhow::Result<&FieldType>;
 }
@@ -366,8 +365,10 @@ impl<T: crate::HasFieldType> BamlValueWithMeta<T> {
         let field_type = self.field_type();
 
         let field_type = match field_type {
-            FieldType::RecursiveTypeAlias { name, .. } => lookup.expand_recursive_type(name).unwrap(),
-            _ => field_type
+            FieldType::RecursiveTypeAlias { name, .. } => {
+                lookup.expand_recursive_type(name).unwrap()
+            }
+            _ => field_type,
         };
 
         if let FieldType::Union(options, _) = field_type {
@@ -387,10 +388,8 @@ impl<T: crate::HasFieldType> BamlValueWithMeta<T> {
                     .clone(),
                 UnionTypeViewGeneric::OneOfOptional(field_types) => field_types
                     .into_iter()
-                    .find(|t| {
-                        self.is_type(t, lookup)
-                    })
-                    .map_or_else(|| FieldType::null(), |t| t.clone()),
+                    .find(|t| self.is_type(t, lookup))
+                    .map_or_else(FieldType::null, |t| t.clone()),
             };
         }
         field_type.clone()
@@ -398,7 +397,7 @@ impl<T: crate::HasFieldType> BamlValueWithMeta<T> {
 }
 
 impl<T: crate::HasFieldType> crate::HasFieldType for BamlValueWithMeta<T> {
-    fn field_type<'a>(&'a self) -> &'a crate::FieldType {
+    fn field_type(&self) -> &crate::FieldType {
         self.meta().field_type()
     }
 }
@@ -412,12 +411,13 @@ impl<T> BamlValueWithMeta<T> {
     // TODO: This will fail for type aliases?
     fn is_type(&self, field_type: &FieldType, lookup: &impl TypeLookups) -> bool {
         let field_type = match field_type {
-            FieldType::RecursiveTypeAlias { name, .. } => lookup.expand_recursive_type(name).unwrap(),
-            _ => field_type
+            FieldType::RecursiveTypeAlias { name, .. } => {
+                lookup.expand_recursive_type(name).unwrap()
+            }
+            _ => field_type,
         };
-        
-        let handle_composite = |field_type: &FieldType| {
-            match field_type {
+
+        let handle_composite = |field_type: &FieldType| match field_type {
             FieldType::Union(options, _) => match options.view() {
                 UnionTypeViewGeneric::Null => self.is_type(&FieldType::null(), lookup),
                 UnionTypeViewGeneric::Optional(field_type) => {
@@ -427,12 +427,12 @@ impl<T> BamlValueWithMeta<T> {
                     field_types.iter().any(|t| self.is_type(t, lookup))
                 }
                 UnionTypeViewGeneric::OneOfOptional(field_types) => {
-                    field_types.iter().any(|t| self.is_type(t, lookup)) || self.is_type(&FieldType::null(), lookup)
+                    field_types.iter().any(|t| self.is_type(t, lookup))
+                        || self.is_type(&FieldType::null(), lookup)
                 }
             },
             _ => false,
-        }
-    };
+        };
 
         match self {
             BamlValueWithMeta::String(val, _) => match field_type {
@@ -462,9 +462,9 @@ impl<T> BamlValueWithMeta<T> {
                 _ => handle_composite(field_type),
             },
             BamlValueWithMeta::List(baml_value_with_metas, _) => match field_type {
-                FieldType::List(item_type, _) => {
-                    baml_value_with_metas.iter().all(|v| v.is_type(item_type, lookup))
-                }
+                FieldType::List(item_type, _) => baml_value_with_metas
+                    .iter()
+                    .all(|v| v.is_type(item_type, lookup)),
                 _ => handle_composite(field_type),
             },
             BamlValueWithMeta::Media(baml_media, _) => match field_type {
@@ -560,11 +560,7 @@ impl<T> BamlValueWithMeta<T> {
                     .iter()
                     .map(|(k, v)| (k.clone(), Self::with_default_meta(v)))
                     .collect();
-                let value_types = entries
-                    .values()
-                    .map(|v| v.field_type())
-                    .into_iter()
-                    .collect::<Vec<_>>();
+                let value_types = entries.values().map(|v| v.field_type()).collect::<Vec<_>>();
                 let field_type =
                     FieldType::union(value_types.into_iter().map(|v| v.to_owned()).collect());
 
@@ -573,11 +569,7 @@ impl<T> BamlValueWithMeta<T> {
             BamlValue::List(items) => {
                 let items: Vec<BamlValueWithMeta<T>> =
                     items.iter().map(|i| Self::with_default_meta(i)).collect();
-                let items_types = items
-                    .iter()
-                    .map(|i| i.field_type())
-                    .into_iter()
-                    .collect::<Vec<_>>();
+                let items_types = items.iter().map(|i| i.field_type()).collect::<Vec<_>>();
                 let field_type =
                     FieldType::union(items_types.into_iter().map(|v| v.to_owned()).collect());
                 List(items, T::from(field_type.simplify()))

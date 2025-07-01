@@ -4,13 +4,20 @@ mod to_baml_arg;
 
 use std::collections::HashSet;
 
+use anyhow::Result;
+use baml_types::{
+    BamlMap, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, LiteralValue,
+    TypeValue, UnionType,
+};
 use indexmap::IndexMap;
+use internal_baml_ast::ast::{WithIdentifier, WithSpan};
 use internal_baml_diagnostics::Span;
 use internal_baml_parser_database::walkers::ExprFnWalker;
-use internal_baml_schema_ast::ast::{WithIdentifier, WithSpan};
 use itertools::Itertools;
+pub use to_baml_arg::ArgCoercer;
 
 use self::scope_diagnostics::ScopeStack;
+use super::{repr, ExprFunctionNode};
 use crate::{
     error_not_found,
     ir::{
@@ -19,15 +26,6 @@ use crate::{
         TypeAlias,
     },
 };
-
-use anyhow::Result;
-use baml_types::{
-    BamlMap, BamlValue, BamlValueWithMeta, Constraint, ConstraintLevel, FieldType, LiteralValue,
-    TypeValue, UnionType,
-};
-pub use to_baml_arg::ArgCoercer;
-
-use super::{repr, ExprFunctionNode};
 
 pub type FunctionWalker<'a> = Walker<'a, &'a FunctionNode>;
 pub type ExprFunctionWalker<'a> = Walker<'a, &'a ExprFunctionNode>;
@@ -69,9 +67,9 @@ pub trait IRHelper {
     fn find_enum_locations(&self, type_name: &str) -> Vec<Span>;
     fn find_type_alias_locations(&self, type_name: &str) -> Vec<Span>;
 
-    fn check_function_params<'a>(
-        &'a self,
-        function_params: &Vec<(String, FieldType)>,
+    fn check_function_params(
+        &self,
+        function_params: &[(String, FieldType)],
         params: &BamlMap<String, BamlValue>,
         coerce_settings: ArgCoercer,
     ) -> Result<IndexMap<String, BamlValueWithMeta<FieldType>>>;
@@ -89,8 +87,8 @@ pub trait IRSemanticStreamingHelper {
     }
 
     fn class_fields(&self, class_name: &str) -> Result<BamlMap<String, FieldType>>;
-    fn find_class_fields_needing_null_filler<'a>(
-        &'a self,
+    fn find_class_fields_needing_null_filler(
+        &self,
         class_name: &str,
         value_names: &std::collections::HashSet<String>,
     ) -> Result<HashSet<String>>;
@@ -136,12 +134,12 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
 
             // Handle types that nest other types.
             (FieldType::List(base_item, _), FieldType::List(other_item, _)) => {
-                self.is_subtype(&base_item, other_item)
+                self.is_subtype(base_item, other_item)
             }
             (FieldType::List(_, _), _) => false,
 
             (FieldType::Map(base_k, base_v, _), FieldType::Map(other_k, other_v, _)) => {
-                self.is_subtype(other_k, base_k) && self.is_subtype(&**base_v, other_v)
+                self.is_subtype(other_k, base_k) && self.is_subtype(base_v, other_v)
             }
             (FieldType::Map(_, _, _), _) => false,
             (
@@ -343,10 +341,7 @@ pub trait IRHelperExtended: IRSemanticStreamingHelper {
             }
 
             BamlValueWithMeta::Class(name, fields, meta) => {
-                if !self.is_subtype(
-                    &FieldType::class(name.as_str()),
-                    &field_type,
-                ) {
+                if !self.is_subtype(&FieldType::class(name.as_str()), &field_type) {
                     anyhow::bail!("Could not unify Class {} with {:?}", name, field_type);
                 } else {
                     let class_fields = self.class_fields(&name)?;
@@ -742,9 +737,9 @@ impl IRHelper for IntermediateRepr {
         locations
     }
 
-    fn check_function_params<'a>(
-        &'a self,
-        function_params: &Vec<(String, FieldType)>,
+    fn check_function_params(
+        &self,
+        function_params: &[(String, FieldType)],
         params: &BamlMap<String, BamlValue>,
         coerce_settings: ArgCoercer,
     ) -> Result<IndexMap<String, BamlValueWithMeta<FieldType>>> {
@@ -762,7 +757,7 @@ impl IRHelper for IntermediateRepr {
             } else {
                 // Check if the parameter is optional.
                 if !param_type.is_optional() {
-                    scope.push_error(format!("Missing required parameter: {}", param_name));
+                    scope.push_error(format!("Missing required parameter: {param_name}"));
                 }
             }
             scope.pop(false);
@@ -819,8 +814,8 @@ impl IRSemanticStreamingHelper for IntermediateRepr {
             .collect())
     }
 
-    fn find_class_fields_needing_null_filler<'a>(
-        &'a self,
+    fn find_class_fields_needing_null_filler(
+        &self,
         class_name: &str,
         value_names: &std::collections::HashSet<String>,
     ) -> Result<HashSet<String>> {
@@ -862,9 +857,9 @@ impl IRSemanticStreamingHelper for IntermediateRepr {
 /// should declare as the `item_type` in the case of unions that
 /// admit multiple different children. (Perhaps a union of all the
 /// child-having variants?).
-pub fn item_type<'ir, 'a>(
-    ir: &'ir (impl IRHelperExtended + ?Sized),
-    field_type: &'a FieldType,
+pub fn item_type(
+    ir: &(impl IRHelperExtended + ?Sized),
+    field_type: &FieldType,
 ) -> Option<FieldType> {
     let res = match field_type {
         FieldType::Class { .. } => None,
@@ -887,7 +882,7 @@ pub fn item_type<'ir, 'a>(
             | baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(field_types) => {
                 let variant_children = field_types
                     .iter()
-                    .filter_map(|variant| item_type(ir, &variant))
+                    .filter_map(|variant| item_type(ir, variant))
                     .collect::<Vec<_>>();
                 match variant_children.len() {
                     0 => None,
@@ -916,7 +911,7 @@ where
             name: alias_name, ..
         } => ir
             .recursive_alias_definition(alias_name)
-            .and_then(|alias_definition| map_types(ir, &alias_definition)),
+            .and_then(|alias_definition| map_types(ir, alias_definition)),
         FieldType::Primitive(_, _) => None,
         FieldType::Enum { .. } => None,
         FieldType::List(_, _) => None,
@@ -928,7 +923,7 @@ where
                 .iter()
                 .filter_map(|variant| map_types(ir, variant))
                 .collect();
-            if variant_map_types.len() == 0 {
+            if variant_map_types.is_empty() {
                 return None;
             } else {
                 let first_key_type = variant_map_types[0].0.clone();
@@ -1029,21 +1024,17 @@ pub fn infer_type(value: &BamlValue) -> Option<FieldType> {
             TypeValue::Media(m.media_type),
             Default::default(),
         )),
-        BamlValue::Enum(enum_name, _) => {
-            Some(FieldType::Enum {
-                name: enum_name.clone(),
-                dynamic: false,
-                meta: Default::default(),
-            })
-        }
-        BamlValue::Class(class_name, _) => {
-            Some(FieldType::Class {
-                name: class_name.clone(),
-                mode: baml_types::ir_type::StreamingMode::NonStreaming,
-                dynamic: false,
-                meta: Default::default(),
-            })
-        }
+        BamlValue::Enum(enum_name, _) => Some(FieldType::Enum {
+            name: enum_name.clone(),
+            dynamic: false,
+            meta: Default::default(),
+        }),
+        BamlValue::Class(class_name, _) => Some(FieldType::Class {
+            name: class_name.clone(),
+            mode: baml_types::ir_type::StreamingMode::NonStreaming,
+            dynamic: false,
+            meta: Default::default(),
+        }),
     };
     ret
 }
@@ -1103,33 +1094,30 @@ pub fn infer_type_with_meta<T>(value: &BamlValueWithMeta<T>) -> Option<FieldType
             TypeValue::Media(m.media_type),
             Default::default(),
         )),
-        BamlValueWithMeta::Enum(enum_name, _, _) => {
-            Some(FieldType::Enum {
-                name: enum_name.clone(),
-                dynamic: false,
-                meta: Default::default(),
-            })
-        }
-        BamlValueWithMeta::Class(class_name, _, _) => {
-            Some(FieldType::Class {
-                name: class_name.clone(),
-                mode: baml_types::ir_type::StreamingMode::NonStreaming,
-                dynamic: false,
-                meta: Default::default(),
-            })
-        }
+        BamlValueWithMeta::Enum(enum_name, _, _) => Some(FieldType::Enum {
+            name: enum_name.clone(),
+            dynamic: false,
+            meta: Default::default(),
+        }),
+        BamlValueWithMeta::Class(class_name, _, _) => Some(FieldType::Class {
+            name: class_name.clone(),
+            mode: baml_types::ir_type::StreamingMode::NonStreaming,
+            dynamic: false,
+            meta: Default::default(),
+        }),
     };
     ret
 }
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use baml_types::{
         BamlMedia, BamlMediaContent, BamlMediaType, BamlValue, Constraint, ConstraintLevel,
         FieldType, JinjaExpression, MediaBase64, TypeValue,
     };
     use repr::make_test_ir;
+
+    use super::*;
 
     fn int_type() -> FieldType {
         FieldType::Primitive(TypeValue::Int, Default::default())
@@ -1408,8 +1396,8 @@ mod tests {
             span_path: None,
             allow_implicit_cast_to_string: true,
         };
-        let res = ir.check_function_params(&function.inputs(), &params, arg_coercer);
-        eprintln!("res: {:?}", res);
+        let res = ir.check_function_params(function.inputs(), &params, arg_coercer);
+        eprintln!("res: {res:?}");
         assert!(res.is_err());
     }
 
@@ -1502,8 +1490,8 @@ mod tests {
             span_path: None,
             allow_implicit_cast_to_string: true,
         };
-        let res = ir.check_function_params(&function.inputs(), &params, arg_coercer);
-        let err = res.err().expect("Should fail due to block constraint");
+        let res = ir.check_function_params(function.inputs(), &params, arg_coercer);
+        let err = res.expect_err("Should fail due to block constraint");
         let msg = format!("{err}");
         assert!(
             msg.contains("Failed assert: hi"),
@@ -1516,8 +1504,10 @@ mod tests {
 // refactored to match the `is_subtype` changes. Do something with this.
 #[cfg(test)]
 mod subtype_tests {
-    use baml_types::BamlMediaType;
-    use baml_types::{type_meta::base::StreamingBehavior, type_meta::base::TypeMeta};
+    use baml_types::{
+        type_meta::base::{StreamingBehavior, TypeMeta},
+        BamlMediaType,
+    };
     use minijinja::machinery::ast::Expr;
     use repr::make_test_ir;
 

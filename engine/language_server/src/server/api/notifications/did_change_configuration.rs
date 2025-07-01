@@ -1,9 +1,13 @@
-use crate::server::api::ResultExt;
-use crate::server::client::{Notifier, Requester};
-use crate::server::{Result, Task};
-use crate::session::Session;
-use lsp_types::notification as notif;
-use lsp_types::{self as types, ConfigurationItem, ConfigurationParams};
+use lsp_types::{self as types, notification as notif, ConfigurationItem, ConfigurationParams};
+
+use crate::{
+    server::{
+        api::ResultExt,
+        client::{Notifier, Requester},
+        Result, Task,
+    },
+    session::Session,
+};
 
 pub(crate) struct DidChangeConfiguration;
 

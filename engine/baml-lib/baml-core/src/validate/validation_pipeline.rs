@@ -1,9 +1,10 @@
 mod context;
 pub mod validations;
 
-use crate::{internal_baml_diagnostics::Diagnostics, PreviewFeature};
 use enumflags2::BitFlags;
 use internal_baml_parser_database::ParserDatabase;
+
+use crate::{internal_baml_diagnostics::Diagnostics, PreviewFeature};
 
 /// Validate a Prisma schema.
 pub(crate) fn validate(

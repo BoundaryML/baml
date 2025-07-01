@@ -1,10 +1,9 @@
 use std::hash::Hash;
 
-use internal_baml_schema_ast::ast::Expression;
-
-use crate::ast::{Span, WithSpan};
+use internal_baml_ast::ast::Expression;
 
 use super::Variable;
+use crate::ast::{Span, WithSpan};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct CodeBlockId(pub u32);

@@ -1,7 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use crate::rpc::ApiEndpoint;
-use crate::s3::S3UploadMetadata;
+use crate::{rpc::ApiEndpoint, s3::S3UploadMetadata};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CreateTraceEventUploadUrlRequest {}

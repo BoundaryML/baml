@@ -1,9 +1,8 @@
 use anyhow::Result;
 use internal_baml_jinja::CompletionOptions;
 
-use crate::{internal::llm_client::LLMResponse, RuntimeContext};
-
 use super::{HttpContext, StreamResponse};
+use crate::{internal::llm_client::LLMResponse, RuntimeContext};
 
 pub trait WithCompletion: Sync + Send {
     fn completion_options(&self, ctx: &RuntimeContext) -> Result<CompletionOptions>;

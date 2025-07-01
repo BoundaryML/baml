@@ -1,8 +1,6 @@
 use anyhow::Result;
-use baml_runtime::cli::RuntimeCliDefaults;
+use baml_runtime::{cli::RuntimeCliDefaults, BamlRuntime};
 use clap::{Parser, Subcommand};
-
-use baml_runtime::BamlRuntime;
 
 #[derive(Parser, Debug)]
 #[command(author, version, about = "A CLI tool for working with BAML. Learn more at https://docs.boundaryml.com.", long_about = None)]
@@ -127,11 +125,9 @@ impl RuntimeCli {
                     }
                 }
             }
-            Commands::LanguageServer(args) => {
-                match args.run() {
-                    Ok(()) => Ok(crate::ExitCode::Success),
-                    Err(_) => Ok(crate::ExitCode::Other),
-                }
+            Commands::LanguageServer(args) => match args.run() {
+                Ok(()) => Ok(crate::ExitCode::Success),
+                Err(_) => Ok(crate::ExitCode::Other),
             },
         }
     }

@@ -1,49 +1,43 @@
-use crate::client_registry::ClientProperty;
-use crate::internal::llm_client::primitive::anthropic::{self, AnthropicClient};
-use crate::internal::llm_client::primitive::request::ResponseType;
-use crate::internal::llm_client::primitive::stream_request::make_stream_request;
-use crate::internal::llm_client::traits::{
-    CompletionToProviderBody, HttpContext, ToProviderMessage, ToProviderMessageExt,
-    WithClientProperties,
-};
-use crate::internal::llm_client::ResolveMediaUrls;
-#[cfg(target_arch = "wasm32")]
-use crate::internal::wasm_jwt::{encode_jwt, JwtError};
-use crate::RuntimeContext;
-use crate::{
-    internal::llm_client::{
-        primitive::{
-            request::{make_parsed_request, make_request, RequestBuilder},
-            vertex::types::VertexResponse,
-        },
-        traits::{
-            SseResponseTrait, StreamResponse, WithChat, WithClient, WithNoCompletion,
-            WithRetryPolicy, WithStreamChat,
-        },
-        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
-        ModelFeatures,
-    },
-    request::create_client,
-};
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
+use baml_types::BamlMediaContent;
 use chrono::{Duration, Utc};
+use eventsource_stream::Eventsource;
 use futures::StreamExt;
 #[cfg(not(target_arch = "wasm32"))]
 use gcp_auth::TokenProvider;
-use internal_llm_client::vertex::{BaseUrlOrLocation, ResolvedGcpAuthStrategy, ResolvedVertex};
+use internal_baml_core::ir::ClientWalker;
+use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage};
 use internal_llm_client::{
+    vertex::{BaseUrlOrLocation, ResolvedGcpAuthStrategy, ResolvedVertex},
     AllowedRoleMetadata, ClientProvider, ResolvedClientProperty, UnresolvedClientProperty,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
 
-use baml_types::BamlMediaContent;
-use eventsource_stream::Eventsource;
-use internal_baml_core::ir::ClientWalker;
-use internal_baml_jinja::{RenderContext_Client, RenderedChatMessage};
-
-use serde_json::json;
-use std::collections::HashMap;
+#[cfg(target_arch = "wasm32")]
+use crate::internal::wasm_jwt::{encode_jwt, JwtError};
+use crate::{
+    client_registry::ClientProperty,
+    internal::llm_client::{
+        primitive::{
+            anthropic::{self, AnthropicClient},
+            request::{make_parsed_request, make_request, RequestBuilder, ResponseType},
+            stream_request::make_stream_request,
+            vertex::types::VertexResponse,
+        },
+        traits::{
+            CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse,
+            ToProviderMessage, ToProviderMessageExt, WithChat, WithClient, WithClientProperties,
+            WithNoCompletion, WithRetryPolicy, WithStreamChat,
+        },
+        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+        ModelFeatures, ResolveMediaUrls,
+    },
+    request::create_client,
+    RuntimeContext,
+};
 
 pub struct VertexClient {
     pub name: String,
@@ -68,7 +62,7 @@ fn resolve_properties(
         );
     };
 
-    if !props.anthropic_version.is_some() && props.model.starts_with("claude") {
+    if props.anthropic_version.is_none() && props.model.starts_with("claude") {
         props.anthropic_version =
             Some(internal_llm_client::anthropic::DEFAULT_ANTHROPIC_VERSION.to_string());
     }
@@ -164,11 +158,7 @@ impl VertexClient {
                 resolve_image_urls: ResolveMediaUrls::EnsureMime,
                 allowed_metadata: properties.allowed_metadata.clone(),
             },
-            retry_policy: client
-                .elem()
-                .retry_policy_id
-                .as_ref()
-                .map(|s| s.to_string()),
+            retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),
             client: create_client()?,
             properties,
         })
@@ -233,7 +223,7 @@ impl RequestBuilder for VertexClient {
                         None => vertex_auth.project_id().await?.to_string(),
                     }
                 )
-            },
+            }
         };
 
         let baml_original_url = format!(
@@ -320,9 +310,7 @@ impl WithChat for VertexClient {
 }
 
 //simple, Map with key "prompt" and value of the prompt string
-fn convert_completion_prompt_to_body(
-    prompt: &String,
-) -> serde_json::Map<String, serde_json::Value> {
+fn convert_completion_prompt_to_body(prompt: &str) -> serde_json::Map<String, serde_json::Value> {
     let mut map = serde_json::Map::new();
     let content = json!({
         "role": "user",
@@ -430,7 +418,7 @@ impl ToProviderMessageExt for VertexClient {
 impl CompletionToProviderBody for VertexClient {
     fn completion_to_provider_body(
         &self,
-        prompt: &String,
+        prompt: &str,
     ) -> serde_json::Map<String, serde_json::Value> {
         convert_completion_prompt_to_body(prompt)
     }

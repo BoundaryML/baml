@@ -1,6 +1,5 @@
+use super::{type_meta, ConstraintLevel, TypeGeneric, TypeStreaming};
 use crate::ir_type::UnionTypeViewGeneric;
-
-use super::{ConstraintLevel, TypeGeneric, TypeStreaming, type_meta};
 
 impl std::fmt::Display for TypeStreaming {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -14,16 +13,13 @@ impl std::fmt::Display for TypeStreaming {
             };
             let constraint_name = match &constraint.label {
                 None => "".to_string(),
-                Some(label) => format!("{}, ", label),
+                Some(label) => format!("{label}, "),
             };
             metadata_display_fmt.push_str(&format!(
                 " @{constraint_level}({constraint_name}, {{{{..}}}} )"
             ));
         }
-        let type_meta::stream::StreamingBehavior {
-            done,
-            state
-        } = self.meta().streaming_behavior;
+        let type_meta::stream::StreamingBehavior { done, state } = self.meta().streaming_behavior;
         if done {
             metadata_display_fmt.push_str(" @stream.done")
         }
@@ -32,7 +28,7 @@ impl std::fmt::Display for TypeStreaming {
             metadata_display_fmt.push_str(" @stream.with_state")
         }
 
-        let _res = match self {
+        match self {
             TypeStreaming::Enum { name, .. }
             | TypeStreaming::Class { name, .. }
             | TypeStreaming::RecursiveTypeAlias { name, .. } => write!(f, "{name}"),
@@ -43,7 +39,7 @@ impl std::fmt::Display for TypeStreaming {
                 let res = match view {
                     UnionTypeViewGeneric::Null => "null".to_string(),
                     UnionTypeViewGeneric::Optional(field_type) => {
-                        format!("{} | null", field_type.to_string())
+                        format!("{field_type} | null")
                     }
                     UnionTypeViewGeneric::OneOf(field_types) => field_types
                         .iter()
@@ -56,7 +52,7 @@ impl std::fmt::Display for TypeStreaming {
                             .map(|t| t.to_string())
                             .collect::<Vec<_>>()
                             .join(" | ");
-                        format!("{} | null", not_null_choices_str)
+                        format!("{not_null_choices_str} | null")
                     }
                 };
                 write!(f, "({res})")
@@ -83,14 +79,13 @@ impl std::fmt::Display for TypeStreaming {
                     .map(|t| t.to_string())
                     .collect::<Vec<_>>()
                     .join(", "),
-                arrow.return_type.to_string()
+                arrow.return_type
             ),
         }?;
 
-        write!(f, "{}", metadata_display_fmt)
+        write!(f, "{metadata_display_fmt}")
     }
 }
-
 
 impl std::fmt::Display for TypeGeneric<type_meta::Base> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -104,7 +99,7 @@ impl std::fmt::Display for TypeGeneric<type_meta::Base> {
             };
             let constraint_name = match &constraint.label {
                 None => "".to_string(),
-                Some(label) => format!("{}, ", label),
+                Some(label) => format!("{label}, "),
             };
             metadata_display_fmt.push_str(&format!(
                 " @{constraint_level}({constraint_name}, {{{{..}}}} )"
@@ -125,7 +120,7 @@ impl std::fmt::Display for TypeGeneric<type_meta::Base> {
             metadata_display_fmt.push_str(" @stream.with_state")
         }
 
-        let _res = match self {
+        match self {
             TypeGeneric::Enum { name, .. }
             | TypeGeneric::Class { name, .. }
             | TypeGeneric::RecursiveTypeAlias { name, .. } => write!(f, "{name}"),
@@ -136,7 +131,7 @@ impl std::fmt::Display for TypeGeneric<type_meta::Base> {
                 let res = match view {
                     UnionTypeViewGeneric::Null => "null".to_string(),
                     UnionTypeViewGeneric::Optional(field_type) => {
-                        format!("{} | null", field_type.to_string())
+                        format!("{field_type} | null")
                     }
                     UnionTypeViewGeneric::OneOf(field_types) => field_types
                         .iter()
@@ -149,7 +144,7 @@ impl std::fmt::Display for TypeGeneric<type_meta::Base> {
                             .map(|t| t.to_string())
                             .collect::<Vec<_>>()
                             .join(" | ");
-                        format!("{} | null", not_null_choices_str)
+                        format!("{not_null_choices_str} | null")
                     }
                 };
                 write!(f, "({res})")
@@ -176,10 +171,10 @@ impl std::fmt::Display for TypeGeneric<type_meta::Base> {
                     .map(|t| t.to_string())
                     .collect::<Vec<_>>()
                     .join(", "),
-                arrow.return_type.to_string()
+                arrow.return_type
             ),
         }?;
 
-        write!(f, "{}", metadata_display_fmt)
+        write!(f, "{metadata_display_fmt}")
     }
 }

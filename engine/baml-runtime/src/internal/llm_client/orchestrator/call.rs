@@ -5,6 +5,7 @@ use internal_baml_core::ir::repr::IntermediateRepr;
 use jsonish::{BamlValueWithFlags, ResponseBamlValue};
 use web_time::Duration;
 
+use super::{OrchestrationScope, OrchestratorNodeIterator};
 use crate::{
     internal::{
         llm_client::{
@@ -16,8 +17,6 @@ use crate::{
     },
     RuntimeContext,
 };
-
-use super::{OrchestrationScope, OrchestratorNodeIterator};
 
 pub(super) struct CtxWithHttpRequestId<'a> {
     runtime_context: &'a RuntimeContext,
@@ -120,7 +119,7 @@ pub async fn orchestrate(
         // Currently, we break out of the loop if an LLM responded, even if we couldn't parse the result.
         if results
             .last()
-            .map_or(false, |(_, r, _)| matches!(r, LLMResponse::Success(_)))
+            .is_some_and(|(_, r, _)| matches!(r, LLMResponse::Success(_)))
         {
             break;
         } else if let Some(duration) = sleep_duration {

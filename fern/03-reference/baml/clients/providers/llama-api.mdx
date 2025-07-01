@@ -1,0 +1,27 @@
+---
+title: llama-api
+---
+
+
+[Llama API](https://llama.developer.meta.com/docs) supports the OpenAI client, allowing you to use the
+[`openai-generic`](/docs/snippets/clients/providers/openai) provider with an
+overridden `base_url`.
+
+<Tip>
+  Note that to call Llama, you must use its OpenAI-compatible
+  `/compat/v1` endpoint. See [Llama's OpenAI compatibility
+  documentation](https://llama.developer.meta.com/docs/features/compatibility).
+</Tip>
+
+```baml
+client<llm> LlamaAPI {
+  provider openai-generic
+  retry_policy Exponential
+  options {
+    base_url "https://llama-api.meta.com/compat/v1"
+    model "Llama-3.3-8B-Instruct"
+    api_key env.LLAMA_API_KEY
+    // see openai-generic docs for more options
+  }
+}
+```

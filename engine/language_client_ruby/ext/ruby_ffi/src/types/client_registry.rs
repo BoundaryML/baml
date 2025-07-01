@@ -1,12 +1,11 @@
+use std::{cell::RefCell, str::FromStr};
+
 use baml_runtime::client_registry;
 use magnus::{
     class, function, method, scan_args::scan_args, Error, Module, Object, RHash, Ruby, Value,
 };
-use std::cell::RefCell;
-use std::str::FromStr;
 
-use crate::ruby_to_json;
-use crate::Result;
+use crate::{ruby_to_json, Result};
 
 #[magnus::wrap(class = "Baml::Ffi::ClientRegistry", free_immediately, size)]
 pub(crate) struct ClientRegistry {
@@ -31,7 +30,7 @@ impl ClientRegistry {
             Err(e) => {
                 return Err(Error::new(
                     ruby.exception_syntax_error(),
-                    format!("error while parsing call_function args:\n{}", e),
+                    format!("error while parsing call_function args:\n{e}"),
                 ));
             }
         };
@@ -41,7 +40,7 @@ impl ClientRegistry {
             Err(e) => {
                 return Err(Error::new(
                     ruby.exception_syntax_error(),
-                    format!("Invalid provider: {:?}", e),
+                    format!("Invalid provider: {e:?}"),
                 ));
             }
         };

@@ -1,24 +1,28 @@
+use std::{
+    cell::RefCell,
+    io::Write,
+    path::{Path, PathBuf},
+    time::Duration,
+};
+
 use anyhow::{Context, Result};
 use baml_runtime::{baml_src_files, BamlRuntime};
 use bstd::ProjectFqn;
 use console::style;
-use dialoguer::theme::ColorfulTheme;
-use dialoguer::Confirm;
+use dialoguer::{theme::ColorfulTheme, Confirm};
 use futures::join;
 use indexmap::IndexMap;
-use std::cell::RefCell;
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::time::Duration;
 use tokio::time::sleep;
 
-use crate::api_client::{
-    ApiClient, CreateDeploymentRequest, CreateDeploymentResponse, CreateProjectRequest,
-    ListProjectsRequest, Project, DEPLOYMENT_ID,
+use crate::{
+    api_client::{
+        ApiClient, CreateDeploymentRequest, CreateDeploymentResponse, CreateProjectRequest,
+        ListProjectsRequest, Project, DEPLOYMENT_ID,
+    },
+    colordiff::print_diff,
+    propelauth::PersistedTokenData,
+    tui::FutureWithProgress,
 };
-use crate::colordiff::print_diff;
-use crate::propelauth::PersistedTokenData;
-use crate::tui::FutureWithProgress;
 
 // Constants (replace with actual values as needed)
 #[derive(clap::Args, Debug)]
@@ -134,6 +138,7 @@ enum GetOrCreateProjectResult {
     ToBeCreated(String),
 }
 
+#[allow(clippy::await_holding_refcell_ref)] // TODO: Figure out how to fix this.
 impl Deployer {
     async fn get_or_create_project(&self) -> Result<GetOrCreateProjectResult> {
         let propel_auth_client = super::propelauth::PropelAuthClient::new()?;
@@ -176,8 +181,7 @@ impl Deployer {
             0 => {
                 let project_shortname = choose_project_shortname()?;
                 Ok(GetOrCreateProjectResult::ToBeCreated(format!(
-                    "{}/{}",
-                    org_slug, project_shortname
+                    "{org_slug}/{project_shortname}"
                 )))
             }
             _ => {
@@ -206,8 +210,7 @@ impl Deployer {
                     let project_shortname = choose_project_shortname()?;
 
                     Ok(GetOrCreateProjectResult::ToBeCreated(format!(
-                        "{}/{}",
-                        org_slug, project_shortname
+                        "{org_slug}/{project_shortname}"
                     )))
                 } else {
                     Ok(GetOrCreateProjectResult::Existing(
@@ -252,7 +255,7 @@ generator cloud {{
                     std::fs::read_to_string(std::path::Path::new(&self.from).join(&path))
                         .context(format!("Failed to read generators in {}", path.display()))?;
 
-                let new_generators = format!("{}{}", current_generators, new_generator_block);
+                let new_generators = format!("{current_generators}{new_generator_block}");
                 (path, current_generators, new_generators)
             }
             None => ("generators.baml".into(), String::new(), new_generator_block),
@@ -281,9 +284,10 @@ generator cloud {{
         let mut file = std::fs::OpenOptions::new()
             .write(true)
             .create(true)
+            .truncate(false) // This is the default. Linter complains if not added.
             .open(&generator_abspath)
             .context(format!("Failed to open {}", generator_abspath.display()))?;
-        writeln!(file, "{}", new_generators).context(format!(
+        writeln!(file, "{new_generators}").context(format!(
             "Failed to write to {}",
             generator_abspath.display()
         ))?;
@@ -301,7 +305,7 @@ generator cloud {{
                     resp
                 }
                 .with_progress_spinner(
-                    format!("Creating project {}", project_fqn),
+                    format!("Creating project {project_fqn}"),
                     |_| "done!".to_string(),
                     "uh-oh, something went wrong.",
                 )
@@ -325,7 +329,7 @@ generator cloud {{
             resp
         }
         .with_progress_spinner(
-            format!("Deploying to {}", project_fqn),
+            format!("Deploying to {project_fqn}"),
             |_| "done!".to_string(),
             "uh-oh, something went wrong.",
         )
@@ -348,7 +352,7 @@ generator cloud {{
             _ => {
                 println!("{} functions deployed at:", function_names.len());
                 for name in function_names.iter().take(2) {
-                    println!("  - {}", name);
+                    println!("  - {name}");
                 }
                 if function_names.len() > 2 {
                     println!("  ... and {} others", function_names.len() - 2);

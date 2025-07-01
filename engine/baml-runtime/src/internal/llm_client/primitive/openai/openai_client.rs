@@ -1,39 +1,34 @@
 use std::collections::HashMap;
 
-use crate::internal::llm_client::ResolveMediaUrls;
 use anyhow::Result;
 use baml_types::{BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
+use eventsource_stream::Eventsource;
+use futures::StreamExt;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-use internal_llm_client::openai::ResolvedOpenAI;
-use internal_llm_client::{AllowedRoleMetadata, FinishReasonFilter};
+use internal_llm_client::{openai::ResolvedOpenAI, AllowedRoleMetadata, FinishReasonFilter};
 use secrecy::ExposeSecret;
 use serde_json::json;
 
-use crate::internal::llm_client::{
-    ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse,
+use super::{
+    properties,
+    types::{ChatCompletionResponse, ChatCompletionResponseDelta},
 };
-
-use super::properties;
-use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta};
-
-use crate::client_registry::ClientProperty;
-use crate::internal::llm_client::primitive::request::{
-    make_parsed_request, make_request, RequestBuilder, ResponseType,
+use crate::{
+    client_registry::ClientProperty,
+    internal::llm_client::{
+        primitive::request::{make_parsed_request, make_request, RequestBuilder, ResponseType},
+        traits::{
+            CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse,
+            ToProviderMessage, ToProviderMessageExt, WithChat, WithClient, WithClientProperties,
+            WithNoCompletion, WithRetryPolicy, WithStreamChat,
+        },
+        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+        ModelFeatures, ResolveMediaUrls,
+    },
+    request::create_client,
+    RuntimeContext,
 };
-use crate::internal::llm_client::traits::{
-    CompletionToProviderBody, HttpContext, SseResponseTrait, StreamResponse, ToProviderMessage,
-    ToProviderMessageExt, WithClientProperties, WithStreamChat,
-};
-use crate::internal::llm_client::{
-    traits::{WithChat, WithClient, WithNoCompletion, WithRetryPolicy},
-    LLMResponse, ModelFeatures,
-};
-
-use crate::request::create_client;
-use crate::RuntimeContext;
-use eventsource_stream::Eventsource;
-use futures::StreamExt;
 
 pub struct OpenAIClient {
     pub name: String,
@@ -92,8 +87,8 @@ impl WithChat for OpenAIClient {
         let model_name = self
             .request_options()
             .get("model")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string);
         make_parsed_request(
             self,
             model_name,
@@ -128,9 +123,9 @@ impl RequestBuilder for OpenAIClient {
         };
 
         let mut req = self.client.post(if prompt.is_left() {
-            format!("{}/completions", destination_url)
+            format!("{destination_url}/completions")
         } else {
-            format!("{}/chat/completions", destination_url)
+            format!("{destination_url}/chat/completions")
         });
 
         if !self.properties.query_params.is_empty() {
@@ -190,8 +185,8 @@ impl WithStreamChat for OpenAIClient {
         let model_name = self
             .request_options()
             .get("model")
-            .and_then(|v| v.as_str())
-            .map(|s| s.to_string());
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string);
         crate::internal::llm_client::primitive::stream_request::make_stream_request(
             self,
             either::Either::Right(prompt),
@@ -473,16 +468,14 @@ impl ToProviderMessageExt for OpenAIClient {
 impl CompletionToProviderBody for OpenAIClient {
     fn completion_to_provider_body(
         &self,
-        prompt: &String,
+        prompt: &str,
     ) -> serde_json::Map<String, serde_json::Value> {
         convert_completion_prompt_to_body(prompt)
     }
 }
 
 // converts completion prompt into JSON body for request
-fn convert_completion_prompt_to_body(
-    prompt: &String,
-) -> serde_json::Map<String, serde_json::Value> {
+fn convert_completion_prompt_to_body(prompt: &str) -> serde_json::Map<String, serde_json::Value> {
     let mut map = serde_json::Map::new();
     map.insert("prompt".into(), json!(prompt));
     map

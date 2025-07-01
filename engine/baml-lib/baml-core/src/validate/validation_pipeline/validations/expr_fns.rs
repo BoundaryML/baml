@@ -1,14 +1,14 @@
-use itertools::Itertools;
 use std::collections::HashSet;
 
-use internal_baml_diagnostics::DatamodelError;
-// use internal_baml_schema_ast::ast::expr;
-use internal_baml_schema_ast::ast::{ClassConstructor, ClassConstructorField, Expression, Stmt};
-use internal_baml_schema_ast::ast::{WithName, WithSpan};
+use internal_baml_ast::ast::{
+    ClassConstructor, ClassConstructorField, Expression, Stmt, WithName, WithSpan,
+};
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning};
+use itertools::Itertools;
 
-use crate::ir;
-use crate::ir::builtin::is_builtin_identifier;
-use crate::validate::validation_pipeline::context::Context;
+use crate::{
+    ir, ir::builtin::is_builtin_identifier, validate::validation_pipeline::context::Context,
+};
 
 /// Builtin functions.
 ///
@@ -53,6 +53,10 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
     });
 
     for expr_fn in ctx.db.walk_expr_fns() {
+        ctx.push_warning(DatamodelWarning::new(
+            "Workflow functions are experimental, and will break in the future.".to_string(),
+            expr_fn.name_span().clone(),
+        ));
         if taken_names.contains(expr_fn.name()) {
             ctx.push_error(DatamodelError::new_validation_error(
                 "Expr function name must be unique",
@@ -81,6 +85,10 @@ pub(super) fn validate_expr_fns(ctx: &mut Context<'_>) {
 
     for toplevel_assignment in ctx.db.walk_toplevel_assignments() {
         let scope: HashSet<String> = taken_names.clone();
+        ctx.push_warning(DatamodelWarning::new(
+            "Variable assignment is experimental, and will break in the future.".to_string(),
+            toplevel_assignment.expr().span().clone(),
+        ));
         validate_stmt(
             ctx,
             &toplevel_assignment.top_level_assignment().stmt,
@@ -114,17 +122,15 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
             }
 
             // Validate generics.
-            if is_builtin_identifier(app.name.name()) {
-                if app.type_args.len() == 0 {
-                    ctx.push_error(DatamodelError::new_anyhow_error(
-                        anyhow::anyhow!(
-                            "Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>",
-                            app.name.name(),
-                            app.name.name()
-                        ),
-                        app.span().clone(),
-                    ));
-                }
+            if is_builtin_identifier(app.name.name()) && app.type_args.is_empty() {
+                ctx.push_error(DatamodelError::new_anyhow_error(
+                    anyhow::anyhow!(
+                        "Generic function {} must have a type argument. Try adding a type argument like this: {}<Type>",
+                        app.name.name(),
+                        app.name.name()
+                    ),
+                    app.span().clone(),
+                ));
             }
             for arg in &app.args {
                 validate_expression(ctx, arg, scope);
@@ -151,7 +157,7 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
             if fields.iter().len()
                 != fields
                     .iter()
-                    .map(|f| format!("{:?}", f))
+                    .map(|f| format!("{f:?}"))
                     .dedup()
                     .collect::<Vec<_>>()
                     .len()
@@ -183,7 +189,7 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
         Expression::ExprBlock(block, span) => {
             let mut scope = scope.clone();
             for stmt in block.stmts.iter() {
-                validate_stmt(ctx, stmt, &mut scope);
+                validate_stmt(ctx, stmt, &scope);
                 scope.insert(stmt.identifier.name().to_string());
             }
             validate_expression(ctx, &block.expr, &scope);
@@ -205,7 +211,7 @@ fn validate_expression(ctx: &mut Context<'_>, expr: &Expression, scope: &HashSet
             let mut body_scope = scope.clone();
             body_scope.insert(identifier.to_string());
             for stmt in body.stmts.iter() {
-                validate_stmt(ctx, stmt, &mut body_scope);
+                validate_stmt(ctx, stmt, &body_scope);
                 validate_expression(ctx, &stmt.body, &body_scope);
             }
         }

@@ -4,12 +4,11 @@ use std::{
 };
 
 use baml_runtime::tracingv2::storage::storage::BAML_TRACER;
-use napi_derive::napi;
-
 use napi::{
     bindgen_prelude::*, Env, JsBoolean, JsNull, JsNumber, JsObject, JsString, JsUndefined,
     JsUnknown, Result,
 };
+use napi_derive::napi;
 use serde_json::Value as JsonValue;
 
 use super::{request::HTTPRequest, response::HTTPResponse};
@@ -89,7 +88,7 @@ impl Collector {
     #[napi(js_name = "__printStorage")]
     pub fn print_storage() {
         let tracer = BAML_TRACER.lock().unwrap();
-        println!("Storage: {:#?}", tracer);
+        println!("Storage: {tracer:#?}");
     }
 }
 
@@ -126,9 +125,9 @@ impl FunctionLog {
 
         format!(
             "FunctionLog(id={}, function_name={}, type={}, timing={}, usage={}, calls=[{}], raw_llm_response={})",
-            inner.id().to_string(),
+            inner.id(),
             inner.function_name(),
-            inner.log_type().to_string(),
+            inner.log_type(),
             Timing { inner: inner.timing() }.to_string(),
             Usage { inner: inner.usage() }.to_string(),
             calls_str,

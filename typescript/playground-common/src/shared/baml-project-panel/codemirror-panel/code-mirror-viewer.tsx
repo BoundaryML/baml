@@ -18,7 +18,7 @@ import { StateField, StateEffect, RangeSet } from '@codemirror/state'
 
 import { hyperLink } from '@uiw/codemirror-extensions-hyper-link'
 import { langs } from '@uiw/codemirror-extensions-langs'
-import { useSetAtom, useStore, useAtomValue } from 'jotai'
+import { useSetAtom, useStore, useAtomValue, useAtom } from 'jotai'
 import { type ICodeBlock } from '../types'
 import { CodeMirrorDiagnosticsAtom } from './atoms'
 
@@ -30,6 +30,7 @@ import { createDefaultMapFromCDN, createSystem, createVirtualTypeScriptEnvironme
 import { useTheme } from 'next-themes'
 import ts from 'typescript'
 import { FlashRange, flashRangesAtom, updateCursorAtom } from '../playground-panel/atoms'
+import { filesAtom } from '../atoms'
 
 const extensionMap = {
   js: [langs.javascript()],
@@ -130,6 +131,8 @@ export const CodeMirrorViewer = ({
   onContentChange: (content: string) => void
   onAutocompleteTrigger?: (content: string) => Promise<string>
 }) => {
+  // const [files, setFiles] = useAtom(filesAtom)
+
   const ref = useRef<ReactCodeMirrorRef>({})
   const store = useStore()
   const flashRanges = useAtomValue(flashRangesAtom)
@@ -189,27 +192,27 @@ export const CodeMirrorViewer = ({
 
   const [extensions, setExtensions] = useState<Extension[]>([])
 
-  useEffect(() => {
-    // const interval = setInterval(() => {
-    if (ref.current?.view?.contentDOM) {
-      const line = ref.current.view.state.doc.lineAt(ref.current.view.state.doc.length)
-      if (line) {
-        if (shouldScrollDown) {
-          ref.current.view?.dispatch({
-            selection: { anchor: line.from, head: undefined },
-            scrollIntoView: true,
-          })
-        }
-      }
-      // // Scroll to the bottom of the container
-      // containerRef.current.contentDOM.scrollIntoView({
-      //   behavior: "smooth",
-      // });
-    }
-    // }, 1000); // Adjust the interval time (in milliseconds) as needed
+  // useEffect(() => {
+  //   // const interval = setInterval(() => {
+  //   if (ref.current?.view?.contentDOM) {
+  //     const line = ref.current.view.state.doc.lineAt(ref.current.view.state.doc.length)
+  //     if (line) {
+  //       if (shouldScrollDown) {
+  //         ref.current.view?.dispatch({
+  //           selection: { anchor: line.from, head: undefined },
+  //           scrollIntoView: true,
+  //         })
+  //       }
+  //     }
+  //     // // Scroll to the bottom of the container
+  //     // containerRef.current.contentDOM.scrollIntoView({
+  //     //   behavior: "smooth",
+  //     // });
+  //   }
+  //   // }, 1000); // Adjust the interval time (in milliseconds) as needed
 
-    // return () => clearInterval(interval); // Clean up the interval on component unmount
-  }, [fileContent, ref, shouldScrollDown])
+  //   // return () => clearInterval(interval); // Clean up the interval on component unmount
+  // }, [fileContent, ref, shouldScrollDown])
 
   const setUpdateCursor = useSetAtom(updateCursorAtom)
 
@@ -267,7 +270,7 @@ export const CodeMirrorViewer = ({
     }
 
     void initializeExtensions()
-  }, [JSON.stringify(generatedFiles?.map((f) => f.content)), compartment, lang, makeLinter])
+  }, [JSON.stringify(generatedFiles?.map((f) => f.path)), compartment, lang, makeLinter])
 
   const inlineCopilotExtension = useMemo(
     () => [
@@ -339,7 +342,7 @@ export const CodeMirrorViewer = ({
 
   useEffect(() => {
     onContentChange?.(fileContent.code)
-  }, [fileContent.code])
+  }, [fileContent.id])
 
   useEffect(() => {
     if (lang !== 'baml') {

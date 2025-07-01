@@ -7,23 +7,27 @@ use serde_json::{json, Map};
 
 mod chat;
 mod completion;
-pub use self::{
-    chat::{WithChat, WithStreamChat},
-    completion::{WithCompletion, WithNoCompletion, WithStreamCompletion},
-};
-use super::{primitive::request::RequestBuilder, LLMResponse, ModelFeatures};
-use crate::{internal::llm_client::ResolveMediaUrls, RenderCurlSettings};
-use crate::{internal::prompt_renderer::PromptRenderer, RuntimeContext};
+use std::borrow::Cow;
+
 use baml_types::{BamlMedia, BamlMediaContent, BamlMediaType, BamlValue, MediaBase64, MediaUrl};
 use base64::{prelude::BASE64_STANDARD, Engine};
 use futures::stream::StreamExt;
 use infer;
 use internal_baml_core::ir::repr::IntermediateRepr;
-use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
-use internal_baml_jinja::{RenderContext_Client, RenderedPrompt};
-
+use internal_baml_jinja::{
+    ChatMessagePart, RenderContext_Client, RenderedChatMessage, RenderedPrompt,
+};
 use shell_escape::escape;
-use std::borrow::Cow;
+
+pub use self::{
+    chat::{WithChat, WithStreamChat},
+    completion::{WithCompletion, WithNoCompletion, WithStreamCompletion},
+};
+use super::{primitive::request::RequestBuilder, LLMResponse, ModelFeatures};
+use crate::{
+    internal::{llm_client::ResolveMediaUrls, prompt_renderer::PromptRenderer},
+    RenderCurlSettings, RuntimeContext,
+};
 
 pub trait HttpContext {
     fn http_request_id(&self) -> &baml_ids::HttpRequestId;
@@ -77,7 +81,7 @@ pub trait ToProviderMessage: WithClient {
 pub trait CompletionToProviderBody {
     fn completion_to_provider_body(
         &self,
-        prompt: &String,
+        prompt: &str,
     ) -> serde_json::Map<String, serde_json::Value>;
 }
 
@@ -174,7 +178,7 @@ where
             .await
             {
                 Ok(messages) => self.chat(ctx, &messages).await,
-                Err(e) => LLMResponse::InternalFailure(format!("Error occurred:\n\n{:?}", e)),
+                Err(e) => LLMResponse::InternalFailure(format!("Error occurred:\n\n{e:?}")),
             },
 
             RenderedPrompt::Completion(p) => self.completion(ctx, p).await,
@@ -192,7 +196,7 @@ fn to_curl_command(
     headers: &reqwest::header::HeaderMap,
     body: Vec<u8>,
 ) -> String {
-    let mut curl_command = format!("curl -X {} '{}'", method, url);
+    let mut curl_command = format!("curl -X {method} '{url}'");
 
     for (key, value) in headers.iter() {
         let header = format!(" -H \"{}: {}\"", key.as_str(), value.to_str().unwrap());
@@ -205,7 +209,7 @@ fn to_curl_command(
         Err(_) => body_json,
     };
     let fully_escaped_body_json = escape_single_quotes(&pretty_body_json);
-    let body_part = format!(" -d {}", fully_escaped_body_json);
+    let body_part = format!(" -d {fully_escaped_body_json}");
     curl_command.push_str(&body_part);
 
     curl_command
@@ -380,8 +384,7 @@ where
                     Ok(messages) => &RenderedPrompt::Chat(messages),
                     Err(e) => {
                         return Err(LLMResponse::InternalFailure(format!(
-                            "Error occurred:\n\n{:?}",
-                            e
+                            "Error occurred:\n\n{e:?}"
                         )))
                     }
                 }
@@ -511,7 +514,7 @@ async fn process_media(
 
             let bytes = baml_src_reader(media_path.as_str())
                 .await
-                .context(format!("Failed to read file {:#}", media_path))?;
+                .context(format!("Failed to read file {media_path:#}"))?;
 
             let mut mime_type = part.mime_type.clone();
 

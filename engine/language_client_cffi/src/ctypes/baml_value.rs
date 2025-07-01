@@ -1,6 +1,9 @@
 use baml_types::BamlValue;
 
-use crate::ctypes::{cffi_generated::cffi::{CFFIValueHolder, CFFIValueUnion}, traits::Decode};
+use crate::ctypes::{
+    cffi_generated::cffi::{CFFIValueHolder, CFFIValueUnion},
+    traits::Decode,
+};
 
 impl Decode for BamlValue {
     type From<'a> = CFFIValueHolder<'a>;
@@ -41,7 +44,7 @@ impl From<CFFIValueHolder<'_>> for BamlValue {
                 .value_as_cffivalue_map()
                 .and_then(|m| m.entries())
                 .map(|v| v.into_iter().map(|v| v.into()).collect())
-                .map(|kv| BamlValue::Map(kv))
+                .map(BamlValue::Map)
                 .expect("Failed to convert CFFIValueMap to BamlValue"),
             CFFIValueUnion::CFFIValueClass => value
                 .value_as_cffivalue_class()
@@ -75,7 +78,7 @@ impl From<CFFIValueHolder<'_>> for BamlValue {
                 panic!("CFFIFunctionArguments is not supported in BamlValue");
             }
             other => {
-                panic!("Unsupported value type: {:?}", other);
+                panic!("Unsupported value type: {other:?}");
             }
         }
     }

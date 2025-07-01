@@ -1,6 +1,7 @@
+use std::sync::OnceLock;
+
 use anyhow::Context;
 use lsp_types::notification::Notification;
-use std::sync::OnceLock;
 
 use crate::server::ClientSender;
 

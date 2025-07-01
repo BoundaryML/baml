@@ -1,11 +1,14 @@
 mod tests;
 
+use std::{
+    collections::HashMap,
+    env,
+    fs::File,
+    io::{self, BufReader, Read},
+    path::{Path, PathBuf},
+};
+
 use anyhow::{anyhow, Context, Result};
-use std::collections::HashMap;
-use std::env;
-use std::fs::File;
-use std::io::{self, BufReader, Read};
-use std::path::{Path, PathBuf};
 
 /// Loads environment variables from a .env file
 ///
@@ -163,7 +166,7 @@ fn expand_value(value: &str, env_vars: &HashMap<String, String>) -> Result<Strin
                 let mut var_name = String::new();
 
                 // Read until closing '}'
-                while let Some(c) = chars.next() {
+                for c in chars.by_ref() {
                     if c == '}' {
                         break;
                     }

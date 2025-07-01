@@ -101,9 +101,12 @@ impl<T: Default + std::fmt::Debug> TypeGeneric<T> {
     }
 
     pub fn arrow(param_types: Vec<TypeGeneric<T>>, return_type: TypeGeneric<T>) -> Self {
-        TypeGeneric::Arrow(Box::new(super::ArrowGeneric {
-            param_types,
-            return_type,
-        }), T::default())
+        TypeGeneric::Arrow(
+            Box::new(super::ArrowGeneric {
+                param_types,
+                return_type,
+            }),
+            T::default(),
+        )
     }
 }

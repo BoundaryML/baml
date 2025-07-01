@@ -1,39 +1,49 @@
 //! Scheduling, I/O, and API endpoints.
 
-use log::info;
-use lsp_types::{
-    WorkspaceClientCapabilities, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
-};
-use std::num::NonZeroUsize;
 // The new PanicInfoHook name requires MSRV >= 1.82
 #[allow(deprecated)]
 use std::panic::PanicInfo;
-use std::path::PathBuf;
-use std::time::{Duration, Instant};
+use std::{
+    num::NonZeroUsize,
+    path::PathBuf,
+    sync::Arc,
+    time::{Duration, Instant},
+};
 
+use log::info;
 use lsp_server::Message;
 use lsp_types::{
     notification::DidChangeTextDocument, ClientCapabilities, CodeLensOptions, CompletionOptions,
     DiagnosticOptions, DiagnosticServerCapabilities, FileSystemWatcher, HoverProviderCapability,
     InitializeParams, MessageType, SaveOptions, ServerCapabilities, TextDocumentSyncCapability,
     TextDocumentSyncKind, TextDocumentSyncOptions, TextDocumentSyncSaveOptions, Url,
+    WorkspaceClientCapabilities, WorkspaceFoldersServerCapabilities, WorkspaceServerCapabilities,
 };
 use schedule::Task;
+use serde::{Deserialize, Serialize};
+use tokio::sync::RwLock;
 
-use self::connection::{Connection, ConnectionInitializer};
-use self::schedule::event_loop_thread;
-use crate::baml_project::file_utils::{find_baml_src, find_top_level_parent};
-
-use crate::session::{AllSettings, ClientSettings, Session};
-use crate::PositionEncoding;
+use self::{
+    connection::{Connection, ConnectionInitializer},
+    schedule::event_loop_thread,
+};
+use crate::{
+    baml_project::file_utils::{find_baml_src, find_top_level_parent},
+    session::{AllSettings, ClientSettings, Session},
+    PositionEncoding,
+};
 
 pub mod api;
 pub mod client;
 pub mod connection;
 mod schedule;
 
-use crate::message::try_show_message;
 pub(crate) use connection::ClientSender;
+
+use crate::{
+    message::try_show_message,
+    playground::{PlaygroundServer, PlaygroundState},
+};
 
 pub type Result<T> = std::result::Result<T, api::Error>;
 
@@ -42,6 +52,17 @@ pub(crate) struct Server {
     pub client_capabilities: ClientCapabilities,
     pub worker_threads: NonZeroUsize,
     pub session: Session,
+}
+
+#[derive(Serialize, Deserialize)]
+struct PortNotificationParams {
+    port: u16,
+}
+
+impl PortNotificationParams {
+    fn new(port: u16) -> Self {
+        PortNotificationParams { port }
+    }
 }
 
 impl Server {
@@ -87,7 +108,7 @@ impl Server {
             global_settings.tracing.log_file.as_deref(),
         );
         if let Err(e) = tracing_log::LogTracer::init() {
-            eprintln!("Failed to initialize log tracer: {}", e);
+            eprintln!("Failed to initialize log tracer: {e}");
             // Decide how to handle this error - maybe log it via tracing if possible,
             // or exit if logging is critical.
         }
@@ -131,32 +152,38 @@ impl Server {
                 anyhow::anyhow!("Failed to get the current working directory while creating a default workspace.")
             })?;
 
-        // tracing::info!("init params: {:?}", init_params);
-
-        // for some reason tracing logs are not available before this point
         tracing::info!("Starting server with {} worker threads", worker_threads);
         tracing::info!("-------- Version: {}", env!("CARGO_PKG_VERSION"));
+
+        let rt = tokio::runtime::Runtime::new()?;
 
         let mut session = Session::new(
             &client_capabilities,
             position_encoding,
             global_settings,
             &workspaces,
+            rt.handle().clone(),
         )?;
 
-        // Create a client and notifier to pass to reload
         let client = client::Client::new(connection.make_sender());
         let notifier = client.notifier();
 
-        // Reload the session with the notifier
+        // Playground state is initialized here, but server startup is now external
+        let playground_state = Arc::new(RwLock::new(PlaygroundState::new()));
+        session.playground_state = Some(playground_state.clone());
+        let session_arc = Arc::new(session.clone());
+        // Store the runtime in the session
+        session.playground_runtime = Some(rt);
         session.reload(Some(notifier))?;
 
-        Ok(Self {
+        let server = Self {
             connection,
             worker_threads,
             session,
             client_capabilities,
-        })
+        };
+        server.start_playground_server();
+        Ok(server)
     }
 
     pub fn run(self) -> anyhow::Result<()> {
@@ -232,7 +259,7 @@ impl Server {
         session.reload(Some(notifier.clone()))?;
         let mut scheduler =
             schedule::Scheduler::new(&mut session, worker_threads, connection.make_sender());
-        Self::try_register_capabilities(&_client_capabilities, &mut scheduler);
+        Self::try_register_capabilities(_client_capabilities, &mut scheduler);
 
         for msg in connection.incoming() {
             if connection.handle_shutdown(&msg)? {
@@ -342,7 +369,14 @@ impl Server {
             code_lens_provider: Some(CodeLensOptions {
                 resolve_provider: Some(true),
             }),
-
+            code_action_provider: Some(lsp_types::CodeActionProviderCapability::Simple(true)),
+            execute_command_provider: Some(lsp_types::ExecuteCommandOptions {
+                commands: vec![
+                    "openPlayground".to_string(),
+                    "baml.changeFunction".to_string(),
+                ],
+                work_done_progress_options: Default::default(),
+            }),
             definition_provider: Some(lsp_types::OneOf::Left(true)),
             document_formatting_provider: Some(lsp_types::OneOf::Left(true)),
             hover_provider: Some(HoverProviderCapability::Simple(true)),
@@ -363,10 +397,59 @@ impl Server {
                     supported: Some(true),
                     change_notifications: Some(lsp_types::OneOf::Left(true)),
                 }),
-
                 ..Default::default()
             }),
             ..Default::default()
+        }
+    }
+
+    fn start_playground_server(&self) {
+        if let (Some(playground_state), Some(rt)) = (
+            self.session.playground_state.clone(),
+            self.session.playground_runtime.as_ref(),
+        ) {
+            let mut playground_port = self.session.baml_settings.playground_port.unwrap_or(3030);
+            let session_arc = Arc::new(self.session.clone());
+            let playground_server = PlaygroundServer::new(playground_state.clone(), session_arc);
+            let sender = self.connection.make_sender();
+
+            rt.spawn(async move {
+                loop {
+                    // Check if port is available before attempting to bind
+                    let port_available =
+                        { std::net::TcpListener::bind(("127.0.0.1", playground_port)).is_ok() };
+
+                    if port_available {
+                        // Port is available, start the server
+                        let server = playground_server.clone();
+                        tracing::info!(
+                            "Hosted playground at http://localhost:{}...",
+                            playground_port
+                        );
+
+                        // Send LSP notification about the port
+                        let params = PortNotificationParams::new(playground_port);
+                        let notification = lsp_server::Notification::new(
+                            "baml/port".to_string(),
+                            serde_json::to_value(params).unwrap(),
+                        );
+                        if let Err(e) = sender.send(Message::Notification(notification)) {
+                            tracing::error!("Failed to send port notification: {}", e);
+                        }
+
+                        server.run(playground_port).await.unwrap();
+                        break;
+                    } else {
+                        // Port is already in use, try next port
+                        playground_port += 1;
+                        tracing::info!(
+                            "Port {} is in use, trying port {}...",
+                            playground_port - 1,
+                            playground_port
+                        );
+                    }
+                }
+            });
         }
     }
 }

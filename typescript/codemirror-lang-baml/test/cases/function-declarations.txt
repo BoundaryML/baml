@@ -1,0 +1,130 @@
+# Simple function
+
+function GetUser(id: string) -> User {
+  client GPT4
+  prompt #"Get user"#
+}
+
+==>
+
+Baml(Decl(FunctionDecl(
+  IdentifierDecl,
+  FunctionArgs(FunctionArg(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))),
+  TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
+  "{",
+  FunctionTupleValue(ClientKeyword, FunctionValueAtom(IdentifierDecl)),
+  FunctionTupleValue(PromptKeyword, FunctionValueAtom(PromptExpr(Document))),
+  "}"
+)))
+
+# Function with multiple arguments
+
+function CreatePost(title: string, content: string, author: User) -> Post {
+  client Claude
+  prompt #"
+    Create a post
+  "#
+}
+
+==>
+
+Baml(Decl(FunctionDecl(
+  IdentifierDecl,
+  FunctionArgs(
+    FunctionArg(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)))),
+    FunctionArg(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)))),
+    FunctionArg(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))
+  ),
+  TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
+  "{",
+  FunctionTupleValue(ClientKeyword, FunctionValueAtom(IdentifierDecl)),
+  FunctionTupleValue(PromptKeyword, FunctionValueAtom(PromptExpr(Document))),
+  "}"
+)))
+
+# Function with optional return type
+
+function SearchUsers(query: string) -> User[]? {
+  client GPT4
+  prompt #"
+    Search for users
+  "#
+}
+
+==>
+
+Baml(Decl(FunctionDecl(
+  IdentifierDecl,
+  FunctionArgs(FunctionArg(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))),
+  TypeExpr(ComplexTypeExpr(SimpleTypeExpr(OptionalTypeExpr(ComplexTypeExpr(SimpleTypeExpr(ListTypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))))))),
+  "{",
+  FunctionTupleValue(ClientKeyword, FunctionValueAtom(IdentifierDecl)),
+  FunctionTupleValue(PromptKeyword, FunctionValueAtom(PromptExpr(Document))),
+  "}"
+)))
+
+# Function with union return type
+
+function ProcessData(data: string) -> string | Error {
+  client GPT4
+  prompt #"
+    Process the data
+  "#
+}
+
+==>
+
+Baml(Decl(FunctionDecl(
+  IdentifierDecl,
+  FunctionArgs(FunctionArg(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))),
+  TypeExpr(UnionTypeExpr(TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))), TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))),
+  "{",
+  FunctionTupleValue(ClientKeyword, FunctionValueAtom(IdentifierDecl)),
+  FunctionTupleValue(PromptKeyword, FunctionValueAtom(PromptExpr(Document))),
+  "}"
+)))
+
+# Function with array arguments
+
+function AnalyzeDocuments(docs: Document[], options: string[]) -> Analysis {
+  client Claude
+  prompt #"
+    Analyze documents
+  "#
+}
+
+==>
+
+Baml(Decl(FunctionDecl(
+  IdentifierDecl,
+  FunctionArgs(
+    FunctionArg(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(ListTypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))))))),
+    FunctionArg(IdentifierDecl, TypeExpr(ComplexTypeExpr(SimpleTypeExpr(ListTypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl)))))))
+  ),
+  TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
+  "{",
+  FunctionTupleValue(ClientKeyword, FunctionValueAtom(IdentifierDecl)),
+  FunctionTupleValue(PromptKeyword, FunctionValueAtom(PromptExpr(Document))),
+  "}"
+)))
+
+# Function with no arguments
+
+function GetCurrentTime() -> string {
+  client GPT4
+  prompt #"
+    What time is it?
+  "#
+}
+
+==>
+
+Baml(Decl(FunctionDecl(
+  IdentifierDecl,
+  FunctionArgs,
+  TypeExpr(ComplexTypeExpr(SimpleTypeExpr(IdentifierDecl))),
+  "{",
+  FunctionTupleValue(ClientKeyword, FunctionValueAtom(IdentifierDecl)),
+  FunctionTupleValue(PromptKeyword, FunctionValueAtom(PromptExpr(Document))),
+  "}"
+)))

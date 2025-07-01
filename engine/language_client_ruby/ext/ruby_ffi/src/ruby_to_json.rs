@@ -1,16 +1,17 @@
+use std::result::Result;
+
 use baml_types::{BamlMap, BamlValue, BamlValueWithMeta, ResponseCheck};
 use indexmap::IndexMap;
+use jsonish::{ResponseBamlValue, ResponseValueMeta};
 use magnus::{
     prelude::*, typed_data::Obj, value::Value, Error, Float, Integer, IntoValue, RArray, RClass,
     RHash, RModule, RString, Ruby, Symbol, TypedData,
 };
-use std::result::Result;
 
 use crate::types::{
     self,
     media::{Audio, Image},
 };
-use jsonish::{ResponseBamlValue, ResponseValueMeta};
 
 struct SerializationError {
     position: Vec<String>,
@@ -86,111 +87,106 @@ impl<'rb> RubyToJson<'rb> {
             Ok(res?)
         }
         // Otherwise encode it directly.
+        else if !checks.is_empty() {
+            let serialized_checks = Self::serialize_response_checks(ruby, checks)?;
+
+            checks.clear();
+
+            let serialized_subvalue =
+                Self::serialize_baml(ruby, types, partial_types, allow_partials, from)?;
+
+            let checked_class = ruby.eval::<RClass>("Baml::Checked")?;
+            let hash = ruby.hash_new();
+            hash.aset(ruby.sym_new("value"), serialized_subvalue)?;
+            if !serialized_checks.is_empty() {
+                hash.aset(ruby.sym_new("checks"), serialized_checks)?;
+            }
+            let res = checked_class.funcall("new", (hash,));
+            Ok(res?)
+        }
+        // Otherwise encode it directly.
         else {
-            if !checks.is_empty() {
-                let serialized_checks = Self::serialize_response_checks(ruby, &checks)?;
+            let res = match from.0 {
+                BamlValueWithMeta::Class(class_name, class_fields, _) => {
+                    let hash = ruby.hash_new();
+                    for (k, v) in class_fields.into_iter() {
+                        let subvalue_allow_partials = allow_partials && !v.meta().2.required_done;
+                        let k = ruby.sym_new(k.as_str());
+                        let v = RubyToJson::serialize_baml(
+                            ruby,
+                            types,
+                            partial_types,
+                            subvalue_allow_partials,
+                            ResponseBamlValue(v),
+                        )?;
+                        hash.aset(k, v)?;
+                    }
 
-                checks.clear();
-
-                let serialized_subvalue =
-                    Self::serialize_baml(ruby, types, partial_types, allow_partials, from)?;
-
-                let checked_class = ruby.eval::<RClass>("Baml::Checked")?;
-                let hash = ruby.hash_new();
-                hash.aset(ruby.sym_new("value"), serialized_subvalue)?;
-                if !serialized_checks.is_empty() {
-                    hash.aset(ruby.sym_new("checks"), serialized_checks)?;
-                }
-                let res = checked_class.funcall("new", (hash,));
-                Ok(res?)
-            }
-            // Otherwise encode it directly.
-            else {
-                let res = match from.0 {
-                    BamlValueWithMeta::Class(class_name, class_fields, _) => {
-                        let hash = ruby.hash_new();
-                        for (k, v) in class_fields.into_iter() {
-                            let subvalue_allow_partials =
-                                allow_partials && !v.meta().2.required_done;
-                            let k = ruby.sym_new(k.as_str());
-                            let v = RubyToJson::serialize_baml(
-                                ruby,
-                                types,
-                                partial_types,
-                                subvalue_allow_partials,
-                                ResponseBamlValue(v),
-                            )?;
-                            hash.aset(k, v)?;
-                        }
-
-                        let (preferred_module, backup_module) = if allow_partials {
-                            (partial_types, types)
-                        } else {
-                            (types, partial_types)
+                    let (preferred_module, backup_module) = if allow_partials {
+                        (partial_types, types)
+                    } else {
+                        (types, partial_types)
+                    };
+                    let preferred_class =
+                        match preferred_module.const_get::<_, RClass>(class_name.as_str()) {
+                            Ok(class_type) => class_type,
+                            Err(_) => ruby.eval::<RClass>("Baml::DynamicStruct")?,
                         };
-                        let preferred_class =
-                            match preferred_module.const_get::<_, RClass>(class_name.as_str()) {
-                                Ok(class_type) => class_type,
-                                Err(_) => ruby.eval::<RClass>("Baml::DynamicStruct")?,
-                            };
-                        let backup_class =
-                            match backup_module.const_get::<_, RClass>(class_name.as_str()) {
-                                Ok(class_type) => class_type,
-                                Err(_) => ruby.eval::<RClass>("Baml::DynamicStruct")?,
-                            };
-                        match preferred_class.funcall("new", (hash,)) {
+                    let backup_class =
+                        match backup_module.const_get::<_, RClass>(class_name.as_str()) {
+                            Ok(class_type) => class_type,
+                            Err(_) => ruby.eval::<RClass>("Baml::DynamicStruct")?,
+                        };
+                    match preferred_class.funcall("new", (hash,)) {
+                        Ok(res) => Ok(res),
+                        Err(original_error) => match backup_class.funcall("new", (hash,)) {
                             Ok(res) => Ok(res),
-                            Err(original_error) => match backup_class.funcall("new", (hash,)) {
-                                Ok(res) => Ok(res),
-                                Err(_) => Err(original_error),
-                            },
+                            Err(_) => Err(original_error),
+                        },
+                    }
+                }
+                BamlValueWithMeta::Enum(enum_name, enum_value, _) => {
+                    if let Ok(enum_type) = types.const_get::<_, RClass>(enum_name.as_str()) {
+                        let enum_value = ruby.str_new(&enum_value);
+                        if let Ok(enum_instance) = enum_type.funcall("deserialize", (enum_value,)) {
+                            return Ok(enum_instance);
                         }
                     }
-                    BamlValueWithMeta::Enum(enum_name, enum_value, _) => {
-                        if let Ok(enum_type) = types.const_get::<_, RClass>(enum_name.as_str()) {
-                            let enum_value = ruby.str_new(&enum_value);
-                            if let Ok(enum_instance) =
-                                enum_type.funcall("deserialize", (enum_value,))
-                            {
-                                return Ok(enum_instance);
-                            }
-                        }
 
-                        Ok(ruby.str_new(&enum_value).into_value_with(ruby))
+                    Ok(ruby.str_new(&enum_value).into_value_with(ruby))
+                }
+                BamlValueWithMeta::Map(m, _) => {
+                    let hash = ruby.hash_new();
+                    for (k, v) in m.into_iter() {
+                        let k = ruby.str_new(&k);
+                        let v = RubyToJson::serialize_baml(
+                            ruby,
+                            types,
+                            partial_types,
+                            allow_partials,
+                            ResponseBamlValue(v),
+                        )?;
+                        hash.aset(k, v)?;
                     }
-                    BamlValueWithMeta::Map(m, _) => {
-                        let hash = ruby.hash_new();
-                        for (k, v) in m.into_iter() {
-                            let k = ruby.str_new(&k);
-                            let v = RubyToJson::serialize_baml(
-                                ruby,
-                                types,
-                                partial_types,
-                                allow_partials,
-                                ResponseBamlValue(v),
-                            )?;
-                            hash.aset(k, v)?;
-                        }
-                        Ok(hash.into_value_with(ruby))
+                    Ok(hash.into_value_with(ruby))
+                }
+                BamlValueWithMeta::List(l, _) => {
+                    let arr = ruby.ary_new();
+                    for v in l.into_iter() {
+                        let v = RubyToJson::serialize_baml(
+                            ruby,
+                            types,
+                            partial_types,
+                            allow_partials,
+                            ResponseBamlValue(v),
+                        )?;
+                        arr.push(v)?;
                     }
-                    BamlValueWithMeta::List(l, _) => {
-                        let arr = ruby.ary_new();
-                        for v in l.into_iter() {
-                            let v = RubyToJson::serialize_baml(
-                                ruby,
-                                types,
-                                partial_types,
-                                allow_partials,
-                                ResponseBamlValue(v),
-                            )?;
-                            arr.push(v)?;
-                        }
-                        Ok(arr.into_value_with(ruby))
-                    }
-                    _ => serde_magnus::serialize(&from.0.value()),
-                };
-                res
-            }
+                    Ok(arr.into_value_with(ruby))
+                }
+                _ => serde_magnus::serialize(&from.0.value()),
+            };
+            res
         }
     }
 
@@ -341,7 +337,7 @@ impl<'rb> RubyToJson<'rb> {
 
         Err(vec![SerializationError {
             position: field_pos,
-            message: format!("failed to convert {:?} to i64", any),
+            message: format!("failed to convert {any:?} to i64"),
         }])
     }
 
@@ -357,7 +353,7 @@ impl<'rb> RubyToJson<'rb> {
         let Ok(any) = any.to_string() else {
             return Err(vec![SerializationError {
                 position: field_pos,
-                message: format!("cannot convert {:#?} to utf-8 string", any),
+                message: format!("cannot convert {any:#?} to utf-8 string"),
             }]);
         };
         Ok(any)
@@ -378,7 +374,7 @@ impl<'rb> RubyToJson<'rb> {
             let Ok(value) = value else {
                 errs.push(SerializationError {
                     position: field_pos.clone(),
-                    message: format!("failed to enumerate array element at index {}", i),
+                    message: format!("failed to enumerate array element at index {i}"),
                 });
                 continue;
             };
@@ -407,20 +403,20 @@ impl<'rb> RubyToJson<'rb> {
                 Ok(k) => Ok(k.to_string()),
                 Err(_) => Err(vec![SerializationError {
                     position: field_pos.clone(),
-                    message: format!("failed to convert symbol key in hash to string: {:#?}", k),
+                    message: format!("failed to convert symbol key in hash to string: {k:#?}"),
                 }]),
             };
         }
         if let Some(k) = RString::from_value(k) {
             let mut field_pos = field_pos.clone();
-            field_pos.push(format!("{:#?}", k));
+            field_pos.push(format!("{k:#?}"));
             return match self.to_string(k, field_pos) {
                 Ok(k) => Ok(k),
                 Err(errs) => Err(errs
                     .into_iter()
                     .map(|mut e| {
                         e.message =
-                            format!("failed to convert string key in hash to string: {:#?}", k);
+                            format!("failed to convert string key in hash to string: {k:#?}");
                         e
                     })
                     .collect()),
@@ -429,8 +425,7 @@ impl<'rb> RubyToJson<'rb> {
         Err(vec![SerializationError {
             position: field_pos.clone(),
             message: format!(
-                "expected every key in this hash to be symbol or string, but found key {:#?}",
-                k
+                "expected every key in this hash to be symbol or string, but found key {k:#?}"
             ),
         }])
     }
@@ -526,7 +521,7 @@ impl<'rb> RubyToJson<'rb> {
                         .into_iter()
                         .map(|v| {
                             Symbol::from_value(v)
-                                .ok_or(format!("failed to convert {:#?} to symbol", v))
+                                .ok_or(format!("failed to convert {v:#?} to symbol"))
                         })
                         .collect::<Result<Vec<_>, std::string::String>>();
                     match fields {
@@ -612,10 +607,7 @@ impl<'rb> RubyToJson<'rb> {
 
         Err(vec![SerializationError {
             position: field_pos,
-            message: format!(
-                "struct did not respond to :to_hash with a hash, was: {:#?}",
-                any
-            ),
+            message: format!("struct did not respond to :to_hash with a hash, was: {any:#?}"),
         }])
     }
 

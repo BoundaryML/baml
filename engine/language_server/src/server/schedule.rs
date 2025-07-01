@@ -11,7 +11,6 @@ use self::{
     task::{BackgroundTaskBuilder, SyncTask},
     thread::ThreadPriority,
 };
-
 use super::{client::Client, ClientSender};
 
 /// The event loop thread is actually a secondary thread that we spawn from the

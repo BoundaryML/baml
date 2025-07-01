@@ -1,10 +1,10 @@
 use std::iter::Peekable;
 
-use crate::jsonish::{value::Fixes, Value};
 use anyhow::Result;
 use baml_types::CompletionState;
 
 use super::json_collection::JsonCollection;
+use crate::jsonish::{value::Fixes, Value};
 
 #[derive(Debug)]
 pub struct JsonParseState {
@@ -76,10 +76,7 @@ impl JsonParseState {
                 }
                 _ => {
                     // TODO: this should never happen as we should only be pushing objects and arrays
-                    panic!(
-                        "Unexpected value: {:?} in collection stack: {:?}",
-                        value, last
-                    );
+                    panic!("Unexpected value: {value:?} in collection stack: {last:?}");
                 }
             }
         } else {
@@ -109,7 +106,7 @@ impl JsonParseState {
                 s.push(token);
             }
             JsonCollection::Object(_, _, _) | JsonCollection::Array(_, _) => {
-                panic!("Unexpected token: {:?} in: {:?}", token, last);
+                panic!("Unexpected token: {token:?} in: {last:?}");
             }
         }
         Ok(0)

@@ -1,19 +1,27 @@
-use crate::errors::{BamlError, BamlInvalidArgumentError};
-use crate::parse_py_type::parse_py_type;
-use crate::types::function_result_stream::{FunctionResultStream, SyncFunctionResultStream};
-use crate::types::function_results::{pythonize_strict, FunctionResult};
-use crate::types::runtime_ctx_manager::RuntimeContextManager;
-use crate::types::trace_stats::TraceStats;
-use crate::types::type_builder::TypeBuilder;
-use crate::types::{ClientRegistry, Collector, HTTPRequest};
-use baml_runtime::runtime_interface::ExperimentalTracingInterface;
-use baml_runtime::BamlRuntime as CoreBamlRuntime;
-use pyo3::prelude::{pymethods, PyResult};
-use pyo3::types::{PyAnyMethods, PyList};
-use pyo3::{pyclass, Bound, IntoPyObjectExt, PyObject, PyRef, Python};
-use std::collections::HashMap;
-use std::path::PathBuf;
-use std::sync::Arc;
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
+
+use baml_runtime::{
+    runtime_interface::ExperimentalTracingInterface, BamlRuntime as CoreBamlRuntime,
+};
+use pyo3::{
+    prelude::{pymethods, PyResult},
+    pyclass,
+    types::{PyAnyMethods, PyList},
+    Bound, IntoPyObjectExt, PyObject, PyRef, Python,
+};
+
+use crate::{
+    errors::{BamlError, BamlInvalidArgumentError},
+    parse_py_type::parse_py_type,
+    types::{
+        function_result_stream::{FunctionResultStream, SyncFunctionResultStream},
+        function_results::{pythonize_strict, FunctionResult},
+        runtime_ctx_manager::RuntimeContextManager,
+        trace_stats::TraceStats,
+        type_builder::TypeBuilder,
+        ClientRegistry, Collector, HTTPRequest,
+    },
+};
 
 crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe);
 
@@ -62,7 +70,7 @@ impl BamlLogEvent {
         format!(
             "BamlLogEvent {{\n    metadata: {{\n        event_id: \"{}\",\n        parent_id: {},\n        root_event_id: \"{}\"\n    }},\n    prompt: {},\n    raw_output: {},\n    parsed_output: {},\n    start_time: \"{}\"\n}}",
             self.metadata.event_id,
-            self.metadata.parent_id.as_ref().map_or("None".to_string(), |id| format!("\"{}\"", id)),
+            self.metadata.parent_id.as_ref().map_or("None".to_string(), |id| format!("\"{id}\"")),
             self.metadata.root_event_id,
             prompt,
             raw_output,
@@ -136,7 +144,7 @@ impl BamlRuntime {
                 "Failed to parse args. Expect kwargs",
             ));
         };
-        log::debug!("pyo3 call_function parsed args into: {:#?}", args_map);
+        log::debug!("pyo3 call_function parsed args into: {args_map:#?}");
 
         let baml_runtime = self.inner.clone();
         let ctx_mng = ctx.inner.clone();
@@ -192,7 +200,7 @@ impl BamlRuntime {
                 "Failed to parse args as a map",
             ));
         };
-        log::debug!("pyo3 call_function_sync parsed args into: {:#?}", args_map);
+        log::debug!("pyo3 call_function_sync parsed args into: {args_map:#?}");
 
         let ctx_mng = ctx.inner.clone();
         let tb = tb.map(|tb| tb.inner.clone());
@@ -245,7 +253,7 @@ impl BamlRuntime {
         let Some(args_map) = args.as_map() else {
             return Err(BamlInvalidArgumentError::new_err("Failed to parse args"));
         };
-        log::debug!("pyo3 stream_function parsed args into: {:#?}", args_map);
+        log::debug!("pyo3 stream_function parsed args into: {args_map:#?}");
 
         let ctx = ctx.inner.clone();
         let collector_list = collectors
@@ -298,7 +306,7 @@ impl BamlRuntime {
         let Some(args_map) = args.as_map() else {
             return Err(BamlInvalidArgumentError::new_err("Failed to parse args"));
         };
-        log::debug!("pyo3 stream_function parsed args into: {:#?}", args_map);
+        log::debug!("pyo3 stream_function parsed args into: {args_map:#?}");
 
         let ctx = ctx.inner.clone();
         let collector_list = collectors
@@ -505,7 +513,7 @@ impl BamlRuntime {
                         ) {
                             Ok(_) => Ok(()),
                             Err(e) => {
-                                log::error!("Error calling log_event_callback: {:?}", e);
+                                log::error!("Error calling log_event_callback: {e:?}");
                                 Err(anyhow::Error::new(e)) // Proper error handling
                             }
                         }

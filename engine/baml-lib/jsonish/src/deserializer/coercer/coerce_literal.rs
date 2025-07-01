@@ -5,6 +5,7 @@ use baml_types::LiteralValue;
 use internal_baml_core::ir::FieldType;
 use internal_baml_jinja::CompletionOptions;
 
+use super::{coerce_primitive::coerce_int, ParsingContext, ParsingError};
 use crate::{
     deserializer::{
         coercer::{coerce_primitive::coerce_bool, match_string::match_string, TypeCoercer},
@@ -13,8 +14,6 @@ use crate::{
     },
     jsonish,
 };
-
-use super::{coerce_primitive::coerce_int, ParsingContext, ParsingError};
 
 impl TypeCoercer for LiteralValue {
     fn coerce(
@@ -47,7 +46,7 @@ impl TypeCoercer for LiteralValue {
                     jsonish::Value::Number(_, _)
                     | jsonish::Value::Boolean(_)
                     | jsonish::Value::String(_, _) => {
-                        let mut result = self.coerce(ctx, target, Some(&inner_value))?;
+                        let mut result = self.coerce(ctx, target, Some(inner_value))?;
                         result.add_flag(Flag::ObjectToPrimitive(jsonish::Value::Object(
                             obj.clone(),
                             completion_state.clone(),

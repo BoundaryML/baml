@@ -12,6 +12,8 @@ anyhow.workspace = true
 dir-writer = { path = "../../utils/dir_writer" }
 baml-types.workspace = true
 internal-baml-core.workspace = true
+indexmap.workspace = true
+regex.workspace = true
 
 
 [dev-dependencies]

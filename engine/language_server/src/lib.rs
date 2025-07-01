@@ -1,17 +1,19 @@
 #![allow(dead_code)]
 
+use std::num::NonZeroUsize;
+
 use anyhow::Context;
 pub use edit::{DocumentKey, PositionEncoding, TextDocument};
 pub use session::{ClientSettings, DocumentQuery, DocumentSnapshot, Session};
-use std::num::NonZeroUsize;
 
 use crate::server::Server;
 
 #[macro_use]
 mod message;
 
-mod edit;
-mod logging;
+pub mod edit;
+pub mod logging;
+pub mod playground;
 pub mod server;
 pub mod session;
 #[cfg(test)]
@@ -24,10 +26,6 @@ mod baml_text_size;
 
 pub(crate) const SERVER_NAME: &str = "baml-lsp";
 pub(crate) const DIAGNOSTIC_NAME: &str = "BAML";
-
-/// A common result type used in most cases where a
-/// result type is needed.
-// pub(crate) type Result<T> = anyhow::Result<T>;
 
 pub(crate) fn version() -> &'static str {
     env!("CARGO_PKG_VERSION")

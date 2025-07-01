@@ -1,12 +1,11 @@
+use std::{
+    cmp, fmt,
+    ops::{Add, AddAssign, Bound, Index, IndexMut, Range, RangeBounds, Sub, SubAssign},
+};
+
 use cmp::Ordering;
 
-use {
-    crate::baml_text_size::size::TextSize,
-    std::{
-        cmp, fmt,
-        ops::{Add, AddAssign, Bound, Index, IndexMut, Range, RangeBounds, Sub, SubAssign},
-    },
-};
+use crate::baml_text_size::size::TextSize;
 
 /// A range in text, represented as a pair of [`TextSize`][struct@TextSize].
 ///

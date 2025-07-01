@@ -125,7 +125,6 @@ test_deserializer!(
     }
 );
 
-
 test_deserializer!(
   triple_quotes_contains_only_quoted_string_dedent,
   BAML_FILE,
@@ -144,7 +143,6 @@ test_deserializer!(
     "code": "def main():\n  print(\"Hello, world!\")"
   }
 );
-
 
 // test_deserializer!(
 //     triple_quotes_nested,

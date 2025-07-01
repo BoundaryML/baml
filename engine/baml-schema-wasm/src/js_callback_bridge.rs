@@ -96,7 +96,7 @@ async fn loop_gcp_cred_provider(
     mut req_rx: tokio::sync::mpsc::Receiver<Option<String>>,
     resp_tx: tokio::sync::broadcast::Sender<Result<GcpCredResult, RuntimeCallbackError>>,
 ) {
-    while let Some(_) = req_rx.recv().await {
+    while (req_rx.recv().await).is_some() {
         let _ = resp_tx.send(GcpCredProvider::invoke(&load_gcp_creds_cb, None).await);
     }
     let _ = resp_tx.send(Err(RuntimeCallbackError::RecvError(

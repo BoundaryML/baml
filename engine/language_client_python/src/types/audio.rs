@@ -1,12 +1,13 @@
 use baml_types::BamlMediaContent;
-use pyo3::prelude::{pymethods, PyResult};
-use pyo3::types::{PyTuple, PyType};
-use pyo3::{Bound, PyAny, PyObject, Python};
+use pyo3::{
+    prelude::{pymethods, PyResult},
+    types::{PyTuple, PyType},
+    Bound, PyAny, PyObject, Python,
+};
 use pythonize::{depythonize, pythonize};
 
-use crate::errors::BamlError;
-
 use super::media_repr::{self, UserFacingBamlMedia};
+use crate::errors::BamlError;
 crate::lang_wrapper!(BamlAudioPy, baml_types::BamlMedia);
 
 #[pymethods]

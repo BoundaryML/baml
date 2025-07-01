@@ -1,10 +1,10 @@
 use std::any::Any;
 
-use crate::deserializer::{deserialize_flags::Flag, types::BamlValueWithFlags};
 use anyhow::Result;
 use internal_baml_core::{ast::Field, ir::FieldType};
 
 use super::{ParsingContext, ParsingError};
+use crate::deserializer::{deserialize_flags::Flag, types::BamlValueWithFlags};
 
 pub fn coerce_array_to_singular(
     ctx: &ParsingContext,
@@ -187,26 +187,26 @@ pub(super) fn pick_best(
             }
 
             // Devalue strings that were cast from objects.
-            if !a_val.is_composite() && b_val.is_composite() {
-                if a_val
+            if !a_val.is_composite()
+                && b_val.is_composite()
+                && a_val
                     .conditions()
                     .flags()
                     .iter()
                     .any(|f| matches!(f, Flag::JsonToString(..) | Flag::FirstMatch(_, _)))
-                {
-                    return std::cmp::Ordering::Greater;
-                }
+            {
+                return std::cmp::Ordering::Greater;
             }
 
-            if a_val.is_composite() && !b_val.is_composite() {
-                if b_val
+            if a_val.is_composite()
+                && !b_val.is_composite()
+                && b_val
                     .conditions()
                     .flags()
                     .iter()
                     .any(|f| matches!(f, Flag::JsonToString(..) | Flag::FirstMatch(_, _)))
-                {
-                    return std::cmp::Ordering::Less;
-                }
+            {
+                return std::cmp::Ordering::Less;
             }
 
             match a_default.cmp(&b_default) {
@@ -252,10 +252,7 @@ pub(super) fn pick_best(
         }
         None => {
             if !res.is_empty() {
-                let errors = res.iter().filter_map(|r| match r {
-                    Ok(_) => None,
-                    Err(e) => Some(e),
-                });
+                let errors = res.iter().filter_map(|r| r.as_ref().err());
                 Err(ctx.error_merge_multiple(
                     &format!("Failed to find any {} in {} items", target, res.len()),
                     errors,

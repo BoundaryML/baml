@@ -1,6 +1,7 @@
+use std::sync::{Arc, Weak};
+
 use lsp_server as lsp;
 use lsp_types::{notification::Notification, request::Request};
-use std::sync::{Arc, Weak};
 
 type ConnectionSender = crossbeam::channel::Sender<lsp::Message>;
 type ConnectionReceiver = crossbeam::channel::Receiver<lsp::Message>;
@@ -170,7 +171,7 @@ impl ClientSender {
         let Some(sender) = self.weak_sender.upgrade() else {
             anyhow::bail!("The connection with the client has been closed");
         };
-        let res = sender.send(msg)?;
-        Ok(res)
+        sender.send(msg)?;
+        Ok(())
     }
 }

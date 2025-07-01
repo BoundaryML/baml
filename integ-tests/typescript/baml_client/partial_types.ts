@@ -487,4 +487,52 @@ export namespace partial_types {
       value?: string | null
       reasoning?: string | null
     }
+export type Amount = number | null
+
+export type Combination = number | string | boolean | number | string[] | Record<string, string[]> | null
+
+export type Currency = types.Checked<number,"gt_ten"> | null
+
+export type Graph = Record<string, (string | null)[] | null> | null
+
+export type JsonArray = (JsonValue | null)[] | null
+
+export type JsonEntry = SimpleTag | JsonTemplate | null
+
+export type JsonValue = number | string | boolean | number | JsonObject | JsonArray | null
+
+export type LinkedListAlias = LinkedListAliasNode | null
+
+export type List = (string | null)[] | null
+
+export type MultipleAttrs = types.Checked<number,"gt_ten"> | null
+
+export type NodeIndirection = NodeWithAliasIndirection | null
+
+export type Primitive = number | string | boolean | number | null
+
+export type RecAliasOne = RecAliasTwo | null
+
+export type RecAliasThree = (RecAliasOne | null)[] | null
+
+export type RecAliasTwo = RecAliasThree | null
+
+export type RecursiveListAlias = (RecursiveListAlias | null)[] | null
+
+export interface JsonObject {
+  [key: string]: Record<string, JsonValue | null> | null
+}
+
+export interface JsonTemplate {
+  [key: string]: Record<string, JsonEntry | null> | null
+}
+
+export interface RecursiveMapAlias {
+  [key: string]: Record<string, RecursiveMapAlias | null> | null
+}
+
+export interface RecursiveUnion {
+  [key: string]: string | Record<string, RecursiveUnion> | null
+}
+
 }

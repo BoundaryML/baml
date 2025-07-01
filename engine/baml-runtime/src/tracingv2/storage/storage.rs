@@ -5,19 +5,24 @@
 //! for a single FunctionCallId, even if multiple Collectors or FunctionLogs want it.
 //! It uses manual reference counting (`inc_ref` / `dec_ref`) to free memory for
 //! a FunctionCallId as soon as there are no more "owners."
-use baml_ids::{FunctionCallId, HttpRequestId};
-use baml_types::tracing::events::{
-    FunctionEnd, FunctionStart, HTTPRequest, HTTPResponse, LoggedLLMRequest, LoggedLLMResponse,
-    TraceData, TraceEvent,
+use std::{
+    collections::{HashMap, HashSet},
+    fmt,
+    hash::Hash,
+    sync::{Arc, Mutex},
 };
-use baml_types::HasFieldType;
+
+use baml_ids::{FunctionCallId, HttpRequestId};
+use baml_types::{
+    tracing::events::{
+        FunctionEnd, FunctionStart, HTTPRequest, HTTPResponse, LoggedLLMRequest, LoggedLLMResponse,
+        TraceData, TraceEvent,
+    },
+    HasFieldType,
+};
 use indexmap::{IndexMap, IndexSet};
 use once_cell::sync::Lazy;
 use serde::Serialize;
-use std::collections::{HashMap, HashSet};
-use std::fmt;
-use std::hash::Hash;
-use std::sync::{Arc, Mutex};
 use uuid::Uuid;
 
 use super::interface::TraceEventWithMeta;
@@ -64,9 +69,7 @@ impl TraceStorage {
         *count += 1;
 
         // Ensure call_map has an entry for the ID; create if not present.
-        self.call_map
-            .entry(function_id.clone())
-            .or_insert_with(Vec::new);
+        self.call_map.entry(function_id.clone()).or_default();
     }
 
     /// Decrease the reference count for the given FunctionCallId,
@@ -75,10 +78,7 @@ impl TraceStorage {
         match self.ref_counts.get_mut(function_id) {
             Some(rc) => {
                 if *rc == 0 {
-                    panic!(
-                        "Attempted to decrement ref below 0 for FunctionID {:?}",
-                        function_id
-                    );
+                    panic!("Attempted to decrement ref below 0 for FunctionID {function_id:?}");
                 }
                 *rc -= 1;
                 // If refcount hits 0, remove from both maps
@@ -92,10 +92,7 @@ impl TraceStorage {
                 }
             }
             None => {
-                panic!(
-                    "Attempted to decrement ref for FunctionID {:?} (not found)",
-                    function_id
-                );
+                panic!("Attempted to decrement ref for FunctionID {function_id:?} (not found)");
             }
         }
     }
@@ -108,7 +105,7 @@ impl TraceStorage {
         //     event.content.type_name()
         // );
         if let Err(e) = crate::tracingv2::publisher::publish_trace_event(event.clone()) {
-            log::warn!("Failed to publish trace event: {:?}", e);
+            log::warn!("Failed to publish trace event: {e:?}");
         }
 
         let Some(&count) = self.ref_counts.get(&event.call_id) else {
@@ -176,7 +173,7 @@ fn build_function_log(
     let guard = events; // A reference to the vector.
 
     let mut function_start: Option<&FunctionStart<_>> = None;
-    let mut function_end: Option<&FunctionEnd<_>> = None;
+    // let mut function_end: Option<&FunctionEnd<_>> = None;
 
     let mut function_start_time: Option<i64> = None;
     let mut function_end_time: Option<i64> = None;
@@ -202,7 +199,7 @@ fn build_function_log(
                 }
             }
             TraceData::FunctionEnd(end) => {
-                function_end = Some(end);
+                // function_end = Some(end);
                 function_end_time = Some(time_ms);
             }
 
@@ -571,7 +568,7 @@ impl Collector {
     }
 
     pub fn track_function(&self, fid: FunctionCallId) {
-        log::debug!("Tracking function: {:?}", fid);
+        log::debug!("Tracking function: {fid:?}");
 
         // Then add to our set (maintaining insertion order)
         let mut guard = self.tracked_ids.lock().unwrap();

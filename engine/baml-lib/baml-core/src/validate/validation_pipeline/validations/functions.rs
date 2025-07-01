@@ -1,15 +1,13 @@
 use std::collections::HashSet;
 
-use crate::validate::validation_pipeline::context::Context;
-
-use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
-
-use internal_baml_parser_database::TypeWalker;
-use internal_baml_schema_ast::ast::{
+use internal_baml_ast::ast::{
     FieldType, TypeAliasId, TypeExpId, WithIdentifier, WithName, WithSpan,
 };
+use internal_baml_diagnostics::{DatamodelError, DatamodelWarning, Span};
+use internal_baml_parser_database::TypeWalker;
 
 use super::types::validate_type;
+use crate::validate::validation_pipeline::context::Context;
 
 pub(super) fn validate(ctx: &mut Context<'_>) {
     let clients = ctx
@@ -60,7 +58,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                         Some(range) => range,
                         None => {
                             ctx.push_error(DatamodelError::new_validation_error(
-                                &format!("Error parsing jinja template: {}", e),
+                                &format!("Error parsing jinja template: {e}"),
                                 pspan.clone(),
                             ));
                             continue;
@@ -70,14 +68,10 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                     let start_offset = pspan.start + range.start;
                     let end_offset = pspan.start + range.end;
 
-                    let span = Span::new(
-                        pspan.file.clone(),
-                        start_offset as usize,
-                        end_offset as usize,
-                    );
+                    let span = Span::new(pspan.file.clone(), start_offset, end_offset);
 
                     ctx.push_error(DatamodelError::new_validation_error(
-                        &format!("Error parsing jinja template: {}", e),
+                        &format!("Error parsing jinja template: {e}"),
                         span,
                     ))
                 } else {
@@ -182,7 +176,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                         Some(range) => range,
                         None => {
                             ctx.push_error(DatamodelError::new_validation_error(
-                                &format!("Error parsing jinja template: {}", e),
+                                &format!("Error parsing jinja template: {e}"),
                                 pspan.clone(),
                             ));
                             continue;
@@ -192,14 +186,10 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
                     let start_offset = pspan.start + range.start;
                     let end_offset = pspan.start + range.end;
 
-                    let span = Span::new(
-                        pspan.file.clone(),
-                        start_offset as usize,
-                        end_offset as usize,
-                    );
+                    let span = Span::new(pspan.file.clone(), start_offset, end_offset);
 
                     ctx.push_error(DatamodelError::new_validation_error(
-                        &format!("Error parsing jinja template: {}", e),
+                        &format!("Error parsing jinja template: {e}"),
                         span,
                     ))
                 } else {
@@ -263,7 +253,7 @@ impl<'c> NestedChecks<'c> {
                             .ast_field()
                             .expr
                             .as_ref()
-                            .map_or(false, |ft| self.has_checks_nested(ft))
+                            .is_some_and(|ft| self.has_checks_nested(ft))
                     })
                 }
                 Some(TypeWalker::TypeAlias(type_alias_walker)) => {

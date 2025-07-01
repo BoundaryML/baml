@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use std::sync::Arc;
-use std::time::Duration;
+use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use aws_config::Region;
-use aws_config::{identity::IdentityCache, retry::RetryConfig, BehaviorVersion, ConfigLoader};
+use anyhow::{Context, Result};
+use aws_config::{
+    identity::IdentityCache, retry::RetryConfig, BehaviorVersion, ConfigLoader, Region,
+};
 use aws_credential_types::{
     provider::{
         error::{CredentialsError, CredentialsNotLoaded},
@@ -11,52 +11,53 @@ use aws_credential_types::{
     },
     Credentials,
 };
-use aws_sdk_bedrockruntime::config::{Intercept, StalledStreamProtectionConfig};
-use aws_sdk_bedrockruntime::Client as BedrockRuntimeClient;
-use aws_sdk_bedrockruntime::{self as bedrock, operation::converse::ConverseOutput};
-
-use anyhow::{Context, Result};
+use aws_sdk_bedrockruntime::{
+    self as bedrock,
+    config::{Intercept, StalledStreamProtectionConfig},
+    operation::converse::ConverseOutput,
+    Client as BedrockRuntimeClient,
+};
 use aws_smithy_json::serialize::JsonObjectWriter;
-use aws_smithy_runtime_api::client::result::SdkError;
-use aws_smithy_runtime_api::http::Headers;
-use aws_smithy_types::Blob;
-use aws_smithy_types::Document;
+use aws_smithy_runtime_api::{client::result::SdkError, http::Headers};
+use aws_smithy_types::{Blob, Document};
 use baml_ids::HttpRequestId;
-use baml_types::tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, TraceData, TraceEvent};
-use baml_types::{ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent, BamlMediaType};
+use baml_types::{
+    tracing::events::{HTTPBody, HTTPRequest, HTTPResponse, TraceData, TraceEvent},
+    ApiKeyWithProvenance, BamlMap, BamlMedia, BamlMediaContent, BamlMediaType,
+};
 use futures::stream;
 use internal_baml_core::ir::ClientWalker;
 use internal_baml_jinja::{ChatMessagePart, RenderContext_Client, RenderedChatMessage};
-use internal_llm_client::aws_bedrock::{self, ResolvedAwsBedrock};
 use internal_llm_client::{
+    aws_bedrock::{self, ResolvedAwsBedrock},
     AllowedRoleMetadata, ClientProvider, ResolvedClientProperty, UnresolvedClientProperty,
 };
 use secrecy::ExposeSecret;
 use serde::Deserialize;
 use serde_json::{json, Map};
 use uuid::Uuid;
-use web_time::Instant;
-use web_time::SystemTime;
+use web_time::{Instant, SystemTime};
 
-use crate::client_registry::ClientProperty;
-use crate::internal::llm_client::traits::{
-    HttpContext, ToProviderMessageExt, WithClientProperties,
-};
-use crate::internal::llm_client::{
-    primitive::request::RequestBuilder,
-    traits::{
-        StreamResponse, WithChat, WithClient, WithNoCompletion, WithRenderRawCurl, WithRetryPolicy,
-        WithStreamChat,
-    },
-    ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
-    ModelFeatures, ResolveMediaUrls,
-};
-use crate::tracingv2::storage::storage::BAML_TRACER;
-use crate::{json_body, JsonBodyInput, RenderCurlSettings, RuntimeContext};
 // See https://github.com/awslabs/aws-sdk-rust/issues/169
 use super::custom_http_client;
 #[cfg(target_arch = "wasm32")]
 use super::wasm::WasmAwsCreds;
+use crate::{
+    client_registry::ClientProperty,
+    internal::llm_client::{
+        primitive::request::RequestBuilder,
+        traits::{
+            HttpContext, StreamResponse, ToProviderMessageExt, WithChat, WithClient,
+            WithClientProperties, WithNoCompletion, WithRenderRawCurl, WithRetryPolicy,
+            WithStreamChat,
+        },
+        ErrorCode, LLMCompleteResponse, LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
+        ModelFeatures, ResolveMediaUrls,
+    },
+    json_body,
+    tracingv2::storage::storage::BAML_TRACER,
+    JsonBodyInput, RenderCurlSettings, RuntimeContext,
+};
 
 // represents client that interacts with the Bedrock API
 pub struct AwsClient {
@@ -175,7 +176,7 @@ impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterc
             request.uri().to_string(),
             request.method().to_string(),
             headers,
-            HTTPBody::new(request.body().bytes().unwrap_or_default().to_vec().into()),
+            HTTPBody::new(request.body().bytes().unwrap_or_default().to_vec()),
         );
         let event = TraceEvent::new_raw_llm_request(self.call_stack.clone(), Arc::new(request));
         BAML_TRACER.lock().unwrap().put(Arc::new(event));
@@ -194,7 +195,7 @@ impl aws_smithy_runtime_api::client::interceptors::Intercept for CollectorInterc
                 self.http_request_id.clone(),
                 response.status().as_u16(),
                 Some(smithy_json_headers(response.headers())),
-                HTTPBody::new(response.body().bytes().unwrap_or_default().to_vec().into()),
+                HTTPBody::new(response.body().bytes().unwrap_or_default().to_vec()),
             );
 
             let event =
@@ -259,13 +260,13 @@ impl AwsClient {
                 resolve_image_urls: ResolveMediaUrls::Always,
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
-            retry_policy: client.retry_policy.as_ref().map(|s| s.to_string()),
+            retry_policy: client.retry_policy.as_ref().map(String::to_owned),
             properties,
         })
     }
 
     pub fn new(client: &ClientWalker, ctx: &RuntimeContext) -> Result<AwsClient> {
-        let properties = resolve_properties(&client.elem().provider, &client.options(), ctx)?;
+        let properties = resolve_properties(&client.elem().provider, client.options(), ctx)?;
 
         Ok(Self {
             name: client.name().into(),
@@ -283,11 +284,7 @@ impl AwsClient {
                 resolve_image_urls: ResolveMediaUrls::Always,
                 allowed_metadata: properties.allowed_role_metadata.clone(),
             },
-            retry_policy: client
-                .elem()
-                .retry_policy_id
-                .as_ref()
-                .map(|s| s.to_string()),
+            retry_policy: client.elem().retry_policy_id.as_ref().map(String::to_owned),
             properties,
         })
     }
@@ -377,11 +374,8 @@ impl AwsClient {
 
         // Set region if specified
         if let Some(aws_region) = self.properties.region.as_ref() {
-            if aws_region.starts_with("$") {
-                return Err(anyhow::anyhow!(
-                    "AWS region expected, please set: env.{}",
-                    &aws_region[1..]
-                ));
+            if let Some(v) = aws_region.strip_prefix("$") {
+                return Err(anyhow::anyhow!("AWS region expected, please set: env.{v}",));
             }
 
             loader = loader.region(Region::new(aws_region.clone()));
@@ -403,7 +397,7 @@ impl AwsClient {
         Ok(BedrockRuntimeClient::from_conf(bedrock_config))
     }
 
-    async fn chat_anyhow<'r>(&self, response: &'r ConverseOutput) -> Result<String> {
+    async fn chat_anyhow(&self, response: &ConverseOutput) -> Result<String> {
         let Some(bedrock::types::ConverseOutput::Message(ref message)) = response.output else {
             anyhow::bail!(
                 "Expected message output in response, but is type {}",
@@ -463,7 +457,7 @@ impl AwsClient {
                     first
                         .parts
                         .iter()
-                        .map(|part| self.part_to_system_message(part))
+                        .map(Self::part_to_system_message)
                         .collect::<Result<_>>()?,
                 );
                 chat_slice = remainder_slice;
@@ -612,7 +606,7 @@ impl WithStreamChat for AwsClient {
                     start_time: SystemTime::now(),
                     request_options,
                     latency: web_time::Duration::ZERO,
-                    message: format!("{:#?}", e),
+                    message: format!("{e:#?}"),
                     code: ErrorCode::Other(2),
                 }));
             }
@@ -628,7 +622,7 @@ impl WithStreamChat for AwsClient {
                     start_time: SystemTime::now(),
                     request_options,
                     latency: web_time::Duration::ZERO,
-                    message: format!("{:#?}", e),
+                    message: format!("{e:#?}"),
                     code: ErrorCode::Other(2),
                 }))
             }
@@ -657,7 +651,7 @@ impl WithStreamChat for AwsClient {
                     start_time: system_start,
                     request_options,
                     latency: instant_start.elapsed(),
-                    message: format!("{:#?}", e),
+                    message: format!("{e:#?}"),
                     code: match e {
                         SdkError::ConstructionFailure(_) => ErrorCode::Other(2),
                         SdkError::TimeoutError(_) => ErrorCode::Other(2),
@@ -713,7 +707,7 @@ impl WithStreamChat for AwsClient {
                     let mut new_state = initial_state?;
                     match response.stream.recv().await {
                         Ok(Some(message)) => {
-                            log::trace!("Received message: {:#?}", message);
+                            log::trace!("Received message: {message:#?}");
                             match message {
                                 bedrock::types::ConverseStreamOutput::ContentBlockDelta(
                                     content_block_delta,
@@ -773,7 +767,7 @@ impl WithStreamChat for AwsClient {
                                 start_time: new_state.start_time,
                                 request_options: new_state.request_options,
                                 latency: instant_start.elapsed(),
-                                message: format!("Failed to parse event: {:#?}", e),
+                                message: format!("Failed to parse event: {e:#?}"),
                                 code: ErrorCode::Other(2),
                             }),
                             (None, response),
@@ -849,7 +843,6 @@ impl AwsClient {
     }
 
     fn part_to_system_message(
-        &self,
         part: &ChatMessagePart,
     ) -> Result<bedrock::types::SystemContentBlock> {
         match part {
@@ -858,7 +851,7 @@ impl AwsClient {
                 "AWS Bedrock only supports text blocks for system messages, but got {:#?}",
                 part
             ),
-            ChatMessagePart::WithMeta(p, _) => self.part_to_system_message(p),
+            ChatMessagePart::WithMeta(p, _) => Self::part_to_system_message(p),
         }
     }
 
@@ -913,7 +906,7 @@ impl WithChat for AwsClient {
                     start_time: SystemTime::now(),
                     request_options,
                     latency: web_time::Duration::ZERO,
-                    message: format!("{:#?}", e),
+                    message: format!("{e:#?}"),
                     code: ErrorCode::Other(2),
                 })
             }
@@ -929,7 +922,7 @@ impl WithChat for AwsClient {
                     start_time: SystemTime::now(),
                     request_options,
                     latency: web_time::Duration::ZERO,
-                    message: format!("{:#?}", e),
+                    message: format!("{e:#?}"),
                     code: ErrorCode::Other(2),
                 })
             }
@@ -955,7 +948,7 @@ impl WithChat for AwsClient {
                     start_time: system_start,
                     request_options,
                     latency: instant_start.elapsed(),
-                    message: format!("{:#?}", e),
+                    message: format!("{e:#?}"),
                     code: match e {
                         SdkError::ConstructionFailure(_) => ErrorCode::Other(2),
                         SdkError::TimeoutError(_) => ErrorCode::Other(2),
@@ -1023,7 +1016,7 @@ impl WithChat for AwsClient {
                 start_time: system_start,
                 request_options,
                 latency: instant_start.elapsed(),
-                message: format!("{:#?}", e),
+                message: format!("{e:#?}"),
                 code: ErrorCode::Other(200),
             }),
         }

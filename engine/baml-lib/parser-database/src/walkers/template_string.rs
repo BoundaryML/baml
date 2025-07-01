@@ -1,12 +1,11 @@
 use either::Either;
-use internal_baml_jinja_types::{PredefinedTypes, Type};
-use internal_baml_schema_ast::ast::{
+use internal_baml_ast::ast::{
     self, ArgumentId, BlockArgs, Span, WithIdentifier, WithName, WithSpan,
 };
-
-use crate::types::TemplateStringProperties;
+use internal_baml_jinja_types::{PredefinedTypes, Type};
 
 use super::Walker;
+use crate::types::TemplateStringProperties;
 
 /// An `enum` declaration in the schema.
 pub type TemplateStringWalker<'db> = Walker<'db, ast::TemplateStringId>;

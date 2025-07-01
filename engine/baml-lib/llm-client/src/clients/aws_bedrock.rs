@@ -1,18 +1,17 @@
 use std::collections::HashSet;
 
+use anyhow::Result;
+use baml_derive::BamlHash;
+use baml_types::{ApiKeyWithProvenance, EvaluationContext, GetEnvVar, StringOr, UnresolvedValue};
+use indexmap::IndexMap;
+use secrecy::SecretString;
+use serde_json::Value;
+
+use super::helpers::{Error, PropertyHandler};
 use crate::{
     AllowedRoleMetadata, FinishReasonFilter, RolesSelection, SupportedRequestModes,
     UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedRolesSelection,
 };
-use anyhow::Result;
-use indexmap::IndexMap;
-use secrecy::SecretString;
-
-use baml_derive::BamlHash;
-use baml_types::{ApiKeyWithProvenance, EvaluationContext, GetEnvVar, StringOr, UnresolvedValue};
-use serde_json::Value;
-
-use super::helpers::{Error, PropertyHandler};
 
 #[derive(Debug, Clone, BamlHash)]
 pub struct UnresolvedAwsBedrock<Meta> {
@@ -158,6 +157,7 @@ impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
 }
 
 impl<Meta: Clone> UnresolvedAwsBedrock<Meta> {
+    #[allow(clippy::single_match)]
     pub fn required_env_vars(&self) -> HashSet<String> {
         let mut env_vars = HashSet::new();
         if let Some(m) = self.model.as_ref() {

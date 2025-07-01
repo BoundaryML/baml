@@ -7,19 +7,15 @@ mod test_expr;
 mod test_stmt;
 mod types;
 
-use std::collections::HashSet;
-use std::fmt::Debug;
-use std::ops::Index;
+use std::{collections::HashSet, fmt::Debug, ops::Index};
 
 use minijinja::machinery::{ast::Expr, Span};
 
-pub use self::types::Type;
-
-pub use self::types::{JinjaContext, PredefinedTypes};
-
-pub use self::stmt::get_variable_types;
-
-pub use self::expr::evaluate_type;
+pub use self::{
+    expr::evaluate_type,
+    stmt::get_variable_types,
+    types::{JinjaContext, PredefinedTypes, Type},
+};
 
 #[derive(Debug, Clone)]
 pub struct TypeError {

@@ -1,5 +1,6 @@
-use super::*;
 use baml_types::type_meta::base::TypeMeta;
+
+use super::*;
 
 //
 const FOO_FILE: &str = r#"
@@ -32,7 +33,7 @@ fn test_union_full() {
 
     let result = from_str(&target, &target_type, r#"{"hi": ["a", "b"]}"#, false);
 
-    assert!(result.is_ok(), "Failed to parse: {:?}", result);
+    assert!(result.is_ok(), "Failed to parse: {result:?}");
 
     let value = result.unwrap();
     log::trace!("Score: {}", value.score());
@@ -53,7 +54,7 @@ fn test_union_full() {
                     }
                 }
                 _ => {
-                    panic!("Unexpected property: {}", prop_name);
+                    panic!("Unexpected property: {prop_name}");
                 }
             }
         }
@@ -61,7 +62,7 @@ fn test_union_full() {
         panic!("Expected a class");
     }
     let value: BamlValue = value.into();
-    log::info!("{}", value);
+    log::info!("{value}");
     let json_value = json!(value);
 
     let expected = serde_json::json!({"hi": ["a", "b"]});

@@ -4,5 +4,6 @@ import com.intellij.openapi.util.IconLoader
 import javax.swing.Icon
 
 object BamlIcons {
-    val FILETYPE: Icon = IconLoader.getIcon("/icons/baml-lamb-purple.svg", BamlIcons::class.java)
+    @JvmField
+    public val FILETYPE: Icon = IconLoader.getIcon("/icons/baml-lamb-purple.svg", BamlIcons::class.java)
 }

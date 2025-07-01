@@ -1,16 +1,15 @@
-use anyhow::{Context, Result};
 use std::{
+    collections::HashMap,
     fmt::Debug,
-    {
-        collections::HashMap,
-        sync::{atomic::AtomicUsize, Arc},
-    },
+    sync::{atomic::AtomicUsize, Arc},
 };
 
+use anyhow::{Context, Result};
 use internal_baml_core::ir::ClientWalker;
 use internal_llm_client::{
     ClientProvider, ClientSpec, ResolvedClientProperty, UnresolvedClientProperty,
 };
+use serde::{Serialize, Serializer};
 
 use crate::{
     client_registry::ClientProperty,
@@ -21,8 +20,6 @@ use crate::{
     runtime_interface::InternalClientLookup,
     RuntimeContext,
 };
-use serde::Serialize;
-use serde::Serializer;
 
 #[derive(Debug)]
 pub struct RoundRobinStrategy {

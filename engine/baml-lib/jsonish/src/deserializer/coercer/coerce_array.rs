@@ -1,14 +1,12 @@
 use anyhow::Result;
+use baml_types::CompletionState;
 use internal_baml_core::ir::FieldType;
 
-use baml_types::CompletionState;
-
+use super::{ParsingContext, ParsingError, TypeCoercer};
 use crate::deserializer::{
     deserialize_flags::{DeserializerConditions, Flag},
     types::BamlValueWithFlags,
 };
-
-use super::{ParsingContext, ParsingError, TypeCoercer};
 
 pub(super) fn coerce_array(
     ctx: &ParsingContext,
@@ -19,7 +17,7 @@ pub(super) fn coerce_array(
 
     log::debug!(
         "scope: {scope} :: coercing to: {name} (current: {current})",
-        name = list_target.to_string(),
+        name = list_target,
         scope = ctx.display_scope(),
         current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
     );

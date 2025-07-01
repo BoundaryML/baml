@@ -2,12 +2,12 @@ mod ir_features;
 mod publisher;
 pub(crate) mod runtime_interface;
 
-use anyhow::Result;
 use std::{
     collections::HashMap,
     path::{Path, PathBuf},
 };
 
+use anyhow::Result;
 pub(super) use publisher::AstSignatureWrapper;
 
 cfg_if::cfg_if!(
@@ -18,13 +18,14 @@ cfg_if::cfg_if!(
     }
 );
 
+use std::sync::Arc;
+
 use internal_baml_core::{
     internal_baml_diagnostics::{Diagnostics, SourceFile},
     internal_baml_parser_database::ParserDatabase,
     ir::repr::IntermediateRepr,
     validate,
 };
-use std::sync::Arc;
 
 use crate::internal::llm_client::{llm_provider::LLMProvider, retry_policy::CallablePolicy};
 
@@ -35,7 +36,7 @@ use crate::internal::llm_client::{llm_provider::LLMProvider, retry_policy::Calla
 pub struct CachedClient {
     pub provider: Arc<LLMProvider>,
     pub env_vars: HashMap<String, String>,
-} 
+}
 
 impl CachedClient {
     pub fn new(provider: Arc<LLMProvider>, env_vars: HashMap<String, String>) -> Self {
@@ -43,7 +44,9 @@ impl CachedClient {
     }
 
     pub fn has_env_vars_changed(&self, new_env_vars: &HashMap<String, String>) -> bool {
-        self.env_vars.iter().any(|(k, v)| new_env_vars.get(k).map_or(false, |v2| v2 != v))
+        self.env_vars
+            .iter()
+            .any(|(k, v)| new_env_vars.get(k).is_some_and(|v2| v2 != v))
     }
 }
 

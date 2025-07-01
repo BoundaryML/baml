@@ -136,13 +136,13 @@ impl TypeGo {
         match self {
             TypeGo::String(val, _) => val.as_ref().map_or("String".to_string(), |v| {
                 let safe_name = safe_name(v);
-                format!("K{}", safe_name)
+                format!("K{safe_name}")
             }),
-            TypeGo::Int(val, _) => val.map_or("Int".to_string(), |v| {
-                format!("IntK{}", v)
-            }),
+            TypeGo::Int(val, _) => val.map_or("Int".to_string(), |v| format!("IntK{v}")),
             TypeGo::Float(_) => "Float".to_string(),
-            TypeGo::Bool(val, _) => val.map_or("Bool".to_string(), |v| format!("BoolK{}", if v { "True" } else { "False" })),
+            TypeGo::Bool(val, _) => val.map_or("Bool".to_string(), |v| {
+                format!("BoolK{}", if v { "True" } else { "False" })
+            }),
             TypeGo::Media(media_type_go, _) => match media_type_go {
                 MediaTypeGo::Image => "Image".to_string(),
                 MediaTypeGo::Audio => "Audio".to_string(),
@@ -166,10 +166,14 @@ impl TypeGo {
             return "nil".to_string();
         }
         match self {
-            TypeGo::String(val, _) => val.as_ref().map_or("\"\"".to_string(), |v| format!("\"{}\"", v.replace("\"", "\\\"")).to_string()),
-            TypeGo::Int(val, _) => val.map_or("0".to_string(), |v| format!("{}", v)),
+            TypeGo::String(val, _) => val.as_ref().map_or("\"\"".to_string(), |v| {
+                format!("\"{}\"", v.replace("\"", "\\\"")).to_string()
+            }),
+            TypeGo::Int(val, _) => val.map_or("0".to_string(), |v| format!("{v}")),
             TypeGo::Float(_) => "0.0".to_string(),
-            TypeGo::Bool(val, _) => val.map_or("false".to_string(), |v| if v { "true" } else { "false" }.to_string()),
+            TypeGo::Bool(val, _) => val.map_or("false".to_string(), |v| {
+                if v { "true" } else { "false" }.to_string()
+            }),
             TypeGo::Media(..) | TypeGo::Class { .. } | TypeGo::Union { .. } => {
                 format!("{}{{}}", self.serialize_type(pkg))
             }
@@ -274,7 +278,7 @@ impl TypeGo {
                 t = inner.serialize_type(pkg),
                 casted = inner.decode_from_any("inner", pkg)
             ),
-            TypeGo::Map(key, value, meta) if !meta.is_optional() => format!(
+            TypeGo::Map(_key, value, meta) if !meta.is_optional() => format!(
                 "baml.DecodeMap({param}, func(inner *cffi.CFFIValueHolder) {t} {{
                 return {casted}
             }})",
@@ -411,7 +415,7 @@ impl SerializeType for TypeGo {
 }
 
 impl SerializeType for MediaTypeGo {
-    fn serialize_type(&self, pkg: &CurrentRenderPackage) -> String {
+    fn serialize_type(&self, _pkg: &CurrentRenderPackage) -> String {
         match self {
             MediaTypeGo::Image => "any".to_string(), // format!("{}Image", Package::imported_base().relative_from(pkg)),
             MediaTypeGo::Audio => "any".to_string(), // format!("{}Audio", Package::imported_base().relative_from(pkg)),

@@ -1,7 +1,9 @@
 use std::collections::VecDeque;
 
 use anyhow::Result;
+use baml_types::{BamlMap, CompletionState, FieldType, LiteralValue, TypeValue};
 
+use super::{ParsingContext, ParsingError, TypeCoercer};
 use crate::{
     deserializer::{
         deserialize_flags::{DeserializerConditions, Flag},
@@ -9,9 +11,6 @@ use crate::{
     },
     jsonish,
 };
-use baml_types::{BamlMap, CompletionState, FieldType, LiteralValue, TypeValue};
-
-use super::{ParsingContext, ParsingError, TypeCoercer};
 
 pub(super) fn coerce_map(
     ctx: &ParsingContext,
@@ -20,7 +19,7 @@ pub(super) fn coerce_map(
 ) -> Result<BamlValueWithFlags, ParsingError> {
     log::debug!(
         "scope: {scope} :: coercing to: {name} (current: {current})",
-        name = map_target.to_string(),
+        name = map_target,
         scope = ctx.display_scope(),
         current = value.map(|v| v.r#type()).unwrap_or("<null>".into())
     );
@@ -46,7 +45,7 @@ pub(super) fn coerce_map(
 
         // For unions we need to check if all the items are literal strings.
         FieldType::Union(items, _) => {
-            let mut queue = VecDeque::from_iter(items.iter_include_null().into_iter());
+            let mut queue = VecDeque::from_iter(items.iter_include_null());
             while let Some(item) = queue.pop_front() {
                 match item {
                     FieldType::Literal(LiteralValue::String(_), _) => continue,

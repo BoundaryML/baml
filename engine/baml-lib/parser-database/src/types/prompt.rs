@@ -1,10 +1,9 @@
+use internal_baml_ast::ast::RawString;
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_prompt_parser::ast::{CodeBlock, PromptAst, Top, Variable};
-use internal_baml_schema_ast::ast::RawString;
-
-use crate::context::Context;
 
 use super::PromptVariable;
+use crate::context::Context;
 
 /// Function returns the raw_string without any comments.
 pub(super) fn validate_prompt(
@@ -93,12 +92,12 @@ fn process_prompt_ast(ctx: &mut Context<'_>, ast: PromptAst) -> (String, Vec<Pro
             (_, Top::WhiteSpace(ws, _)) => {
                 if is_comment {
                     post_white_space = match post_white_space {
-                        Some(existing_ws) => Some(format!("{}{}", existing_ws, ws)),
+                        Some(existing_ws) => Some(format!("{existing_ws}{ws}")),
                         None => Some(ws.to_string()),
                     };
                 } else {
                     prev_white_space = match prev_white_space {
-                        Some(existing_ws) => Some(format!("{}{}", existing_ws, ws)),
+                        Some(existing_ws) => Some(format!("{existing_ws}{ws}")),
                         None => Some(ws.to_string()),
                     };
                 }
@@ -128,7 +127,7 @@ fn process_prompt_ast(ctx: &mut Context<'_>, ast: PromptAst) -> (String, Vec<Pro
                         full_prompt_text.push_str(&replacement.key().to_string());
                         replacers.push(replacement);
                     }
-                    None => full_prompt_text.push_str(&format!("{{{}}}", raw_string)),
+                    None => full_prompt_text.push_str(&format!("{{{raw_string}}}")),
                 }
             }
         }

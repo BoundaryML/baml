@@ -1,14 +1,14 @@
+use anyhow::Result;
+use baml_types::{BamlValue, BamlValueWithMeta};
+use colored::*;
+use jsonish::{
+    deserializer::deserialize_flags::Flag, BamlValueWithFlags, ResponseBamlValue, SerializeMode,
+};
+
 pub use crate::internal::llm_client::LLMResponse;
 use crate::{
     errors::ExposedError, internal::llm_client::orchestrator::OrchestrationScope,
     test_constraints::TestConstraintsResult,
-};
-use anyhow::Result;
-use colored::*;
-
-use baml_types::{BamlValue, BamlValueWithMeta};
-use jsonish::{
-    deserializer::deserialize_flags::Flag, BamlValueWithFlags, ResponseBamlValue, SerializeMode,
 };
 
 #[derive(Debug)]
@@ -141,17 +141,17 @@ impl FunctionResult {
             // only call this function when we have a successful response.
             message: match self.llm_response() {
                 LLMResponse::Success(_) => {
-                    format!("Failed to parse LLM response: {}", actual_error)
+                    format!("Failed to parse LLM response: {actual_error}")
                 }
                 LLMResponse::LLMFailure(err) => format!(
                     "LLM Failure: {} ({}) - {}",
                     err.message, err.code, actual_error
                 ),
                 LLMResponse::UserFailure(err) => {
-                    format!("User Failure: {} - {}", err, actual_error)
+                    format!("User Failure: {err} - {actual_error}")
                 }
                 LLMResponse::InternalFailure(err) => {
-                    format!("Internal Failure: {} - {}", err, actual_error)
+                    format!("Internal Failure: {err} - {actual_error}")
                 }
             },
         }
@@ -193,9 +193,9 @@ impl From<TestStatus<'_>> for BamlValue {
         match status {
             TestStatus::Pass => BamlValue::String("pass".to_string()),
             TestStatus::NeedsHumanEval(checks) => {
-                BamlValue::String(format!("checks need human evaluation: {:?}", checks))
+                BamlValue::String(format!("checks need human evaluation: {checks:?}"))
             }
-            TestStatus::Fail(r) => BamlValue::String(format!("failed! {:?}", r)),
+            TestStatus::Fail(r) => BamlValue::String(format!("failed! {r:?}")),
         }
     }
 }
@@ -259,9 +259,9 @@ impl TestResponse {
                 let err = parsed.as_ref().unwrap_err();
                 match err.downcast_ref::<crate::errors::ExposedError>() {
                     Some(ExposedError::FinishReasonError { .. }) => {
-                        TestStatus::Fail(TestFailReason::TestFinishReasonFailed(&err))
+                        TestStatus::Fail(TestFailReason::TestFinishReasonFailed(err))
                     }
-                    _ => TestStatus::Fail(TestFailReason::TestParseFailure(&err)),
+                    _ => TestStatus::Fail(TestFailReason::TestParseFailure(err)),
                 }
             }
         } else {
@@ -273,10 +273,10 @@ impl TestResponse {
 impl std::fmt::Display for TestFailReason<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::TestUnspecified(e) => write!(f, "{}", e),
-            Self::TestLLMFailure(r) => write!(f, "{}", r),
-            Self::TestParseFailure(e) => write!(f, "{}", e),
-            Self::TestFinishReasonFailed(e) => write!(f, "{}", e),
+            Self::TestUnspecified(e) => write!(f, "{e}"),
+            Self::TestLLMFailure(r) => write!(f, "{r}"),
+            Self::TestParseFailure(e) => write!(f, "{e}"),
+            Self::TestFinishReasonFailed(e) => write!(f, "{e}"),
             Self::TestConstraintsFailure {
                 checks,
                 failed_assert,
@@ -285,7 +285,7 @@ impl std::fmt::Display for TestFailReason<'_> {
                     write!(f, "{} - {}", check, if *pass { "passed" } else { "failed" })?;
                 }
                 if let Some(failed_assert) = failed_assert {
-                    write!(f, "{}", failed_assert)?;
+                    write!(f, "{failed_assert}")?;
                 }
                 Ok(())
             }

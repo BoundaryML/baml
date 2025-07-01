@@ -1,14 +1,13 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use baml_types::BamlMap;
+use serde::Deserialize;
+use serde_json::Value;
 
 use super::types::{ChatCompletionResponse, ChatCompletionResponseDelta};
 use crate::internal::llm_client::{
     primitive::request::RequestBuilder, traits::WithClient, ErrorCode, LLMCompleteResponse,
     LLMCompleteResponseMetadata, LLMErrorResponse, LLMResponse,
 };
-use anyhow::Context;
-use serde::Deserialize;
-use serde_json::Value;
 
 fn to_prompt(
     prompt: either::Either<&String, &[internal_baml_jinja::RenderedChatMessage]>,
@@ -40,7 +39,7 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
             start_time: system_now,
             request_options: client.request_options().clone(),
             latency: instant_now.elapsed(),
-            message: format!("{:?}", e),
+            message: format!("{e:?}"),
             code: ErrorCode::Other(2),
         }) {
         Ok(response) => response,
@@ -79,11 +78,11 @@ pub fn parse_openai_response<C: WithClient + RequestBuilder>(
         model: response.model,
         request_options: client.request_options().clone(),
         metadata: LLMCompleteResponseMetadata {
-            baml_is_complete: match response.choices.get(0) {
+            baml_is_complete: match response.choices.first() {
                 Some(c) => c.finish_reason.as_ref().is_some_and(|f| f == "stop"),
                 None => false,
             },
-            finish_reason: match response.choices.get(0) {
+            finish_reason: match response.choices.first() {
                 Some(c) => c.finish_reason.clone(),
                 None => None,
             },
@@ -110,7 +109,7 @@ pub fn scan_openai_response_stream(
         Err(e) => return Ok(()),
     };
 
-    let event = match ChatCompletionResponseDelta::deserialize(&event_body)
+    let event = ChatCompletionResponseDelta::deserialize(&event_body)
         .context(format!(
             "Failed to parse into a response accepted by {}: {}",
             std::any::type_name::<ChatCompletionResponseDelta>(),
@@ -120,15 +119,13 @@ pub fn scan_openai_response_stream(
             client: client_name.to_string(),
             model: model_name.clone(),
             prompt: prompt.clone(),
-            start_time: system_now.clone(),
+            start_time: *system_now,
             request_options: request_options.clone(),
             latency: instant_now.elapsed(),
-            message: format!("{:?}", e),
+            message: format!("{e:?}"),
             code: ErrorCode::Other(2),
-        }) {
-        Ok(response) => response,
-        Err(e) => return Err(e),
-    };
+        })?;
+
     if let Some(choice) = event.choices.first() {
         if let Some(content) = choice.delta.content.as_ref() {
             inner.content += content.as_str();
@@ -150,11 +147,11 @@ pub fn scan_openai_response_stream(
 
 #[cfg(test)]
 mod tests {
-    use crate::internal::llm_client::primitive::tests::MockClient;
-
-    use super::*;
     use pretty_assertions::assert_eq;
     use web_time::Duration;
+
+    use super::*;
+    use crate::internal::llm_client::primitive::tests::MockClient;
     const RESPONSE: &str = r#"
 {
   "id": "chatcmpl-B7rcnRIX2lh1okEeeIrCtzLppkaSw",
@@ -233,7 +230,7 @@ mod tests {
             actual_result.latency = Duration::ZERO;
             assert_eq!(actual_result, expected);
         } else {
-            panic!("Expected LLMResponse::Success, got {:?}", result);
+            panic!("Expected LLMResponse::Success, got {result:?}");
         }
     }
 }

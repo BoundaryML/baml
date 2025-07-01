@@ -1,12 +1,11 @@
-use {
-    crate::baml_text_size::traits::TextLen,
-    std::{
-        convert::TryFrom,
-        fmt, iter,
-        num::TryFromIntError,
-        ops::{Add, AddAssign, Sub, SubAssign},
-    },
+use std::{
+    convert::TryFrom,
+    fmt, iter,
+    num::TryFromIntError,
+    ops::{Add, AddAssign, Sub, SubAssign},
 };
+
+use crate::baml_text_size::traits::TextLen;
 
 /// A measure of text length. Also, equivalently, an index into text.
 ///
@@ -44,12 +43,12 @@ impl TextSize {
     }
 
     /// Returns current raw `offset` as u32.
-    pub const fn to_u32(&self) -> u32 {
+    pub const fn as_u32(&self) -> u32 {
         self.raw
     }
 
     /// Returns current raw `offset` as usize.
-    pub const fn to_usize(&self) -> usize {
+    pub const fn to_usize(self) -> usize {
         self.raw as usize
     }
 }
@@ -80,7 +79,7 @@ impl From<u32> for TextSize {
 impl From<TextSize> for u32 {
     #[inline]
     fn from(value: TextSize) -> Self {
-        value.to_u32()
+        value.as_u32()
     }
 }
 

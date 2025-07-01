@@ -1,19 +1,23 @@
 // See https://github.com/awslabs/aws-sdk-rust/issues/169
 use std::time::Duration;
 
-use aws_smithy_runtime_api::client::http::{
-    HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings, SharedHttpConnector,
+use aws_smithy_runtime_api::{
+    client::{
+        http::{
+            HttpClient, HttpConnector, HttpConnectorFuture, HttpConnectorSettings,
+            SharedHttpConnector,
+        },
+        result::ConnectorError,
+        runtime_components::RuntimeComponents,
+    },
+    http::Request,
 };
-use aws_smithy_runtime_api::client::result::ConnectorError;
-use aws_smithy_runtime_api::client::runtime_components::RuntimeComponents;
-use aws_smithy_runtime_api::http::Request;
 use aws_smithy_types::body::SdkBody;
-
-use crate::request::create_client;
-
 // --- WASM specific imports ---
 #[cfg(target_arch = "wasm32")]
 use {futures::channel::oneshot, wasm_bindgen_futures::spawn_local};
+
+use crate::request::create_client;
 
 /// Returns a wrapper around the global reqwest client.
 /// [HttpClient].
@@ -112,7 +116,7 @@ impl std::fmt::Display for CallError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.message)?;
         if let Some(err) = self.source.as_ref() {
-            write!(f, ": {}", err)?;
+            write!(f, ": {err}")?;
         }
         Ok(())
     }

@@ -1,43 +1,42 @@
 mod call;
 mod stream;
 
+use std::{collections::HashMap, sync::Arc};
+
+use anyhow::Result;
 use baml_ids::HttpRequestId;
-use baml_types::tracing::events::{LLMChatMessage, LLMChatMessagePart, LLMUsage};
+use baml_types::{
+    tracing::events::{
+        HTTPRequest, HTTPResponse, LLMChatMessage, LLMChatMessagePart, LLMUsage, LoggedLLMRequest,
+        LoggedLLMResponse, TraceData, TraceEvent,
+    },
+    BamlValue,
+};
+pub use call::orchestrate as orchestrate_call;
+use internal_baml_core::ir::repr::IntermediateRepr;
+use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage, RenderedPrompt};
+use serde::Serialize;
 use serde_json::json;
+pub use stream::orchestrate_stream;
 use web_time::Duration; // Add this line
-
-use crate::tracingv2::storage::make_trace_event_for_response;
-use crate::tracingv2::storage::storage::BAML_TRACER;
-use crate::RenderCurlSettings;
-use crate::{
-    internal::prompt_renderer::PromptRenderer, runtime_interface::InternalClientLookup,
-    RuntimeContext,
-};
-
-use super::traits::{HttpContext, WithClientProperties, WithRenderRawCurl};
-use super::LLMCompleteResponse;
-use super::{
-    strategy::roundrobin::RoundRobinStrategy,
-    traits::{StreamResponse, WithPrompt, WithSingleCallable, WithStreamable},
-    LLMResponse,
-};
+use web_time::SystemTime;
 
 pub use super::primitive::LLMPrimitiveProvider;
-pub use call::orchestrate as orchestrate_call;
-pub use stream::orchestrate_stream;
-
-use crate::tracing::Visualize;
-use anyhow::Result;
-use baml_types::tracing::events::{
-    HTTPRequest, HTTPResponse, LoggedLLMRequest, LoggedLLMResponse, TraceData, TraceEvent,
+use super::{
+    strategy::roundrobin::RoundRobinStrategy,
+    traits::{
+        HttpContext, StreamResponse, WithClientProperties, WithPrompt, WithRenderRawCurl,
+        WithSingleCallable, WithStreamable,
+    },
+    LLMCompleteResponse, LLMResponse,
 };
-use baml_types::BamlValue;
-use internal_baml_core::ir::repr::IntermediateRepr;
-use internal_baml_jinja::RenderedPrompt;
-use internal_baml_jinja::{ChatMessagePart, RenderedChatMessage};
-use serde::Serialize;
-use std::{collections::HashMap, sync::Arc};
-use web_time::SystemTime;
+use crate::{
+    internal::prompt_renderer::PromptRenderer,
+    runtime_interface::InternalClientLookup,
+    tracing::Visualize,
+    tracingv2::storage::{make_trace_event_for_response, storage::BAML_TRACER},
+    RenderCurlSettings, RuntimeContext,
+};
 pub struct OrchestratorNode {
     pub scope: OrchestrationScope,
     pub provider: Arc<LLMPrimitiveProvider>,
@@ -46,7 +45,7 @@ pub struct OrchestratorNode {
 impl std::fmt::Display for ExecutionScope {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExecutionScope::Direct(s) => write!(f, "{}", s),
+            ExecutionScope::Direct(s) => write!(f, "{s}"),
             ExecutionScope::Retry(policy, count, delay) => {
                 write!(f, "Retry({}, {}, {}ms)", policy, count, delay.as_millis())
             }
@@ -54,7 +53,7 @@ impl std::fmt::Display for ExecutionScope {
                 write!(f, "RoundRobin({}, {})", strategy.name, index)
             }
             ExecutionScope::Fallback(strategy, index) => {
-                write!(f, "Fallback({}, {})", strategy, index)
+                write!(f, "Fallback({strategy}, {index})")
             }
         }
     }
@@ -64,7 +63,7 @@ impl std::fmt::Display for OrchestratorNode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "OrchestratorNode: [")?;
         for scope in &self.scope.scope {
-            write!(f, "{} + ", scope)?;
+            write!(f, "{scope} + ")?;
         }
         write!(f, "{}]", self.provider)
     }
@@ -116,7 +115,7 @@ impl OrchestrationScope {
         self.scope
             .iter()
             .filter(|scope| !matches!(scope, ExecutionScope::Retry(..)))
-            .map(|scope| format!("{}", scope))
+            .map(|scope| format!("{scope}"))
             .collect::<Vec<_>>()
             .join(" + ")
     }
@@ -250,7 +249,11 @@ impl WithSingleCallable for OrchestratorNode {
                 &response,
                 ctx.runtime_context().call_id_stack.clone(),
                 ctx.http_request_id(),
-                self.scope.scope.iter().map(|s| s.to_string()).collect(),
+                self.scope
+                    .scope
+                    .iter()
+                    .map(ExecutionScope::to_string)
+                    .collect(),
             );
             BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
         }
@@ -311,7 +314,11 @@ impl WithStreamable for OrchestratorNode {
                 err_resp,
                 ctx.runtime_context().call_id_stack.clone(),
                 ctx.http_request_id(),
-                self.scope.scope.iter().map(|s| s.to_string()).collect(),
+                self.scope
+                    .scope
+                    .iter()
+                    .map(ExecutionScope::to_string)
+                    .collect(),
             );
             BAML_TRACER.lock().unwrap().put(Arc::new(trace_event));
         }

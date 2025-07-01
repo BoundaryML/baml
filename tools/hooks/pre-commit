@@ -1,0 +1,31 @@
+#!/bin/sh
+#
+# Pre-commit hook that runs cargo fmt with import organization
+#
+
+# Exit on any error
+set -e
+
+echo "Running cargo fmt with import organization..."
+
+# Get the repository root directory
+REPO_ROOT=$(git rev-parse --show-toplevel)
+
+# Change to the engine directory where Cargo.toml is located
+cd "$REPO_ROOT/engine"
+
+# Run cargo fmt with the specified configuration
+cargo fmt -- --config imports_granularity="Crate" --config group_imports="StdExternalCrate"
+
+# Change to repo root to check git diff
+cd "$REPO_ROOT"
+
+# Check if there are any formatting changes
+if ! git diff --quiet --exit-code; then
+    echo "Code has been formatted. Please review and add the changes:"
+    echo "  git add ."
+    echo "  git commit"
+    exit 1
+fi
+
+echo "Code formatting check passed."

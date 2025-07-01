@@ -20,15 +20,18 @@ pub struct WasmGeneratedFile {
     pub contents: String,
 }
 
-impl Into<WasmGeneratorOutput> for GenerateOutput {
-    fn into(self) -> WasmGeneratorOutput {
+impl From<GenerateOutput> for WasmGeneratorOutput {
+    fn from(generate_output: GenerateOutput) -> WasmGeneratorOutput {
         WasmGeneratorOutput {
-            output_dir: self.output_dir_full.to_string_lossy().to_string(),
-            output_dir_relative_to_baml_src: self
+            output_dir: generate_output
+                .output_dir_full
+                .to_string_lossy()
+                .to_string(),
+            output_dir_relative_to_baml_src: generate_output
                 .output_dir_shorthand
                 .to_string_lossy()
                 .to_string(),
-            files: self
+            files: generate_output
                 .files
                 .into_iter()
                 .map(|(path, contents)| WasmGeneratedFile {

@@ -1,15 +1,21 @@
-use crate::baml_project::Project;
-use crate::server::api::traits::{RequestHandler, SyncRequestHandler};
-use crate::server::api::ResultExt;
-use crate::server::client::Requester;
-use crate::server::{client::Notifier, Result};
-use crate::DocumentKey;
-use crate::Session;
+use std::{collections::HashMap, path::PathBuf};
+
 use baml_lsp_types::BamlSpan;
 use baml_runtime::InternalRuntimeInterface;
 use lsp_types::{request, CodeLensParams, Command, Position, Range};
-use std::collections::HashMap;
-use std::path::PathBuf;
+
+use crate::{
+    baml_project::Project,
+    server::{
+        api::{
+            traits::{RequestHandler, SyncRequestHandler},
+            ResultExt,
+        },
+        client::{Notifier, Requester},
+        Result,
+    },
+    DocumentKey, Session,
+};
 
 pub struct CodeLens;
 
@@ -78,7 +84,7 @@ impl SyncRequestHandler for CodeLens {
 
         let mut function_lenses: Vec<lsp_types::CodeLens> = project_lock
             .list_functions()
-            .unwrap_or(vec![])
+            .unwrap_or_default()
             .iter()
             .filter(|func| doc_matches(&func.span, &project_lock))
             .map(|func| {
@@ -102,9 +108,38 @@ impl SyncRequestHandler for CodeLens {
 
         tracing::info!("Function lenses calculated");
 
+        // Uncomment this to broadcast function change using code lens
+        // if let Some(state) = &session.playground_state {
+        //     // Get the first function from the lenses if available
+        //     if let Some(first_function) = function_lenses.first() {
+        //         if let Some(command) = &first_function.command {
+        //             if let Some(args) = &command.arguments {
+        //                 if let Some(function_name) =
+        //                     args[0].get("functionName").and_then(|v| v.as_str())
+        //                 {
+        //                     tracing::info!("Broadcasting function change for: {}", function_name);
+        //                     let root_path = project_lock.root_path().to_string_lossy().to_string();
+        //                     let state = state.clone();
+        //                     let function_name = function_name.to_string();
+        //                     if let Some(runtime) = &session.playground_runtime {
+        //                         runtime.spawn(async move {
+        //                             let _ = crate::playground::broadcast_function_change(
+        //                                 &state,
+        //                                 &root_path,
+        //                                 function_name,
+        //                             )
+        //                             .await;
+        //                         });
+        //                     }
+        //                 }
+        //             }
+        //         }
+        //     }
+        // }
+
         let test_case_lenses: Vec<lsp_types::CodeLens> = project_lock
             .list_testcases()
-            .unwrap_or(vec![])
+            .unwrap_or_default()
             .iter()
             .filter(|testcase| doc_matches(&testcase.span, &project_lock))
             .map(|testcase| {
@@ -134,5 +169,22 @@ impl SyncRequestHandler for CodeLens {
 
         function_lenses.extend(test_case_lenses);
         Ok(Some(function_lenses))
+    }
+}
+
+pub struct CodeLensResolve;
+
+impl RequestHandler for CodeLensResolve {
+    type RequestType = request::CodeLensResolve;
+}
+
+impl SyncRequestHandler for CodeLensResolve {
+    fn run(
+        session: &mut Session,
+        notifier: Notifier,
+        _requester: &mut Requester,
+        params: lsp_types::CodeLens,
+    ) -> Result<lsp_types::CodeLens> {
+        Ok(params)
     }
 }

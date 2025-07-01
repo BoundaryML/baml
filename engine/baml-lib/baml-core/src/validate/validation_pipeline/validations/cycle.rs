@@ -4,11 +4,9 @@ use std::{
     ops::Index,
 };
 
+use internal_baml_ast::ast::{self, Ast, FieldType, TypeAliasId, TypeExpId, WithName, WithSpan};
 use internal_baml_diagnostics::DatamodelError;
 use internal_baml_parser_database::{Tarjan, TypeWalker};
-use internal_baml_schema_ast::ast::{
-    self, FieldType, SchemaAst, TypeAliasId, TypeExpId, WithName, WithSpan,
-};
 
 use crate::validate::validation_pipeline::context::Context;
 
@@ -97,7 +95,7 @@ pub(super) fn validate(ctx: &mut Context<'_>) {
             for (client, span) in options.strategy() {
                 if let either::Either::Right(internal_llm_client::ClientSpec::Named(s)) = client {
                     if valid_clients.contains(s) {
-                        dependencies.insert(ctx.db.find_client(&s).unwrap().id);
+                        dependencies.insert(ctx.db.find_client(s).unwrap().id);
                     }
                 }
             }
@@ -124,9 +122,9 @@ fn report_infinite_cycles<V: Ord + Eq + Hash + Copy>(
     message: &str,
 ) -> Vec<Vec<V>>
 where
-    SchemaAst: Index<V>,
-    <SchemaAst as Index<V>>::Output: WithName,
-    <SchemaAst as Index<V>>::Output: WithSpan,
+    Ast: Index<V>,
+    <Ast as Index<V>>::Output: WithName,
+    <Ast as Index<V>>::Output: WithSpan,
 {
     let components = Tarjan::components(graph);
 

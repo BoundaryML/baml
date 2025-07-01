@@ -1,11 +1,11 @@
-use crate::base::EpochMsTimestamp;
-use crate::rpc::ApiEndpoint;
 use baml_ids::ProjectId;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
+use crate::{base::EpochMsTimestamp, rpc::ApiEndpoint};
+
 /**
- * interface Expression<T> {
+interface Expression<T> {
     operator: "gt" | "lt" | "lte" | "gte" | "eq" | "ne" | "in" | "contains" | "regex" | "exists";
     unary_operator?: "length"
     value: T;

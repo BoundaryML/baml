@@ -1,12 +1,19 @@
-use crate::baml_project::position_utils::get_word_at_position;
-use crate::baml_project::trim_line;
-use crate::server::api::traits::{RequestHandler, SyncRequestHandler};
-use crate::server::api::ResultExt;
-use crate::server::client::Requester;
-use crate::server::{client::Notifier, Result};
-use crate::{DocumentKey, Session};
-use lsp_types::{request, CompletionItem, CompletionList, CompletionParams, CompletionResponse};
 use std::path::PathBuf;
+
+use lsp_types::{request, CompletionItem, CompletionList, CompletionParams, CompletionResponse};
+
+use crate::{
+    baml_project::{position_utils::get_word_at_position, trim_line},
+    server::{
+        api::{
+            traits::{RequestHandler, SyncRequestHandler},
+            ResultExt,
+        },
+        client::{Notifier, Requester},
+        Result,
+    },
+    DocumentKey, Session,
+};
 pub(crate) struct Completion;
 
 impl RequestHandler for Completion {

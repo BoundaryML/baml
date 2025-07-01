@@ -1,15 +1,15 @@
-use anyhow::Result;
 use std::sync::{mpsc, Arc, Mutex};
+
+use anyhow::Result;
 use tokio::sync::watch;
 use web_time::{Duration, Instant};
 
+use super::api_wrapper::{core_types::LogSchema, APIConfig, APIWrapper, BoundaryAPI};
 use crate::{
     on_log_event::{LogEvent, LogEventCallbackSync, LogEventMetadata},
     tracing::api_wrapper::core_types::{ContentPart, MetadataType, Template, ValueType},
     TraceStats,
 };
-
-use super::api_wrapper::{core_types::LogSchema, APIConfig, APIWrapper, BoundaryAPI};
 
 const MAX_TRACE_SEND_CONCURRENCY: usize = 10;
 
@@ -84,7 +84,7 @@ impl DeliveryThread {
                             );
                         }
                         Err(e) => {
-                            log::warn!("Unable to emit BAML logs: {:#?}", e);
+                            log::warn!("Unable to emit BAML logs: {e:#?}");
                         }
                     }
                 }
@@ -132,7 +132,7 @@ impl DeliveryThread {
                 match self.stop_tx.send(ProcessorStatus::Done(id)) {
                     Ok(_) => {}
                     Err(e) => {
-                        log::error!("Error sending flush signal: {:?}", e);
+                        log::error!("Error sending flush signal: {e:?}");
                     }
                 }
             }
@@ -260,7 +260,7 @@ impl ThreadedTracer {
                     // '["d", "e", "f"]'
                     ValueType::String(value) => serde_json::from_str::<serde_json::Value>(&value)
                         .ok()
-                        .and_then(|json_value| json_value.as_str().map(|s| s.to_string()))
+                        .and_then(|json_value| json_value.as_str().map(str::to_string))
                         .or(Some(value)),
                     _ => serde_json::to_string_pretty(&output.value)
                         .ok()

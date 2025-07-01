@@ -33,7 +33,7 @@ export class BamlSyncClient {
   private llmStreamParser: LlmStreamParser
   private bamlOptions: BamlCallOptions
 
-  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager, private bamlOptions?: BamlCallOptions) {
+  constructor(private runtime: BamlRuntime, private ctxManager: BamlCtxManager, bamlOptions?: BamlCallOptions) {
     this.httpRequest = new HttpRequest(runtime, ctxManager)
     this.httpStreamRequest = new HttpStreamRequest(runtime, ctxManager)
     this.llmResponseParser = new LlmResponseParser(runtime, ctxManager)
@@ -80,7 +80,10 @@ export class BamlSyncClient {
     try {
       const options = { ...this.bamlOptions, ...(__baml_options__ || {}) }
       const collector = options.collector ? (Array.isArray(options.collector) ? options.collector : [options.collector]) : [];
-      const env = options.env ? { ...process.env, ...options.env } : { ...process.env };
+      const rawEnv = __baml_options__?.env ? { ...process.env, ...__baml_options__.env } : { ...process.env };
+      const env: Record<string, string> = Object.fromEntries(
+        Object.entries(rawEnv).filter(([_, value]) => value !== undefined) as [string, string][]
+      );
       const raw = this.runtime.callFunctionSync(
         "{{func.name}}",
         {

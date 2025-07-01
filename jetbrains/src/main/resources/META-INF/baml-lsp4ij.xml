@@ -1,0 +1,22 @@
+<idea-plugin>
+
+    <extensions defaultExtensionNs="com.redhat.devtools.lsp4ij">
+        <server id="baml-language-server"
+                name="BAML Language Server"
+                icon="com.boundaryml.jetbrains_ext.BamlIcons.FILETYPE"
+                factoryClass="com.boundaryml.jetbrains_ext.BamlLanguageServerFactory">
+            <description><![CDATA[
+            The BAML language server.
+        ]]>
+            </description>
+        </server>
+
+<!--        <fileTypeMapping fileType="BAML"-->
+<!--                         serverId="baml-language-server"-->
+<!--                         languageId="baml"/>-->
+
+        <fileNamePatternMapping patterns="*.baml"
+                                serverId="baml-language-server"
+                                languageId="baml"/>
+    </extensions>
+</idea-plugin>

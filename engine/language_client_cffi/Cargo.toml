@@ -13,6 +13,9 @@ license-file.workspace = true
 # for more information.
 crate-type = ["cdylib", "staticlib"]
 
+[lints.clippy]
+not_unsafe_ptr_arg_deref = "allow"
+
 [dependencies]
 libc = "0.2.2"
 baml-cli.workspace = true

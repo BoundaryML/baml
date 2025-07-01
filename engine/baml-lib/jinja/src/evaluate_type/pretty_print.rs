@@ -1,4 +1,4 @@
-use minijinja::machinery::ast::{self, Expr, CallArg};
+use minijinja::machinery::ast::{self, CallArg, Expr};
 
 fn pretty_print_call_arg(arg: &CallArg) -> String {
     match arg {

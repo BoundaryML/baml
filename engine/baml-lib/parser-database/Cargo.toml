@@ -16,9 +16,9 @@ unused_variables = "allow"
 [dependencies]
 baml-derive.workspace = true
 baml-types = { path = "../baml-types" }
+internal-baml-ast = { path = "../ast" }
 internal-baml-jinja-types = { path = "../jinja" }
 internal-baml-diagnostics = { path = "../diagnostics" }
-internal-baml-schema-ast = { path = "../schema-ast" }
 internal-baml-prompt-parser = { path = "../prompt-parser" }
 internal-llm-client = { path = "../llm-client" }
 

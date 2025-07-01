@@ -1,15 +1,14 @@
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
-use super::TypeWalker;
-use super::{field::FieldWalker, EnumWalker};
-use crate::types::Attributes;
 use baml_types::Constraint;
 use either::Either;
 use indexmap::IndexMap;
-use internal_baml_schema_ast::ast::Identifier;
-use internal_baml_schema_ast::ast::SubType;
-use internal_baml_schema_ast::ast::{self, ArgumentId, WithIdentifier, WithName, WithSpan};
-use std::collections::HashMap;
+use internal_baml_ast::ast::{
+    self, ArgumentId, Identifier, SubType, WithIdentifier, WithName, WithSpan,
+};
+
+use super::{field::FieldWalker, EnumWalker, TypeWalker};
+use crate::types::Attributes;
 
 /// Class walker with some helper methods to extract info from the parser DB.
 pub type ClassWalker<'db> = super::Walker<'db, ast::TypeExpId>;
@@ -88,7 +87,7 @@ impl<'db> ClassWalker<'db> {
                 .types
                 .enum_attributes
                 .get(&self.id)
-                .and_then(|f| f.serilizer.as_ref()),
+                .and_then(|f| f.serializer.as_ref()),
             _ => self
                 .db
                 .types

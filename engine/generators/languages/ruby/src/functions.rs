@@ -1,7 +1,11 @@
 use askama::Template;
 use baml_types::GeneratorDefaultClientMode;
 
-use crate::{generated_types::{ClassRb, EnumRb}, package::CurrentRenderPackage, r#type::{SerializeType, TypeRb}};
+use crate::{
+    generated_types::{ClassRb, EnumRb},
+    package::CurrentRenderPackage,
+    r#type::{SerializeType, TypeRb},
+};
 
 pub struct FunctionRb {
     pub(crate) documentation: Option<String>,
@@ -17,7 +21,6 @@ pub struct FunctionArgRb {
     pub(crate) default_value: Option<String>,
 }
 
-
 #[derive(askama::Template)]
 #[template(path = "client.rb.j2", escape = "none")]
 struct Client<'a> {
@@ -25,13 +28,12 @@ struct Client<'a> {
     pkg: &'a CurrentRenderPackage,
 }
 
-pub fn render_client(functions: &[FunctionRb], pkg: &CurrentRenderPackage) -> Result<String, askama::Error> {
-    Client {
-        functions,
-        pkg,
-    }.render()
+pub fn render_client(
+    functions: &[FunctionRb],
+    pkg: &CurrentRenderPackage,
+) -> Result<String, askama::Error> {
+    Client { functions, pkg }.render()
 }
-
 
 #[derive(askama::Template)]
 #[template(path = "parser.rb.j2", escape = "none")]
@@ -40,14 +42,12 @@ struct Parser<'a> {
     pkg: &'a CurrentRenderPackage,
 }
 
-pub fn render_parser(functions: &[FunctionRb], pkg: &CurrentRenderPackage) -> Result<String, askama::Error> {
-    Parser {
-        functions,
-        pkg,
-    }.render()
+pub fn render_parser(
+    functions: &[FunctionRb],
+    pkg: &CurrentRenderPackage,
+) -> Result<String, askama::Error> {
+    Parser { functions, pkg }.render()
 }
-
-
 
 /// A map of type names to their Rb types.
 ///
@@ -55,7 +55,7 @@ pub fn render_parser(functions: &[FunctionRb], pkg: &CurrentRenderPackage) -> Re
 /// from . import types
 /// from . import stream_types
 ///
-/// 
+///
 /// type_map = {
 /// {% for class in classes %}
 ///     "types.{{ class.name }}": types.{{ class.name }},
@@ -73,12 +73,8 @@ struct TypeMap<'a> {
     enums: &'a [EnumRb],
 }
 
-
 pub fn render_type_map(classes: &[ClassRb], enums: &[EnumRb]) -> Result<String, askama::Error> {
-    TypeMap {
-        classes,
-        enums,
-    }.render()
+    TypeMap { classes, enums }.render()
 }
 
 /// A map of file paths to their contents.
@@ -104,19 +100,17 @@ struct SourceFiles<'a> {
 pub fn render_source_files(file_map: Vec<(String, String)>) -> Result<String, askama::Error> {
     SourceFiles {
         file_map: &file_map,
-    }.render()
+    }
+    .render()
 }
-
 
 pub fn render_runtime(_pkg: &CurrentRenderPackage) -> Result<String, askama::Error> {
-    Runtime{}.render()
+    Runtime {}.render()
 }
-
 
 #[derive(askama::Template)]
 #[template(path = "runtime.rb.j2", escape = "none", ext = "txt")]
-struct Runtime {
-}
+struct Runtime {}
 
 pub fn render_globals(_pkg: &CurrentRenderPackage) -> Result<String, askama::Error> {
     Ok(include_str!("./_templates/globals.rb").to_string())
@@ -138,9 +132,13 @@ struct Init<'a> {
     default_client_mode: GeneratorDefaultClientMode,
 }
 
-pub fn render_init(pkg: &CurrentRenderPackage, client_mode: &GeneratorDefaultClientMode) -> Result<String, askama::Error> {
+pub fn render_init(
+    _pkg: &CurrentRenderPackage,
+    client_mode: &GeneratorDefaultClientMode,
+) -> Result<String, askama::Error> {
     Init {
         version: env!("CARGO_PKG_VERSION"),
         default_client_mode: client_mode.clone(),
-    }.render()
+    }
+    .render()
 }

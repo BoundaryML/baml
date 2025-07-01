@@ -1,12 +1,13 @@
 use baml_types::{BamlValueWithMeta, ResponseCheck};
 use jsonish::{ResponseBamlValue, ResponseValueMeta};
-use pyo3::prelude::{pymethods, PyResult};
-use pyo3::types::{PyAnyMethods, PyDict, PyModule, PyTuple, PyType};
-use pyo3::{Bound, IntoPyObject, IntoPyObjectExt, Py, PyAny, PyErr, PyObject, Python};
-
-use crate::errors::BamlError;
+use pyo3::{
+    prelude::{pymethods, PyResult},
+    types::{PyAnyMethods, PyDict, PyModule, PyTuple, PyType},
+    Bound, IntoPyObject, IntoPyObjectExt, Py, PyAny, PyErr, PyObject, Python,
+};
 
 use super::{BamlAudioPy, BamlImagePy};
+use crate::errors::BamlError;
 
 crate::lang_wrapper!(FunctionResult, baml_runtime::FunctionResult);
 
@@ -96,15 +97,19 @@ pub(crate) fn pythonize_strict(
     let allow_partials = allow_partials && !parsed.0.meta().2.required_done;
     let meta = parsed.0.meta().clone();
 
-    let is_pydantic_2 = { 
-        let pydantic =  py.import("pydantic")?;
+    let is_pydantic_2 = {
+        let pydantic = py.import("pydantic")?;
         let pydantic_version = pydantic.getattr("version")?;
         let pydantic_version = pydantic_version.getattr("VERSION")?;
         let pydantic_version = pydantic_version.call_method("__str__", (), None)?;
         let pydantic_version = pydantic_version.extract::<String>()?;
         pydantic_version.split(".").next().unwrap_or("0") >= "2"
     };
-    let model_validate_method = if is_pydantic_2 { "model_validate" } else { "parse_obj" };
+    let model_validate_method = if is_pydantic_2 {
+        "model_validate"
+    } else {
+        "parse_obj"
+    };
 
     let py_value_without_constraints = match parsed.0 {
         BamlValueWithMeta::String(val, _) => val.into_py_any(py),
@@ -209,7 +214,8 @@ pub(crate) fn pythonize_strict(
                 // classes inheriting `BaseModel`, which probably incurs some
                 // performance penalty. So we should consider testing whether
                 // the field is a `Checked` before doing a `model_dump`.
-                let value_model = value.call_method0(py, if is_pydantic_2 { "model_dump" } else { "dict" });
+                let value_model =
+                    value.call_method0(py, if is_pydantic_2 { "model_dump" } else { "dict" });
                 match value_model {
                     Err(_) => {
                         properties_dict.set_item(key, value)?;
@@ -245,18 +251,21 @@ pub(crate) fn pythonize_strict(
                 Err(_) => unreachable!("The return value for the Err case in class_type would have triggered before we reached this line."),
             };
 
-            let instance =
-                match class_type.call_method(model_validate_method, (properties_dict.clone(),), None) {
+            let instance = match class_type.call_method(
+                model_validate_method,
+                (properties_dict.clone(),),
+                None,
+            ) {
+                Ok(x) => Ok(x),
+                Err(original_error) => match backup_class_type.call_method(
+                    model_validate_method,
+                    (properties_dict.clone(),),
+                    None,
+                ) {
                     Ok(x) => Ok(x),
-                    Err(original_error) => match backup_class_type.call_method(
-                        model_validate_method,
-                        (properties_dict.clone(),),
-                        None,
-                    ) {
-                        Ok(x) => Ok(x),
-                        Err(_) => Err(original_error),
-                    },
-                }?;
+                    Err(_) => Err(original_error),
+                },
+            }?;
 
             Ok(instance.into())
         }
@@ -274,7 +283,8 @@ pub(crate) fn pythonize_strict(
 
     let value_with_possible_checks = if !checks.is_empty() {
         // Generate the Python checks
-        let python_checks = pythonize_checks(py, cls_module, &checks, model_validate_method).expect("pythonize_checks");
+        let python_checks = pythonize_checks(py, cls_module, &checks, model_validate_method)
+            .expect("pythonize_checks");
 
         // Get the type of the original value
         let value_type = py_value_without_constraints.bind(py).get_type();

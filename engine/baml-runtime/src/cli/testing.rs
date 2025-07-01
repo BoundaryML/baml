@@ -1,10 +1,13 @@
-use crate::cli::dotenv;
-use crate::test_executor::TestExecutor;
-use crate::{test_executor::TestFilter, BamlRuntime};
+use std::{collections::HashMap, path::PathBuf};
+
 use anyhow::{Context, Result};
 use clap::{Args, Subcommand};
-use std::collections::HashMap;
-use std::path::PathBuf;
+
+use crate::{
+    cli::dotenv,
+    test_executor::{TestExecutor, TestFilter},
+    BamlRuntime,
+};
 
 #[derive(Args, Clone, Debug)]
 pub struct TestArgs {
@@ -101,7 +104,7 @@ impl std::str::FromStr for OutputFormat {
         match s {
             "github" => Ok(OutputFormat::Github),
             "pretty" => Ok(OutputFormat::Pretty),
-            _ => Err(format!("Invalid output format: {}", s)),
+            _ => Err(format!("Invalid output format: {s}")),
         }
     }
 }
@@ -124,7 +127,8 @@ impl TestArgs {
             }
         }
 
-        let runtime = BamlRuntime::from_directory(&from, std::env::vars().collect())?;
+        let env_vars = std::env::vars().collect::<HashMap<String, String>>();
+        let runtime = BamlRuntime::from_directory(&from, env_vars.clone())?;
         let runtime = std::sync::Arc::new(runtime);
 
         let test_execution_args = TestFilter::from(
@@ -151,6 +155,7 @@ impl TestArgs {
                     *parallel,
                     output_format,
                     if *junit { Some(junit_path) } else { None },
+                    &env_vars,
                 )
                 .await
             {

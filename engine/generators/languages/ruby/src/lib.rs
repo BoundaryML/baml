@@ -29,7 +29,9 @@ impl RbLanguageFeatures {
         } else {
             self.requires.lock().unwrap()
         };
-        map.entry(std::path::Path::new(path).to_path_buf()).or_insert_with(Vec::new).push(import.to_string());
+        map.entry(std::path::Path::new(path).to_path_buf())
+            .or_insert_with(Vec::new)
+            .push(import.to_string());
     }
 }
 
@@ -69,24 +71,24 @@ impl LanguageFeatures for RbLanguageFeatures {
         *content = {
             let mut new_content = self.content_prefix().to_string();
             if let Some(requires) = self.requires.lock().unwrap().get(path) {
-                new_content.push_str("\n");
+                new_content.push('\n');
                 for require in requires {
-                    new_content.push_str(&format!("require \"{}\"\n", require));
+                    new_content.push_str(&format!("require \"{require}\"\n"));
                 }
             }
             if let Some(requires) = self.requires_relative.lock().unwrap().get(path) {
-                new_content.push_str("\n");
+                new_content.push('\n');
                 for require in requires {
-                    new_content.push_str(&format!("require_relative \"{}\"\n", require));
+                    new_content.push_str(&format!("require_relative \"{require}\"\n"));
                 }
             }
-            new_content.push_str("\n");
+            new_content.push('\n');
             new_content.push_str("module BamlClient\n");
             for line in content.split("\n") {
                 if line.trim().is_empty() {
-                    new_content.push_str("\n");
+                    new_content.push('\n');
                 } else {
-                    new_content.push_str(&format!("  {}\n", line));
+                    new_content.push_str(&format!("  {line}\n"));
                 }
             }
             new_content.push_str("\nend\n");
@@ -102,7 +104,7 @@ impl LanguageFeatures for RbLanguageFeatures {
         args: &GeneratorArgs,
     ) -> Result<(), anyhow::Error> {
         let pkg = package::CurrentRenderPackage::new("BamlClient", ir.clone());
-        let file_map = args.file_map_as_json_string()?;
+        let _file_map = args.file_map_as_json_string()?;
 
         // collector.add_file("b.rb", render_init(&pkg, &args.default_client_mode)?)?;
         // collector.add_file("inlinedbaml.rb", render_source_files(file_map)?)?;
@@ -127,9 +129,7 @@ impl LanguageFeatures for RbLanguageFeatures {
             .walk_enums()
             .map(|e| ir_to_rb::enums::ir_enum_to_rb(e.item, &pkg))
             .collect::<Vec<_>>();
-        let type_aliases = ir
-            .walk_type_aliases()
-            .collect::<Vec<_>>();
+        let type_aliases = ir.walk_type_aliases().collect::<Vec<_>>();
         let mut rb_type_aliases = type_aliases
             .iter()
             .map(|c| ir_to_rb::type_aliases::ir_type_alias_to_rb(c.item, &pkg))
@@ -168,7 +168,10 @@ impl LanguageFeatures for RbLanguageFeatures {
         collector.add_file("stream_types.rb", "module StreamTypes\n")?;
         collector.append_to_file("stream_types.rb", &render_rb_stream_types_utils(&pkg)?)?;
         collector.append_to_file("stream_types.rb", &render_rb_types(&rb_classes, &pkg)?)?;
-        collector.append_to_file("stream_types.rb", &render_rb_types(&rb_stream_type_aliases, &pkg)?)?;
+        collector.append_to_file(
+            "stream_types.rb",
+            &render_rb_types(&rb_stream_type_aliases, &pkg)?,
+        )?;
         collector.append_to_file("stream_types.rb", "\nend\n")?;
 
         Ok(())
@@ -192,8 +195,9 @@ mod generated_tests {
 mod tests {
     #[test]
     fn test_name() {
-        use dir_writer::LanguageFeatures;
         use std::str::FromStr;
+
+        use dir_writer::LanguageFeatures;
 
         let gen_type = baml_types::GeneratorOutputType::from_str(crate::RbLanguageFeatures::name())
             .expect("RbLanguageFeatures name should be a valid GeneratorOutputType");

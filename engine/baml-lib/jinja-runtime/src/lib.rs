@@ -3,21 +3,19 @@ use colored::*;
 mod chat_message_part;
 
 mod output_format;
-use internal_baml_core::ir::jinja_helpers::get_env;
-use internal_baml_core::ir::repr::IntermediateRepr;
+use internal_baml_core::ir::{jinja_helpers::get_env, repr::IntermediateRepr};
 pub use output_format::types;
 mod baml_value_to_jinja_value;
 
-use minijinja::{self, value::Kwargs};
-use minijinja::{context, ErrorKind};
+use std::collections::HashMap;
+
+use minijinja::{self, context, value::Kwargs, ErrorKind};
 use output_format::types::OutputFormatContent;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
-use std::collections::HashMap;
 
-use crate::baml_value_to_jinja_value::IntoMiniJinjaValue;
 pub use crate::chat_message_part::ChatMessagePart;
-use crate::output_format::OutputFormat;
+use crate::{baml_value_to_jinja_value::IntoMiniJinjaValue, output_format::OutputFormat};
 
 #[allow(non_camel_case_types)]
 #[derive(Clone, Debug, Serialize)]
@@ -71,7 +69,7 @@ fn render_minijinja(
 
     // trim
     let template = template.trim();
-    log::debug!("Rendering template: \n{}\n------\n", template);
+    log::debug!("Rendering template: \n{template}\n------\n");
     // let args_dict = minijinja::Value::from_serializable(args);
 
     // inject macros
@@ -114,7 +112,7 @@ fn render_minijinja(
                     // If both are present, we should error
                     return Err(minijinja::Error::new(
                         ErrorKind::TooManyArguments,
-                        format!("role() called with two roles: '{}' and '{}'", a, b),
+                        format!("role() called with two roles: '{a}' and '{b}'"),
                     ));
                 }
                 (Some(role), _) => role,
@@ -223,7 +221,7 @@ fn render_minijinja(
                         Ok(m) => Some(ChatMessagePart::Media(m)),
                         Err(_) => Err(minijinja::Error::new(
                             ErrorKind::CannotUnpack,
-                            format!("Media variable had unrecognizable data: {}", media_data),
+                            format!("Media variable had unrecognizable data: {media_data}"),
                         ))?,
                     }
                 } else if !part.trim().is_empty() {
@@ -298,7 +296,7 @@ pub enum RenderedPrompt {
 impl std::fmt::Display for RenderedPrompt {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            RenderedPrompt::Completion(s) => write!(f, "{}", s),
+            RenderedPrompt::Completion(s) => write!(f, "{s}"),
             RenderedPrompt::Chat(messages) => {
                 for message in messages {
                     writeln!(
@@ -447,12 +445,12 @@ pub fn render_prompt(
 #[cfg(test)]
 mod render_tests {
 
-    use super::*;
+    use std::sync::Once;
 
     use baml_types::{BamlMap, BamlMediaType};
-
     use indexmap::IndexMap;
-    use std::sync::Once;
+
+    use super::*;
 
     static INIT: Once = Once::new();
 
@@ -463,10 +461,10 @@ mod render_tests {
     }
 
     pub fn make_test_ir(source_code: &str) -> anyhow::Result<IntermediateRepr> {
-        use internal_baml_core::validate;
-        use internal_baml_core::ValidatedSchema;
-        use internal_baml_diagnostics::SourceFile;
         use std::path::PathBuf;
+
+        use internal_baml_core::{validate, ValidatedSchema};
+        use internal_baml_diagnostics::SourceFile;
         let path: PathBuf = "fake_file.baml".into();
         let source_file: SourceFile = (path.clone(), source_code).into();
         let validated_schema: ValidatedSchema = validate(&path, vec![source_file]);

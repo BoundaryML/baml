@@ -1,6 +1,6 @@
-use anyhow::Result;
 use std::collections::HashSet;
 
+use anyhow::Result;
 use baml_types::{
     BamlMap, BamlMedia, BamlValue, BamlValueWithMeta, Constraint, FieldType, JinjaExpression,
 };
@@ -151,10 +151,7 @@ impl From<BamlValueWithFlags> for BamlValueWithMeta<FieldType> {
             BamlValueWithFlags::Float(v) => BamlValueWithMeta::Float(v.value, field_type),
             BamlValueWithFlags::Bool(v) => BamlValueWithMeta::Bool(v.value, field_type),
             BamlValueWithFlags::List(conditions, target, items) => BamlValueWithMeta::List(
-                items
-                    .into_iter()
-                    .map(|v| BamlValueWithMeta::from(v))
-                    .collect(),
+                items.into_iter().map(BamlValueWithMeta::from).collect(),
                 field_type,
             ),
             BamlValueWithFlags::Map(conditions, target, fields) => BamlValueWithMeta::Map(
@@ -191,10 +188,7 @@ impl From<BamlValueWithFlags> for BamlValueWithMeta<Vec<Flag>> {
             BamlValueWithFlags::Float(v) => BamlValueWithMeta::Float(v.value, v.flags.flags),
             BamlValueWithFlags::Bool(v) => BamlValueWithMeta::Bool(v.value, v.flags.flags),
             BamlValueWithFlags::List(conditions, target, items) => BamlValueWithMeta::List(
-                items
-                    .into_iter()
-                    .map(|v| BamlValueWithMeta::from(v))
-                    .collect(),
+                items.into_iter().map(BamlValueWithMeta::from).collect(),
                 conditions.flags,
             ),
             BamlValueWithFlags::Map(conditions, target, fields) => BamlValueWithMeta::Map(
@@ -302,7 +296,7 @@ impl BamlValueWithFlags {
                 }
                 for (i, value) in values.iter().enumerate() {
                     let mut scope = scope.clone();
-                    scope.push(format!("parsed:{}", i));
+                    scope.push(format!("parsed:{i}"));
                     value.explanation_impl(scope, expls);
                 }
             }
@@ -320,12 +314,12 @@ impl BamlValueWithFlags {
                     if !causes.is_empty() {
                         expls.push(ParsingError {
                             scope: scope.clone(),
-                            reason: format!("error while parsing value for map key '{}'", k),
+                            reason: format!("error while parsing value for map key '{k}'"),
                             causes,
                         });
                     }
                     let mut scope = scope.clone();
-                    scope.push(format!("parsed:{}", k));
+                    scope.push(format!("parsed:{k}"));
                     v.explanation_impl(scope, expls);
                 }
             }
@@ -344,7 +338,7 @@ impl BamlValueWithFlags {
                 if !causes.is_empty() {
                     expls.push(ParsingError {
                         scope: scope.clone(),
-                        reason: format!("error while parsing class {}", class_name),
+                        reason: format!("error while parsing class {class_name}"),
                         causes,
                     });
                 }

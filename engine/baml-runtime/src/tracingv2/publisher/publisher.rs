@@ -1,39 +1,40 @@
+use core::time::Duration;
+use std::{
+    any::type_name,
+    borrow::Cow,
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+    sync::Arc,
+};
+
 use anyhow::{Context, Result};
-use baml_rpc::ast::tops::{FunctionDefinition, SourceCode, AST};
-use baml_rpc::TypeDefinition;
-use baml_rpc::TypeReference;
 use baml_rpc::{
+    ast::tops::{FunctionDefinition, SourceCode, AST},
     ApiEndpoint, BamlSrcUploadS3File, CheckBamlSrcUpload, CheckBamlSrcUploadRequest,
     CreateTraceEventUploadUrl, CreateTraceEventUploadUrlRequest, CreateTraceEventUploadUrlResponse,
-    S3UploadMetadata, TraceEventBatch,
+    NamedType, S3UploadMetadata, TraceEventBatch, TypeDefinition, TypeDefinitionSource,
+    TypeReference,
 };
-use baml_rpc::{NamedType, TypeDefinitionSource};
-use baml_types::FieldType;
-use std::collections::hash_map::DefaultHasher;
-use std::hash::{Hash, Hasher};
-use tracing::field;
-
-use baml_types::tracing::events::{TraceData, TraceEvent};
-use baml_types::{BamlValueWithMeta, HasFieldType};
-use core::time::Duration;
+use baml_types::{
+    tracing::events::{TraceData, TraceEvent},
+    BamlValueWithMeta, FieldType, HasFieldType,
+};
 use futures::StreamExt;
 use http::{HeaderMap, HeaderName, HeaderValue};
 use once_cell::sync::OnceCell;
 use serde::Serialize;
-use std::any::type_name;
-use std::borrow::Cow;
-use std::sync::Arc;
 use tokio::sync::mpsc;
 #[cfg(not(target_family = "wasm"))]
 use tokio::time::*;
-
+use tracing::field;
 #[cfg(target_family = "wasm")]
 use wasmtimer::tokio::*;
 
-use crate::runtime::{AstSignatureWrapper, InternalBamlRuntime};
-use crate::tracingv2::storage::interface::TraceEventWithMeta;
-
 use super::rpc_converters::{to_rpc_event, IntoRpcEvent, TypeLookup};
+use crate::{
+    runtime::{AstSignatureWrapper, InternalBamlRuntime},
+    tracingv2::storage::interface::TraceEventWithMeta,
+};
 
 enum PublisherMessage {
     Trace(Arc<TraceEventWithMeta>),
@@ -110,7 +111,7 @@ impl RuntimeAST {
     where
         TEndpoint: ApiEndpoint,
     {
-        if !self.api_key().is_some() {
+        if self.api_key().is_none() {
             return Err(ApiError::Http {
                 status: reqwest::StatusCode::UNAUTHORIZED,
                 body: format!("BOUNDARY_API_KEY is not set for {}", TEndpoint::path()),
@@ -153,8 +154,7 @@ impl RuntimeAST {
         }
 
         // D) happy path: 2xx → attempt to parse into T
-        Ok(serde_json::from_slice::<TEndpoint::Response<'resp>>(&bytes)
-            .map_err(ApiError::Deserialize)?)
+        serde_json::from_slice::<TEndpoint::Response<'resp>>(&bytes).map_err(ApiError::Deserialize)
     }
 }
 
@@ -219,17 +219,6 @@ pub fn start_publisher(
         tx
     });
 
-    // Update runtime if channel already existed
-    #[cfg(not(target_arch = "wasm32"))]
-    let _ = rt.block_on(flush());
-    #[cfg(target_arch = "wasm32")]
-    {
-        let _ = wasm_bindgen_futures::spawn_local(async move {
-            if let Err(e) = flush().await {
-                log::error!("Failed to flush: {}", e);
-            }
-        });
-    }
     let _ = channel.send(PublisherMessage::UpdateRuntime(lookup));
 }
 
@@ -294,7 +283,7 @@ impl TracePublisher {
                 // Process any incoming command or event.
                 Some(message) = self.rx.recv() => {
 
-                    if !self.lookup.api_key().is_some() {
+                    if self.lookup.api_key().is_none() {
                         tracing::debug!("Skipping trace event because BOUNDARY_API_KEY is not set");
                         continue;
                     }
@@ -334,7 +323,7 @@ impl TracePublisher {
                 }
                 // Periodic flush of pending events.
                 _ = tick_interval.tick() => {
-                    if !self.lookup.api_key().is_some() {
+                    if self.lookup.api_key().is_none() {
                         tracing::debug!("Skipping trace event because BOUNDARY_API_KEY is not set");
                         continue;
                     }
@@ -367,19 +356,19 @@ impl TracePublisher {
                     .iter()
                     .map(|(name, field_type)| NamedType {
                         name: name.clone(),
-                        type_ref: field_type.into_rpc_event(self.lookup.as_ref()),
+                        type_ref: field_type.to_rpc_event(self.lookup.as_ref()),
                     })
                     .collect();
 
                 FunctionDefinition {
                     function_id: signature.function_id.0.clone(),
                     inputs,
-                    output: signature.output.into_rpc_event(self.lookup.as_ref()),
+                    output: signature.output.to_rpc_event(self.lookup.as_ref()),
                     dependencies: signature
                         .function_id
                         .1
                         .iter()
-                        .map(|dep| (**dep).0.clone())
+                        .map(|dep| dep.0.clone())
                         .collect(),
                 }
             })
@@ -388,8 +377,8 @@ impl TracePublisher {
         // Convert types
         let types: Vec<TypeDefinition> =
             ast.types
-                .iter()
-                .map(|(_name, type_with_deps)| {
+                .values()
+                .map(|type_with_deps| {
                     let type_id_arc = &type_with_deps.type_id.0;
                     let dependencies_arc = &type_with_deps.type_id.1;
 
@@ -410,7 +399,7 @@ impl TracePublisher {
                                         .map(|(name, field_type_arc)| NamedType {
                                             name: name.clone(),
                                             type_ref: (**field_type_arc)
-                                                .into_rpc_event(self.lookup.as_ref()),
+                                                .to_rpc_event(self.lookup.as_ref()),
                                         })
                                         .collect()
                                 });
@@ -441,7 +430,7 @@ impl TracePublisher {
                         }
                         "type_alias" => TypeDefinition::Alias {
                             type_id: concrete_type_id,
-                            rhs: (*type_with_deps.field_type).into_rpc_event(self.lookup.as_ref()),
+                            rhs: (*type_with_deps.field_type).to_rpc_event(self.lookup.as_ref()),
                         },
                         _ => TypeDefinition::Alias {
                             type_id: concrete_type_id,
@@ -521,7 +510,7 @@ impl TracePublisher {
             .headers({
                 let mut headers = reqwest::header::HeaderMap::new();
                 for (key, value) in upload_metadata.to_map() {
-                    let header_name = format!("x-amz-meta-{}", key);
+                    let header_name = format!("x-amz-meta-{key}");
                     if let (Ok(name), Ok(val)) = (
                         reqwest::header::HeaderName::from_bytes(header_name.as_bytes()),
                         reqwest::header::HeaderValue::from_str(&value),
@@ -615,15 +604,15 @@ impl TracePublisher {
                         Ok(())
                     }
                     (Err(e1), Ok(())) => {
-                        log::info!("First half failed: {}", e1);
+                        log::info!("First half failed: {e1}");
                         Err(e1)
                     }
                     (Ok(()), Err(e2)) => {
-                        log::info!("Second half failed: {}", e2);
+                        log::info!("Second half failed: {e2}");
                         Err(e2)
                     }
                     (Err(e1), Err(e2)) => {
-                        log::debug!("Both halves failed - first: {}, second: {}", e1, e2);
+                        log::debug!("Both halves failed - first: {e1}, second: {e2}");
                         Err(e1) // Return the first error
                     }
                 }
@@ -685,7 +674,7 @@ impl TracePublisher {
         {
             Ok(response) => response,
             Err(e) => {
-                log::debug!("Failed to upload trace events: {}", e);
+                log::debug!("Failed to upload trace events: {e}");
                 return Err(e.into());
             }
         };
@@ -727,7 +716,7 @@ impl AsReqwestHeaders for S3UploadMetadata {
             .iter()
             .map(|(k, v)| {
                 Ok((
-                    HeaderName::from_bytes(format!("x-amz-meta-{}", k).as_bytes())?,
+                    HeaderName::from_bytes(format!("x-amz-meta-{k}").as_bytes())?,
                     HeaderValue::from_str(v.as_str().unwrap())?,
                 ))
             })

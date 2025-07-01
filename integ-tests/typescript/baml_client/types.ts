@@ -829,10 +829,6 @@ export type JsonArray = JsonValue[]
 
 export type JsonEntry = SimpleTag | JsonTemplate
 
-export type JsonObject = Record<string, JsonValue>
-
-export type JsonTemplate = Record<string, JsonEntry>
-
 export type JsonValue = number | string | boolean | number | JsonObject | JsonArray
 
 export type LinkedListAlias = LinkedListAliasNode
@@ -853,6 +849,18 @@ export type RecAliasTwo = RecAliasThree
 
 export type RecursiveListAlias = RecursiveListAlias[]
 
-export type RecursiveMapAlias = Record<string, RecursiveMapAlias>
+export interface JsonObject {
+  [key: string]: JsonValue
+}
 
-export type RecursiveUnion = string | Record<string, RecursiveUnion>
+export interface JsonTemplate {
+  [key: string]: JsonEntry
+}
+
+export interface RecursiveMapAlias {
+  [key: string]: RecursiveMapAlias
+}
+
+export interface RecursiveUnion {
+  [key: string]: string | Record<string, RecursiveUnion>
+}

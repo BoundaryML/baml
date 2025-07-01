@@ -16,11 +16,10 @@ use base64::{
 use js_sys::{Array, Object, Uint8Array};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use thiserror::Error;
 use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{window, CryptoKey, SubtleCrypto};
-
-use thiserror::Error;
 
 #[derive(Error, Debug)]
 pub enum JwtError {
@@ -60,7 +59,7 @@ pub async fn encode_jwt(
     let claims_segment = URL_SAFE_NO_PAD.encode(serde_json::to_string(claims)?);
 
     // Combine header and claims
-    let signing_input = format!("{}.{}", header_segment, claims_segment);
+    let signing_input = format!("{header_segment}.{claims_segment}");
 
     // Convert PEM to importable key format
     let pem = private_key_pem
@@ -106,7 +105,6 @@ pub async fn encode_jwt(
     // Create final JWT
     let signature_segment = URL_SAFE_NO_PAD.encode(&signature_vec);
     Ok(format!(
-        "{}.{}.{}",
-        header_segment, claims_segment, signature_segment
+        "{header_segment}.{claims_segment}.{signature_segment}"
     ))
 }

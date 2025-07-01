@@ -13,6 +13,9 @@ elided_named_lifetimes = "deny"
 unused_imports = "allow"
 unused_variables = "allow"
 
+[lints.clippy]
+type_complexity = "allow"
+
 [dependencies]
 anyhow.workspace = true
 baml-types = { path = "../baml-types" }

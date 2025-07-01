@@ -1,7 +1,7 @@
+use baml_types::FieldType;
 use criterion::Criterion;
 use internal_baml_jinja::types::Builder;
 use jsonish::from_str;
-use baml_types::FieldType;
 
 const PARTIAL_SCHEMA: &str = r#"
 class NestedObject {
@@ -40,25 +40,31 @@ class ComplexPartial {
 
 pub fn bench_partials(c: &mut Criterion) {
     let mut group = c.benchmark_group("partials");
-    
+
     // Test partial parsing of a deeply nested object
     let target = FieldType::class("NestedObject");
     let of = Builder::new(target.clone()).build();
-    
-    group.bench_function("partial_nested_shallow", |b| b.iter(|| from_str(
-        &of,
-        &target,
-        r#"{
+
+    group.bench_function("partial_nested_shallow", |b| {
+        b.iter(|| {
+            from_str(
+                &of,
+                &target,
+                r#"{
             "id": 1,
             "name": "test"
         }"#,
-        true,
-    )));
+                true,
+            )
+        })
+    });
 
-    group.bench_function("partial_nested_mid", |b| b.iter(|| from_str(
-        &of,
-        &target,
-        r#"{
+    group.bench_function("partial_nested_mid", |b| {
+        b.iter(|| {
+            from_str(
+                &of,
+                &target,
+                r#"{
             "id": 1,
             "name": "test",
             "metadata": {
@@ -66,28 +72,36 @@ pub fn bench_partials(c: &mut Criterion) {
                 "tags": ["tag1", "tag2"]
             }
         }"#,
-        true,
-    )));
+                true,
+            )
+        })
+    });
 
     // Test partial with optional fields
     let target = FieldType::class("ComplexPartial");
     let of = Builder::new(target.clone()).build();
-    
-    group.bench_function("partial_with_optional", |b| b.iter(|| from_str(
-        &of,
-        &target,
-        r#"{
+
+    group.bench_function("partial_with_optional", |b| {
+        b.iter(|| {
+            from_str(
+                &of,
+                &target,
+                r#"{
             "required_field": "required",
             "list_field": ["item1"]
         }"#,
-        true,
-    )));
+                true,
+            )
+        })
+    });
 
     // Test partial with array fields
-    group.bench_function("partial_with_arrays", |b| b.iter(|| from_str(
-        &of,
-        &target,
-        r#"{
+    group.bench_function("partial_with_arrays", |b| {
+        b.iter(|| {
+            from_str(
+                &of,
+                &target,
+                r#"{
             "required_field": "required",
             "list_field": ["item1", "item2", "item3", "item4", "item5"],
             "nested": {
@@ -98,14 +112,18 @@ pub fn bench_partials(c: &mut Criterion) {
                 }
             }
         }"#,
-        true,
-    )));
+                true,
+            )
+        })
+    });
 
     // Test partial with map fields
-    group.bench_function("partial_with_maps", |b| b.iter(|| from_str(
-        &of,
-        &target,
-        r#"{
+    group.bench_function("partial_with_maps", |b| {
+        b.iter(|| {
+            from_str(
+                &of,
+                &target,
+                r#"{
             "required_field": "required",
             "map_field": {
                 "key1": "value1",
@@ -113,14 +131,18 @@ pub fn bench_partials(c: &mut Criterion) {
                 "key3": "value3"
             }
         }"#,
-        true,
-    )));
+                true,
+            )
+        })
+    });
 
     // Test partial with mixed fields
-    group.bench_function("partial_mixed", |b| b.iter(|| from_str(
-        &of,
-        &target,
-        r#"{
+    group.bench_function("partial_mixed", |b| {
+        b.iter(|| {
+            from_str(
+                &of,
+                &target,
+                r#"{
             "required_field": "required",
             "optional_field": "optional",
             "list_field": ["item1", "item2"],
@@ -132,8 +154,10 @@ pub fn bench_partials(c: &mut Criterion) {
                 "name": "test"
             }
         }"#,
-        true,
-    )));
+                true,
+            )
+        })
+    });
 
     group.finish();
-} 
+}

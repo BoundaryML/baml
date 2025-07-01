@@ -1,7 +1,8 @@
-use crate::rpc::ApiEndpoint;
 use baml_ids::ProjectId;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
+
+use crate::rpc::ApiEndpoint;
 
 #[derive(Debug, Serialize, Deserialize, TS)]
 #[ts(export)]

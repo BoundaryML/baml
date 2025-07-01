@@ -88,7 +88,7 @@ impl AST {
 
         ASTId {
             top_id: Cow::Owned(top_ast_hash),
-            top_ids: top_ids,
+            top_ids,
             raw_src_id: Cow::Borrowed(&self.source_code[0].file_name),
             raw_src_ids: self
                 .source_code

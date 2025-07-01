@@ -1,5 +1,7 @@
-use std::fmt;
-use std::sync::{Arc, Mutex};
+use std::{
+    fmt,
+    sync::{Arc, Mutex},
+};
 
 use baml_types::{BamlValue, EvaluationContext, FieldType};
 use indexmap::{IndexMap, IndexSet};
@@ -164,7 +166,7 @@ impl fmt::Display for ClassPropertyBuilder {
             .as_ref()
             .map_or("(unknown-type)".to_string(), |t| format!("{}", t.clone()));
 
-        write!(f, "{}", type_str)?;
+        write!(f, "{type_str}")?;
 
         if !meta.is_empty() {
             write!(f, " (")?;
@@ -172,7 +174,7 @@ impl fmt::Display for ClassPropertyBuilder {
                 if i > 0 {
                     write!(f, ", ")?;
                 }
-                write!(f, "{}={}", key, value)?;
+                write!(f, "{key}={value}")?;
             }
             write!(f, ")")?;
         }
@@ -207,7 +209,7 @@ impl fmt::Display for EnumValueBuilder {
                 if i > 0 {
                     write!(f, ", ")?;
                 }
-                write!(f, "{}={}", key, value)?;
+                write!(f, "{key}={value}")?;
             }
             write!(f, ")")?;
         }
@@ -350,7 +352,7 @@ impl fmt::Display for TypeBuilder {
             match self.type_aliases.lock() {
                 Ok(type_aliases) => {
                     let keys: Vec<_> = type_aliases.keys().collect();
-                    writeln!(f, "{:?}", keys)?
+                    writeln!(f, "{keys:?}")?
                 }
                 Err(_) => writeln!(f, "Cannot acquire lock,")?,
             }
@@ -362,7 +364,7 @@ impl fmt::Display for TypeBuilder {
             match self.recursive_type_aliases.lock() {
                 Ok(recursive_type_aliases) => {
                     let keys: Vec<_> = recursive_type_aliases.iter().map(|v| v.keys()).collect();
-                    writeln!(f, "{:?}", keys)?
+                    writeln!(f, "{keys:?}")?
                 }
                 Err(_) => writeln!(f, "Cannot acquire lock,")?,
             }
@@ -406,6 +408,12 @@ impl TypeAliasBuilder {
     }
 }
 
+impl Default for TypeAliasBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl std::fmt::Debug for TypeBuilder {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         // Start the debug printout with the struct name
@@ -418,7 +426,7 @@ impl std::fmt::Debug for TypeBuilder {
                 // We iterate through the keys only to avoid deadlocks and because we might not be able to print the values
                 // safely without deep control over locking mechanisms
                 let keys: Vec<_> = classes.keys().collect();
-                writeln!(f, "{:?},", keys)?
+                writeln!(f, "{keys:?},")?
             }
             Err(_) => writeln!(f, "Cannot acquire lock,")?,
         }
@@ -429,7 +437,7 @@ impl std::fmt::Debug for TypeBuilder {
             Ok(enums) => {
                 // Similarly, print only the keys
                 let keys: Vec<_> = enums.keys().collect();
-                writeln!(f, "{:?}", keys)?
+                writeln!(f, "{keys:?}")?
             }
             Err(_) => writeln!(f, "Cannot acquire lock,")?,
         }
@@ -586,14 +594,14 @@ impl TypeBuilder {
     /// `type_builder.add_baml("BAML CODE")`
     pub fn add_baml(&self, baml: &str, rt: &crate::BamlRuntime) -> anyhow::Result<()> {
         use internal_baml_core::{
+            internal_baml_ast::parse_type_builder_contents_from_str,
             internal_baml_diagnostics::{Diagnostics, SourceFile},
-            internal_baml_schema_ast::parse_type_builder_contents_from_str,
             ir::repr::IntermediateRepr,
             run_validation_pipeline_on_db, validate_type_builder_entries,
         };
 
         let path = std::path::PathBuf::from("TypeBuilder::add_baml");
-        let source = SourceFile::from((path.clone().into(), baml));
+        let source = SourceFile::from((path.clone(), baml));
 
         let mut diagnostics = Diagnostics::new(path);
         diagnostics.set_source(&source);
@@ -665,7 +673,7 @@ impl TypeBuilder {
             .unwrap()
             .iter()
             .map(|(name, cls)| {
-                log::debug!("Converting class: {}", name);
+                log::debug!("Converting class: {name}");
                 let mut overrides = RuntimeClassOverride {
                     alias: None,
                     new_fields: Default::default(),
@@ -743,11 +751,7 @@ impl TypeBuilder {
             })
             .collect();
 
-        log::debug!(
-            "Dynamic types: \n {:#?} \n Dynamic enums\n {:#?} enums",
-            cls,
-            enm
-        );
+        log::debug!("Dynamic types: \n {cls:#?} \n Dynamic enums\n {enm:#?} enums");
 
         let recursive_aliases = self.recursive_type_aliases.lock().unwrap().clone();
         let recursive_classes = self.recursive_classes.lock().unwrap().clone();
@@ -1038,8 +1042,7 @@ mod tests {
   ]
 )"#
             ),
-            "Output did not contain the expected recursive property format: {}",
-            output
+            "Output did not contain the expected recursive property format: {output}"
         );
 
         // Verify via to_overrides() that the recursive field is set correctly.
@@ -1138,8 +1141,8 @@ mod tests {
             }
         "##;
 
-        builder.add_baml(&baml, &runtime)?;
-        println!("{}", builder.to_string());
+        builder.add_baml(baml, &runtime)?;
+        println!("{builder}");
         builder.to_overrides();
         Ok(())
     }

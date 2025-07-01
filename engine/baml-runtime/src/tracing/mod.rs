@@ -1,31 +1,26 @@
 pub mod api_wrapper;
 
-use crate::on_log_event::LogEventCallbackSync;
-use crate::tracingv2::storage::storage::{Collector, BAML_TRACER};
-use crate::InnerTraceStats;
-use anyhow::{Context, Result};
-use baml_types::tracing::events::{
-    EvaluationContext, FunctionStart, FunctionType, TraceData, TraceEvent,
+use std::{
+    collections::HashMap,
+    sync::{Arc, Mutex},
+    time::SystemTime,
 };
-use baml_types::{BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta};
+
+use ::tracing as rust_tracing;
+use anyhow::{Context, Result};
+use baml_types::{
+    tracing::events::{EvaluationContext, FunctionStart, FunctionType, TraceData, TraceEvent},
+    BamlMap, BamlMediaType, BamlValue, BamlValueWithMeta,
+};
 use cfg_if::cfg_if;
 use colored::{ColoredString, Colorize};
 use internal_baml_core::ir::ir_helpers::infer_type;
 use internal_baml_jinja::RenderedPrompt;
-use serde::Serialize;
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use std::time::SystemTime;
-use tracing::Instrument;
-
 use jsonish::ResponseBamlValue;
+use serde::Serialize;
+use tracing::Instrument;
 use uuid::Uuid;
-
-use crate::{
-    client_registry::ClientRegistry, internal::llm_client::LLMResponse,
-    tracing::api_wrapper::core_types::Role, type_builder::TypeBuilder, CallCtx, FunctionResult,
-    RuntimeContext, RuntimeContextManager, TestResponse, TraceStats,
-};
+use valuable::Valuable;
 
 use self::api_wrapper::{
     core_types::{
@@ -35,8 +30,16 @@ use self::api_wrapper::{
     },
     APIWrapper,
 };
-use ::tracing as rust_tracing;
-use valuable::Valuable;
+use crate::{
+    client_registry::ClientRegistry,
+    internal::llm_client::LLMResponse,
+    on_log_event::LogEventCallbackSync,
+    tracing::api_wrapper::core_types::Role,
+    tracingv2::storage::storage::{Collector, BAML_TRACER},
+    type_builder::TypeBuilder,
+    CallCtx, FunctionResult, InnerTraceStats, RuntimeContext, RuntimeContextManager, TestResponse,
+    TraceStats,
+};
 
 cfg_if! {
     if #[cfg(target_arch = "wasm32")] {
@@ -226,11 +229,11 @@ impl baml_log::Loggable for BamlEventLoggable<'_> {
         let function_name = format!("Function {}", self.function_name).purple();
         match self.data.as_ref() {
             Ok(response) => {
-                let response = response.visualize(max_message_length.clone());
-                format!("{}:\n{}", function_name, response)
+                let response = response.visualize(*max_message_length);
+                format!("{function_name}:\n{response}")
             }
             Err(error) => {
-                format!("{}:\n{}", function_name, error)
+                format!("{function_name}:\n{error}")
             }
         }
     }
@@ -282,9 +285,7 @@ impl BamlEventLoggable<'_> {
                             .result_with_constraints()
                             .as_ref()
                             .and_then(|r| r.as_ref().ok())
-                            .map(|v| {
-                                serde_json::to_value(&v.serialize_final()).unwrap_or_default()
-                            }),
+                            .map(|v| serde_json::to_value(v.serialize_final()).unwrap_or_default()),
                         error: None,
                     },
                     LLMResponse::LLMFailure(err) => BamlEventJson {
@@ -459,7 +460,7 @@ impl BamlTracer {
             EvaluationContext {
                 tags: global_tags
                     .into_iter()
-                    .chain(last_tags.into_iter())
+                    .chain(last_tags)
                     .map(|(k, v)| (k, serde_json::to_value(v).unwrap_or_default()))
                     .collect(),
             },
@@ -609,7 +610,7 @@ impl BamlTracer {
             if is_ok {
                 baml_log::info!(
                     "{}{}",
-                    name.map(|s| format!("Function {}:\n", s))
+                    name.map(|s| format!("Function {s}:\n"))
                         .unwrap_or_default()
                         .purple(),
                     response.visualize(self.options.config.max_log_chunk_chars())
@@ -617,7 +618,7 @@ impl BamlTracer {
             } else {
                 baml_log::warn!(
                     "{}{}",
-                    name.map(|s| format!("Function {}:\n", s))
+                    name.map(|s| format!("Function {s}:\n"))
                         .unwrap_or_default()
                         .purple(),
                     response.visualize(self.options.config.max_log_chunk_chars())
@@ -702,9 +703,9 @@ impl BamlTracer {
         env_vars: &std::collections::HashMap<String, String>,
     ) -> bool {
         // Try to create a new APIWrapper from the env vars
-        if let Ok(new_api_wrapper) = crate::tracing::api_wrapper::APIWrapper::from_env_vars(
-            env_vars.iter().map(|(k, v)| (k, v)),
-        ) {
+        if let Ok(new_api_wrapper) =
+            crate::tracing::api_wrapper::APIWrapper::from_env_vars(env_vars.iter())
+        {
             // Compare the config in the current APIWrapper to the new one
             self.options.config == new_api_wrapper.config
         } else {
@@ -713,7 +714,7 @@ impl BamlTracer {
     }
 
     pub fn tracing_project_id(&self) -> Option<String> {
-        self.options.project_id().map(|s| s.to_string())
+        self.options.project_id().map(str::to_string)
     }
 }
 
@@ -735,7 +736,7 @@ fn log_simple_event(
     if is_ok {
         baml_log::info!(
             "{}{}",
-            name.map(|s| format!("Function {}:\n", s))
+            name.map(|s| format!("Function {s}:\n"))
                 .unwrap_or_default()
                 .purple(),
             response.visualize(options.config.max_log_chunk_chars())
@@ -743,7 +744,7 @@ fn log_simple_event(
     } else {
         baml_log::warn!(
             "{}{}",
-            name.map(|s| format!("Function {}:\n", s))
+            name.map(|s| format!("Function {s}:\n"))
                 .unwrap_or_default()
                 .purple(),
             response.visualize(options.config.max_log_chunk_chars())
@@ -814,7 +815,7 @@ impl
 
 impl From<&BamlMap<String, BamlValue>> for IOValue {
     fn from(items: &BamlMap<String, BamlValue>) -> Self {
-        log::trace!("Converting IOValue from BamlMap: {:#?}", items);
+        log::trace!("Converting IOValue from BamlMap: {items:#?}");
         IOValue {
             r#type: TypeSchema {
                 name: api_wrapper::core_types::TypeSchemaName::Multi,
@@ -906,7 +907,7 @@ impl<T: ToLogSchema> ToLogSchema for Result<T> {
         match self {
             Ok(r) => r.to_log_schema(api, event_chain, tags, call),
             Err(e) => LogSchema {
-                project_id: api.project_id().map(|s| s.to_string()),
+                project_id: api.project_id().map(str::to_string),
                 event_type: api_wrapper::core_types::EventType::FuncCode,
                 root_event_id: event_chain.first().map(|s| s.call_id).unwrap().to_string(),
                 event_id: event_chain.last().map(|s| s.call_id).unwrap().to_string(),
@@ -938,7 +939,7 @@ impl ToLogSchema for Option<BamlValue> {
         call: TracingCall,
     ) -> LogSchema {
         LogSchema {
-            project_id: api.project_id().map(|s| s.to_string()),
+            project_id: api.project_id().map(str::to_string),
             event_type: api_wrapper::core_types::EventType::FuncCode,
             root_event_id: event_chain.first().map(|s| s.call_id).unwrap().to_string(),
             event_id: event_chain.last().map(|s| s.call_id).unwrap().to_string(),
@@ -982,7 +983,7 @@ impl ToLogSchema for FunctionResult {
         call: TracingCall,
     ) -> LogSchema {
         LogSchema {
-            project_id: api.project_id().map(|s| s.to_string()),
+            project_id: api.project_id().map(str::to_string),
             event_type: api_wrapper::core_types::EventType::FuncLlm,
             root_event_id: event_chain.first().map(|s| s.call_id).unwrap().to_string(),
             event_id: event_chain.last().map(|s| s.call_id).unwrap().to_string(),

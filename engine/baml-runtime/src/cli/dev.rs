@@ -1,12 +1,14 @@
+use std::{
+    ops::DerefMut,
+    path::PathBuf,
+    time::{Duration, Instant},
+};
+
 use anyhow::Result;
 use notify_debouncer_full::{new_debouncer, notify::*};
-use std::ops::DerefMut;
-use std::path::PathBuf;
-use std::time::{Duration, Instant};
-
-use crate::{cli::generate::GenerateArgs, BamlRuntime};
 
 use super::serve::Server;
+use crate::{cli::generate::GenerateArgs, BamlRuntime};
 
 #[derive(clap::Args, Clone, Debug)]
 pub struct DevArgs {
@@ -51,7 +53,7 @@ impl DevArgs {
                             "Reloading - {}",
                             match events.len() {
                                 1 => "1 file changed".to_string(),
-                                n => format!("{} files changed", n),
+                                n => format!("{n} files changed"),
                             }
                         );
                         let start = Instant::now();
@@ -73,12 +75,12 @@ impl DevArgs {
                                     elapsed.as_millis(),
                                     match events.len() {
                                         1 => "1 file changed".to_string(),
-                                        n => format!("{} files changed", n),
+                                        n => format!("{n} files changed"),
                                     }
                                 );
                             }
                             Err(e) => {
-                                log::warn!("Failed to reload runtime: {:?}", e);
+                                log::warn!("Failed to reload runtime: {e:?}");
                             }
                         }
                     }

@@ -1,17 +1,16 @@
 use std::collections::HashSet;
 
-use crate::{
-    AllowedRoleMetadata, FinishReasonFilter, ResponseType, RolesSelection, SupportedRequestModes,
-    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedResponseType,
-    UnresolvedRolesSelection,
-};
 use anyhow::Result;
-
 use baml_derive::BamlHash;
 use baml_types::{ApiKeyWithProvenance, GetEnvVar, StringOr, UnresolvedValue};
 use indexmap::IndexMap;
 
 use super::helpers::{Error, PropertyHandler, UnresolvedUrl};
+use crate::{
+    AllowedRoleMetadata, FinishReasonFilter, ResponseType, RolesSelection, SupportedRequestModes,
+    UnresolvedAllowedRoleMetadata, UnresolvedFinishReasonFilter, UnresolvedResponseType,
+    UnresolvedRolesSelection,
+};
 
 #[derive(Debug, Clone, BamlHash)]
 pub struct UnresolvedOpenAI<Meta> {
@@ -204,7 +203,7 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
                     && !properties.contains_key("max_tokens")
                 {
                     properties.insert("max_tokens".into(), serde_json::json!(4096));
-                } else if properties.get("max_tokens").map_or(false, |v| v.is_null()) {
+                } else if properties.get("max_tokens").is_some_and(|v| v.is_null()) {
                     properties.shift_remove("max_tokens");
                 }
             }
@@ -298,7 +297,6 @@ impl<Meta: Clone> UnresolvedOpenAI<Meta> {
 
         let api_key = properties
             .ensure_api_key()
-            .map(|v| v.clone())
             .unwrap_or_else(|| StringOr::EnvVar("AZURE_OPENAI_API_KEY".to_string()));
 
         let query_params = match properties.ensure_query_params() {
