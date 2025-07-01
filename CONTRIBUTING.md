@@ -77,6 +77,8 @@ Issues labeled `good first issue` are a good place to start.
 
 ### Steps to Build and Test Locally
 
+1. Install protobuf generator for Go `brew install protoc-gen-go`
+
 1. Install Rust
 
 2. Run `cargo build` in `engine/` and make sure everything builds on your machine.

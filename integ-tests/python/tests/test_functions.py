@@ -1493,20 +1493,8 @@ async def test_semantic_streaming():
             assert msg.class_needed.s_20_words.state == "Complete"
 
         # Checks for @stream.not_null.
-        print(f"DEBUG: three_small_things = {msg.three_small_things}")
-        print(f"DEBUG: len(three_small_things) = {len(msg.three_small_things)}")
-        print(f"DEBUG: type(three_small_things) = {type(msg.three_small_things)}")
-        try:
-            for i, sub in enumerate(msg.three_small_things):
-                print(f"DEBUG: three_small_things[{i}] = {sub}")
-                print(f"DEBUG: three_small_things[{i}].i_16_digits = {sub.i_16_digits}")
-                assert sub.i_16_digits is not None
-        except Exception as e:
-            print(f"DEBUG: Exception in iteration: {e}")
-            print(f"DEBUG: Exception type: {type(e)}")
-            import traceback
-            traceback.print_exc()
-            raise
+        for sub in msg.three_small_things:
+            assert sub.i_16_digits is not None
 
     print("done streaming")
 

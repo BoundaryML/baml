@@ -38,7 +38,6 @@ impl FunctionResult {
         allow_partials: bool,
         runtime: &BamlRuntime,
     ) -> PyResult<PyObject> {
-        println!("DEBUG cast_to: allow_partials={}", allow_partials);
         let parsed = self
             .inner
             .result_with_constraints_content()
@@ -155,7 +154,6 @@ pub(crate) fn pythonize_strict(
             py,
             vec.into_iter()
                 .map(|v| {
-                    println!("DEBUG: list: v = {:?}", v.clone().value());
                     pythonize_strict(
                         py,
                         ResponseBamlValue(v),
@@ -280,13 +278,6 @@ pub(crate) fn pythonize_strict(
             ) {
                 Ok(x) => Ok(x),
                 Err(original_error) => {
-                    if class_name == "SemanticContainer" {
-                        println!(
-                            "DEBUG: Validation error for SemanticContainer: {:?}",
-                            original_error
-                        );
-                        println!("DEBUG: properties_dict keys: {:?}", properties_dict.keys());
-                    }
                     match backup_class_type.call_method(
                         model_validate_method,
                         (properties_dict.clone(),),
