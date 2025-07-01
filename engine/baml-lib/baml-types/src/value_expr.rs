@@ -299,7 +299,7 @@ pub struct EvaluationContext<'a> {
     fill_missing_env_vars: bool,
 }
 
-impl<'a> GetEnvVar for EvaluationContext<'a> {
+impl GetEnvVar for EvaluationContext<'_> {
     fn get_env_var(&self, key: &str) -> Result<String> {
         match self
             .env_vars
@@ -334,7 +334,7 @@ impl<'a> EvaluationContext<'a> {
     }
 }
 
-impl<'db> Default for EvaluationContext<'db> {
+impl Default for EvaluationContext<'_> {
     fn default() -> Self {
         Self {
             env_vars: None,

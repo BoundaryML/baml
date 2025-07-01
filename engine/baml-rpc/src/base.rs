@@ -8,6 +8,22 @@ use ts_rs::TS;
 #[ts(export, type = "number")]
 pub struct EpochMsTimestamp(time::OffsetDateTime);
 
+impl PartialEq for EpochMsTimestamp {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.unix_timestamp_nanos() == other.0.unix_timestamp_nanos()
+    }
+}
+
+impl PartialOrd for EpochMsTimestamp {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(
+            self.0
+                .unix_timestamp_nanos()
+                .cmp(&other.0.unix_timestamp_nanos()),
+        )
+    }
+}
+
 impl From<time::OffsetDateTime> for EpochMsTimestamp {
     fn from(value: time::OffsetDateTime) -> Self {
         Self(value)

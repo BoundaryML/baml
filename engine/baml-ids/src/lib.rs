@@ -17,6 +17,31 @@ macro_rules! define_id {
             pub fn new() -> Self {
                 Self(TypeSafeId::<$inner_name>::new())
             }
+
+            pub fn from_uuid(uuid: uuid::Uuid) -> Self {
+                Self(TypeSafeId::<$inner_name>::from_uuid(uuid))
+            }
+
+            pub fn timestamp(&self) -> time::OffsetDateTime {
+                let (seconds, subsec_nanos) = self
+                    .0
+                    .uuid()
+                    .get_timestamp()
+                    .expect(&format!(
+                        "{} should always contain a timestamp",
+                        $inner_name::TYPE
+                    ))
+                    .to_unix();
+
+                use std::time::Duration;
+                let epoch_timestamp =
+                    Duration::from_secs(seconds) + Duration::from_nanos(subsec_nanos as u64);
+                time::OffsetDateTime::from_unix_timestamp_nanos(epoch_timestamp.as_nanos() as i128)
+                    .expect(&format!(
+                        "{} should always be convertible to a timestamp",
+                        $inner_name::TYPE
+                    ))
+            }
         }
 
         impl Default for $name {
@@ -43,7 +68,12 @@ macro_rules! define_id {
                 let s = String::deserialize(deserializer)?;
                 match s.parse() {
                     Ok(id) => Ok($name(id)),
-                    Err(e) => Err(serde::de::Error::custom(e.to_string())),
+                    Err(e) => Err(serde::de::Error::custom(format!(
+                        "Failed to parse {:?} as {}: {}",
+                        s,
+                        $inner_name::TYPE,
+                        e
+                    ))),
                 }
             }
         }

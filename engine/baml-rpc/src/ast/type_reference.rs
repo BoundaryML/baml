@@ -34,6 +34,7 @@ impl TypeMetadata {
 }
 
 /// FieldType represents the type of either a class field or a function arg.
+/// THIS IS ONLY FOR NON_STREAMING TYPES.
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Hash, TS)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 pub enum TypeReferenceWithMetadata<Metadata> {
@@ -45,26 +46,8 @@ pub enum TypeReferenceWithMetadata<Metadata> {
     Int(Metadata),
     Float(Metadata),
     Bool(Metadata),
-    Null(Metadata),
     Media(MediaTypeDefinition, Metadata),
     Literal(LiteralTypeDefinition, Metadata),
-
-    // Container types
-    List(Box<TypeReferenceWithMetadata<Metadata>>, Metadata),
-    Map {
-        key: Box<TypeReferenceWithMetadata<Metadata>>,
-        value: Box<TypeReferenceWithMetadata<Metadata>>,
-        metadata: Metadata,
-    },
-    Union {
-        one_of: Vec<TypeReferenceWithMetadata<Metadata>>,
-        selected_index: usize,
-        metadata: Metadata,
-    },
-    Tuple {
-        items: Vec<TypeReferenceWithMetadata<Metadata>>,
-        metadata: Metadata,
-    },
 
     // User-defined types
     Class {
@@ -79,6 +62,28 @@ pub enum TypeReferenceWithMetadata<Metadata> {
         type_id: Arc<BamlTypeId>,
         metadata: Metadata,
     },
+
+    // Container types
+    List(Box<Self>, Metadata),
+    Map {
+        key: Box<Self>,
+        value: Box<Self>,
+        metadata: Metadata,
+    },
+    Union {
+        union_type: UnionType<Metadata>,
+        metadata: Metadata,
+    },
+    Tuple {
+        items: Vec<Self>,
+        metadata: Metadata,
+    },
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq, Hash, TS)]
+pub struct UnionType<Metadata> {
+    pub types: Vec<TypeReferenceWithMetadata<Metadata>>,
+    pub is_nullable: bool,
 }
 
 type CheckedType = NarrowingType<String>;
@@ -99,10 +104,6 @@ impl<Metadata: Default> TypeReferenceWithMetadata<Metadata> {
 
     pub fn bool() -> Self {
         Self::Bool(Metadata::default())
-    }
-
-    pub fn null() -> Self {
-        Self::Null(Metadata::default())
     }
 
     pub fn media(media_type: MediaTypeDefinition) -> Self {
@@ -128,10 +129,18 @@ impl<Metadata: Default> TypeReferenceWithMetadata<Metadata> {
         }
     }
 
-    pub fn union(one_of: Vec<TypeReferenceWithMetadata<Metadata>>) -> Self {
+    pub fn union(mut one_of: Vec<TypeReferenceWithMetadata<Metadata>>, is_nullable: bool) -> Self {
+        if one_of.is_empty() {
+            return Self::Unknown;
+        }
+        if one_of.len() == 1 && !is_nullable {
+            return one_of.pop().unwrap();
+        }
         Self::Union {
-            one_of,
-            selected_index: 0,
+            union_type: UnionType {
+                types: one_of,
+                is_nullable,
+            },
             metadata: Metadata::default(),
         }
     }
@@ -171,7 +180,6 @@ impl<Metadata: Default> TypeReferenceWithMetadata<Metadata> {
             Self::Int(metadata) => metadata,
             Self::Float(metadata) => metadata,
             Self::Bool(metadata) => metadata,
-            Self::Null(metadata) => metadata,
             Self::Media(_, metadata) => metadata,
             Self::Literal(_, metadata) => metadata,
             Self::List(_, metadata) => metadata,
@@ -191,7 +199,6 @@ impl<Metadata: Default> TypeReferenceWithMetadata<Metadata> {
             Self::Int(metadata) => metadata,
             Self::Float(metadata) => metadata,
             Self::Bool(metadata) => metadata,
-            Self::Null(metadata) => metadata,
             Self::Media(_, metadata) => metadata,
             Self::Literal(_, metadata) => metadata,
             Self::List(_, metadata) => metadata,

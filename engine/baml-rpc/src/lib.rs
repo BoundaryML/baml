@@ -1,4 +1,5 @@
 pub mod ast;
+pub mod auth;
 
 mod base;
 mod rpc;

@@ -410,6 +410,6 @@ impl Formatter {
     }
 }
 
-fn pair_to_doc_text<'a>(pair: Pair<'a, Rule>) -> RcDoc<'a, ()> {
+fn pair_to_doc_text(pair: Pair<'_, Rule>) -> RcDoc<'_, ()> {
     RcDoc::text(pair.as_str().trim())
 }

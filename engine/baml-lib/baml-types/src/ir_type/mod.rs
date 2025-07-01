@@ -193,7 +193,7 @@ enum UnionTypeViewGenericMut<'a, T> {
     OneOfOptional(Vec<&'a mut TypeGeneric<T>>),
 }
 
-impl<'a, T: Default + std::fmt::Debug + Clone> UnionTypeViewGeneric<'a, T> {
+impl<T: Default + std::fmt::Debug + Clone> UnionTypeViewGeneric<'_, T> {
     /// A helper-function for the `FieldType::flatten`.
     /// See `FieldType::flatten` for context.
     fn flatten(&self) -> Vec<TypeGeneric<T>> {
@@ -230,7 +230,7 @@ impl<T> UnionTypeGeneric<T> {
         self.types.push(t);
     }
 
-    pub fn view<'a>(&'a self) -> UnionTypeViewGeneric<'a, T> {
+    pub fn view(&self) -> UnionTypeViewGeneric<'_, T> {
         let non_null_types = self
             .types
             .iter()
@@ -249,7 +249,7 @@ impl<T> UnionTypeGeneric<T> {
         }
     }
 
-    fn view_mut<'a>(&'a mut self) -> UnionTypeViewGenericMut<'a, T> {
+    fn view_mut(&mut self) -> UnionTypeViewGenericMut<'_, T> {
         let num_types = self.types.len();
         let non_null_types = self
             .types

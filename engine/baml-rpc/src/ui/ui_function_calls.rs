@@ -317,6 +317,9 @@ pub struct ListFunctionCallsRequest {
     pub streamed: Option<FilterExpression<bool>>,
     #[ts(optional)]
     pub relative_time: Option<RelativeTime>,
+    /// Search filter for LLM request and response content
+    #[ts(optional)]
+    pub search: Option<String>,
 }
 
 impl Default for ListFunctionCallsRequest {
@@ -339,6 +342,7 @@ impl Default for ListFunctionCallsRequest {
             error_filters: None,
             streamed: None,
             relative_time: None,
+            search: None,
         }
     }
 }

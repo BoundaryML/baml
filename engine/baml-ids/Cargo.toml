@@ -16,8 +16,9 @@ unused_imports = "deny"
 unused_variables = "deny"
 
 [dependencies]
-type-safe-id = "0.3.2"
-uuid.workspace = true
+anyhow.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-anyhow.workspace = true
+time.workspace = true
+type-safe-id = "0.3.2"
+uuid.workspace = true

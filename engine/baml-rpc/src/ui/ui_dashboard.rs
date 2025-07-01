@@ -97,6 +97,27 @@ pub struct UnaryBooleanOperator<T> {
 pub struct GetDashboardDataRequest {
     #[ts(type = "string")]
     pub project_id: ProjectId,
+    #[ts(optional)]
+    pub function_id: Option<super::ui_function_calls::FilterExpression<String>>,
+    #[ts(optional)]
+    pub function_name: Option<super::ui_function_calls::FilterExpression<String>>,
+    #[ts(type = "FilterExpression<number>", optional)]
+    pub start_time:
+        Option<super::ui_function_calls::FilterExpression<crate::base::EpochMsTimestamp>>,
+    #[ts(type = "FilterExpression<number>", optional)]
+    pub end_time: Option<super::ui_function_calls::FilterExpression<crate::base::EpochMsTimestamp>>,
+    #[ts(optional)]
+    pub relative_time: Option<super::ui_function_calls::RelativeTime>,
+    #[ts(optional)]
+    pub tags: Option<Vec<super::ui_function_calls::TagFilter>>,
+    #[ts(optional)]
+    pub status: Option<
+        super::ui_function_calls::FilterExpression<super::ui_function_calls::FunctionCallStatus>,
+    >,
+    #[ts(optional)]
+    pub limit: Option<u32>,
+    #[ts(optional)]
+    pub offset: Option<u32>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
@@ -139,7 +160,7 @@ pub struct GetDashboardDataResponse {
     pub status_counts: Vec<StatusCountOverTime>,
 }
 
-struct GetDashboardData;
+pub struct GetDashboardData;
 
 impl ApiEndpoint for GetDashboardData {
     type Request<'a> = GetDashboardDataRequest;

@@ -147,7 +147,7 @@ pub enum TraceData<'a, T: HasType<type_meta::NonStreaming>> {
     // In the future, we can send more metadata, like parsing information.
 }
 
-impl<'a, T: HasType<type_meta::NonStreaming>> TraceData<'a, T> {
+impl<T: HasType<type_meta::NonStreaming>> TraceData<'_, T> {
     pub fn type_name(&self) -> &'static str {
         match self {
             Self::FunctionStart(_) => "FunctionStart",

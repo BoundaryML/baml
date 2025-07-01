@@ -52,35 +52,30 @@ impl UiFunctionIdString {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, TS)]
+#[derive(Debug, Serialize, Deserialize, Clone, TS)]
 #[ts(export)]
-#[serde(tag = "type", rename_all = "snake_case")]
+#[serde(tag = "type")]
 pub enum UiBamlFunctionCallError {
-    ExternalException {
-        message: String,
-    },
-    InternalException {
-        message: String,
-    },
-    Base {
-        message: String,
-    },
-    InvalidArgument {
-        message: String,
-    },
-    Client {
-        message: String,
-    },
-    ClientHttp {
-        message: String,
-        status_code: i32,
-    },
+    #[serde(rename = "BamlExternalException")]
+    ExternalException { message: String },
+    #[serde(rename = "BamlInternalException")]
+    InternalException { message: String },
+    #[serde(rename = "BamlError")]
+    Base { message: String },
+    #[serde(rename = "BamlInvalidArgumentError")]
+    InvalidArgument { message: String },
+    #[serde(rename = "BamlClientError")]
+    Client { message: String },
+    #[serde(rename = "BamlClientHttpError")]
+    ClientHttp { message: String, status_code: i32 },
+    #[serde(rename = "BamlClientFinishReasonError")]
     ClientFinishReason {
         finish_reason: String,
         message: String,
         prompt: String,
         raw_output: String,
     },
+    #[serde(rename = "BamlValidationError")]
     Validation {
         raw_output: String,
         message: String,
@@ -123,9 +118,35 @@ pub struct UiFunctionCall {
     pub usage_estimate: UiUsageEstimate,
     #[ts(optional)]
     pub details: Option<UiFunctionCallDetails>,
+    #[ts(optional)]
+    pub llm_request: Option<UiLlmRequest>,
+    #[ts(optional)]
+    pub llm_response: Option<UiLlmResponse>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UiLlmRequest {
+    pub client_name: String,
+    pub client_provider: String,
+    // TODO: type this out properly.
+    #[ts(type = "any")]
+    pub params: serde_json::Value,
+    #[ts(type = "any")]
+    pub prompt: serde_json::Value,
+}
+
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct UiLlmResponse {
+    pub client_stack: Vec<String>,
+    pub model: Option<String>,
+    pub finish_reason: Option<String>,
+    pub usage: Option<UiUsageEstimate>,
+    pub raw_text_output: Option<String>,
+}
+#[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct UiUsageEstimate {
     // TODO: these estimates are pulled straight from LLMResponse and
     // does not reflect the cost of failed retries.
@@ -141,11 +162,13 @@ pub struct UiUsageEstimate {
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct UiFunctionCallDetails {
     pub http_calls: Vec<UiHttpCall>,
 }
 
 #[derive(Debug, Serialize, Deserialize, TS)]
+#[ts(export)]
 pub struct UiHttpCall {
     pub http_request: UiHttpRequest,
     pub http_response: Option<UiHttpResponse>,
@@ -229,63 +252,6 @@ pub enum UiTypeDefinitionData {
     },
 }
 
-// pub enum UiTypeDefinitionSource {
-//     CompileTime,
-//     Buildable,
-//     PureBuildable,
-// }
-
-// #[derive(Debug, Deserialize, Serialize, TS)]
-// #[ts(export)]
-// pub struct UiNameTypeField {
-//     pub name: String,
-//     pub r#type: TypeReference,
-// }
-
-// #[derive(Debug, Deserialize, Serialize, TS)]
-// #[ts(export)]
-// #[serde(tag = "type", rename_all = "snake_case")]
-// pub enum UiTypeReference {
-//     Null,
-//     String,
-//     Int,
-//     Float,
-//     Bool,
-//     Media,
-//     Class {
-//         type_id: UiTypeId,
-//     },
-//     Enum {
-//         type_id: UiTypeId,
-//     },
-//     TypeAlias {
-//         type_id: UiTypeId,
-//     },
-//     Array {
-//         items: Box<UiTypeReference>,
-//     },
-//     Map {
-//         key: Box<UiTypeReference>,
-//         value: Box<UiTypeReference>,
-//     },
-//     Union {
-//         any_of: Vec<UiTypeReference>,
-//     },
-//     Literal(LiteralType),
-// }
-
-// #[derive(Debug, Deserialize, Serialize, TS)]
-// #[ts(export)]
-// #[serde(tag = "literal_type", content = "literal", rename_all = "snake_case")]
-// pub enum LiteralType {
-//     String(String),
-//     Int(i64),
-//     Bool(bool),
-// }
-
-// Mappers
-
-// from FunctionDefinition to UiFunctionDefinition
 impl From<FunctionDefinition> for UiFunctionDefinition {
     fn from(value: FunctionDefinition) -> Self {
         UiFunctionDefinition {
@@ -303,7 +269,6 @@ impl From<FunctionDefinition> for UiFunctionDefinition {
     }
 }
 
-// from TypeDefinition to UiTypeDefinition
 impl From<TypeDefinition> for UiTypeDefinition {
     fn from(value: TypeDefinition) -> Self {
         match value {
