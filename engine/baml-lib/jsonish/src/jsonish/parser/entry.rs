@@ -12,7 +12,7 @@ use crate::jsonish::{
     Value,
 };
 
-pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
+pub(super) fn parse_func(str: &str, mut options: ParseOptions, is_done: bool) -> Result<Value> {
     log::debug!("Parsing:\n{options:?}\n-------\n{str}\n-------");
 
     options.depth += 1;
@@ -94,11 +94,12 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                             _ => None,
                         })
                         .map(|v| {
-                            parse(
+                            parse_func(
                                 str,
                                 options.next_from_mode(
                                     crate::jsonish::parser::ParsingMode::JsonMarkdownString,
                                 ),
+                                false,
                             )
                         })
                         .filter_map(|res| match res {
@@ -141,21 +142,24 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
 
     if options.all_finding_all_json_objects {
         match multi_json_parser::parse(str, &options) {
-            Ok(items) => match items.len() {
+            Ok(mut items) => match items.len() {
                 0 => {}
                 1 => {
-                    let ret = Value::AnyOf(
-                        vec![Value::FixedJson(
-                            items
-                                .into_iter()
-                                .next()
-                                .ok_or_else(|| anyhow::anyhow!("Expected 1 item"))?
-                                .into(),
-                            vec![Fixes::GreppedForJSON],
-                        )],
-                        str.to_string(),
-                    );
-                    return Ok(ret);
+                    let first = items.pop().expect("Expected 1 item");
+                    match &first {
+                        // if the string is the same, then we can drop this condition.
+                        Value::String(content, completion_state) if content == str => {}
+                        _ => {
+                            let ret = Value::AnyOf(
+                                vec![Value::FixedJson(
+                                    Box::new(first),
+                                    vec![Fixes::GreppedForJSON],
+                                )],
+                                str.to_string(),
+                            );
+                            return Ok(ret);
+                        }
+                    }
                 }
                 n => {
                     let items_clone = Value::Array(items.clone(), CompletionState::Incomplete);
@@ -182,10 +186,16 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
                         let (v, fixes) = items.into_iter().next().ok_or_else(|| {
                             anyhow::anyhow!("Expected 1 item when performing fixes")
                         })?;
-                        return Ok(Value::AnyOf(
-                            vec![Value::FixedJson(v.into(), fixes)],
-                            str.to_string(),
-                        ));
+                        // drop the fix if the string is the same
+                        if fixes.is_empty()
+                            && matches!(&v, Value::String(content, ..) if content == str)
+                        {
+                        } else {
+                            return Ok(Value::AnyOf(
+                                vec![Value::FixedJson(v.into(), fixes)],
+                                str.to_string(),
+                            ));
+                        }
                     }
                     _ => {
                         // In the case of multiple JSON objects:
@@ -218,10 +228,22 @@ pub fn parse(str: &str, mut options: ParseOptions) -> Result<Value> {
     }
 
     if options.allow_as_string {
-        return Ok(Value::String(str.to_string(), CompletionState::Incomplete));
+        return Ok(Value::String(
+            str.to_string(),
+            if is_done {
+                CompletionState::Complete
+            } else {
+                CompletionState::Incomplete
+            },
+        ));
     }
 
     Err(anyhow::anyhow!("Failed to parse JSON"))
+}
+
+pub fn parse(str: &str, options: ParseOptions, is_done: bool) -> Result<Value> {
+    let res = parse_func(str, options, is_done)?;
+    Ok(res.simplify(is_done))
 }
 
 #[cfg(test)]
@@ -241,7 +263,7 @@ mod tests {
 
     #[test]
     fn test_partial_int() {
-        let res = parse("1", ParseOptions::default()).unwrap();
+        let res = parse_func("1", ParseOptions::default(), false).unwrap();
         assert_eq!(
             res,
             to_any_of(Value::Number(1.into(), CompletionState::Incomplete), "1")
@@ -250,7 +272,7 @@ mod tests {
 
     #[test]
     fn test_complete_list() {
-        let res = parse("[1]", ParseOptions::default()).unwrap();
+        let res = parse_func("[1]", ParseOptions::default(), false).unwrap();
         assert_eq!(
             res,
             to_any_of(
@@ -265,7 +287,7 @@ mod tests {
 
     #[test]
     fn test_incomplete_list() {
-        let res = parse("[1, 2", ParseOptions::default()).unwrap();
+        let res = parse_func("[1, 2", ParseOptions::default(), false).unwrap();
         assert_eq!(
             res,
             to_any_of(
@@ -292,7 +314,7 @@ mod tests {
 
     #[test]
     fn test_incomplete_nested_list() {
-        let res = parse("[1, 2, [3", ParseOptions::default()).unwrap();
+        let res = parse_func("[1, 2, [3", ParseOptions::default(), false).unwrap();
         assert_eq!(
             res,
             to_any_of(

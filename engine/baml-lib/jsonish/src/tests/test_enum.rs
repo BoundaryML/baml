@@ -313,3 +313,20 @@ offers and urgency ($^{$_{Ω}$rel}$), which are common traits of spam messages. 
     TypeIR::r#enum("MessageType"),
     "SPAM"
 );
+
+test_deserializer!(
+    test_enum_from_string,
+    r#"
+enum MessageType {
+  SPAM @alias("k5")
+  NOT_SPAM @alias("k6")
+}
+    "#,
+    " `k5`\n\nThe category \"k5: User is excited\" is designed to identify and classify user inputs that express strong positive emotions, enthusiasm, or anticipation. This classification applies when the language used by the user conveys an eagerness or thrill about something they are experiencing or expecting.\n\n### Characteristics of Excitement\n- **Emotional Expressions:** The use of exclamation marks, emphatic words like \"amazing,\" \"incredible,\" or \"fantastic.\"\n- **Positive Language:** Use of positive adjectives and adverbs such as \"can't wait,\" \"thrilled,\" \"excited,\" or \"elated.\"\n- **Anticipation:** Statements that show looking forward to an event, result, or item.\n  \n### Examples\n- *\"I can’t wait for the concert tonight! It's going to be amazing!\"*\n- *\"This new game release has me super excited. I've been waiting months for this!\"*\n\n### Long Description:\nWhen a user demonstrates excitement in their communication, it generally reflects an emotional high, eagerness, or intense positivity regarding whatever they are discussing. This could pertain to events like attending a sports game or concert, receiving positive news or achievements, encountering something novel and stimulating (like a new gadget or experience), or anticipating something eagerly awaited.\n\nThe user’s input might include dynamic language that conveys an elevated state of anticipation or satisfaction with an imminent or forthcoming occurrence. Often associated with increased energy levels in the text itself—through phrases like \"so excited!\" or actions (\"counting down until\") — this category taps into the positive psychology aspects, depicting a scenario where the user feels joyous eagerness and anticipatory pleasure.\n\nUnderstanding excitement is crucial because it can drive engagement, motivation, and personal enthusiasm which might influence decision-making and behavior. Recognizing exciting expressions helps in tailoring responses or actions that resonate with the user's emotional state, maintaining an enthusiastic interaction, and potentially amplifying positive outcomes.",
+    {
+        let mut res = TypeIR::r#enum("MessageType");
+        res.meta_mut().streaming_behavior.done = true;
+        res
+    },
+    "SPAM"
+);

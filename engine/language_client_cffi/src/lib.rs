@@ -108,8 +108,17 @@ static ERROR_CALLBACK_FN: OnceCell<CallbackFn> = OnceCell::new();
 
 #[no_mangle]
 extern "C" fn register_callbacks(callback_fn: CallbackFn, error_callback_fn: CallbackFn) {
-    let _ = baml_log::init();
-    let _ = env_logger::try_init_from_env(env_logger::Env::new().filter("BAML_INTERNAL_LOG"));
+    let log_setup = baml_log::init();
+    if let Err(e) = log_setup {
+        eprintln!("Error setting up logging: {e}");
+    }
+    let env = env_logger::Env::new().filter("BAML_INTERNAL_LOG");
+    let log_setup = env_logger::try_init_from_env(env);
+    if let Err(e) = log_setup {
+        eprintln!("Error setting up internal logging: {e}");
+    } else {
+        println!("Internal logging set up");
+    }
 
     // Create a global runtime or pass it along as needed.
     let _ = RESULT_CALLBACK_FN.set(callback_fn);
@@ -376,10 +385,7 @@ fn call_collector_function_inner(
                     Ok(null())
                 }
                 "usage" => {
-                    let logs = collector.function_logs();
                     let usage = collector.usage();
-                    println!("logs: {logs:?}");
-                    println!("usage: {usage:?}");
                     Ok(UsageWrapper::from_object(usage).send())
                 }
                 _ => Err(anyhow::anyhow!(
@@ -391,7 +397,6 @@ fn call_collector_function_inner(
         }
         "usage" => {
             let usage = UsageWrapper::from_raw(object, true);
-            println!("usage: {:?}", usage.as_ref());
             match function_name.as_str() {
                 "destroy" => {
                     usage.destroy();

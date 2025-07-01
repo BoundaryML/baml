@@ -33,7 +33,7 @@ fn test_union_full() {
     )
     .unwrap();
 
-    let result = from_str(&target, &target_type, r#"{"hi": ["a", "b"]}"#);
+    let result = from_str(&target, &target_type, r#"{"hi": ["a", "b"]}"#, true);
 
     assert!(result.is_ok(), "Failed to parse: {result:?}");
 

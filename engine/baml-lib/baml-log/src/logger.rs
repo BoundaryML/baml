@@ -539,6 +539,7 @@ pub fn init() -> Result<(), LogError> {
 
     INIT.call_once(|| {
         if let Ok(mut config) = CONFIG.write() {
+            config.reload_from_env();
             config.initialized = true;
         } else {
             result = Err(LogError::LockError);

@@ -602,6 +602,8 @@ func initSlog() {
 
 	envLevel := os.Getenv("BAML_LOG")
 	switch strings.ToUpper(envLevel) {
+	case "TRACE":
+		logLevel = slog.LevelDebug - 1
 	case "DEBUG":
 		logLevel = slog.LevelDebug
 	case "INFO":
@@ -610,11 +612,14 @@ func initSlog() {
 		logLevel = slog.LevelWarn
 	case "ERROR":
 		logLevel = slog.LevelError
+	case "OFF":
+		logLevel = slog.LevelError + 1
 	default:
 		if envLevel != "" {
 			coloredLevel := getColorForLevel("WARN")
-			fmt.Fprintf(os.Stderr, "%s [BAML %s] Invalid BAML_LOG '%s'. Defaulting to %s.\n",
-				time.Now().Format("2006-01-02T15:04:05.000"), coloredLevel, envLevel, getColorForLevel("INFO"))
+			fmt.Fprintf(os.Stderr, "%s [BAML %s] Invalid BAML_LOG '%s'. Defaulting to %s%s%s.\n",
+				time.Now().Format("2006-01-02T15:04:05.000"), coloredLevel, envLevel, getColorForLevel("INFO"), "INFO", resetColor())
+			logLevel = slog.LevelInfo
 		}
 	}
 
@@ -694,6 +699,8 @@ func getColorForLevel(levelStr string) string {
 		return "\033[93m" // Yellow
 	case "ERROR":
 		return "\033[91m" // Red
+	case "TRACE":
+		return "\033[94m" // Blue
 	default:
 		return ""
 	}
@@ -719,6 +726,10 @@ func getLevelString(level slog.Level) string {
 		return "WARN"
 	case slog.LevelError:
 		return "ERROR"
+	case slog.LevelDebug - 1:
+		return "TRACE"
+	case slog.LevelError + 1:
+		return "OFF"
 	default:
 		return fmt.Sprintf("L(%d)", level)
 	}

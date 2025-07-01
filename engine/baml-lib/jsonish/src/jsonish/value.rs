@@ -69,6 +69,38 @@ impl Hash for Value {
 }
 
 impl Value {
+    pub(super) fn simplify(self, is_done: bool) -> Self {
+        match self {
+            Value::AnyOf(items, s) => {
+                let as_simple_str = |s: String| {
+                    Value::String(
+                        s,
+                        if is_done {
+                            CompletionState::Complete
+                        } else {
+                            CompletionState::Incomplete
+                        },
+                    )
+                };
+                let mut items = items
+                    .into_iter()
+                    .map(|v| v.simplify(is_done))
+                    .collect::<Vec<_>>();
+                match items.len() {
+                    0 => as_simple_str(s),
+                    1 => match items.pop().expect("Expected 1 item") {
+                        Value::String(content, completion_state) if content == s => {
+                            as_simple_str(s)
+                        }
+                        other => Value::AnyOf(vec![other], s),
+                    },
+                    _ => Value::AnyOf(items, s),
+                }
+            }
+            _ => self,
+        }
+    }
+
     pub fn r#type(&self) -> String {
         match self {
             Value::String(_, _) => "String".to_string(),

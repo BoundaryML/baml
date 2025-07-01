@@ -136,7 +136,7 @@ fn test_union_of_class_and_map() {
     )
     .unwrap();
 
-    let result = from_str(&target, &target_type, llm_output);
+    let result = from_str(&target, &target_type, llm_output, true);
 
     assert!(result.is_ok(), "Failed to parse: {result:?}");
 
@@ -174,7 +174,7 @@ fn test_union_of_map_and_class() {
     )
     .unwrap();
 
-    let result = from_str(&target, &target_type, llm_output);
+    let result = from_str(&target, &target_type, llm_output, true);
 
     assert!(result.is_ok(), "Failed to parse: {result:?}");
 

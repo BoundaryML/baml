@@ -185,7 +185,6 @@ async fn beta_reduce<'a>(
     expr: &Expr<ExprMetadata>,
     eval_final_llm_fn: bool,
 ) -> anyhow::Result<Expr<ExprMetadata>> {
-    eprintln!("BETA_REDUCE\n{}\n", expr.dump_str());
     match expr {
         Expr::Atom(_) => Ok(expr.clone()),
         Expr::Let(name, value, body, meta) => {
@@ -444,7 +443,7 @@ async fn beta_reduce<'a>(
                         baml_types::StreamingMode::NonStreaming,
                     )?;
 
-                    let parsed = jsonish::from_str(&output_format, &arrow.return_type, &body)
+                    let parsed = jsonish::from_str(&output_format, &arrow.return_type, &body, true)
                         .context("(jsonish) Failed parsing response of fetch_value call")?;
 
                     Ok(Expr::Atom(
@@ -550,13 +549,7 @@ pub async fn eval_to_value_or_llm_call<'a>(
 ) -> anyhow::Result<ExprEvalResult> {
     let mut current_expr = expr.clone();
 
-    eprintln!("start eval_to_value_or_llm_call:\n{:?}", expr.dump_str());
     for steps in 0..MAX_STEPS {
-        eprintln!(
-            "loop eval_to_value_or_lm_call: n: {}, current_expr: {}",
-            steps,
-            current_expr.dump_str()
-        );
         match current_expr {
             Expr::App {
                 ref func,
@@ -823,7 +816,6 @@ pub async fn eval_to_value<'a>(
                 let new_expr = Box::pin(beta_reduce(env, &other, true)).await?;
 
                 if new_expr.temporary_same_state(expr) {
-                    eprintln!("Value: {new_expr:?}");
                     return Err(anyhow!("Failed to make progress."));
                 }
                 current_expr = new_expr;

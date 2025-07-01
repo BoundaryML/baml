@@ -39,13 +39,13 @@ module BamlClient
 
   class TestEnum < T::Enum
       enums do
-          A = new("A")
-          B = new("B")
-          C = new("C")
-          D = new("D")
-          E = new("E")
-          F = new("F")
-          G = new("G")
+          Angry = new("Angry")
+          Happy = new("Happy")
+          Sad = new("Sad")
+          Confused = new("Confused")
+          Excited = new("Excited")
+          Exclamation = new("Exclamation")
+          Bored = new("Bored")
       end
   end
 

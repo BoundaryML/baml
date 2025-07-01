@@ -375,6 +375,7 @@ type JsonObject = map<string, JsonValue>
             ]
         }
     }"#,
+        true,
     );
 
     assert!(result.is_ok(), "Failed to parse: {result:?}");

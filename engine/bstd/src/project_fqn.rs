@@ -75,63 +75,40 @@ mod tests {
 
     use super::*;
 
-    #[test]
-    fn test_parse_outcomes() {
-        let allowed_project_fqids = vec![
-            ("org/proj", Ok(())),
-            ("_org/proj", Ok(())),
-            (
-                "-org/proj",
-                Err("'-org/proj' contains an invalid org name ('-org')"),
-            ),
-            (
-                "@org/proj",
-                Err("'@org/proj' contains an invalid org name ('@org')"),
-            ),
-            (
-                "%org/proj",
-                Err("'%org/proj' contains an invalid org name ('%org')"),
-            ),
-            ("123/proj", Ok(())),
-            ("org1/proj", Ok(())),
-            ("org-1/proj", Ok(())),
-            ("org_1/proj", Ok(())),
-            ("org/proj-1", Ok(())),
-            ("org/proj_1", Ok(())),
-            ("org/proj-", Ok(())),
-            ("org/proj_", Ok(())),
-            (
-                "org/1proj",
-                Err("'org/1proj' contains an invalid project name ('1proj') - must start with a lowercase letter"),
-            ),
-            (
-                "org/-proj",
-                Err("'org/-proj' contains an invalid project name ('-proj') - must start with a lowercase letter"),
-            ),
-            (
-                "org/_proj",
-                Err("'org/_proj' contains an invalid project name ('_proj') - must start with a lowercase letter"),
-            ),
-        ];
+    macro_rules! test_parse_outcomes {
+        ($($name:ident: $fqid:expr => $expected:expr),* $(,)?) => {
+            $(
+                #[test]
+                fn $name() {
+                    let fqid_str = $fqid;
+                    let expected_outcome = $expected.map_err(|e| e.to_string());
+                    let actual_outcome = ProjectFqn::parse(fqid_str);
+                    let actual_outcome = match actual_outcome {
+                        Ok(_) => Ok(()),
+                        Err(e) => Err(format!("{e}")),
+                    };
+                    assert_eq!(expected_outcome, actual_outcome, "Failed for fqid: {}", fqid_str);
+                }
+            )*
+        };
+    }
 
-        let parse_failures = allowed_project_fqids
-            .iter()
-            .map(|(fqid_str, expected_outcome)| {
-                let expected_outcome = expected_outcome.map_err(|e| e.to_string());
-                let fqid = ProjectFqn::parse(fqid_str);
-                match fqid {
-                    Ok(_) => (fqid_str, expected_outcome, Ok(())),
-                    Err(e) => (fqid_str, expected_outcome, Err(format!("{e:?}"))),
-                }
-            })
-            .filter_map(|(fqid_str, expected_outcome, actual_outcome)| {
-                if expected_outcome == actual_outcome {
-                    None
-                } else {
-                    Some((fqid_str, expected_outcome, actual_outcome))
-                }
-            })
-            .collect::<Vec<_>>();
-        assert_eq!(parse_failures, vec![]);
+    test_parse_outcomes! {
+        test_parse_org_proj: "org/proj" => Ok::<(), anyhow::Error>(()),
+        test_parse_underscore_org: "_org/proj" => Ok::<(), anyhow::Error>(()),
+        test_parse_dash_org: "-org/proj" => Err("'-org/proj' contains an invalid org name ('-org')"),
+        test_parse_at_org: "@org/proj" => Err("'@org/proj' contains an invalid org name ('@org')"),
+        test_parse_percent_org: "%org/proj" => Err("'%org/proj' contains an invalid org name ('%org')"),
+        test_parse_numeric_org: "123/proj" => Ok::<(), anyhow::Error>(()),
+        test_parse_org1: "org1/proj" => Ok::<(), anyhow::Error>(()),
+        test_parse_org_dash_1: "org-1/proj" => Ok::<(), anyhow::Error>(()),
+        test_parse_org_underscore_1: "org_1/proj" => Ok::<(), anyhow::Error>(()),
+        test_parse_proj_dash_1: "org/proj-1" => Ok::<(), anyhow::Error>(()),
+        test_parse_proj_underscore_1: "org/proj_1" => Ok::<(), anyhow::Error>(()),
+        test_parse_proj_dash_end: "org/proj-" => Ok::<(), anyhow::Error>(()),
+        test_parse_proj_underscore_end: "org/proj_" => Ok::<(), anyhow::Error>(()),
+        test_parse_proj_numeric_start: "org/1proj" => Err("'org/1proj' contains an invalid project name ('1proj') - must start with a lowercase letter"),
+        test_parse_proj_dash_start: "org/-proj" => Err("'org/-proj' contains an invalid project name ('-proj') - must start with a lowercase letter"),
+        test_parse_proj_underscore_start: "org/_proj" => Err("'org/_proj' contains an invalid project name ('_proj') - must start with a lowercase letter"),
     }
 }

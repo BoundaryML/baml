@@ -24,25 +24,25 @@ import (
 type TestEnum string
 
 const (
-	TestEnumA TestEnum = "A"
-	TestEnumB TestEnum = "B"
-	TestEnumC TestEnum = "C"
-	TestEnumD TestEnum = "D"
-	TestEnumE TestEnum = "E"
-	TestEnumF TestEnum = "F"
-	TestEnumG TestEnum = "G"
+	TestEnumAngry       TestEnum = "Angry"
+	TestEnumHappy       TestEnum = "Happy"
+	TestEnumSad         TestEnum = "Sad"
+	TestEnumConfused    TestEnum = "Confused"
+	TestEnumExcited     TestEnum = "Excited"
+	TestEnumExclamation TestEnum = "Exclamation"
+	TestEnumBored       TestEnum = "Bored"
 )
 
 // Values returns all allowed values for the TestEnum type.
 func (TestEnum) Values() []TestEnum {
 	return []TestEnum{
-		TestEnumA,
-		TestEnumB,
-		TestEnumC,
-		TestEnumD,
-		TestEnumE,
-		TestEnumF,
-		TestEnumG,
+		TestEnumAngry,
+		TestEnumHappy,
+		TestEnumSad,
+		TestEnumConfused,
+		TestEnumExcited,
+		TestEnumExclamation,
+		TestEnumBored,
 	}
 }
 

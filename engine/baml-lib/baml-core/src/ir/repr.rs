@@ -87,7 +87,6 @@ impl Pass2Repr {
                     meta.streaming_behavior = meta
                         .streaming_behavior
                         .combine(&attributes.streaming_behavior());
-                    // enums must always be done
                     meta.streaming_behavior.done = true;
                     meta.constraints.extend(attributes.constraints.clone());
                 }

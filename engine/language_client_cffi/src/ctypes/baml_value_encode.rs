@@ -1,5 +1,6 @@
 use baml_types::{
-    baml_value::TypeQuery, ir_type::TypeGeneric, type_meta, BamlValueWithMeta, HasType, ToUnionName,
+    baml_value::TypeQuery, ir_type::TypeGeneric, type_meta, BamlValue, BamlValueWithMeta, HasType,
+    ToUnionName,
 };
 
 use crate::{
@@ -53,7 +54,12 @@ where
 
         if let baml_types::ir_type::TypeGeneric::Union(union_type_generic, _) = target_type {
             let real_type = self.real_type(lookup);
-            let options = union_type_generic.iter_include_null();
+            if real_type.is_null() {
+                return holder;
+            }
+
+            // TODO: This is a hack to get the correct variant name.
+            let options = union_type_generic.iter_skip_null();
             let value_type_index = options
                 .iter()
                 .position(|t| real_type == **t)
@@ -109,7 +115,11 @@ where
 
         if let baml_types::ir_type::TypeGeneric::Union(union_type_generic, _) = target_type {
             let real_type = self.real_type(lookup);
-            let options = union_type_generic.iter_include_null();
+            if real_type.is_null() {
+                return holder;
+            }
+
+            let options = union_type_generic.iter_skip_null();
             let value_type_index = options
                 .iter()
                 .position(|t| real_type == **t)
@@ -299,9 +309,15 @@ where
             holder
         };
 
+        let baml_value: BamlValue = value.into();
+
+        println!(
+            "encoded {} type ->\n{baml_value}\n{:?}\n\n",
+            value.field_type(),
+            holder
+        );
         let holder = value.maybe_wrap_union(holder, lookup);
         let holder = value.maybe_wrap_stream_state(holder, lookup);
-        println!("encoded {} type ->\n{:#?}\n\n", value.field_type(), holder);
         holder
     }
 }

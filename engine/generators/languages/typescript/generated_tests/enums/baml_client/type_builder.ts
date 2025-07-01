@@ -26,7 +26,7 @@ export default class TypeBuilder {
     private tb: _TypeBuilder;
     
     
-    TestEnum: EnumViewer<'TestEnum', "A" | "B" | "C" | "D" | "E" | "F" | "G">;
+    TestEnum: EnumViewer<'TestEnum', "Angry" | "Happy" | "Sad" | "Confused" | "Excited" | "Exclamation" | "Bored">;
     
 
     constructor() {
@@ -42,7 +42,7 @@ export default class TypeBuilder {
         
         
         this.TestEnum = this.tb.enumViewer("TestEnum", [
-          "A","B","C","D","E","F","G",
+          "Angry","Happy","Sad","Confused","Excited","Exclamation","Bored",
         ]);
         
     }

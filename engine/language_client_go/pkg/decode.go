@@ -173,12 +173,12 @@ func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant) any {
 	typeName := valueUnion.Name
 	namespace := typeName.Namespace.String()
 	unionName := string(typeName.Name)
-	
+
 	// === DECODE LOGGING START ===
 	fmt.Printf("\n=== UNION DECODE ===\n")
 	fmt.Printf("Type: %s.%s\n", namespace, unionName)
 	fmt.Printf("Variant: %s\n", valueUnion.VariantName)
-	
+
 	// Show field types to identify union structure
 	var fieldTypeStrs []string
 	var isOptionalPattern bool = false
@@ -195,7 +195,7 @@ func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant) any {
 			fieldTypeStrs = append(fieldTypeStrs, "?")
 		}
 	}
-	
+
 	// Check if this is an optional pattern (T | null)
 	if len(valueUnion.FieldTypes) == 2 {
 		hasNull := false
@@ -209,14 +209,14 @@ func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant) any {
 		}
 		isOptionalPattern = hasNull && hasNonNull
 	}
-	
+
 	fmt.Printf("Union structure: (%s)\n", strings.Join(fieldTypeStrs, " | "))
 	if isOptionalPattern {
 		fmt.Printf("Pattern: Optional type (T | null)\n")
 	}
 	fmt.Printf("===================\n\n")
 	// === DECODE LOGGING END ===
-	
+
 	// For optional patterns (T | null), decode the inner value directly
 	// These shouldn't be looked up as union types
 	if isOptionalPattern {
@@ -224,7 +224,7 @@ func decodeUnionValue(valueUnion *cffi.CFFIValueUnionVariant) any {
 		value := valueUnion.Value
 		return Decode(value)
 	}
-	
+
 	found, ok := typeMap[namespace+"."+unionName]
 	if !ok {
 		// This is a fully dynamic union, so we

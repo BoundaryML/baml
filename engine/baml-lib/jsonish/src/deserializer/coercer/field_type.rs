@@ -42,7 +42,7 @@ impl TypeCoercer for TypeIR {
                         target,
                         Some(&crate::jsonish::Value::String(
                             primitive.clone(),
-                            CompletionState::Incomplete,
+                            CompletionState::Complete,
                         )),
                     )
                 } else {

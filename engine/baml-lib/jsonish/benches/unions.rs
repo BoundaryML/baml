@@ -39,7 +39,7 @@ pub fn bench_unions(c: &mut Criterion) {
 
     group.bench_function("video_content_jsonish_only", |b| {
         b.iter(|| {
-            internal_jsonish::parse(
+            internal_jsonish::parse_func(
                 r#"{"url": "https://example.com/video.mp4", "duration": 120}"#,
                 internal_jsonish::ParseOptions::default(),
             )
@@ -67,7 +67,7 @@ pub fn bench_unions(c: &mut Criterion) {
 
     group.bench_function("json_value_jsonish_only", |b| {
         b.iter(|| {
-            internal_jsonish::parse(
+            internal_jsonish::parse_func(
                 jsonish::helpers::common::JSON_STRING,
                 internal_jsonish::ParseOptions::default(),
             )

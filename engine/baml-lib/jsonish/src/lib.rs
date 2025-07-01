@@ -226,6 +226,7 @@ pub fn from_str(
     of: &OutputFormatContent,
     target: &TypeIR,
     raw_string: &str,
+    raw_string_is_done: bool,
 ) -> Result<BamlValueWithFlags> {
     if matches!(target, TypeIR::Primitive(TypeValue::String, _)) {
         return Ok(BamlValueWithFlags::String(
@@ -234,10 +235,14 @@ pub fn from_str(
     }
 
     // When the schema is just a string, i should really just return the raw_string w/o parsing it.
-    let value = jsonish::parse(raw_string, jsonish::ParseOptions::default())?;
+    let value = jsonish::parse(
+        raw_string,
+        jsonish::ParseOptions::default(),
+        raw_string_is_done,
+    )?;
 
     // Pick the schema that is the most specific.
-    log::debug!("Parsed JSONish (step 1 of parsing): {value:#?}");
+    log::debug!("Parsed JSONish (step 1 of parsing) {raw_string_is_done}: {value:#?}");
     let ctx = ParsingContext::new(of);
 
     // Determine the best way to get the desired schema from the parsed schema.

@@ -135,12 +135,10 @@ fn relevant_data_models<'a>(
     IndexMap<String, TypeIR>,
 )> {
     let output = if partialize {
-        eprintln!("relevant_data_models is partializing type {output}");
         output.to_streaming_type(ir).to_ir_type()
     } else {
         output.clone()
     };
-    eprintln!("relevant_data_models for: {output}");
     let mut checked_types: HashSet<String> = HashSet::new();
     let mut enums = Vec::new();
     let mut classes: Vec<Class> = Vec::new();
@@ -330,8 +328,8 @@ pub fn parsed_value_to_response(
                 .collect()
         });
 
-    let baml_value_with_streaming =
-        validate_streaming_state(ir, &baml_value).map_err(|s| anyhow::anyhow!("{s:?}"))?;
+    let baml_value_with_streaming = validate_streaming_state(ir, &baml_value)
+        .map_err(|s| anyhow::anyhow!("Parsing failed due to: {s:?}"))?;
 
     // Combine the baml_value, its types, the parser flags, and the streaming state
     // into a final value.

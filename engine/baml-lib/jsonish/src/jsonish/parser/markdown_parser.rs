@@ -40,9 +40,10 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<MarkdownResult>> {
 
         log::trace!("Content:\n-----\n{md_content}\n-----\n");
 
-        let res = entry::parse(
+        let res = super::entry::parse_func(
             md_content,
             options.next_from_mode(ParsingMode::JsonMarkdown),
+            false,
         );
 
         match res {

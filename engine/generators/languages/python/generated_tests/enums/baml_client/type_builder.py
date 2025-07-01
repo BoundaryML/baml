@@ -46,7 +46,7 @@ class TestEnumAst:
     def __init__(self, tb: type_builder.TypeBuilder):
         _tb = tb._tb # type: ignore (we know how to use this private attribute)
         self._bldr = _tb.enum("TestEnum")
-        self._values: typing.Set[str] = set([  "A",  "B",  "C",  "D",  "E",  "F",  "G",  ])
+        self._values: typing.Set[str] = set([  "Angry",  "Happy",  "Sad",  "Confused",  "Excited",  "Exclamation",  "Bored",  ])
         self._vals = TestEnumValues(self._bldr, self._values)
 
     def type(self) -> baml_py.FieldType:
@@ -74,32 +74,32 @@ class TestEnumValues:
     
     
     @property
-    def A(self) -> type_builder.EnumValueViewer:
-        return type_builder.EnumValueViewer(self.__bldr.value("A"))
+    def Angry(self) -> type_builder.EnumValueViewer:
+        return type_builder.EnumValueViewer(self.__bldr.value("Angry"))
     
     @property
-    def B(self) -> type_builder.EnumValueViewer:
-        return type_builder.EnumValueViewer(self.__bldr.value("B"))
+    def Happy(self) -> type_builder.EnumValueViewer:
+        return type_builder.EnumValueViewer(self.__bldr.value("Happy"))
     
     @property
-    def C(self) -> type_builder.EnumValueViewer:
-        return type_builder.EnumValueViewer(self.__bldr.value("C"))
+    def Sad(self) -> type_builder.EnumValueViewer:
+        return type_builder.EnumValueViewer(self.__bldr.value("Sad"))
     
     @property
-    def D(self) -> type_builder.EnumValueViewer:
-        return type_builder.EnumValueViewer(self.__bldr.value("D"))
+    def Confused(self) -> type_builder.EnumValueViewer:
+        return type_builder.EnumValueViewer(self.__bldr.value("Confused"))
     
     @property
-    def E(self) -> type_builder.EnumValueViewer:
-        return type_builder.EnumValueViewer(self.__bldr.value("E"))
+    def Excited(self) -> type_builder.EnumValueViewer:
+        return type_builder.EnumValueViewer(self.__bldr.value("Excited"))
     
     @property
-    def F(self) -> type_builder.EnumValueViewer:
-        return type_builder.EnumValueViewer(self.__bldr.value("F"))
+    def Exclamation(self) -> type_builder.EnumValueViewer:
+        return type_builder.EnumValueViewer(self.__bldr.value("Exclamation"))
     
     @property
-    def G(self) -> type_builder.EnumValueViewer:
-        return type_builder.EnumValueViewer(self.__bldr.value("G"))
+    def Bored(self) -> type_builder.EnumValueViewer:
+        return type_builder.EnumValueViewer(self.__bldr.value("Bored"))
     
     
 

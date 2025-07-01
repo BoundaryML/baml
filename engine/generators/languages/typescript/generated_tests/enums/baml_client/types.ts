@@ -48,11 +48,11 @@ export function get_checks<CheckName extends string>(checks: Record<CheckName, C
     return Object.values(checks)
 }
 export enum TestEnum {
-  A = "A",
-  B = "B",
-  C = "C",
-  D = "D",
-  E = "E",
-  F = "F",
-  G = "G",
+  Angry = "Angry",
+  Happy = "Happy",
+  Sad = "Sad",
+  Confused = "Confused",
+  Excited = "Excited",
+  Exclamation = "Exclamation",
+  Bored = "Bored",
 }

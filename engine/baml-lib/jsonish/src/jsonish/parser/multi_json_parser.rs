@@ -34,9 +34,10 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
                     } else {
                         &str[..end_index]
                     };
-                    match entry::parse(
+                    match entry::parse_func(
                         json_str,
                         options.next_from_mode(super::ParsingMode::AllJsonObjects),
+                        false,
                     ) {
                         Ok(json) => json_objects.push(json),
                         Err(e) => {
@@ -55,9 +56,10 @@ pub fn parse(str: &str, options: &ParseOptions) -> Result<Vec<Value>> {
         match json_str_start {
             Some(start) => {
                 let json_str = &str[start..];
-                match entry::parse(
+                match entry::parse_func(
                     json_str,
                     options.next_from_mode(super::ParsingMode::AllJsonObjects),
+                    false,
                 ) {
                     Ok(json) => {
                         complete_stack_head(&mut json_objects);

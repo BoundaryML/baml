@@ -16,7 +16,7 @@ macro_rules! test_failing_deserializer {
             log::info!("target: {target}");
             log::info!("target_type: {target_type}");
 
-            let result = from_str(&target, &target_type, $raw_string);
+            let result = from_str(&target, &target_type, $raw_string, true);
 
             match result {
                 Ok(v) => {
@@ -61,6 +61,7 @@ macro_rules! test_deserializer {
                 &target,
                 &target_type,
                 $raw_string,
+                true,
             );
 
             assert!(result.is_ok(), "Failed to parse: {:?}", result);
@@ -94,7 +95,7 @@ macro_rules! test_deserializer_with_expected_score {
             )
             .unwrap();
 
-            let result = from_str(&target, &target_type, $raw_string);
+            let result = from_str(&target, &target_type, $raw_string, true);
 
             assert!(result.is_ok(), "Failed to parse: {:?}", result);
 
@@ -122,6 +123,7 @@ macro_rules! test_partial_deserializer {
                 &target,
                 &target_type,
                 $raw_string,
+                false,
             );
 
             assert!(result.is_ok(), "Failed to parse: {:?}", result);
@@ -157,6 +159,7 @@ macro_rules! test_partial_deserializer_streaming {
                 &target,
                 &target_type,
                 $raw_string,
+                false,
             );
 
             // dbg!(&target);
@@ -195,7 +198,7 @@ macro_rules! test_partial_deserializer_streaming_failure {
             )
             .unwrap();
 
-            let parsed = from_str(&target, &target_type, $raw_string);
+            let parsed = from_str(&target, &target_type, $raw_string, false);
 
             assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed);
 
