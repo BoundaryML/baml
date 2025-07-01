@@ -4,6 +4,32 @@ title: Changelog
 
 All notable changes to this project will be documented in this file. See [conventional commits](https://www.conventionalcommits.org/) for commit guidelines.
 
+## [0.200.0](https://github.com/boundaryml/baml/compare/0.90.2..0.200.0) - 2025-07-01
+
+### Bug Fixes
+
+- Fix issue with baml-cli test where env vars wouldnt work (#2060) - ([344fb8a](https://github.com/boundaryml/baml/commit/344fb8a55ab46df8672904cf89bc5a814161d9c4)) - Rahul Tiwari
+- fix VSCode Proxy Handling due to v2 -> v3 for npm:http-proxy-middleware (#2065)
+- [Python] Fix issue where Baml wouldn't be pickleable
+- Render `none` as `null` for jinja inputs (#2037) - ([bfa98e8](https://github.com/boundaryml/baml/commit/bfa98e8ec7f272a888bb581a75c71469c21dfef7)) - Antonio Sarosi
+- Add linter warnings for experimental expr features (#2053) - ([9fbc9ee](https://github.com/boundaryml/baml/commit/9fbc9ee38336bf08a0c67c02f237a6886e931cd5)) - Greg Hale
+- Fix prompt-fiddle highlighting (#2082) - ([350914c](https://github.com/boundaryml/baml/commit/350914cf4f2ca7244951eb62f7e1570248ee2482)) - Greg Hale
+- Fix performance issue on promptfiddle codemirror editor (#2083) - ([a64848c](https://github.com/boundaryml/baml/commit/a64848c9e5f29adad89a558a8ae9c0f3092e1545)) - aaronvg
+- Fix env vars in promptfiddle (#2084) - ([52b5329](https://github.com/boundaryml/baml/commit/52b532906506dc684d683242ccea871747ec458c)) - Antonio Sarosi
+- Add fixes for typesystem to deal with semantic streaming (#2086) - ([d2c26f2](https://github.com/boundaryml/baml/commit/d2c26f2c43fd7384a99343248e09b83454f0ae4d)) - hellovai
+- Parsing fix for streaming lists of objects (#2092) - ([cca8863](https://github.com/boundaryml/baml/commit/cca8863cbad3430f59e1e6dd40077f5a94aa036b)) - aaronvg
+
+
+### Features
+- Zed Extension support (#2044) - ([f07d944](https://github.com/boundaryml/baml/commit/f07d944a357506b14cdd6549ccf435289ed5ab47)) - egol
+- Boundary studio v2 alpha release - ([843dfde](https://github.com/boundaryml/baml/commit/843dfdeb7e00acb6a464aa26654bc7f94fc382ce)) - aaronvg
+- Jetbrains Extension support (#2001) - ([984e800](https://github.com/boundaryml/baml/commit/984e800ffe26236963de080820cb43d7f410c826)) - Samuel Lijin
+
+
+### Miscellaneous
+- Adding more docs for llama api (#2077) - ([412eaff](https://github.com/boundaryml/baml/commit/412eaff86895d4c163510651e912b8c5bcd550c9)) - hellovai
+- Bump version to 0.200.0 - ([c153d4a](https://github.com/boundaryml/baml/commit/c153d4ae1835aa9e8bd33c341b1126b16f1a219d)) - Aaron Villalpando
+
 ## [0.90.1](https://github.com/boundaryml/baml/compare/0.90.0..0.90.1) - 2025-06-16
 
 
