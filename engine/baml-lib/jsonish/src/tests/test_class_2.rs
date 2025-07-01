@@ -529,6 +529,10 @@ Actions:
 );
 
 const TEST_FILE_STREAMING_NOT_NULL_LIST: &str = r###"
+class SemanticContainer2 {    
+    three_small_things SmallThing[] @description("Should have three items.")
+}
+
 class SemanticContainer {
     sixteen_digit_number int
     string_with_twenty_words string @stream.done
@@ -711,15 +715,44 @@ test_deserializer!(
   }
 );
 
-test_partial_deserializer_streaming_failure!(
-    test_streaming_not_null_list_partial_3,
+test_partial_deserializer!(
+    test_streaming_not_null_list_partial_3_0,
     TEST_FILE_STREAMING_NOT_NULL_LIST,
     r#"
       {
-        "i_16_digits": 123456789012345
+        "three_small_things": [
+          {
+            "i_16_digits": 123456789012345
   "#,
-    TypeIR::class("SmallThing").as_list() // {
-                                          //   "i_16_digits": 123456789012345i64,
-                                          //   "i_8_digits": null
-                                          // }
+  TypeIR::class("SemanticContainer2"),
+  // we should return an empty list here, not null
+  // SmallThing.i_16_digits is not_null, so the entry is not valid
+  // until the number is complete
+  {
+    "three_small_things": [
+    ]
+  }
+);
+
+test_partial_deserializer!(
+  test_streaming_not_null_list_partial_3_1,
+  TEST_FILE_STREAMING_NOT_NULL_LIST,
+  r#"
+    {
+      "three_small_things": [
+        {
+          "i_16_digits": 123456789012345,
+"#,
+TypeIR::class("SemanticContainer2"),
+// we should return an empty list here, not null
+// SmallThing.i_16_digits is not_null, so the entry is not valid
+// until the number is complete
+{
+  "three_small_things": [
+    {
+      "i_16_digits": 123456789012345i64,
+      "i_8_digits": null
+    }
+  ]
+}
 );

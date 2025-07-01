@@ -200,7 +200,6 @@ macro_rules! test_partial_deserializer_streaming_failure {
             .unwrap();
 
             let parsed = from_str(&target, &target_type, $raw_string, false);
-            println!("parsed: {:?}", parsed);
 
             assert!(parsed.is_ok(), "Failed to parse: {:?}", parsed);
 

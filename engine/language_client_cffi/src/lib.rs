@@ -148,7 +148,7 @@ fn safe_trigger_callback(
                         field_type: f.3.to_non_streaming_type(runtime.inner.ir.as_ref()),
                         checks: &f.1,
                     });
-                    
+
                     meta.encode_to_c_buffer(runtime.inner.ir.as_ref())
                 } else {
                     let meta = content.0.map_meta(|f| ctypes::EncodeMeta {
