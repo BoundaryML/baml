@@ -670,7 +670,7 @@ test_partial_deserializer!(
         "s_20_words": "Another class that explains what is currently needed for completion includes another twenty-word explanation for better understanding."
       },
       "three_small_things": [{
-        "i_16_digits": 123,
+        "i_16_digits": 123
         
   "#,
   TypeIR::class("SemanticContainer"),
