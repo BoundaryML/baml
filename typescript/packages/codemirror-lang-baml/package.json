@@ -4,20 +4,23 @@
   "description": "BAML language support for CodeMirror",
   "packageManager": "pnpm@9.12.0",
   "scripts": {
-    "dev": "tsc --watch",
+    "dev": "pnpm build:grammar && tsup --watch",
     "test": "mocha test/test.js",
-    "build": "rollup -c",
-    "release": "rollup -c",
-    "prepare": "pnpm build",
-    "clean": "git clean -xdf .turbo node_modules dist",
-    "typecheck": "tsc --noEmit --emitDeclarationOnly false && pnpm build"
+    "prebuild": "rm -rf dist",
+    "build:grammar": "lezer-generator src/syntax.grammar -o src/syntax.grammar.js",
+    "build": "pnpm build:grammar && tsup",
+    "prerelease": "rm -rf dist",
+    "release": "pnpm build:grammar && tsup",
+    "prepare": "pnpm prebuild && pnpm build",
+    "clean": "git clean -xdf .turbo node_modules dist src/syntax.grammar.js",
+    "typecheck": "pnpm build && tsc --noEmit --emitDeclarationOnly false"
   },
   "type": "module",
   "exports": {
     ".": {
+      "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
-      "require": "./dist/index.cjs",
-      "types": "./dist/src/index.d.ts"
+      "require": "./dist/index.cjs"
     }
   },
   "dependencies": {
@@ -31,9 +34,9 @@
   },
   "devDependencies": {
     "@lezer/generator": "1.7.3",
-    "@rollup/plugin-typescript": "12.1.2",
     "mocha": "11.6.0",
-    "rollup": "4.43.0",
+    "tslib": "^2.6.2",
+    "tsup": "8.5.0",
     "typescript": "5.8.3"
   },
   "license": "MIT"

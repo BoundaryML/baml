@@ -1,4 +1,4 @@
-import type { InputFieldConfig } from '@/lib/store';
+import type { InputFieldConfig } from '~/lib/store';
 import { useEffect, useMemo, useState } from 'react';
 import { type ImageSourceType, isValidImageUrl } from '../utils/imageUtils';
 
@@ -116,7 +116,7 @@ export function useFormState(inputConfigs: InputFieldConfig[]): FormState {
 
         // For URL image sources, check if the URL is valid
         const url = formValues[input.key];
-        return isValidImageUrl(url);
+        return isValidImageUrl(url ?? '');
       }
 
       return !!formValues[input.key]?.trim();

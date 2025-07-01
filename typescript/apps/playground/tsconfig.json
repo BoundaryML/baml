@@ -4,10 +4,12 @@
     "tsBuildInfoFile": "node_modules/.cache/tsbuildinfo.json",
     "jsx": "react-jsx",
     "noEmit": false,
-    // "baseUrl": ".",
+    "baseUrl": ".",
     "rootDir": "src",
     "outDir": "dist",
-    "types": ["node"]
+    "paths": {
+      "~/*": ["./src/*"]
+    }
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist", ".turbo"]

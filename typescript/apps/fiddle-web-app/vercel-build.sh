@@ -2,12 +2,26 @@
 set -x
 set -e
 
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | bash -s -- -y --default-toolchain 1.85.0
-export PATH="/vercel/.cargo/bin:$PATH"
+# Skip Rust installation in setup-dev.sh since we handled it above
+bash ../../../scripts/setup-dev.sh --skip-pnpm --skip-cargo-watch --skip-go
 
-source $HOME/.cargo/env
+# Try to source cargo environment from multiple possible locations
+if [ -f "$HOME/.cargo/env" ]; then
+    source $HOME/.cargo/env
+elif [ -f "/vercel/.cargo/env" ]; then
+    source /vercel/.cargo/env
+elif [ -f "$(eval echo ~$(whoami))/.cargo/env" ]; then
+    source "$(eval echo ~$(whoami))/.cargo/env"
+fi
 
-which cargo
+# Ensure PATH includes cargo
+export PATH="$HOME/.cargo/bin:/vercel/.cargo/bin:$(eval echo ~$(whoami))/.cargo/bin:$PATH"
+
+# Ensure rustup has a default toolchain configured
+if ! rustup show active-toolchain &> /dev/null; then
+    echo "Setting up default Rust toolchain..."
+    rustup default stable
+fi
 # clang --version
 #llvm-config --version
 # g++ --version
@@ -19,18 +33,10 @@ cd ../../../engine/baml-schema-wasm
 export OPENSSL_NO_VENDOR=1
 # cargo install
 rustup target add wasm32-unknown-unknown
-cargo update -p wasm-bindgen
-cargo install -f wasm-bindgen-cli@0.2.92
 
-# cargo build
-cd ../../typescript/apps/fiddle-web-app
+cd ../../
 
-npm add -g tsup
-
-echo "Path: $(pwd)"
-
-turbo build --filter=fiddle-frontend
-echo "Path2: $(pwd)"
+pnpm build:fiddle-web-app
 
 ls -l
 ls -l /vercel/output

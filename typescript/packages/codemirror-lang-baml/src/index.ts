@@ -13,7 +13,7 @@ import { jinja2 } from '@codemirror/legacy-modes/mode/jinja2';
 import { parseMixed } from '@lezer/common';
 import { classHighlighter, styleTags, tags as t } from '@lezer/highlight';
 import { vscodeDarkInit } from '@uiw/codemirror-theme-vscode';
-import { parser } from './syntax.grammar';
+import { parser } from './syntax.grammar.js';
 
 export const BAMLLanguage = LRLanguage.define({
   parser: parser.configure({

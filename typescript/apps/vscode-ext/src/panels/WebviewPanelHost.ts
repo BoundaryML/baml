@@ -334,17 +334,65 @@ export class WebviewPanelHost {
                 function sendVSCodeVars() {
                     if (!iframe.contentWindow) return;
                     const styles = getComputedStyle(document.documentElement);
-                    // Add more vars as needed
                     const vars = {
+                        // Basic editor/UI variables
                         '--vscode-editor-background': styles.getPropertyValue('--vscode-editor-background'),
                         '--vscode-editor-foreground': styles.getPropertyValue('--vscode-editor-foreground'),
                         '--vscode-editorWidget-background': styles.getPropertyValue('--vscode-editorWidget-background'),
                         '--vscode-editorWidget-foreground': styles.getPropertyValue('--vscode-editorWidget-foreground'),
-                        '--vscode-sideBar-background': styles.getPropertyValue('--vscode-sideBar-background'),
-                        '--vscode-sideBar-foreground': styles.getPropertyValue('--vscode-sideBar-foreground'),
+                        '--vscode-input-background': styles.getPropertyValue('--vscode-input-background'),
+                        '--vscode-input-foreground': styles.getPropertyValue('--vscode-input-foreground'),
+                        '--vscode-button-foreground': styles.getPropertyValue('--vscode-button-foreground'),
+                        '--vscode-button-background': styles.getPropertyValue('--vscode-button-background'),
+                        '--vscode-badge-background': styles.getPropertyValue('--vscode-badge-background'),
+                        '--vscode-badge-foreground': styles.getPropertyValue('--vscode-badge-foreground'),
+                        '--vscode-quickInput-background': styles.getPropertyValue('--vscode-quickInput-background'),
+                        '--vscode-quickInput-foreground': styles.getPropertyValue('--vscode-quickInput-foreground'),
+                        '--vscode-errorForeground': styles.getPropertyValue('--vscode-errorForeground'),
                         '--vscode-panel-background': styles.getPropertyValue('--vscode-panel-background'),
                         '--vscode-panel-foreground': styles.getPropertyValue('--vscode-panel-foreground'),
-                        // ... add more as needed
+                        '--vscode-panel-border': styles.getPropertyValue('--vscode-panel-border'),
+                        '--vscode-focusBorder': styles.getPropertyValue('--vscode-focusBorder'),
+
+                        // Sidebar variables
+                        '--vscode-sideBar-background': styles.getPropertyValue('--vscode-sideBar-background'),
+                        '--vscode-sideBar-foreground': styles.getPropertyValue('--vscode-sideBar-foreground'),
+                        '--vscode-sideBar-border': styles.getPropertyValue('--vscode-sideBar-border'),
+                        '--vscode-list-hoverForeground': styles.getPropertyValue('--vscode-list-hoverForeground'),
+                        '--vscode-list-hoverBackground': styles.getPropertyValue('--vscode-list-hoverBackground'),
+                        '--vscode-sideBarSectionHeader-foreground': styles.getPropertyValue('--vscode-sideBarSectionHeader-foreground'),
+                        '--vscode-sideBarSectionHeader-background': styles.getPropertyValue('--vscode-sideBarSectionHeader-background'),
+
+                        // Font variables
+                        '--vscode-editor-font-family': styles.getPropertyValue('--vscode-editor-font-family'),
+                        '--vscode-editor-font-features': styles.getPropertyValue('--vscode-editor-font-features'),
+                        '--vscode-editor-letter-spacing': styles.getPropertyValue('--vscode-editor-letter-spacing'),
+                        '--vscode-editor-font-size': styles.getPropertyValue('--vscode-editor-font-size'),
+                        '--vscode-editor-font-weight': styles.getPropertyValue('--vscode-editor-font-weight'),
+                        '--vscode-editor-line-height': styles.getPropertyValue('--vscode-editor-line-height'),
+
+                        // Form/checkbox variables
+                        '--vscode-checkbox-background': styles.getPropertyValue('--vscode-checkbox-background'),
+                        '--vscode-checkbox-foreground': styles.getPropertyValue('--vscode-checkbox-foreground'),
+                        '--vscode-text-separator-foreground': styles.getPropertyValue('--vscode-text-separator-foreground'),
+
+                        // Terminal ANSI colors
+                        '--vscode-terminal-ansiBlack': styles.getPropertyValue('--vscode-terminal-ansiBlack'),
+                        '--vscode-terminal-ansiRed': styles.getPropertyValue('--vscode-terminal-ansiRed'),
+                        '--vscode-terminal-ansiGreen': styles.getPropertyValue('--vscode-terminal-ansiGreen'),
+                        '--vscode-terminal-ansiYellow': styles.getPropertyValue('--vscode-terminal-ansiYellow'),
+                        '--vscode-terminal-ansiBlue': styles.getPropertyValue('--vscode-terminal-ansiBlue'),
+                        '--vscode-terminal-ansiMagenta': styles.getPropertyValue('--vscode-terminal-ansiMagenta'),
+                        '--vscode-terminal-ansiCyan': styles.getPropertyValue('--vscode-terminal-ansiCyan'),
+                        '--vscode-terminal-ansiWhite': styles.getPropertyValue('--vscode-terminal-ansiWhite'),
+                        '--vscode-terminal-ansiBrightBlack': styles.getPropertyValue('--vscode-terminal-ansiBrightBlack'),
+                        '--vscode-terminal-ansiBrightRed': styles.getPropertyValue('--vscode-terminal-ansiBrightRed'),
+                        '--vscode-terminal-ansiBrightGreen': styles.getPropertyValue('--vscode-terminal-ansiBrightGreen'),
+                        '--vscode-terminal-ansiBrightYellow': styles.getPropertyValue('--vscode-terminal-ansiBrightYellow'),
+                        '--vscode-terminal-ansiBrightBlue': styles.getPropertyValue('--vscode-terminal-ansiBrightBlue'),
+                        '--vscode-terminal-ansiBrightMagenta': styles.getPropertyValue('--vscode-terminal-ansiBrightMagenta'),
+                        '--vscode-terminal-ansiBrightCyan': styles.getPropertyValue('--vscode-terminal-ansiBrightCyan'),
+                        '--vscode-terminal-ansiBrightWhite': styles.getPropertyValue('--vscode-terminal-ansiBrightWhite'),
                     };
                     iframe.contentWindow.postMessage({ type: 'vscode-theme', vars }, '*');
                 }

@@ -8,7 +8,21 @@
   },
   "files": {
     "ignoreUnknown": false,
-    "ignore": [".next", "dist", "node_modules"]
+    "ignore": [
+      ".next",
+      "dist",
+      "build",
+      "bin",
+      "node_modules",
+      "**/baml_client/**",
+      "**/generated/**",
+      "**/target/**",
+      "**/.turbo/**",
+      "**/coverage/**",
+      "engine/**",
+      "integ-tests/**",
+      "typescript/**"
+    ]
   },
   "json": {
     "formatter": {

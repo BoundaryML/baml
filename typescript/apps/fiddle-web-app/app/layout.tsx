@@ -42,8 +42,8 @@ export default function RootLayout({
             {/* <PromptPreview /> */}
             {/* </JotaiProvider> */}
             <Toaster />
-          </ThemeProvider>
-        </body>
+        </ThemeProvider>
+      </body>
       </PHProvider>
     </html>
   );

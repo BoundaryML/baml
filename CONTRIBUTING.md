@@ -93,6 +93,39 @@ First off, thanks for your interest in contributing to BAML! We appreciate all t
    - This hook will run `cargo fmt` with import organization before each commit
    - If formatting changes are made, you'll need to review and re-commit the changes
 
+## Running the Full CI Pipeline Locally
+
+For convenience, we provide a script that runs the entire CI pipeline locally, including all the checks and tests that run in GitHub Actions:
+
+```bash
+./run-local-ci.sh
+```
+
+This script will:
+1. Check and install required dependencies (pnpm, goimports, ruff, prettier)
+2. Run TypeScript and Rust linting/formatting checks
+3. Test the Node.js code generator
+4. Build WASM targets
+5. Run Rust unit tests
+6. Run Python integration tests
+
+**Available options:**
+- `./run-local-ci.sh --lint-only` - Run only linting checks
+- `./run-local-ci.sh --test-only` - Run only tests
+- `./run-local-ci.sh --build-only` - Run only build steps
+- `./run-local-ci.sh --build-cli` - Include CLI build (normally skipped)
+- `./run-local-ci.sh --skip-deps` - Skip dependency installation checks
+- `./run-local-ci.sh --help` - Show help
+
+**Prerequisites:**
+- Node.js 20.x or later
+- Rust (stable toolchain)
+- Go 1.21.x or later
+- Python 3.13
+- Git
+
+The script automatically handles installing missing tools and dependencies, so you can run it on a fresh machine.
+
 ## Running Integration Tests
 
 The integration tests verify BAML's functionality across multiple programming languages. Each language has its own test suite in the `integ-tests/` directory.

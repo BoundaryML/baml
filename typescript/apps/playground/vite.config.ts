@@ -18,6 +18,7 @@ export default defineConfig({
   // root: path.resolve(process.cwd(), './src'),
   server: {
     strictPort: true, // Allow fallback to next available port
+    port: 3030,
     host: true,
     cors: {
       origin: '*',

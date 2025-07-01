@@ -1,12 +1,11 @@
 {
-  "name": "typescript",
+  "name": "@baml/integ-tests-typescript",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
   "scripts": {
     "test": "node --expose-gc ./node_modules/jest/bin/jest.js",
-    "build:debug": "cd ../../engine/language_client_typescript && pnpm run build:debug && cd - && pnpm i",
-    "build": "cd ../../engine/language_client_typescript && npm run build && cd - && pnpm i",
+    "build": "tsc",
     "integ-tests:ci": "pnpm tsc && infisical run --env=test -- pnpm test -- --ci --silent false --testTimeout 30000 --verbose=false --reporters=jest-junit",
     "integ-tests": "pnpm tsc && infisical run --env=test -- pnpm test -- --silent false --testTimeout 60000",
     "integ-tests:dotenv": "pnpm tsc && pnpm test -- --silent false --testTimeout 30000",
@@ -35,7 +34,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "0.39.0",
     "@aws-sdk/client-sts": "3.721.0",
-    "@boundaryml/baml": "link:../../engine/language_client_typescript",
+    "@boundaryml/baml": "workspace:*",
     "@google/generative-ai": "0.24.0",
     "dotenv": "16.4.5",
     "esbuild": "0.25.2",

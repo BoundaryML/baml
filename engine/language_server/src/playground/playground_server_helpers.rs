@@ -1,8 +1,7 @@
 use std::{collections::HashMap, path::PathBuf, sync::Arc};
 
 use anyhow::Result;
-use base64::engine::general_purpose;
-use base64::Engine as _;
+use base64::{engine::general_purpose, Engine as _};
 use futures_util::{SinkExt, StreamExt};
 use include_dir::{include_dir, Dir};
 use mime_guess::from_path;
@@ -11,8 +10,10 @@ use tokio::sync::RwLock;
 use warp::{http::Response, ws::Message, Filter};
 
 use crate::{
-    playground::definitions::{FrontendMessage, PlaygroundState},
-    playground::playground_server_rpc::handle_rpc_websocket,
+    playground::{
+        definitions::{FrontendMessage, PlaygroundState},
+        playground_server_rpc::handle_rpc_websocket,
+    },
     session::Session,
 };
 

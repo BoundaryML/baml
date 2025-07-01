@@ -1,11 +1,11 @@
 @import "tailwindcss";
 @source "../../../../apps/**/*.{ts,tsx}";
 @source "../../../../packages/**/*.{ts,tsx}";
+@source "../../../../../integ-tests/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
 
 @plugin "tailwindcss-animate";
 @plugin "@tailwindcss/typography";
-@plugin "@githubocto/tailwind-vscode";
 
 @custom-variant dark (&:is(.dark *));
 
@@ -257,13 +257,7 @@
 }
 
 /* controls dropdown styling on rsjf */
-.form-control {
-  @apply bg-vscode-input-background text-vscode-input-foreground rounded-sm;
-}
 
-.array-item {
-  @apply text-xs text-vscode-description-foreground w-full;
-}
 
 .field-array {
   @apply w-full;
@@ -273,9 +267,6 @@
   @apply bg-vscode-checkbox-background text-vscode-checkbox-foreground flex flex-row items-center gap-x-1;
 } */
 
-.array-item-list {
-  @apply divide-y divide-vscode-text-separator-foreground w-full;
-}
 
 /* .array-item-remove::after {
   content: 'Remove';

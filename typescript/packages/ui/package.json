@@ -70,10 +70,10 @@
   },
   "devDependencies": {
     "@baml/tsconfig": "workspace:*",
-    "@tailwindcss/postcss": "4.1.10",
+    "@tailwindcss/postcss": "4.1.11",
     "@types/react": "19.1.8",
     "@types/react-dom": "19.1.6",
-    "tailwindcss": "4.1.10",
+    "tailwindcss": "4.1.11",
     "typescript": "5.8.3",
     "zod": "3.25.66"
   },

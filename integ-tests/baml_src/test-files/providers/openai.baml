@@ -139,7 +139,6 @@ test TestOpenAIClients {
   args {
     input #"
     Cherry blossoms
-    adsfasdf
     "#
   }
 }

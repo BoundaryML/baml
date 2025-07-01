@@ -1,6 +1,6 @@
 {
-  "$schema": "https://turbo.build/schema.json",
-  "globalEnv": ["NODE_ENV"],
+  "$schema": "./node_modules/turbo/schema.json",
+  "globalEnv": ["NODE_ENV", "RUSTUP_HOME", "CARGO_HOME", "PATH"],
   "ui": "tui",
   "concurrency": "15",
   "tasks": {
@@ -11,28 +11,75 @@
       "cache": false,
       "dependsOn": ["^clean"]
     },
-    "topo": {
-      "dependsOn": ["^topo"]
-    },
     "dev": {
-      "dependsOn": ["^topo", "^build"],
+      "dependsOn": ["^build"],
       "cache": false,
       "persistent": true
     },
+    "generate": {
+      "inputs": ["**/*.baml"],
+      "outputs": ["baml_client/**"]
+    },
     "typecheck": {
-      "dependsOn": ["^topo"],
-      "inputs": ["**/*.rs", "**/*.toml", "**/*.j2", "**/*.pest"],
-      "outputs": ["node_modules/.cache/tsbuildinfo.json", "target/**"]
+      "dependsOn": ["^typecheck"],
+      "inputs": [
+        "**/*.rs",
+        "**/*.toml",
+        "**/Cargo.lock",
+        "**/*.j2",
+        "**/*.pest",
+        "**/*.ts",
+        "**/*.tsx"
+      ],
+      "outputs": [
+        "dist/**",
+        "node_modules/.cache/tsbuildinfo.json",
+        "target/**",
+        "npm/**",
+        "artifacts/**"
+      ]
     },
     "build": {
-      "dependsOn": ["^topo", "^build"],
-      "inputs": ["**/*.rs", "**/*.toml", "**/*.j2", "**/*.pest"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "target/**"]
+      "dependsOn": ["^build"],
+      "inputs": [
+        "**/*.rs",
+        "**/*.toml",
+        "**/Cargo.lock",
+        "**/*.j2",
+        "**/*.pest",
+        "**/*.ts",
+        "**/*.tsx"
+      ],
+      "outputs": [
+        "dist/**",
+        ".next/**",
+        "!.next/cache/**",
+        "target/**",
+        "npm/**",
+        "artifacts/**"
+      ]
     },
     "release": {
-      "dependsOn": ["^topo", "^release"],
-      "inputs": ["**/*.rs", "**/*.toml", "**/*.j2", "**/*.pest"],
-      "outputs": ["dist/**", ".next/**", "!.next/cache/**", "target/**"]
+      "dependsOn": ["^release"],
+      "inputs": [
+        "**/*.rs",
+        "**/*.toml",
+        "**/Cargo.lock",
+        "**/*.j2",
+        "**/*.pest",
+        "**/*.ts",
+        "**/*.tsx",
+        "**/*.js",
+        "**/*.jsx"
+      ],
+      "outputs": [
+        "dist/**",
+        ".next/**",
+        "!.next/cache/**",
+        "target/**",
+        "npm/**",
+        "artifacts/**"
+      ]
     }
   }
 }

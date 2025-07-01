@@ -3,14 +3,12 @@
   "compilerOptions": {
     "baseUrl": ".",
     "paths": {
-      // "@/*": ["./src/*"],
-      // "@gloo-ai/baml-schema-wasm-web/*": ["../baml-schema-wasm-web/dist/*"],
-      // "@baml/ui/*": ["../ui/src/*"]
+      "~/*": ["./src/*"],
     },
     "tsBuildInfoFile": "node_modules/.cache/tsbuildinfo.json",
     "rootDir": ".",
     "outDir": "dist",
-    "types": ["node", "vscode"]
+    "types": ["vscode"]
   },
   "include": ["src"],
   "exclude": ["node_modules", "dist"]

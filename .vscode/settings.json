@@ -15,7 +15,7 @@
     "editor.defaultFormatter": "biomejs.biome",
     "editor.formatOnSave": true
   },
-	"tailwindCSS.experimental.configFile": "typescript/packages/ui/src/styles/globals.css",
+  "tailwindCSS.experimental.configFile": "typescript/packages/ui/src/styles/globals.css",
   "editor.defaultFormatter": "biomejs.biome",
   "editor.formatOnSave": true,
   "tailwindCSS.experimental.classRegex": [
@@ -36,5 +36,5 @@
     "twx\\(.*?\\).*?`([^`]*)",
     ["twx\\.[^`]+\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"],
     ["twx\\(.*?\\).*?\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
-  ],
+  ]
 }
