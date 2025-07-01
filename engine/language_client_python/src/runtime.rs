@@ -10,6 +10,16 @@ use pyo3::{
     Bound, IntoPyObjectExt, PyObject, PyRef, Python,
 };
 
+// Type alias for pickle reduce return type
+type PickleReduceResult = PyResult<(
+    PyObject,
+    (
+        String,
+        std::collections::HashMap<String, String>,
+        std::collections::HashMap<String, String>,
+    ),
+)>;
+
 use crate::{
     errors::{BamlError, BamlInvalidArgumentError},
     parse_py_type::parse_py_type,
@@ -23,7 +33,7 @@ use crate::{
     },
 };
 
-crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe);
+crate::lang_wrapper!(BamlRuntime, CoreBamlRuntime, clone_safe, root_path: String = String::new(), env_vars: HashMap<String, String> = HashMap::new(), files: HashMap<String, String> = HashMap::new());
 
 #[derive(Debug, Clone)]
 #[pyclass]
@@ -82,6 +92,34 @@ impl BamlLogEvent {
 
 #[pymethods]
 impl BamlRuntime {
+    // Called by pickle to serialize the object using __reduce__ protocol
+    fn __reduce__(&self, py: Python) -> PickleReduceResult {
+        let cls = py.get_type::<Self>();
+        let args = (
+            self.root_path.clone(),
+            self.env_vars.clone(),
+            self.files.clone(),
+        );
+        Ok((cls.getattr("_create_from_state")?.into(), args))
+    }
+
+    /// Static method to recreate BamlRuntime from pickle state
+    #[staticmethod]
+    fn _create_from_state(
+        root_path: String,
+        env_vars: std::collections::HashMap<String, String>,
+        files: std::collections::HashMap<String, String>,
+    ) -> PyResult<Self> {
+        let core = CoreBamlRuntime::from_file_content(&root_path, &files, env_vars.clone())
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(format!("{e}")))?;
+        Ok(BamlRuntime {
+            inner: std::sync::Arc::new(core),
+            root_path,
+            env_vars,
+            files,
+        })
+    }
+
     #[staticmethod]
     fn from_directory(directory: PathBuf, env_vars: HashMap<String, String>) -> PyResult<Self> {
         Ok(CoreBamlRuntime::from_directory(&directory, env_vars)

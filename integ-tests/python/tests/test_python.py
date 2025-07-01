@@ -42,3 +42,33 @@ def test_pickle():
     p3 = pickle.dumps(i3)
     assert i3 == pickle.loads(pickle.dumps(i3))
     assert p3 == pickle.dumps(pickle.loads(p3))
+
+def test_baml_client_pickle_roundtrip():
+    import pickle
+    from baml_client import b
+    # Pickle and unpickle the b object
+    pickled = pickle.dumps(b)
+    b2 = pickle.loads(pickled)
+    # Check type and that no error occurs
+    assert type(b2) is type(b)
+
+
+def test_baml_runtime_pickle():
+    """Test that the BAML runtime can be pickled and unpickled successfully."""
+    import pickle
+    from baml_client.globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
+    
+    try:
+        runtime = DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME
+        pickled = pickle.dumps(runtime)
+        unpickled_runtime = pickle.loads(pickled)
+        
+        # Verify the unpickled runtime is of the same type
+        assert type(unpickled_runtime) is type(runtime)
+        # Test that pickling roundtrip works multiple times
+        pickled_again = pickle.dumps(unpickled_runtime)
+        unpickled_again = pickle.loads(pickled_again)
+        assert type(unpickled_again) is type(runtime)
+        
+    except Exception as e:
+        pytest.fail(f"BAML runtime pickling failed with exception: {e}")

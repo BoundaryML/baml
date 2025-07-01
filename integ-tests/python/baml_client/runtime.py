@@ -55,6 +55,14 @@ class DoNotUseDirectlyCallManager:
     def __init__(self, baml_options: BamlCallOptions):
         self.__baml_options = baml_options
 
+    def __getstate__(self):
+        # Return state needed for pickling
+        return {"baml_options": self.__baml_options}
+
+    def __setstate__(self, state):
+        # Restore state from pickling
+        self.__baml_options = state["baml_options"]
+
     def __resolve(self) -> _ResolvedBamlOptions:
         tb = self.__baml_options.get("tb")
         if tb is not None:

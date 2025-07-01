@@ -54,6 +54,10 @@ class VSCodeAPIWrapper {
     // context (i.e. VS Code development window or web browser)
     if (typeof acquireVsCodeApi === 'function' && typeof window !== 'undefined') {
       this.vsCodeApi = acquireVsCodeApi()
+    }
+
+    // Always add message listener for RPC responses, regardless of environment
+    if (typeof window !== 'undefined') {
       window.addEventListener('message', this.listenForRpcResponses.bind(this))
     }
 
@@ -109,10 +113,11 @@ class VSCodeAPIWrapper {
   }
 
   public async setProxySettings(proxyEnabled: boolean) {
-    await this.rpc<SetProxySettingsRequest, void>({
+    const resp = await this.rpc<SetProxySettingsRequest, { enablePlaygroundProxy: boolean }>({
       vscodeCommand: 'SET_PROXY_SETTINGS',
       proxyEnabled,
     })
+    return resp
   }
 
   public loadAwsCreds = async (profile: string | null) => {
@@ -143,10 +148,30 @@ class VSCodeAPIWrapper {
   public rpc<TRequest, TResponse>(data: TRequest): Promise<TResponse> {
     return new Promise((resolve, reject) => {
       const rpcId = this.rpcId++
+      const vscodeCommand = (data as unknown as { vscodeCommand: string }).vscodeCommand
+
+      // Handle browser mode locally for specific commands
+      if (!this.vsCodeApi) {
+        setTimeout(() => {
+          try {
+            const response = this.handleBrowserModeRpc(vscodeCommand, data)
+            if (response !== null) {
+              resolve(response as TResponse)
+              return
+            }
+            // If no local handler, reject with timeout error
+            reject(new Error(`VSCode RPC request not supported in browser mode: ${vscodeCommand}`))
+          } catch (error) {
+            reject(error)
+          }
+        }, 0)
+        return
+      }
+
       this.rpcTable.set(rpcId, { resolve: resolve as (resp: unknown) => void })
 
       const message = {
-        rpcMethod: (data as unknown as { vscodeCommand: string }).vscodeCommand,
+        rpcMethod: vscodeCommand,
         rpcId,
         data,
       }
@@ -156,10 +181,24 @@ class VSCodeAPIWrapper {
       setTimeout(() => {
         if (this.rpcTable.has(rpcId)) {
           this.rpcTable.delete(rpcId)
-          reject(new Error(`VSCode RPC request timed out after ${RPC_TIMEOUT_MS}ms: ${(data as any).vscodeCommand}`))
+          reject(new Error(`VSCode RPC request timed out after ${RPC_TIMEOUT_MS}ms: ${vscodeCommand}`))
         }
       }, RPC_TIMEOUT_MS)
     })
+  }
+
+  private handleBrowserModeRpc(vscodeCommand: string, data: any): any {
+    switch (vscodeCommand) {
+      case 'SET_PROXY_SETTINGS':
+        // In browser mode, just return the requested setting since there's no real proxy to configure
+        // The frontend will update its local config state to reflect this change
+        return { enablePlaygroundProxy: data.proxyEnabled }
+      case 'GET_PLAYGROUND_PORT':
+        // In browser mode, return 0 since there's no local proxy server
+        return { port: 0 }
+      default:
+        return null // No local handler available
+    }
   }
 
   private listenForRpcResponses(event: any) {

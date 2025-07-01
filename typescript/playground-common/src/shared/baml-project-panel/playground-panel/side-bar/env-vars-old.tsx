@@ -22,7 +22,8 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useState } from 'react'
-import { envVarsAtom, proxyUrlAtom, requiredEnvVarsAtom } from '../../atoms'
+import { envVarsAtom, proxyUrlAtom, requiredEnvVarsAtom, userEnvVarsAtom } from '../../atoms'
+import { bamlConfig, type BamlConfigAtom } from '../../../../baml_wasm_web/bamlConfig'
 import { cn } from '@/lib/utils'
 import { Switch } from '@radix-ui/react-switch'
 import { QuestionMarkCircledIcon, QuestionMarkIcon } from '@radix-ui/react-icons'
@@ -30,16 +31,16 @@ import { Checkbox } from '@/components/ui/checkbox'
 import { vscode } from '../../vscode'
 
 const renderedEnvVarsAtom = atom((get) => {
-  const envVars = get(envVarsAtom)
+  const userEnvVars = get(userEnvVarsAtom)
   const requiredEnvVars = get(requiredEnvVarsAtom)
 
-  const vars = Object.entries(envVars).map(([key, value]) => ({
+  const vars = Object.entries(userEnvVars).map(([key, value]) => ({
     key,
     value,
     required: requiredEnvVars.includes(key),
   }))
 
-  const missingVars = requiredEnvVars.filter((envVar) => !(envVar in envVars))
+  const missingVars = requiredEnvVars.filter((envVar) => !(envVar in userEnvVars))
 
   vars.push(
     ...missingVars.map((envVar) => ({
@@ -60,9 +61,11 @@ const renderedEnvVarsAtom = atom((get) => {
 
 export default function EnvVars() {
   const envVars = useAtomValue(renderedEnvVarsAtom)
-  const setEnvVars = useSetAtom(envVarsAtom)
-  const currentEnvVars = useAtomValue(envVarsAtom)
+  const setUserEnvVars = useSetAtom(userEnvVarsAtom)
+  const currentUserEnvVars = useAtomValue(userEnvVarsAtom)
   const proxySettings = useAtomValue(proxyUrlAtom)
+  const setBamlConfig = useSetAtom(bamlConfig)
+
   const [editingKey, setEditingKey] = useState<string | null>(null)
   const [editValue, setEditValue] = useState('')
   const [newKey, setNewKey] = useState('')
@@ -78,7 +81,7 @@ export default function EnvVars() {
   const handleSave = async (key: string) => {
     try {
       await new Promise((resolve) => setTimeout(resolve, 0))
-      setEnvVars({ ...currentEnvVars, [key]: editValue })
+      setUserEnvVars({ ...currentUserEnvVars, [key]: editValue })
       setEditingKey(null)
       toast({
         title: 'Environment variable updated',
@@ -110,7 +113,7 @@ export default function EnvVars() {
       })
       return
     }
-    setEnvVars({ ...currentEnvVars, [newKey]: '' })
+    setUserEnvVars({ ...currentUserEnvVars, [newKey]: '' })
     setNewKey('')
     toast({
       title: 'New variable added',
@@ -160,8 +163,25 @@ export default function EnvVars() {
               VSCode proxy is <b>{proxySettings.proxyEnabled ? 'enabled' : 'disabled'}</b>
               <Checkbox
                 checked={proxySettings.proxyEnabled}
-                onCheckedChange={() => {
-                  vscode.setProxySettings(!proxySettings.proxyEnabled)
+                onCheckedChange={async (checked) => {
+                  try {
+                    const response = await vscode.setProxySettings(!!checked)
+                    // Update local config to reflect the change immediately
+                    setBamlConfig((prev: BamlConfigAtom) => ({
+                      ...prev,
+                      config: {
+                        ...prev.config,
+                        enablePlaygroundProxy: response.enablePlaygroundProxy,
+                      },
+                    }))
+                  } catch (error) {
+                    console.error('Failed to update proxy settings:', error)
+                    toast({
+                      title: 'Error updating proxy settings',
+                      description: 'Please try again',
+                      variant: 'destructive',
+                    })
+                  }
                 }}
               />
             </p>
@@ -202,9 +222,9 @@ export default function EnvVars() {
                             className='p-0 w-4 h-4'
                             onClick={(e) => {
                               e.preventDefault()
-                              const newVars = { ...currentEnvVars }
+                              const newVars = { ...currentUserEnvVars }
                               delete newVars[key]
-                              setEnvVars(newVars)
+                              setUserEnvVars(newVars)
                             }}
                           >
                             <XCircle className='w-4 h-4 text-muted-foreground hover:text-destructive' />

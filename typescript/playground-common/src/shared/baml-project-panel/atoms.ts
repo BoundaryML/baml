@@ -214,53 +214,71 @@ export const envKeyValuesAtom = atom(
     }
   },
 )
+
+// Simple atom for user's environment variables (direct editing)
+export const userEnvVarsAtom = atom(
+  (get) => {
+    const envKeyValues = get(envKeyValuesAtom)
+    return Object.fromEntries(envKeyValues.map(([k, v]) => [k, v]).filter(([k]) => k !== 'BOUNDARY_PROXY_URL'))
+  },
+  (get, set, newEnvVars: Record<string, string>) => {
+    const envKeyValues = Object.entries(newEnvVars)
+    set(envKeyValueStorage, envKeyValues)
+  },
+)
+
+// Computed atom that includes proxy logic (for runtime usage)
 export const envVarsAtom = atom(
   (get) => {
     if (typeof window === 'undefined') {
       return {}
     }
-    if ((window as any).next?.version) {
-      // NextJS environment doesnt have vscode settings, and proxy is always enabled
-      return Object.fromEntries(defaultEnvKeyValues.map(([k, v]) => [k, v]))
-    } else {
-      const { proxyEnabled, proxyUrl } = get(proxyUrlAtom)
+
+    // Check for Next.js environment
+    const isNextJs = !!(window as any).next?.version
+
+    if (isNextJs) {
+      // NextJS environment - check proxy settings but use Next.js specific proxy URL
+      const { proxyEnabled } = get(proxyUrlAtom)
+      const userEnvVars = get(userEnvVarsAtom)
+
       if (!proxyEnabled) {
-        // if proxy is not enabled, remove the BOUNDARY_PROXY_URL
-        const envKeyValues = get(envKeyValuesAtom)
-        return Object.fromEntries(envKeyValues.map(([k, v]) => [k, v]).filter(([k]) => k !== 'BOUNDARY_PROXY_URL'))
+        return userEnvVars
       }
 
-      const envKeyValues = get(envKeyValuesAtom)
-      if (proxyUrl === undefined) {
-        return Object.fromEntries(envKeyValues.map(([k, v]) => [k, v]).filter(([k]) => k !== 'BOUNDARY_PROXY_URL'))
+      // Proxy enabled - use Next.js specific proxy URL
+      const nextJsProxyUrl = window?.location?.origin?.includes('localhost')
+        ? 'https://fiddle-proxy.fly.dev' // localhost development
+        : 'https://fiddle-proxy.fly.dev' // production
+
+      return {
+        ...userEnvVars,
+        BOUNDARY_PROXY_URL: nextJsProxyUrl,
       }
+    }
 
-      // Check if BOUNDARY_PROXY_URL exists in the env vars.
-      const hasBoundaryProxyUrl = envKeyValues.some(([k]) => k === 'BOUNDARY_PROXY_URL')
+    const { proxyEnabled, proxyUrl } = get(proxyUrlAtom)
+    const userEnvVars = get(userEnvVarsAtom)
 
-      const entries = envKeyValues.map(([k, v]) => {
-        if (k === 'BOUNDARY_PROXY_URL') {
-          return [k, proxyUrl]
-        }
-        return [k, v]
-      })
+    if (!proxyEnabled) {
+      // if proxy is not enabled, just return user vars without BOUNDARY_PROXY_URL
+      return userEnvVars
+    }
 
-      // If proxy is enabled and there's a proxyUrl but no BOUNDARY_PROXY_URL, add it
-      // TODO: it's likely when proxy is updated we dont update our env vars properly again.
-      // so we resort to this.
-      if (proxyEnabled && proxyUrl && !hasBoundaryProxyUrl) {
-        console.warn(
-          '⚠️ WARNING: BOUNDARY_PROXY_URL was not found in env vars but proxy is enabled. Adding it automatically.',
-        )
-        entries.push(['BOUNDARY_PROXY_URL', proxyUrl])
-      }
+    if (proxyUrl === undefined) {
+      return userEnvVars
+    }
 
-      return Object.fromEntries(entries.filter((e) => e !== undefined))
+    // Add or update BOUNDARY_PROXY_URL based on current proxy settings
+    return {
+      ...userEnvVars,
+      BOUNDARY_PROXY_URL: proxyUrl,
     }
   },
+  // Delegate writes to userEnvVarsAtom to avoid interference
   (get, set, newEnvVars: Record<string, string>) => {
-    const envKeyValues = Object.entries(newEnvVars)
-    set(envKeyValueStorage, envKeyValues)
+    const { BOUNDARY_PROXY_URL, ...userVars } = newEnvVars
+    set(userEnvVarsAtom, userVars)
   },
 )
 
