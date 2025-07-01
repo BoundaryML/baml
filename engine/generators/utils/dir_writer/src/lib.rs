@@ -120,7 +120,7 @@ impl GeneratorArgs {
     /// baml_src relative to the path of the file in which the singleton is defined. In Python this is
     /// os.path.dirname(__file__) for globals.py; in TS this is __dirname for globals.ts.
     pub fn baml_src_relative_to_output_dir(&self) -> Result<PathBuf> {
-        pathdiff::diff_paths(&self.baml_src_dir, self.output_dir()).ok_or_else(|| {
+        pathdiff::diff_paths(&self.baml_src_dir, &self.output_dir()).ok_or_else(|| {
             anyhow::anyhow!(
                 "Failed to compute baml_src ({}) relative to output_dir ({})",
                 self.baml_src_dir.display(),

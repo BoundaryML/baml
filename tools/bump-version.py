@@ -96,6 +96,9 @@ def main(
     allow_dirty: bool = typer.Option(
         False, "--allow-dirty", help="Allow dirty git status"
     ),
+    new_version: str | None = typer.Option(
+        None, "--new-version", help="New version to bump to (or auto-detect)"
+    ),
 ) -> None:
     # Replace VersionBumpArgs with direct flag access
     modes = [ts, python, ruby, go, vscode, jetbrains, bump_all]
@@ -187,6 +190,7 @@ def main(
         allow_dirty,
         selected_version_bump,
         repo_root,
+        new_version,
     )
 
     # Run bundle install for Ruby client to update Gemfile.lock version of baml.
@@ -322,6 +326,7 @@ def perform_version_bumps(
     allow_dirty: bool,
     user_confirmation: VersionBumpType,
     repo_root: str,
+    new_version: str | None,
 ) -> None:
     os.chdir(os.path.join(repo_root, "tools"))
 
@@ -331,6 +336,7 @@ def perform_version_bumps(
             "./versions/engine.cfg",
             user_confirmation,
             "--allow-dirty" if allow_dirty else "",
+            f"--new-version={new_version}" if new_version else "",
         )
         for config in [
             "python",
@@ -346,19 +352,50 @@ def perform_version_bumps(
                 f"./versions/{config}.cfg",
                 user_confirmation,
                 "--allow-dirty",  # always true since the first run of this dirties the git tree
+                f"--new-version={new_version}" if new_version else "",
             )
     elif ts:
-        bump2version("--config-file", "./versions/typescript.cfg", "patch")
+        bump2version(
+            "--config-file",
+            "./versions/typescript.cfg",
+            "patch",
+            f"--new-version={new_version}" if new_version else "",
+        )
     elif python:
-        bump2version("--config-file", "./versions/python.cfg", "patch")
+        bump2version(
+            "--config-file",
+            "./versions/python.cfg",
+            "patch",
+            f"--new-version={new_version}" if new_version else "",
+        )
     elif ruby:
-        bump2version("--config-file", "./versions/ruby.cfg", "patch")
+        bump2version(
+            "--config-file",
+            "./versions/ruby.cfg",
+            "patch",
+            f"--new-version={new_version}" if new_version else "",
+        )
     elif go:
-        bump2version("--config-file", "./versions/go.cfg", "patch")
+        bump2version(
+            "--config-file",
+            "./versions/go.cfg",
+            "patch",
+            f"--new-version={new_version}" if new_version else "",
+        )
     elif vscode:
-        bump2version("--config-file", "./versions/vscode.cfg", "patch")
+        bump2version(
+            "--config-file",
+            "./versions/vscode.cfg",
+            "patch",
+            f"--new-version={new_version}" if new_version else "",
+        )
     elif jetbrains:
-        bump2version("--config-file", "./versions/jetbrains.cfg", "patch")
+        bump2version(
+            "--config-file",
+            "./versions/jetbrains.cfg",
+            "patch",
+            f"--new-version={new_version}" if new_version else "",
+        )
 
 
 if __name__ == "__main__":
