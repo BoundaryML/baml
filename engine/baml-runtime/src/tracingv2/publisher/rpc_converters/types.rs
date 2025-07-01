@@ -58,7 +58,7 @@ impl<'a, T: HasFieldType> IntoRpcEvent<'a, runtime_api::BamlValue<'a>> for BamlV
                     },
                     _ => runtime_api::TypeIndex::NotUnion,
                 },
-                type_ref: type_ref,
+                type_ref,
                 check_results: None,
             },
             value,
