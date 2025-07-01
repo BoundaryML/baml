@@ -146,7 +146,7 @@ async def test_modular_google_gemini():
 
     body = req.body.json()
     response = await client.aio.models.generate_content(
-        model="gemini-1.5-pro-001",
+        model="gemini-1.5-flash",
         contents=body["contents"],
         config={"safety_settings": [body["safetySettings"]]},
     )

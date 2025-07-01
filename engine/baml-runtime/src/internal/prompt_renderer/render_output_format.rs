@@ -4,7 +4,7 @@ use anyhow::Result;
 use baml_types::{
     baml_value::TypeLookups,
     ir_type::{TypeIR, TypeStreaming},
-    BamlValue,
+    BamlValue, StreamingMode,
 };
 use indexmap::{IndexMap, IndexSet};
 use internal_baml_core::ir::{
@@ -21,25 +21,10 @@ pub fn render_output_format(
     ir: &IntermediateRepr,
     ctx: &RuntimeContext,
     output: &TypeIR,
+    mode: StreamingMode,
 ) -> Result<OutputFormatContent> {
     let (enums, classes, recursive_classes, structural_recursive_aliases) =
-        relevant_data_models(ir, output, ctx)?;
-
-    Ok(OutputFormatContent::target(output.clone())
-        .enums(enums)
-        .classes(classes)
-        .recursive_classes(recursive_classes)
-        .structural_recursive_aliases(structural_recursive_aliases)
-        .build())
-}
-
-pub fn render_output_format_streaming(
-    ir: &IntermediateRepr,
-    ctx: &RuntimeContext,
-    output: &TypeIR,
-) -> Result<OutputFormatContent> {
-    let (enums, classes, recursive_classes, structural_recursive_aliases) =
-        relevant_data_models_streaming(ir, output, ctx)?;
+        relevant_data_models(ir, output, ctx, mode == StreamingMode::Streaming)?;
 
     Ok(OutputFormatContent::target(output.clone())
         .enums(enums)
@@ -236,12 +221,18 @@ fn relevant_data_models<'a>(
     ir: &'a IntermediateRepr,
     output: &'a TypeIR,
     ctx: &RuntimeContext,
+    partialize: bool,
 ) -> Result<(
     Vec<Enum>,
     Vec<Class>,
     IndexSet<String>,
     IndexMap<String, TypeIR>,
 )> {
+    let output = if partialize {
+        output.to_streaming_type(ir).to_ir_type()
+    } else {
+        output.clone()
+    };
     let mut checked_types = HashSet::new();
     let mut enums = Vec::new();
     let mut classes = Vec::new();
@@ -303,17 +294,27 @@ fn relevant_data_models<'a>(
                 }
             }
             TypeIR::List(inner, _) => {
+                let inner = if partialize {
+                    &inner.to_streaming_type(ir).to_ir_type()
+                } else {
+                    inner
+                };
                 if !checked_types.contains(&inner.to_string()) {
-                    stack.push(inner.as_ref().clone());
+                    stack.push(inner.clone());
                 }
             }
             TypeIR::Map(k, ref v, _) => {
                 if checked_types.insert(output.to_string()) {
+                    let v = if partialize {
+                        v.to_streaming_type(ir).to_ir_type()
+                    } else {
+                        v.as_ref().clone()
+                    };
                     if !checked_types.contains(&k.to_string()) {
                         stack.push(k.as_ref().clone());
                     }
                     if !checked_types.contains(&v.to_string()) {
-                        stack.push(v.as_ref().clone());
+                        stack.push(v);
                     }
                 }
             }
@@ -386,7 +387,18 @@ fn relevant_data_models<'a>(
                         }
                     }
 
-                    let fields = fields.chain(new_fields).collect::<Result<Vec<_>>>()?;
+                    let fields = fields
+                        .chain(new_fields)
+                        .map(|field| {
+                            let (name, t, desc, needed) = field?;
+                            let t = if partialize {
+                                t.to_streaming_type(ir).to_ir_type()
+                            } else {
+                                t
+                            };
+                            Ok((name, t, desc, needed))
+                        })
+                        .collect::<Result<Vec<_>>>()?;
 
                     for (_, t, _, _) in fields.iter().as_ref() {
                         if !checked_types.contains(&t.to_string()) {
@@ -657,7 +669,11 @@ fn relevant_data_models_streaming<'a>(
 
                     classes.push(Class {
                         name: Name::new_with_alias(cls.to_string(), alias.value()),
-                        namespace: mode.clone(),
+                        namespace: if metadata.streaming_behavior.done {
+                            StreamingMode::NonStreaming
+                        } else {
+                            StreamingMode::Streaming
+                        },
                         fields,
                         constraints: metadata.constraints.clone(),
                         streaming_behavior: metadata.streaming_behavior.clone(),

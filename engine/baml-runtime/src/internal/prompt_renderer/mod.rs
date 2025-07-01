@@ -1,7 +1,7 @@
 mod render_output_format;
 pub(crate) mod scoped_ir;
 use anyhow::Result;
-use baml_types::{BamlValue, TypeIR, TypeValue};
+use baml_types::{BamlValue, StreamingMode, TypeIR, TypeValue};
 use internal_baml_core::{
     error_unsupported,
     ir::{
@@ -15,7 +15,7 @@ use internal_baml_jinja::{
 };
 use internal_llm_client::ClientSpec;
 use jsonish::{BamlValueWithFlags, ResponseBamlValue};
-use render_output_format::{render_output_format, render_output_format_streaming};
+use render_output_format::render_output_format;
 use scoped_ir::ScopedIr;
 
 use super::llm_client::parsed_value_to_response;
@@ -53,12 +53,22 @@ impl PromptRenderer {
                 _ => config.client.clone(),
             },
             non_streaming: TypeDefinitionWrapper {
-                defintions: render_output_format(ir, ctx, &func_v2.output)?,
+                defintions: render_output_format(
+                    ir,
+                    ctx,
+                    &func_v2.output,
+                    StreamingMode::NonStreaming,
+                )?,
                 target: func_v2.output.clone(),
             },
             streaming: TypeDefinitionWrapper {
-                defintions: render_output_format_streaming(ir, ctx, &func_v2.output)?,
-                target: func_v2.output.clone(),
+                defintions: render_output_format(
+                    ir,
+                    ctx,
+                    &func_v2.output,
+                    StreamingMode::Streaming,
+                )?,
+                target: func_v2.output.to_streaming_type(ir).to_ir_type(),
             },
         })
     }

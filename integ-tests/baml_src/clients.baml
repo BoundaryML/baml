@@ -143,7 +143,7 @@ client<llm> GPT35AzureFailed {
 client<llm> Gemini {
   provider google-ai
   options {
-    model gemini-1.5-pro
+    model gemini-2.5-flash
     api_key env.GOOGLE_API_KEY
     safetySettings {
       category HARM_CATEGORY_HATE_SPEECH
@@ -156,7 +156,7 @@ client<llm> GeminiOpenAiGeneric {
   provider "openai-generic"
   options {
     base_url "https://generativelanguage.googleapis.com/v1beta/"
-    model "gemini-1.5-flash"
+    model "gemini-2.5-flash"
     api_key env.GOOGLE_API_KEY
   }
 }
@@ -164,7 +164,7 @@ client<llm> GeminiOpenAiGeneric {
 client<llm> Vertex {
   provider vertex-ai
   options {
-    model gemini-1.5-pro
+    model gemini-2.5-flash
     location us-central1
     credentials env.INTEG_TESTS_GOOGLE_APPLICATION_CREDENTIALS_CONTENT
   }

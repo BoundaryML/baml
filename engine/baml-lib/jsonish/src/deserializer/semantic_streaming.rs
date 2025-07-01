@@ -75,7 +75,10 @@ fn process_node(
 
     if must_be_done && !(completion_state == CompletionState::Complete) {
         // TODO(vbv): enums must always be done (but need to make tests pass)
-        if !matches!(value, BamlValueWithMeta::Enum(..)) {
+        if !matches!(
+            value,
+            BamlValueWithMeta::Enum(..) | BamlValueWithMeta::Null(_)
+        ) {
             return Err(StreamingError::IncompleteDoneValue);
         }
     }

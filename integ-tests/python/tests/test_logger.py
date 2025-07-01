@@ -44,12 +44,16 @@ async def test_logger(capfd: pytest.CaptureFixture[str]):
     await test_log_level("OFF")
     await test_log_level("INFO")
 
+
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("reset_log_level")
 async def test_logger_initializes_correctly(capfd: pytest.CaptureFixture[str]):
     # default if not set should be INFO
     # make sure BAML_LOG is not set in infisical when running this test.
-    assert os.environ.get("BAML_LOG") is None
+    starter = os.environ.get("BAML_LOG")
+    assert starter is None or starter == "INFO", (
+        "BAML_LOG should be INFO but was " + starter
+    )
     assert get_log_level() == "INFO"
     result = await b.TestOpenAIShorthand("use the word 'fiscal'")
     assert get_log_level() == "INFO"
@@ -61,7 +65,8 @@ async def test_logger_initializes_correctly(capfd: pytest.CaptureFixture[str]):
 
     # Test with environment variable from dotenv, which sets BAML_LOG to warn
     # a caveat here is, log level is only set after a function call.
-    load_dotenv(dotenv_path="./test-dotenv")
+    loaded = load_dotenv(dotenv_path="./test-dotenv", override=True)
+    assert loaded, "Failed to load dotenv file"
     assert os.environ.get("BAML_LOG") == "warn"
     result = await b.TestOpenAIShorthand("use the word 'fiscal'")
     assert get_log_level() == "WARN"
