@@ -324,16 +324,8 @@ where
             holder
         };
 
-        let baml_value: BamlValue = value.into();
-
-        println!(
-            "encoded {} type ->\n{baml_value}\n{:?}\n\n",
-            value.field_type(),
-            holder
-        );
         let holder = value.maybe_wrap_union(holder, lookup);
-        let holder = value.maybe_wrap_stream_state(holder, lookup);
-        holder
+        value.maybe_wrap_stream_state(holder, lookup)
     }
 }
 
