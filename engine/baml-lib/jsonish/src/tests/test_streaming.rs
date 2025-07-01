@@ -460,7 +460,7 @@ class SmallThing {
 
 // This test simulates the scenario where @stream.not_null fields are null
 // during partial streaming, which should cause validation to fail
-test_partial_deserializer!(
+test_partial_deserializer_streaming_failure!(
     test_stream_not_null_with_partial_data,
     STREAM_NOT_NULL_TEST,
     r#"{
@@ -477,16 +477,6 @@ test_partial_deserializer!(
         let mut class = TypeIR::class("SemanticContainer");
         class.meta_mut().streaming_behavior.needed = true;
         class
-    },
-    {
-        "sixteen_digit_number": 1234567890123456i64,
-        "string_with_twenty_words": "This is a string with exactly twenty words in it for testing purposes and validation",
-        "class_1": null,
-        "class_2": null,
-        "class_done_needed": null,
-        "class_needed": null,
-        "three_small_things": [],
-        "final_string": "end"
     }
 );
 
