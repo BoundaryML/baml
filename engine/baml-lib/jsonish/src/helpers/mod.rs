@@ -365,7 +365,10 @@ mod tests {
             baml_types::StreamingMode::NonStreaming,
         )
         .expect("Rendering should work");
-        let foo = output.classes.get("Foo").expect("Exists");
+        let foo = output
+            .classes
+            .get(&("Foo".to_string(), baml_types::StreamingMode::NonStreaming))
+            .expect("Exists");
         assert_eq!(foo.fields.len(), 1);
         assert_eq!(foo.fields[0].2, Some("d".to_string()));
         assert_eq!(

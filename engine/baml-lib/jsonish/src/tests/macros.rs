@@ -190,6 +190,7 @@ macro_rules! test_partial_deserializer_streaming_failure {
             let ir = crate::helpers::load_test_ir($file_content);
             let mut target_type = $target_type;
             ir.finalize_type(&mut target_type);
+            let target_type = target_type.to_streaming_type(&ir).to_ir_type();
             let target = crate::helpers::render_output_format(
                 &ir,
                 &target_type,
