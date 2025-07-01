@@ -33,6 +33,7 @@ use wasm_bindgen::JsValue;
 pub fn parsed_value_to_response(
     ir: &impl IRHelperExtended,
     baml_value: BamlValueWithFlags,
+    mode: baml_types::StreamingMode,
 ) -> Result<ResponseBamlValue> {
     let meta_flags: BamlValueWithMeta<Vec<Flag>> = baml_value.clone().into();
     let baml_value_with_meta: BamlValueWithMeta<Vec<(String, JinjaExpression, bool)>> =
@@ -54,7 +55,7 @@ pub fn parsed_value_to_response(
         });
 
     let baml_value_with_streaming =
-        validate_streaming_state(ir, &baml_value).map_err(|s| anyhow::anyhow!("{s:?}"))?;
+        validate_streaming_state(ir, &baml_value, mode).map_err(|s| anyhow::anyhow!("{s:?}"))?;
 
     // Combine the baml_value, its types, the parser flags, and the streaming state
     // into a final value.
@@ -446,7 +447,7 @@ mod tests {
             .into_iter()
             .collect(),
         );
-        let response = parsed_value_to_response(&ir, val);
+        let response = parsed_value_to_response(&ir, val, baml_types::StreamingMode::NonStreaming);
         assert!(response.is_ok());
     }
 
@@ -519,7 +520,8 @@ mod tests {
         );
         let field_type = TypeIR::class("Info");
 
-        let res = parsed_value_to_response(&ir, value).unwrap();
+        let res =
+            parsed_value_to_response(&ir, value, baml_types::StreamingMode::NonStreaming).unwrap();
 
         let json = serde_json::to_value(res.serialize_final()).unwrap();
 

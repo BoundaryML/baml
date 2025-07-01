@@ -91,7 +91,7 @@ impl std::fmt::Display for Class {
 #[derive(Debug, Clone)]
 pub struct OutputFormatContent {
     pub enums: Arc<IndexMap<String, Enum>>,
-    pub classes: Arc<IndexMap<String, Class>>,
+    pub classes: Arc<IndexMap<(String, baml_types::StreamingMode), Class>>,
     pub recursive_classes: Arc<IndexSet<String>>,
     pub structural_recursive_aliases: Arc<IndexMap<String, TypeIR>>,
     pub target: TypeIR,
@@ -102,7 +102,7 @@ impl std::fmt::Display for OutputFormatContent {
         writeln!(f, "OutputFormatContent {{")?;
         writeln!(f, "enums: {:?}", self.enums)?;
         writeln!(f, "classes:")?;
-        for (name, class) in self.classes.iter() {
+        for ((name, _), class) in self.classes.iter() {
             writeln!(f, "  {name}: {class}")?;
         }
         writeln!(f, "recursive_classes: {:?}", self.recursive_classes)?;
@@ -177,7 +177,7 @@ impl Builder {
             classes: Arc::new(
                 self.classes
                     .into_iter()
-                    .map(|c| (c.name.name.clone(), c))
+                    .map(|c| ((c.name.name.clone(), c.namespace.clone()), c))
                     .collect(),
             ),
             recursive_classes: Arc::new(self.recursive_classes.into_iter().collect()),
@@ -679,8 +679,10 @@ impl OutputFormatContent {
                         .join(&options.or_splitter)
                 }
             }
-            TypeIR::Class { name: cls, .. } => {
-                let Some(class) = self.classes.get(cls) else {
+            TypeIR::Class {
+                name: cls, mode, ..
+            } => {
+                let Some(class) = self.classes.get(&(cls.clone(), mode.clone())) else {
                     return Err(minijinja::Error::new(
                         minijinja::ErrorKind::BadSerialization,
                         format!("Class {cls} not found"),
@@ -795,14 +797,20 @@ impl OutputFormatContent {
             // Hoist all classes.
             HoistClasses::All => render_ctx
                 .hoisted_classes
-                .extend(self.classes.keys().cloned()),
+                .extend(self.classes.keys().map(|(name, _)| name.clone())),
 
             // Hoist only the specified subset.
             HoistClasses::Subset(classes) => {
                 let mut not_found = IndexSet::new();
 
                 for cls in classes {
-                    if self.classes.contains_key(cls) {
+                    if self
+                        .classes
+                        .contains_key(&(cls.clone(), baml_types::StreamingMode::NonStreaming))
+                        || self
+                            .classes
+                            .contains_key(&(cls.clone(), baml_types::StreamingMode::Streaming))
+                    {
                         render_ctx.hoisted_classes.insert(cls.to_owned());
                     } else {
                         not_found.insert(cls.to_owned());
@@ -977,9 +985,9 @@ impl OutputFormatContent {
             .ok_or_else(|| anyhow::anyhow!("Enum {name} not found"))
     }
 
-    pub fn find_class(&self, name: &str) -> Result<&Class> {
+    pub fn find_class(&self, mode: &baml_types::StreamingMode, name: &str) -> Result<&Class> {
         self.classes
-            .get(name)
+            .get(&(name.to_string(), mode.clone()))
             .ok_or_else(|| anyhow::anyhow!("Class {name} not found"))
     }
 

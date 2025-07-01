@@ -63,7 +63,7 @@ impl TypeCoercer for Class {
             self.fields.iter().partition(|f| f.1.is_optional());
         let (constraints, streaming_behavior) = ctx
             .of
-            .find_class(self.name.real_name())
+            .find_class(&self.namespace, self.name.real_name())
             .map_or((vec![], Default::default()), |class| {
                 (class.constraints.clone(), class.streaming_behavior.clone())
             });

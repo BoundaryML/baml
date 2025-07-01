@@ -58,8 +58,15 @@ where
                 return holder;
             }
 
-            // TODO: This is a hack to get the correct variant name.
-            let options = union_type_generic.iter_skip_null();
+            let options = match union_type_generic.view() {
+                baml_types::ir_type::UnionTypeViewGeneric::Null
+                | baml_types::ir_type::UnionTypeViewGeneric::Optional(..) => return holder,
+                baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => type_generics,
+                baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
+                    type_generics
+                }
+            };
+
             let value_type_index = options
                 .iter()
                 .position(|t| real_type == **t)
@@ -119,7 +126,15 @@ where
                 return holder;
             }
 
-            let options = union_type_generic.iter_skip_null();
+            let options = match union_type_generic.view() {
+                baml_types::ir_type::UnionTypeViewGeneric::Null
+                | baml_types::ir_type::UnionTypeViewGeneric::Optional(..) => return holder,
+                baml_types::ir_type::UnionTypeViewGeneric::OneOf(type_generics) => type_generics,
+                baml_types::ir_type::UnionTypeViewGeneric::OneOfOptional(type_generics) => {
+                    type_generics
+                }
+            };
+
             let value_type_index = options
                 .iter()
                 .position(|t| real_type == **t)

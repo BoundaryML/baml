@@ -114,7 +114,15 @@ impl PromptRenderer {
         // since def has all the context for the mode (streaming / non-streaming)
         let scoped_ir = ScopedIr::new(ir, ctx);
 
-        parsed_value_to_response(&scoped_ir, parsed)
+        parsed_value_to_response(
+            &scoped_ir,
+            parsed,
+            if allow_partials {
+                baml_types::StreamingMode::Streaming
+            } else {
+                baml_types::StreamingMode::NonStreaming
+            },
+        )
     }
 
     pub fn render_prompt(

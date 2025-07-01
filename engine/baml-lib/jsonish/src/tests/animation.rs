@@ -50,7 +50,12 @@ pub fn make_test_data1() {
         .map(|i| {
             let partial_llm_data = &llm_data[0..i];
             let parsed_value = from_str(&target, &target_type, partial_llm_data, false);
-            let value = parsed_value_to_response(&ir, parsed_value.unwrap()).unwrap();
+            let value = parsed_value_to_response(
+                &ir,
+                parsed_value.unwrap(),
+                baml_types::StreamingMode::Streaming,
+            )
+            .unwrap();
 
             serde_json::to_value(
                 vec![

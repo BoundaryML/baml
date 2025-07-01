@@ -34,6 +34,7 @@ pub enum StreamingError {
 pub fn validate_streaming_state(
     ir: &impl IRHelperExtended,
     baml_value: &BamlValueWithFlags,
+    mode: baml_types::StreamingMode,
 ) -> Result<BamlValueWithMeta<Completion>, StreamingError> {
     let baml_value_with_meta_flags: BamlValueWithMeta<Vec<Flag>> = baml_value.clone().into();
     let typed_baml_value: BamlValueWithMeta<(Vec<Flag>, TypeIR)> =
@@ -41,7 +42,12 @@ pub fn validate_streaming_state(
     let baml_value_with_streaming_state_and_behavior =
         typed_baml_value.map_meta(|(flags, r#type)| (completion_state(flags), r#type));
 
-    let top_level_node = process_node(ir, baml_value_with_streaming_state_and_behavior, 0)?;
+    let top_level_node = process_node(
+        ir,
+        baml_value_with_streaming_state_and_behavior,
+        0,
+        mode == baml_types::StreamingMode::NonStreaming,
+    )?;
     Ok(top_level_node)
 }
 
@@ -60,6 +66,9 @@ fn process_node(
     ir: &impl IRHelperExtended,
     value: BamlValueWithMeta<(CompletionState, &TypeIR)>,
     _depth: usize,
+    // TODO(vbv): This is a hack to allow us to skip the done check for
+    // non-streaming values.
+    skip_done_check: bool,
 ) -> Result<BamlValueWithMeta<Completion>, StreamingError> {
     let (completion_state, field_type) = value.meta().clone();
     let metadata = field_type.meta();
@@ -73,14 +82,8 @@ fn process_node(
         required_done: must_be_done,
     };
 
-    if must_be_done && !(completion_state == CompletionState::Complete) {
-        // TODO(vbv): enums must always be done (but need to make tests pass)
-        if !matches!(
-            value,
-            BamlValueWithMeta::Enum(..) | BamlValueWithMeta::Null(_)
-        ) {
-            return Err(StreamingError::IncompleteDoneValue);
-        }
+    if !skip_done_check && must_be_done && !(completion_state == CompletionState::Complete) {
+        return Err(StreamingError::IncompleteDoneValue);
     }
 
     let new_value = match value {
@@ -93,7 +96,7 @@ fn process_node(
         BamlValueWithMeta::List(items, _) => Ok(BamlValueWithMeta::List(
             items
                 .into_iter()
-                .filter_map(|item| process_node(ir, item, _depth + 1).ok())
+                .filter_map(|item| process_node(ir, item, _depth + 1, skip_done_check).ok())
                 .collect(),
             new_meta,
         )),
@@ -145,7 +148,7 @@ fn process_node(
                 .filter_map(|(field_name, field_value)| {
                     let with_state = field_value.meta().1.meta().streaming_behavior.state;
                     let completion_state = field_value.meta().0.clone();
-                    match process_node(ir, field_value, _depth + 1) {
+                    match process_node(ir, field_value, _depth + 1, skip_done_check) {
                         Ok(res) => Some((field_name, res)),
                         _ => {
                             let state = Completion {
@@ -230,7 +233,11 @@ fn process_node(
         BamlValueWithMeta::Map(kvs, _) => {
             let new_kvs = kvs
                 .into_iter()
-                .filter_map(|(k, v)| process_node(ir, v, _depth + 1).ok().map(|v| (k, v)))
+                .filter_map(|(k, v)| {
+                    process_node(ir, v, _depth + 1, skip_done_check)
+                        .ok()
+                        .map(|v| (k, v))
+                })
                 .collect();
             Ok(BamlValueWithMeta::Map(new_kvs, new_meta))
         }
@@ -406,7 +413,8 @@ mod tests {
             mk_list(vec![mk_list(vec![]), mk_list(vec![])]),
         ]);
 
-        let res = validate_streaming_state(&ir, &value).unwrap();
+        let res =
+            validate_streaming_state(&ir, &value, baml_types::StreamingMode::NonStreaming).unwrap();
 
         assert_eq!(res.into_iter().count(), 6);
     }
@@ -461,7 +469,8 @@ mod tests {
         );
         let field_type = TypeIR::class("Info");
 
-        let res = validate_streaming_state(&ir, &value).unwrap();
+        let res =
+            validate_streaming_state(&ir, &value, baml_types::StreamingMode::NonStreaming).unwrap();
 
         // The first key should be "Name", matching the order specified in the
         // original value.

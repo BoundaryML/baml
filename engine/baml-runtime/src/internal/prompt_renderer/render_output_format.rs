@@ -430,7 +430,11 @@ fn relevant_data_models<'a>(
 
                     classes.push(Class {
                         name: Name::new_with_alias(cls.to_string(), alias.value()),
-                        namespace: mode.clone(),
+                        namespace: if !metadata.streaming_behavior.done && partialize {
+                            StreamingMode::Streaming
+                        } else {
+                            StreamingMode::NonStreaming
+                        },
                         fields,
                         constraints: metadata.constraints.clone(),
                         streaming_behavior: metadata.streaming_behavior.clone(),
@@ -752,8 +756,13 @@ mod tests {
             .unwrap();
 
         let field_type = TypeIR::r#enum("Foo");
-        let render_output =
-            render_output_format(baml_runtime.inner.ir.as_ref(), &ctx, &field_type).unwrap();
+        let render_output = render_output_format(
+            baml_runtime.inner.ir.as_ref(),
+            &ctx,
+            &field_type,
+            StreamingMode::NonStreaming,
+        )
+        .unwrap();
 
         let foo_enum = render_output.find_enum("Foo").unwrap();
         assert_eq!(foo_enum.values[0].0.real_name(), "Bar".to_string());
@@ -811,8 +820,13 @@ class Resume {
             .unwrap();
 
         let field_type = TypeIR::class("Resume");
-        let render_output =
-            render_output_format(baml_runtime.inner.ir.as_ref(), &ctx, &field_type).unwrap();
+        let render_output = render_output_format(
+            baml_runtime.inner.ir.as_ref(),
+            &ctx,
+            &field_type,
+            StreamingMode::NonStreaming,
+        )
+        .unwrap();
 
         let rendered = render_output
             .render(RenderOptions::default())
@@ -909,8 +923,13 @@ class Resume {
             .unwrap();
 
         let field_type = TypeIR::class("Resume");
-        let render_output =
-            render_output_format(baml_runtime.inner.ir.as_ref(), &ctx, &field_type).unwrap();
+        let render_output = render_output_format(
+            baml_runtime.inner.ir.as_ref(),
+            &ctx,
+            &field_type,
+            StreamingMode::NonStreaming,
+        )
+        .unwrap();
 
         let rendered = render_output
             .render(RenderOptions::default())
@@ -980,10 +999,17 @@ Answer in JSON using this schema:
             .expect("Should create context");
 
         let field_type = TypeIR::class("Foo");
-        let render_output =
-            render_output_format(baml_runtime.inner.ir.as_ref(), &ctx, &field_type).unwrap();
+        let render_output = render_output_format(
+            baml_runtime.inner.ir.as_ref(),
+            &ctx,
+            &field_type,
+            StreamingMode::NonStreaming,
+        )
+        .unwrap();
 
-        let foo = render_output.find_class("Foo").unwrap();
+        let foo = render_output
+            .find_class(&StreamingMode::NonStreaming, "Foo")
+            .unwrap();
         assert_eq!(
             foo.fields[0].0,
             Name::new_with_alias("bar".to_string(), Some("a".to_string()))

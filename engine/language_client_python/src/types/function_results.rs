@@ -1,4 +1,4 @@
-use baml_types::{BamlValueWithMeta, ResponseCheck};
+use baml_types::{BamlValue, BamlValueWithMeta, ResponseCheck};
 use jsonish::{ResponseBamlValue, ResponseValueMeta};
 use pyo3::{
     prelude::{pymethods, PyResult},
@@ -41,6 +41,10 @@ impl FunctionResult {
             .inner
             .result_with_constraints_content()
             .map_err(BamlError::from_anyhow)?;
+
+        // TODO:
+        let value: BamlValue = parsed.0.clone().value();
+        println!("cast_to parsed: {value}\n\n");
 
         // TODO: The .cast_to() function is only called in codegen once at the
         // end of each Baml function, it should be possible to avoid the
@@ -182,7 +186,7 @@ pub(crate) fn pythonize_strict(
             };
             Ok(instance.into())
         }
-        BamlValueWithMeta::Class(class_name, index_map, _) => {
+        BamlValueWithMeta::Class(class_name, index_map, ..) => {
             let properties = index_map
                 .into_iter()
                 .map(|(key, value)| {

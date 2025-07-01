@@ -308,6 +308,7 @@ fn relevant_data_models<'a>(
 pub fn parsed_value_to_response(
     ir: &IntermediateRepr,
     baml_value: BamlValueWithFlags,
+    mode: baml_types::StreamingMode,
 ) -> Result<ResponseBamlValue> {
     let meta_flags: BamlValueWithMeta<Vec<Flag>> = baml_value.clone().into();
     let baml_value_with_meta: BamlValueWithMeta<Vec<(String, JinjaExpression, bool)>> =
@@ -328,7 +329,7 @@ pub fn parsed_value_to_response(
                 .collect()
         });
 
-    let baml_value_with_streaming = validate_streaming_state(ir, &baml_value)
+    let baml_value_with_streaming = validate_streaming_state(ir, &baml_value, mode)
         .map_err(|s| anyhow::anyhow!("Parsing failed due to: {s:?}"))?;
 
     // Combine the baml_value, its types, the parser flags, and the streaming state

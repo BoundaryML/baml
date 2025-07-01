@@ -88,7 +88,9 @@ impl TypeCoercer for TypeIR {
                 TypeIR::Primitive(p, _) => p.coerce(ctx, target, value),
                 TypeIR::Enum { name, .. } => IrRef::Enum(name).coerce(ctx, target, value),
                 TypeIR::Literal(l, _) => l.coerce(ctx, target, value),
-                TypeIR::Class { name, .. } => IrRef::Class(name).coerce(ctx, target, value),
+                TypeIR::Class { name, mode, .. } => {
+                    IrRef::Class(name, mode).coerce(ctx, target, value)
+                }
                 TypeIR::RecursiveTypeAlias { name, .. } => {
                     coerce_alias(ctx, self, value).map(|v| v.with_target(target))
                 }

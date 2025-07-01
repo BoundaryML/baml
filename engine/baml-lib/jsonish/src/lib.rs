@@ -228,6 +228,8 @@ pub fn from_str(
     raw_string: &str,
     raw_string_is_done: bool,
 ) -> Result<BamlValueWithFlags> {
+    // println!("--------------{raw_string_is_done}-----------------");
+    // println!("from_str target: {raw_string}");
     if matches!(target, TypeIR::Primitive(TypeValue::String, _)) {
         return Ok(BamlValueWithFlags::String(
             (raw_string.to_string(), target).into(),
@@ -264,6 +266,10 @@ pub fn from_str(
     }?;
 
     log::debug!("Parsed JSONish (step 2 of parsing): {parsed_value:#?}");
+
+    let value: BamlValue = parsed_value.clone().into();
+    // println!("from_str value: {value}");
+    // println!("-------------------------------------------------");
 
     Ok(parsed_value)
 }
