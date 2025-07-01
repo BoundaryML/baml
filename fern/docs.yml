@@ -421,9 +421,18 @@ navigation:
                 path: 01-guide/07-observability/studio.mdx
       - section: Comparisons
         contents:
+          - page: BAML vs Langchain
+            icon: fa-solid fa-magnifying-glass
+            path: 01-guide/09-comparisons/langchain.mdx
           - page: BAML vs Marvin
             icon: fa-solid fa-magnifying-glass
             path: 01-guide/09-comparisons/marvin.mdx
+          - page: BAML vs Ai-SDK
+            icon: fa-solid fa-magnifying-glass
+            path: 01-guide/09-comparisons/ai-sdk.mdx
+          - page: BAML vs OpenAI SDK
+            icon: fa-solid fa-magnifying-glass
+            path: 01-guide/09-comparisons/openai-sdk.mdx
           - page: BAML vs Pydantic
             icon: fa-solid fa-magnifying-glass
             path: 01-guide/09-comparisons/pydantic.mdx
